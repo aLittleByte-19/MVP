@@ -19,11 +19,11 @@ class CommunicationResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-chat-bubble-left-right';
 
-    protected static ?string $navigationLabel = 'Comunicazioni';
+    protected static ?string $navigationLabel = 'AI Generativa';
 
     protected static ?string $modelLabel = 'Comunicazione';
 
-    protected static ?string $pluralModelLabel = 'Comunicazioni';
+    protected static ?string $pluralModelLabel = 'AI Generativa';
 
     public static function form(Form $form): Form
     {

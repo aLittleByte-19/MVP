@@ -15,6 +15,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 class OriginalDocumentResource extends Resource
 {
@@ -22,11 +23,11 @@ class OriginalDocumentResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-document-arrow-up';
 
-    protected static ?string $navigationLabel = 'Documenti';
+    protected static ?string $navigationLabel = 'AI Copilot';
 
     protected static ?string $modelLabel = 'Documento';
 
-    protected static ?string $pluralModelLabel = 'Documenti';
+    protected static ?string $pluralModelLabel = 'AI Copilot';
 
     public static function form(Form $form): Form
     {
@@ -89,7 +90,7 @@ class OriginalDocumentResource extends Resource
                     ->action(function (array $data) {
                         $service = app(DocumentProcessingService::class);
                         $file = new UploadedFile(
-                            storage_path('app/'.$data['pdf_file']),
+                            Storage::disk('local')->path($data['pdf_file']),
                             basename($data['pdf_file']),
                             'application/pdf',
                             null,

@@ -34,6 +34,13 @@ class BedrockService
             ]);
 
             $text = $result['output']['message']['content'][0]['text'] ?? '';
+
+            if (preg_match('/```(?:json)?\s*(\{.*?\})\s*```/s', $text, $matches)) {
+                $text = $matches[1];
+            } elseif (preg_match('/(\{.*\})/s', $text, $matches)) {
+                $text = $matches[1];
+            }
+
             $decoded = json_decode($text, true);
 
             if (! is_array($decoded) || ! isset($decoded['title'], $decoded['body'])) {
