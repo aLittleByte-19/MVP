@@ -59,4 +59,9 @@ return [
         'url' => env('AI_WORKER_URL', 'http://ai-worker:8000'),
     ],
 
+    'documents' => [
+        'ocr_driver' => env('DOCUMENT_OCR_DRIVER', 'local'),
+        'classifier_driver' => env('DOCUMENT_CLASSIFIER_DRIVER', 'fake'),
+    ],
+
 ];

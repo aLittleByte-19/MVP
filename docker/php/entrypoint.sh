@@ -4,6 +4,9 @@ set -eu
 cd /var/www/html
 
 setup_marker="storage/framework/poc-setup-complete"
+view_compiled_path="${VIEW_COMPILED_PATH:-storage/framework/views}"
+mkdir -p "$view_compiled_path"
+chmod 0777 "$view_compiled_path"
 
 run_with_retries() {
     description="$1"
@@ -31,7 +34,8 @@ if [ "${COMPOSER_INSTALL_ON_STARTUP:-true}" = "true" ] && [ -f composer.json ]; 
         composer_hash="$(sha256sum composer.json | awk '{ print $1 }')"
     fi
 
-    stamp_file="vendor/.composer-lock.sha256"
+    composer_install_mode="${COMPOSER_INSTALL_DEV:-false}"
+    stamp_file="vendor/.composer-lock.${composer_install_mode}.sha256"
     needs_install=false
 
     if [ ! -f vendor/autoload.php ]; then
@@ -66,7 +70,14 @@ if [ "${COMPOSER_INSTALL_ON_STARTUP:-true}" = "true" ] && [ -f composer.json ]; 
 
         if [ "$needs_install" = "true" ]; then
             echo "Installing Composer dependencies..."
-            composer install --no-interaction --prefer-dist --optimize-autoloader
+            composer_install_flags="--no-interaction --prefer-dist"
+
+            if [ "$composer_install_mode" != "true" ]; then
+                composer_install_flags="$composer_install_flags --no-dev"
+            fi
+
+            # shellcheck disable=SC2086
+            composer install $composer_install_flags
             echo "$composer_hash" > "$stamp_file"
         fi
     fi
@@ -91,6 +102,10 @@ if [ "${LARAVEL_AUTOMATED_SETUP:-false}" = "true" ]; then
     fi
 
     run_with_retries "Database migration" php artisan migrate --force --no-interaction
+
+    if [ "${POC_RESET_PROCESSING_DATA_ON_STARTUP:-true}" = "true" ]; then
+        php artisan poc:reset-data --force --no-interaction
+    fi
 
     touch "$setup_marker"
 fi

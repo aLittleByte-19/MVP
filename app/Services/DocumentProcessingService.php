@@ -49,10 +49,7 @@ class DocumentProcessingService
         $original->update(['processing_status' => ProcessingStatus::Processing]);
 
         try {
-            $segments = $this->normalizeSegments(
-                $this->bedrock->splitDocument($original->file_path),
-                $original->file_path,
-            );
+            $segments = $this->normalizeSegments($this->splitDocument($original->file_path), $original->file_path);
 
             foreach ($segments as $segment) {
                 $subPath = $this->extractPages(
@@ -71,7 +68,7 @@ class DocumentProcessingService
                 ]);
 
                 try {
-                    $fields = $this->bedrock->extractFields($subPath);
+                    $fields = $this->extractFields($subPath);
                     ExtractedData::create(array_merge(
                         ['sub_document_id' => $subDocument->id],
                         $fields,
@@ -140,6 +137,40 @@ class DocumentProcessingService
             'description' => null,
             'confidence_score' => null,
         ]);
+    }
+
+    /**
+     * @return array<int, array{employee_name: string, start_page: int, end_page: int}>
+     */
+    private function splitDocument(string $pdfPath): array
+    {
+        if (config('services.documents.classifier_driver', 'fake') === 'fake') {
+            return [
+                ['employee_name' => 'Mario Rossi', 'start_page' => 1, 'end_page' => 1],
+            ];
+        }
+
+        return $this->bedrock->splitDocument($pdfPath);
+    }
+
+    /**
+     * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}
+     */
+    private function extractFields(string $subPdfPath): array
+    {
+        if (config('services.documents.classifier_driver', 'fake') === 'fake') {
+            return [
+                'employee_first_name' => 'Mario',
+                'employee_last_name' => 'Rossi',
+                'company_name' => 'Azienda Demo Srl',
+                'document_date' => now()->toDateString(),
+                'document_type' => 'Cedolino',
+                'description' => 'Dati estratti in modalita PoC.',
+                'confidence_score' => (int) config('services.bedrock.poc_confidence_threshold', 80),
+            ];
+        }
+
+        return $this->bedrock->extractFields($subPdfPath);
     }
 
     /**

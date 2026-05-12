@@ -38,8 +38,14 @@ test('legacy app and login paths do not require authentication', function () {
         ->assertRedirect('/');
 });
 
-test('admin routes are not registered for the public poc', function () {
+test('filament console is public for the poc', function () {
     $this->get('/admin')
+        ->assertOk()
+        ->assertSee('Amministrazione PoC')
+        ->assertSee('Salva configurazione')
+        ->assertDontSee('Sign in');
+
+    $this->get('/admin/ai-assistant')
         ->assertNotFound();
 
     $this->get('/admin/login')

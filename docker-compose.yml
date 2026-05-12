@@ -19,13 +19,30 @@ services:
       COMPOSER_INSTALL_ON_STARTUP: ${COMPOSER_INSTALL_ON_STARTUP:-true}
       LARAVEL_AUTOMATED_SETUP: ${LARAVEL_AUTOMATED_SETUP:-true}
       LARAVEL_SETUP_RETRIES: ${LARAVEL_SETUP_RETRIES:-30}
+      POC_RESET_PROCESSING_DATA_ON_STARTUP: ${POC_RESET_PROCESSING_DATA_ON_STARTUP:-true}
+      VIEW_COMPILED_PATH: ${VIEW_COMPILED_PATH:-/tmp/laravel-views}
     volumes:
       - ./:/var/www/html
     depends_on:
-      - postgres
-      - redis
-      - minio
-      - mailpit
+      frontend-build:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+      mailpit:
+        condition: service_started
+    networks:
+      - poc
+
+  frontend-build:
+    image: node:22-alpine
+    working_dir: /var/www/html
+    command: sh -lc "npm install --ignore-scripts && npm run build"
+    volumes:
+      - ./:/var/www/html
     networks:
       - poc
 
@@ -38,6 +55,7 @@ services:
       COMPOSER_INSTALL_ON_STARTUP: ${COMPOSER_INSTALL_ON_STARTUP:-true}
       LARAVEL_WAIT_FOR_SETUP: ${LARAVEL_WAIT_FOR_SETUP:-true}
       LARAVEL_SETUP_WAIT_SECONDS: ${LARAVEL_SETUP_WAIT_SECONDS:-120}
+      VIEW_COMPILED_PATH: ${VIEW_COMPILED_PATH:-/tmp/laravel-views}
     volumes:
       - ./:/var/www/html
     depends_on:
@@ -56,6 +74,7 @@ services:
       COMPOSER_INSTALL_ON_STARTUP: ${COMPOSER_INSTALL_ON_STARTUP:-true}
       LARAVEL_WAIT_FOR_SETUP: ${LARAVEL_WAIT_FOR_SETUP:-true}
       LARAVEL_SETUP_WAIT_SECONDS: ${LARAVEL_SETUP_WAIT_SECONDS:-120}
+      VIEW_COMPILED_PATH: ${VIEW_COMPILED_PATH:-/tmp/laravel-views}
     volumes:
       - ./:/var/www/html
     depends_on:
