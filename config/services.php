@@ -38,9 +38,12 @@ return [
     'bedrock' => [
         'enabled' => env('BEDROCK_ENABLED', false),
         'model_id' => env('BEDROCK_MODEL_ID'),
-        'classifier_model_id' => env('BEDROCK_CLASSIFIER_MODEL_ID'),
-        'guardrail_id' => env('BEDROCK_GUARDRAIL_ID'),
-        'region' => env('BEDROCK_AWS_REGION', env('AWS_DEFAULT_REGION', 'eu-central-1')),
+        'region' => env('AWS_DEFAULT_REGION', 'eu-north-1'),
+        'credentials' => [
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'token' => env('AWS_SESSION_TOKEN'),
+        ],
         'poc_confidence_threshold' => (int) env('POC_CONFIDENCE_THRESHOLD', 80),
     ],
 

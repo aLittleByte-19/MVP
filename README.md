@@ -115,17 +115,18 @@ BEDROCK_ENABLED=false
 TEXTRACT_ENABLED=false
 ```
 
-Per provare Amazon Bedrock reale, abilita il servizio e imposta modello e credenziali tramite `.env` locale o variabili d'ambiente non versionate:
+Per provare Amazon Bedrock reale con credenziali IAM temporanee, abilita il servizio e imposta modello, region e credenziali tramite `.env` locale o variabili d'ambiente non versionate:
 
 ```env
 BEDROCK_ENABLED=true
-BEDROCK_AWS_REGION=eu-central-1
-BEDROCK_MODEL_ID=<model-id>
+BEDROCK_MODEL_ID=eu.anthropic.claude-sonnet-4-20250514-v1:0
+AWS_DEFAULT_REGION=eu-north-1
 AWS_ACCESS_KEY_ID=<access-key>
 AWS_SECRET_ACCESS_KEY=<secret-key>
+AWS_SESSION_TOKEN=<session-token-se-temporaneo>
 ```
 
-Per Textract valgono le stesse cautele: le credenziali AWS e gli ARN reali non devono essere versionati.
+Per i modelli che supportano solo `INFERENCE_PROFILE`, `BEDROCK_MODEL_ID` deve contenere l'ID del profilo di inferenza, non il foundation model id. Le credenziali generate dal portale AWS IAM Identity Center sono temporanee: quando scadono vanno sostituite nel file `.env` locale o riesportate nell'ambiente. Per Textract valgono le stesse cautele: le credenziali AWS e gli ARN reali non devono essere versionati.
 
 ## Storage locale
 

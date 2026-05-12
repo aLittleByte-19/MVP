@@ -15,15 +15,18 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(BedrockRuntimeClient::class, function () {
-            return new BedrockRuntimeClient([
+            $credentials = config('services.bedrock.credentials');
+
+            $config = [
                 'version' => 'latest',
                 'region' => config('services.bedrock.region'),
-                'credentials' => [
-                    'key' => env('AWS_ACCESS_KEY_ID'),
-                    'secret' => env('AWS_SECRET_ACCESS_KEY'),
-                    'token' => env('AWS_SESSION_TOKEN'),
-                ],
-            ]);
+            ];
+
+            if (filled($credentials['key'] ?? null) && filled($credentials['secret'] ?? null)) {
+                $config['credentials'] = array_filter($credentials, filled(...));
+            }
+
+            return new BedrockRuntimeClient($config);
         });
 
         $this->app->singleton(BedrockService::class, function ($app) {
