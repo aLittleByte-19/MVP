@@ -48,7 +48,7 @@ class BedrockService
 
             if (preg_match('/```(?:json)?\s*(\{.*?\})\s*```/s', $text, $matches)) {
                 $text = $matches[1];
-            } elseif (preg_match('/(\{.*\})/s', $text, $matches)) {
+            } elseif (preg_match('/(\{.*?\})/s', $text, $matches)) {
                 $text = $matches[1];
             }
 
@@ -115,7 +115,7 @@ class BedrockService
 
             if (preg_match('/```(?:json)?\s*(\[.*?\])\s*```/s', $text, $matches)) {
                 $text = $matches[1];
-            } elseif (preg_match('/(\[.*\])/s', $text, $matches)) {
+            } elseif (preg_match('/(\[.*?\])/s', $text, $matches)) {
                 $text = $matches[1];
             }
 
@@ -161,7 +161,7 @@ class BedrockService
             throw new \RuntimeException("File non trovato sul disco: {$subPdfPath}");
         }
 
-        $prompt = "Estrai i seguenti campi da questo cedolino PDF.\nRispondi SOLO con JSON valido con le chiavi: employee_first_name, employee_last_name, company_name, document_date (formato YYYY-MM-DD), document_type, description (max 200 caratteri), confidence_score (intero 0-100 che indica la tua confidenza nell'estrazione).\nUsa null per i campi non trovati.";
+        $prompt = "Estrai i seguenti campi da questo cedolino PDF.\nRispondi SOLO con JSON valido con le chiavi: employee_first_name, employee_last_name, company_name, document_date (formato YYYY-MM-DD), document_type, description (max 200 caratteri), confidence_score (intero 0-100).\nUsa null per i campi non trovati.\n\nPer confidence_score usa questa scala:\n- 90-100: tutti i campi principali (nome, cognome, azienda, data) sono chiaramente leggibili\n- 70-89: la maggior parte dei campi è leggibile ma uno o due sono ambigui o parziali\n- 40-69: diversi campi mancanti o incerti, testo poco chiaro o layout non standard\n- 0-39: documento illeggibile, non è un cedolino, o quasi tutti i campi sono assenti";
 
         try {
             $result = $this->client->converse([
@@ -188,7 +188,7 @@ class BedrockService
 
             if (preg_match('/```(?:json)?\s*(\{.*?\})\s*```/s', $text, $matches)) {
                 $text = $matches[1];
-            } elseif (preg_match('/(\{.*\})/s', $text, $matches)) {
+            } elseif (preg_match('/(\{.*?\})/s', $text, $matches)) {
                 $text = $matches[1];
             }
 
