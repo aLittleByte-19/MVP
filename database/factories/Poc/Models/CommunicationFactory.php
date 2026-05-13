@@ -13,6 +13,11 @@ class CommunicationFactory extends Factory
 {
     protected $model = \App\Poc\Models\Communication::class;
 
+    /**
+     * Define the model's default state.
+     *
+     * @return array<string, mixed>
+     */
     public function definition(): array
     {
         return [
@@ -25,16 +30,31 @@ class CommunicationFactory extends Factory
         ];
     }
 
+    /**
+     * Indicate that the communication is a draft.
+     *
+     * @return static
+     */
     public function draft(): static
     {
         return $this->state(['status' => CommunicationStatus::Draft]);
     }
 
+    /**
+     * Indicate that the communication is approved.
+     *
+     * @return static
+     */
     public function approved(): static
     {
         return $this->state(['status' => CommunicationStatus::Approved]);
     }
 
+    /**
+     * Indicate that the communication is discarded.
+     *
+     * @return static
+     */
     public function discarded(): static
     {
         return $this->state(['status' => CommunicationStatus::Discarded]);

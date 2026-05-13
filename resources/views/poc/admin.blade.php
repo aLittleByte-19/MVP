@@ -76,6 +76,20 @@
           </dl>
         </section>
 
+        <form action="{{ route('admin.clear-credentials') }}" method="post" class="panel">
+          @csrf
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Credenziali</p>
+              <h3>Rimozione rapida</h3>
+            </div>
+          </div>
+          <p class="panel-note">Disabilita Bedrock reale e rimuove access key, secret e session token dal file `.env`.</p>
+          <div class="button-row">
+            <button type="submit" class="danger-soft-button" onclick="return confirm('Rimuovere access key, secret e session token dal file .env?')">Rimuovi credenziali AWS</button>
+          </div>
+        </form>
+
         <form id="admin-settings-form" action="{{ route('admin.save') }}" method="post" class="admin-grid">
           @csrf
 
@@ -190,20 +204,6 @@
 
         <form id="reset-form" action="{{ route('admin.reset-data') }}" method="post" onsubmit="return confirm('Saranno eliminati comunicazioni generate, documenti caricati, split e dati estratti. Continuare?')">
           @csrf
-        </form>
-
-        <form action="{{ route('admin.clear-credentials') }}" method="post" class="panel">
-          @csrf
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Credenziali</p>
-              <h3>Rimozione rapida</h3>
-            </div>
-          </div>
-          <p class="panel-note">Disabilita Bedrock reale e rimuove access key, secret e session token dal file `.env`.</p>
-          <div class="button-row">
-            <button type="submit" class="danger-soft-button" onclick="return confirm('Rimuovere access key, secret e session token dal file .env?')">Rimuovi credenziali AWS</button>
-          </div>
         </form>
     </div>
 @endsection

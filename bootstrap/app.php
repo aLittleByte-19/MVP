@@ -21,6 +21,16 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (AiServiceException $exception, Request $request) {
+            if ($request->is('poc/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => $exception->getMessage(),
+                ], $exception->getCode() ?: 502);
+            }
+
+            return null;
+        });
+
         $exceptions->render(function (TokenMismatchException $exception, Request $request) {
             if ($request->is('poc/*') || $request->expectsJson()) {
                 return response()->json([

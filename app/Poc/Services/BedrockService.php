@@ -7,8 +7,19 @@ use Aws\Exception\AwsException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * Service for interacting with AWS Bedrock for AI-powered tasks.
+ */
 class BedrockService
 {
+    /**
+     * Create a new service instance.
+     *
+     * @param  \Aws\BedrockRuntime\BedrockRuntimeClient|null  $client
+     * @param  string|null  $modelId
+     * @param  bool  $enabled
+     * @return void
+     */
     public function __construct(
         private readonly ?BedrockRuntimeClient $client,
         private readonly ?string $modelId,
@@ -18,6 +29,9 @@ class BedrockService
     /**
      * Generate a communication title and body from a prompt.
      *
+     * @param  string  $prompt
+     * @param  string  $tone
+     * @param  string  $style
      * @return array{title: string, body: string}
      *
      * @throws \RuntimeException
@@ -25,49 +39,98 @@ class BedrockService
     public function generateCommunication(string $prompt, string $tone, string $style): array
     {
         if (! $this->enabled) {
-            return [
-                'title' => 'Bozza comunicazione NEXUM',
-                'body' => "Contenuto generato in modalita PoC con tono {$tone} e stile {$style}. Prompt di partenza: {$prompt}",
-            ];
+            return $this->fallbackCommunication($prompt, $tone, $style);
         }
 
         $this->ensureConfigured();
 
-        $userMessage = "Genera una comunicazione aziendale con tono '{$tone}' e stile '{$style}'.\n\nContenuto richiesto: {$prompt}\n\nRispondi SOLO con JSON valido con le chiavi: title (stringa), body (stringa).";
+        $aiPrompt = $this->buildCommunicationPrompt($prompt, $tone, $style);
 
         try {
-            $result = $this->client->converse([
+            /** @var \Aws\Result $response */
+            $response = $this->client->converse([
                 'modelId' => $this->modelId,
                 'messages' => [
-                    ['role' => 'user', 'content' => [['text' => $userMessage]]],
+                    ['role' => 'user', 'content' => [['text' => $aiPrompt]]],
                 ],
                 'inferenceConfig' => ['maxTokens' => 2048, 'temperature' => 0.7],
             ]);
 
-            $text = $result['output']['message']['content'][0]['text'] ?? '';
+            $jsonResponse = $this->extractJsonFromAiResponse($response->toArray());
 
-            if (preg_match('/```(?:json)?\s*(\{.*?\})\s*```/s', $text, $matches)) {
-                $text = $matches[1];
-            } elseif (preg_match('/(\{.*?\})/s', $text, $matches)) {
-                $text = $matches[1];
+            if (! isset($jsonResponse['title'], $jsonResponse['body'])) {
+                throw new \RuntimeException('Risposta Bedrock incompleta: chiavi title/body mancanti.');
             }
 
-            $decoded = json_decode($text, true);
-
-            if (! is_array($decoded) || ! isset($decoded['title'], $decoded['body'])) {
-                throw new \RuntimeException('Risposta Bedrock non valida: JSON mancante o malformato.');
-            }
-
-            return ['title' => $decoded['title'], 'body' => $decoded['body']];
+            return [
+                'title' => (string) $jsonResponse['title'],
+                'body' => (string) $jsonResponse['body'],
+            ];
         } catch (AwsException $e) {
-            Log::error('Bedrock generateCommunication error', ['message' => $e->getMessage()]);
-            throw new \RuntimeException('Errore nella chiamata a Bedrock: '.$e->getMessage(), previous: $e);
+            Log::error('AI Generation Error', ['error' => $e->getMessage()]);
+            throw new \RuntimeException("Errore di connessione con Bedrock: {$e->getMessage()}", 0, $e);
         }
+    }
+
+    /**
+     * Extract JSON from the AI response.
+     *
+     * @param  array<string, mixed>  $rawResponse
+     * @return array<string, mixed>
+     */
+    private function extractJsonFromAiResponse(array $rawResponse): array
+    {
+        $text = $rawResponse['output']['message']['content'][0]['text'] ?? '';
+
+        // Rimuove eventuali blocchi di codice markdown ```json ... ```
+        $cleanJson = preg_replace('/^```(?:json)?\s*|```\s*$/m', '', trim($text));
+
+        // Se l'AI ha aggiunto testo prima o dopo, cerchiamo di isolare solo l'oggetto/array
+        if (! str_starts_with($cleanJson, '{') && ! str_starts_with($cleanJson, '[')) {
+            preg_match('/([\{\[].*[\}\]])/s', $cleanJson, $matches);
+            $cleanJson = $matches[1] ?? $cleanJson;
+        }
+
+        $decoded = json_decode($cleanJson, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Fallback communication generation when AI is disabled.
+     *
+     * @param  string  $prompt
+     * @param  string  $tone
+     * @param  string  $style
+     * @return array{title: string, body: string}
+     */
+    private function fallbackCommunication(string $prompt, string $tone, string $style): array
+    {
+        return [
+            'title' => 'Bozza NEXUM (Simulata)',
+            'body' => "LOGICA POC: Generazione disabilitata.\nPrompt: {$prompt}\nTono: {$tone}\nStile: {$style}",
+        ];
+    }
+
+    /**
+     * Build the prompt for communication generation.
+     *
+     * @param  string  $userPrompt
+     * @param  string  $tone
+     * @param  string  $style
+     * @return string
+     */
+    private function buildCommunicationPrompt(string $userPrompt, string $tone, string $style): string
+    {
+        return "Agisci come un assistente HR. Genera una comunicazione con tono '{$tone}' e stile '{$style}'.\n"
+             . "Argomento: {$userPrompt}\n"
+             . "Rispondi esclusivamente in formato JSON: {\"title\": \"...\", \"body\": \"...\"}";
     }
 
     /**
      * Analyse a multi-employee PDF and return per-employee page boundaries.
      *
+     * @param  string  $pdfPath
      * @return array<int, array{employee_name: string, start_page: int, end_page: int}>
      *
      * @throws \RuntimeException
@@ -91,6 +154,7 @@ class BedrockService
         $prompt = "Analizza questo PDF di cedolini aziendali. Identifica tutti i dipendenti presenti.\nPer ogni dipendente restituisci un array JSON con: employee_name (stringa), start_page (intero, 1-indexed), end_page (intero, 1-indexed).\nRispondi SOLO con JSON valido (array). Se non ci sono dipendenti distinti, restituisci un array vuoto.";
 
         try {
+            /** @var \Aws\Result $result */
             $result = $this->client->converse([
                 'modelId' => $this->modelId,
                 'messages' => [
@@ -111,21 +175,9 @@ class BedrockService
                 'inferenceConfig' => ['maxTokens' => 1024, 'temperature' => 0.1],
             ]);
 
-            $text = $result['output']['message']['content'][0]['text'] ?? '[]';
+            $decoded = $this->extractJsonFromAiResponse($result->toArray());
 
-            if (preg_match('/```(?:json)?\s*(\[.*?\])\s*```/s', $text, $matches)) {
-                $text = $matches[1];
-            } elseif (preg_match('/(\[.*?\])/s', $text, $matches)) {
-                $text = $matches[1];
-            }
-
-            $decoded = json_decode($text, true);
-
-            if (! is_array($decoded)) {
-                throw new \RuntimeException('Bedrock splitDocument: risposta non è un array JSON valido.');
-            }
-
-            return $decoded;
+            return is_array($decoded) ? $decoded : [];
         } catch (AwsException $e) {
             Log::error('Bedrock splitDocument error', ['path' => $pdfPath, 'message' => $e->getMessage()]);
             throw new \RuntimeException('Errore nella chiamata a Bedrock (split): '.$e->getMessage(), previous: $e);
@@ -184,19 +236,7 @@ class BedrockService
                 'inferenceConfig' => ['maxTokens' => 512, 'temperature' => 0.1],
             ]);
 
-            $text = $result['output']['message']['content'][0]['text'] ?? '{}';
-
-            if (preg_match('/```(?:json)?\s*(\{.*?\})\s*```/s', $text, $matches)) {
-                $text = $matches[1];
-            } elseif (preg_match('/(\{.*?\})/s', $text, $matches)) {
-                $text = $matches[1];
-            }
-
-            $decoded = json_decode($text, true);
-
-            if (! is_array($decoded)) {
-                throw new \RuntimeException('Bedrock extractFields: risposta non è un oggetto JSON valido.');
-            }
+            $decoded = $this->extractJsonFromAiResponse($result->toArray());
 
             return [
                 'employee_first_name' => $decoded['employee_first_name'] ?? null,
@@ -213,6 +253,13 @@ class BedrockService
         }
     }
 
+    /**
+     * Ensure the service is properly configured.
+     *
+     * @return void
+     *
+     * @throws \RuntimeException
+     */
     private function ensureConfigured(): void
     {
         if (! $this->client || ! $this->modelId) {
@@ -220,6 +267,11 @@ class BedrockService
         }
     }
 
+    /**
+     * Get the configured document disk.
+     *
+     * @return string
+     */
     private function documentDisk(): string
     {
         return config('filesystems.default', 'local');

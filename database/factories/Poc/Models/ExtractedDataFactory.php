@@ -13,6 +13,11 @@ class ExtractedDataFactory extends Factory
 {
     protected $model = \App\Poc\Models\ExtractedData::class;
 
+    /**
+     * Define the model's default state.
+     *
+     * @return array<string, mixed>
+     */
     public function definition(): array
     {
         return [
@@ -27,6 +32,11 @@ class ExtractedDataFactory extends Factory
         ];
     }
 
+    /**
+     * Indicate that the extracted data has null fields.
+     *
+     * @return static
+     */
     public function withNullFields(): static
     {
         return $this->state([

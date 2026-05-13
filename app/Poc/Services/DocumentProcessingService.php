@@ -13,12 +13,26 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use setasign\Fpdi\Fpdi;
 
+/**
+ * Service for handling document processing including uploads, splitting, and data extraction.
+ */
 class DocumentProcessingService
 {
+    /**
+     * Create a new service instance.
+     *
+     * @param  \App\Poc\Services\BedrockService  $bedrock
+     * @return void
+     */
     public function __construct(private readonly BedrockService $bedrock) {}
 
     /**
      * Store the uploaded PDF without starting the processing pipeline.
+     *
+     * @param  \Illuminate\Http\UploadedFile  $file
+     * @return \App\Poc\Models\OriginalDocument
+     *
+     * @throws \RuntimeException
      */
     public function storeUpload(UploadedFile $file): OriginalDocument
     {
@@ -35,6 +49,9 @@ class DocumentProcessingService
 
     /**
      * Store the uploaded PDF, trigger AI split, and persist SubDocuments.
+     *
+     * @param  \Illuminate\Http\UploadedFile  $file
+     * @return \App\Poc\Models\OriginalDocument
      */
     public function handleUpload(UploadedFile $file): OriginalDocument
     {
@@ -46,6 +63,10 @@ class DocumentProcessingService
 
     /**
      * Create an OriginalDocument from a file that is already stored on the document disk.
+     *
+     * @param  string  $path
+     * @param  string  $filename
+     * @return \App\Poc\Models\OriginalDocument
      */
     public function handleStoredFile(string $path, string $filename): OriginalDocument
     {
@@ -57,40 +78,10 @@ class DocumentProcessingService
     }
 
     /**
-     * Split a document into sub-documents without field extraction.
-     *
-     * @return SubDocument[]
-     */
-    public function splitIntoSubDocuments(OriginalDocument $original): array
-    {
-        $segments = $this->normalizeSegments(
-            $this->splitDocument($original->file_path),
-            $original->file_path,
-        );
-
-        $subDocuments = [];
-        foreach ($segments as $segment) {
-            $subPath = $this->extractPages(
-                $original->file_path,
-                $original->id,
-                $segment['employee_name'],
-                (int) $segment['start_page'],
-                (int) $segment['end_page'],
-            );
-
-            $subDocuments[] = SubDocument::create([
-                'original_document_id' => $original->id,
-                'file_path' => $subPath,
-                'start_page' => $segment['start_page'],
-                'end_page' => $segment['end_page'],
-            ]);
-        }
-
-        return $subDocuments;
-    }
-
-    /**
      * Extract fields from a single sub-document and persist to ExtractedData.
+     *
+     * @param  \App\Poc\Models\SubDocument  $subDocument
+     * @return void
      */
     public function extractAndSaveFields(SubDocument $subDocument): void
     {
@@ -110,60 +101,126 @@ class DocumentProcessingService
     }
 
     /**
-     * Run AI split + physical PDF splitting for an OriginalDocument.
+     * Run the full AI pipeline: split the PDF and extract fields for each segment.
+     *
+     * @param  \App\Poc\Models\OriginalDocument  $original
+     * @return void
      */
     public function process(OriginalDocument $original): void
     {
         $original->update(['processing_status' => ProcessingStatus::Processing]);
 
         try {
-            $segments = $this->normalizeSegments($this->splitDocument($original->file_path), $original->file_path);
+            $segments = $this->analyzeDocumentStructure($original);
 
             DB::transaction(function () use ($segments, $original): void {
-                $this->deleteSubDocuments($original);
+                $this->cleanupExistingSplits($original);
 
                 foreach ($segments as $segment) {
-                    $subPath = $this->extractPages(
-                        $original->file_path,
-                        $original->id,
-                        $segment['employee_name'],
-                        (int) $segment['start_page'],
-                        (int) $segment['end_page'],
-                    );
-
-                    $subDocument = SubDocument::create([
-                        'original_document_id' => $original->id,
-                        'file_path' => $subPath,
-                        'start_page' => $segment['start_page'],
-                        'end_page' => $segment['end_page'],
-                    ]);
-
-                    try {
-                        $fields = $this->extractFields($subPath);
-                        ExtractedData::create(array_merge(
-                            ['sub_document_id' => $subDocument->id],
-                            $fields,
-                        ));
-                    } catch (\Throwable $e) {
-                        Log::error('DocumentProcessingService: extraction failed', [
-                            'sub_document_id' => $subDocument->id,
-                            'message' => $e->getMessage(),
-                        ]);
-
-                        $this->createEmptyExtractedData($subDocument);
-                    }
+                    $subDocument = $this->createSubDocumentFromSegment($original, $segment);
+                    $this->runDataExtraction($subDocument);
                 }
             });
 
             $original->update(['processing_status' => ProcessingStatus::Completed]);
         } catch (\Throwable $e) {
-            Log::error('DocumentProcessingService: split failed', [
-                'original_id' => $original->id,
-                'message' => $e->getMessage(),
-            ]);
-            $original->update(['processing_status' => ProcessingStatus::Failed]);
-            throw $e;
+            $this->handleProcessingFailure($original, $e);
         }
+    }
+
+    /**
+     * Analyze the document structure and return segments.
+     *
+     * @param  \App\Poc\Models\OriginalDocument  $original
+     * @return array<int, array{employee_name: string, start_page: int, end_page: int}>
+     */
+    private function analyzeDocumentStructure(OriginalDocument $original): array
+    {
+        return $this->normalizeSegments(
+            $this->splitDocument($original->file_path),
+            $original->file_path
+        );
+    }
+
+    /**
+     * Create a SubDocument from a segment.
+     *
+     * @param  \App\Poc\Models\OriginalDocument  $original
+     * @param  array{employee_name: string, start_page: int, end_page: int}  $segment
+     * @return \App\Poc\Models\SubDocument
+     */
+    private function createSubDocumentFromSegment(OriginalDocument $original, array $segment): SubDocument
+    {
+        $splitPath = $this->extractPages(
+            $original->file_path,
+            $original->id,
+            $segment['employee_name'],
+            (int) $segment['start_page'],
+            (int) $segment['end_page']
+        );
+
+        return SubDocument::create([
+            'original_document_id' => $original->id,
+            'file_path' => $splitPath,
+            'start_page' => $segment['start_page'],
+            'end_page' => $segment['end_page'],
+        ]);
+    }
+
+    /**
+     * Run data extraction for a sub-document.
+     *
+     * @param  \App\Poc\Models\SubDocument  $subDocument
+     * @return void
+     */
+    private function runDataExtraction(SubDocument $subDocument): void
+    {
+        try {
+            $fields = $this->extractFields($subDocument->file_path);
+
+            ExtractedData::create(array_merge(
+                ['sub_document_id' => $subDocument->id],
+                $fields
+            ));
+        } catch (\Throwable $e) {
+            Log::warning("Extraction failed for split {$subDocument->id}", ['error' => $e->getMessage()]);
+            $this->createEmptyExtractedData($subDocument);
+        }
+    }
+
+    /**
+     * Handle processing failure for an original document.
+     *
+     * @param  \App\Poc\Models\OriginalDocument  $original
+     * @param  \Throwable  $e
+     * @return void
+     *
+     * @throws \Throwable
+     */
+    private function handleProcessingFailure(OriginalDocument $original, \Throwable $e): void
+    {
+        Log::error('PDF Pipeline Failure', [
+            'document_id' => $original->id,
+            'error' => $e->getMessage(),
+        ]);
+
+        $original->update(['processing_status' => ProcessingStatus::Failed]);
+
+        throw $e;
+    }
+
+    /**
+     * Cleanup existing sub-documents for an original document.
+     *
+     * @param  \App\Poc\Models\OriginalDocument  $original
+     * @return void
+     */
+    private function cleanupExistingSplits(OriginalDocument $original): void
+    {
+        $original->subDocuments->each(function (SubDocument $split): void {
+            Storage::disk($this->documentDisk())->delete($split->file_path);
+            $split->delete();
+        });
     }
 
     /**
@@ -171,6 +228,7 @@ class DocumentProcessingService
      * one fallback segment still allows field extraction on the uploaded PDF.
      *
      * @param  array<int, array{employee_name?: string, start_page?: int, end_page?: int}>  $segments
+     * @param  string  $sourcePath
      * @return array<int, array{employee_name: string, start_page: int, end_page: int}>
      */
     private function normalizeSegments(array $segments, string $sourcePath): array
@@ -197,6 +255,12 @@ class DocumentProcessingService
         }, $segments));
     }
 
+    /**
+     * Create an empty ExtractedData record for a sub-document.
+     *
+     * @param  \App\Poc\Models\SubDocument  $subDocument
+     * @return void
+     */
     private function createEmptyExtractedData(SubDocument $subDocument): void
     {
         ExtractedData::create([
@@ -211,12 +275,20 @@ class DocumentProcessingService
         ]);
     }
 
+    /**
+     * Get the configured document disk.
+     *
+     * @return string
+     */
     public function documentDisk(): string
     {
         return config('filesystems.default', 'local');
     }
 
     /**
+     * Split the document using the configured classifier.
+     *
+     * @param  string  $pdfPath
      * @return array<int, array{employee_name: string, start_page: int, end_page: int}>
      */
     private function splitDocument(string $pdfPath): array
@@ -231,6 +303,9 @@ class DocumentProcessingService
     }
 
     /**
+     * Extract fields from the document using the configured OCR driver.
+     *
+     * @param  string  $subPdfPath
      * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}
      */
     private function extractFields(string $subPdfPath): array
@@ -253,6 +328,11 @@ class DocumentProcessingService
     /**
      * Extract a page range from a PDF and write it to storage.
      *
+     * @param  string  $sourcePath
+     * @param  int  $originalId
+     * @param  string  $employeeName
+     * @param  int  $startPage
+     * @param  int  $endPage
      * @return string Relative path within the configured document disk
      */
     private function extractPages(string $sourcePath, int $originalId, string $employeeName, int $startPage, int $endPage): string
@@ -286,6 +366,12 @@ class DocumentProcessingService
         }
     }
 
+    /**
+     * Get the page count of a PDF.
+     *
+     * @param  string  $sourcePath
+     * @return int
+     */
     private function pageCount(string $sourcePath): int
     {
         $pdf = new Fpdi;
@@ -298,6 +384,14 @@ class DocumentProcessingService
         }
     }
 
+    /**
+     * Copy a file from storage to a temporary path.
+     *
+     * @param  string  $storagePath
+     * @return string
+     *
+     * @throws \RuntimeException
+     */
     private function copyStorageFileToTemporaryPath(string $storagePath): string
     {
         $contents = Storage::disk($this->documentDisk())->get($storagePath);
@@ -312,6 +406,14 @@ class DocumentProcessingService
         return $temporaryPath;
     }
 
+    /**
+     * Create a temporary path for a file.
+     *
+     * @param  string  $prefix
+     * @return string
+     *
+     * @throws \RuntimeException
+     */
     private function temporaryPath(string $prefix): string
     {
         $directory = storage_path('app/tmp/poc-processing');
@@ -324,15 +426,5 @@ class DocumentProcessingService
         }
 
         return $path;
-    }
-
-    private function deleteSubDocuments(OriginalDocument $original): void
-    {
-        $original->subDocuments()
-            ->get()
-            ->each(function (SubDocument $subDocument): void {
-                Storage::disk($this->documentDisk())->delete($subDocument->file_path);
-                $subDocument->delete();
-            });
     }
 }

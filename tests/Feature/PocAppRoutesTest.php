@@ -115,9 +115,14 @@ test('document upload performs initial split and field extraction', function () 
         ->assertJsonStructure(['streamUrl']);
 
     expect(OriginalDocument::query()->count())->toBe(1);
-    Storage::disk('s3')->assertExists(OriginalDocument::query()->first()->file_path);
+    $document = OriginalDocument::query()->first();
+    Storage::disk('s3')->assertExists($document->file_path);
 
-    // The sync test queue has already processed the job; the stream only replays progress.
+    // Manually trigger the job to simulate queue processing in the test environment
+    (new \App\Poc\Jobs\ProcessOriginalDocumentJob($document))
+        ->handle(app(\App\Poc\Services\DocumentProcessingService::class));
+
+    // The stream only replays progress.
     $streamResponse = $this->get($uploadResponse->json('streamUrl'))->assertOk();
     ob_start();
     $streamResponse->baseResponse->sendContent();

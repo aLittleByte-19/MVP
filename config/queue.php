@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'default' => env('QUEUE_CONNECTION', 'database'),
+    'default' => env('QUEUE_CONNECTION', 'redis'),
 
     /*
     |--------------------------------------------------------------------------
@@ -33,6 +33,7 @@ return [
 
         'sync' => [
             'driver' => 'sync',
+            'after_commit' => false,
         ],
 
         'database' => [

@@ -2,14 +2,22 @@
 
 namespace App\Poc\Controllers;
 
+use App\Poc\Requests\SaveSettingsRequest;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\View\View;
 
+/**
+ * Controller for managing PoC administrative settings and data resets.
+ */
 class AdminController
 {
+    /**
+     * Display the administrative dashboard.
+     *
+     * @return \Illuminate\View\View
+     */
     public function index(): View
     {
         $settings = $this->settings();
@@ -22,24 +30,18 @@ class AdminController
         ]);
     }
 
-    public function save(Request $request): RedirectResponse
+    /**
+     * Save updated settings.
+     *
+     * @param  \App\Poc\Requests\SaveSettingsRequest  $request
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function save(SaveSettingsRequest $request): RedirectResponse
     {
-        $state = $request->validate([
-            'bedrock_enabled' => ['nullable', 'boolean'],
-            'aws_access_key_id' => ['nullable', 'string'],
-            'aws_secret_access_key' => ['nullable', 'string'],
-            'aws_session_token' => ['nullable', 'string'],
-            'aws_default_region' => ['required', 'string', 'max:80'],
-            'bedrock_model_id' => ['required', 'string', 'max:200'],
-            'document_ocr_driver' => ['required', 'in:local,textract'],
-            'document_classifier_driver' => ['required', 'in:fake,bedrock'],
-            'textract_enabled' => ['nullable', 'boolean'],
-            'textract_aws_region' => ['required', 'string', 'max:80'],
-            'poc_confidence_threshold' => ['required', 'integer', 'min:0', 'max:100'],
-        ]);
+        $state = $request->validated();
 
-        $bedrockEnabled = $request->boolean('bedrock_enabled');
-        $textractEnabled = $request->boolean('textract_enabled');
+        $bedrockEnabled = $state['bedrock_enabled'];
+        $textractEnabled = $state['textract_enabled'];
 
         if (! $this->settingsAreValid($state, $bedrockEnabled, $textractEnabled)) {
             return back()->withInput();
@@ -76,6 +78,11 @@ class AdminController
             ->with('status', 'Configurazione salvata. I nuovi job useranno i valori aggiornati.');
     }
 
+    /**
+     * Apply simulation default settings.
+     *
+     * @return \Illuminate\Http\RedirectResponse
+     */
     public function useSimulationDefaults(): RedirectResponse
     {
         $this->writeEnvironment([
@@ -93,6 +100,11 @@ class AdminController
             ->with('status', 'Preset simulazione applicato.');
     }
 
+    /**
+     * Clear AWS credentials from the environment.
+     *
+     * @return \Illuminate\Http\RedirectResponse
+     */
     public function clearAwsCredentials(): RedirectResponse
     {
         $this->writeEnvironment([
@@ -110,6 +122,11 @@ class AdminController
             ->with('status', 'Credenziali AWS rimosse.');
     }
 
+    /**
+     * Reset all PoC processing data.
+     *
+     * @return \Illuminate\Http\RedirectResponse
+     */
     public function resetData(): RedirectResponse
     {
         Artisan::call('poc:reset-data', ['--force' => true]);
@@ -120,6 +137,8 @@ class AdminController
     }
 
     /**
+     * Get current settings from the environment.
+     *
      * @return array<string, mixed>
      */
     private function settings(): array
@@ -140,7 +159,10 @@ class AdminController
     }
 
     /**
+     * Get the status of AWS credentials.
+     *
      * @param  array<string, mixed>  $settings
+     * @return string
      */
     private function awsCredentialsStatus(array $settings): string
     {
@@ -151,6 +173,8 @@ class AdminController
     }
 
     /**
+     * Get the status rows for AWS credentials.
+     *
      * @param  array<string, mixed>  $settings
      * @return array<int, array{label: string, configured: bool}>
      */
@@ -173,6 +197,8 @@ class AdminController
     }
 
     /**
+     * Get the runtime status of various components.
+     *
      * @param  array<string, mixed>  $settings
      * @return array{bedrock: string, credentials: string, analysis: string, ocr: string, queue: string, storage: string}
      */
@@ -189,7 +215,12 @@ class AdminController
     }
 
     /**
+     * Validate settings.
+     *
      * @param  array<string, mixed>  $state
+     * @param  bool  $bedrockEnabled
+     * @param  bool  $textractEnabled
+     * @return bool
      */
     private function settingsAreValid(array $state, bool $bedrockEnabled, bool $textractEnabled): bool
     {
@@ -221,7 +252,10 @@ class AdminController
     }
 
     /**
+     * Write updates to the .env file.
+     *
      * @param  array<string, string>  $updates
+     * @return void
      */
     private function writeEnvironment(array $updates): void
     {
@@ -247,12 +281,23 @@ class AdminController
         File::put($envPath, $contents);
     }
 
+    /**
+     * Refresh the runtime configuration.
+     *
+     * @return void
+     */
     private function refreshRuntimeConfiguration(): void
     {
         Artisan::call('config:clear');
         Artisan::call('queue:restart');
     }
 
+    /**
+     * Format a value for the .env file.
+     *
+     * @param  string  $value
+     * @return string
+     */
     private function formatEnvironmentValue(string $value): string
     {
         if ($value === '') {
@@ -266,11 +311,25 @@ class AdminController
         return '"'.str_replace(['\\', '"'], ['\\\\', '\\"'], $value).'"';
     }
 
+    /**
+     * Get a boolean value from the environment.
+     *
+     * @param  string  $key
+     * @param  bool  $default
+     * @return bool
+     */
     private function environmentBoolean(string $key, bool $default = false): bool
     {
         return filter_var($this->environmentValue($key, $default ? 'true' : 'false'), FILTER_VALIDATE_BOOL);
     }
 
+    /**
+     * Get a value from the environment.
+     *
+     * @param  string  $key
+     * @param  mixed  $default
+     * @return mixed
+     */
     private function environmentValue(string $key, mixed $default = null): mixed
     {
         $envPath = base_path('.env');
