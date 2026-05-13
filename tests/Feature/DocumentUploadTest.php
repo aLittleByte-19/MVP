@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\ProcessingStatus;
-use App\Models\OriginalDocument;
-use App\Models\SubDocument;
-use App\Services\BedrockService;
+use App\Poc\Enums\ProcessingStatus;
+use App\Poc\Models\OriginalDocument;
+use App\Poc\Models\SubDocument;
+use App\Poc\Services\BedrockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);

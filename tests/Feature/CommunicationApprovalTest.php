@@ -1,7 +1,7 @@
 <?php
 
-use App\Enums\CommunicationStatus;
-use App\Models\Communication;
+use App\Poc\Enums\CommunicationStatus;
+use App\Poc\Models\Communication;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);

@@ -2,8 +2,8 @@
 
 namespace App\Providers;
 
-use App\Services\BedrockService;
-use App\Services\DocumentProcessingService;
+use App\Poc\Services\BedrockService;
+use App\Poc\Services\DocumentProcessingService;
 use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Illuminate\Support\ServiceProvider;
 

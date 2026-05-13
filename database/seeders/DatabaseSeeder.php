@@ -17,10 +17,10 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         User::query()->updateOrCreate(
-            ['email' => env('FILAMENT_ADMIN_EMAIL', 'admin@nexum.local')],
+            ['email' => env('POC_ADMIN_EMAIL', 'admin@nexum.local')],
             [
-                'name' => env('FILAMENT_ADMIN_NAME', 'NEXUM Admin'),
-                'password' => Hash::make(env('FILAMENT_ADMIN_PASSWORD', 'password')),
+                'name' => env('POC_ADMIN_NAME', 'NEXUM Admin'),
+                'password' => Hash::make(env('POC_ADMIN_PASSWORD', 'password')),
                 'is_admin' => true,
                 'email_verified_at' => now(),
             ],

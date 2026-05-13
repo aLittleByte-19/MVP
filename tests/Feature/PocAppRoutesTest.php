@@ -1,10 +1,10 @@
 <?php
 
-use App\Models\Communication;
-use App\Models\ExtractedData;
-use App\Models\OriginalDocument;
-use App\Models\SubDocument;
-use App\Services\BedrockService;
+use App\Poc\Models\Communication;
+use App\Poc\Models\ExtractedData;
+use App\Poc\Models\OriginalDocument;
+use App\Poc\Models\SubDocument;
+use App\Poc\Services\BedrockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -13,7 +13,7 @@ uses(RefreshDatabase::class);
 
 function pocPdfUpload(string $filename = 'cedolino.pdf'): UploadedFile
 {
-    $pdf = new FPDF;
+    $pdf = new \FPDF;
     $pdf->AddPage();
     $pdf->SetFont('Arial', '', 12);
     $pdf->Cell(0, 10, 'Cedolino dimostrativo PoC');
@@ -38,7 +38,7 @@ test('legacy app and login paths do not require authentication', function () {
         ->assertRedirect('/');
 });
 
-test('filament console is public for the poc', function () {
+test('blade admin console is public for the poc', function () {
     $this->get('/admin')
         ->assertOk()
         ->assertSee('Amministrazione PoC')

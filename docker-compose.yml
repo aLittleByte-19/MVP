@@ -39,8 +39,6 @@ services:
     volumes:
       - ./:/var/www/html
     depends_on:
-      frontend-build:
-        condition: service_completed_successfully
       postgres:
         condition: service_started
       redis:
@@ -49,17 +47,6 @@ services:
         condition: service_started
       minio-init:
         condition: service_completed_successfully
-      mailpit:
-        condition: service_started
-    networks:
-      - poc
-
-  frontend-build:
-    image: node:22-alpine
-    working_dir: /var/www/html
-    command: sh -lc "npm install --ignore-scripts && npm run build"
-    volumes:
-      - ./:/var/www/html
     networks:
       - poc
 
@@ -100,40 +87,6 @@ services:
         condition: service_started
       minio-init:
         condition: service_completed_successfully
-    networks:
-      - poc
-
-  scheduler:
-    build:
-      context: .
-      dockerfile: docker/php/Dockerfile
-    command: sh -lc "while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done"
-    environment:
-      COMPOSER_INSTALL_ON_STARTUP: ${COMPOSER_INSTALL_ON_STARTUP:-true}
-      LARAVEL_WAIT_FOR_SETUP: ${LARAVEL_WAIT_FOR_SETUP:-true}
-      LARAVEL_SETUP_WAIT_SECONDS: ${LARAVEL_SETUP_WAIT_SECONDS:-120}
-      VIEW_COMPILED_PATH: ${VIEW_COMPILED_PATH:-/tmp/laravel-views}
-      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
-      DB_HOST: ${DB_HOST:-postgres}
-      DB_PORT: ${DB_PORT:-5432}
-      DB_DATABASE: ${DB_DATABASE:-nexum}
-      DB_USERNAME: ${DB_USERNAME:-nexum}
-      DB_PASSWORD: ${DB_PASSWORD:-nexum}
-      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
-      REDIS_HOST: ${REDIS_HOST:-redis}
-      FILESYSTEM_DISK: ${FILESYSTEM_DISK:-s3}
-      AWS_STORAGE_ACCESS_KEY_ID: ${AWS_STORAGE_ACCESS_KEY_ID:-minioadmin}
-      AWS_STORAGE_SECRET_ACCESS_KEY: ${AWS_STORAGE_SECRET_ACCESS_KEY:-minioadmin}
-      AWS_STORAGE_SESSION_TOKEN: ${AWS_STORAGE_SESSION_TOKEN:-}
-      AWS_BUCKET: ${AWS_BUCKET:-nexum-local}
-      AWS_ENDPOINT: ${AWS_ENDPOINT:-http://minio:9000}
-      AWS_USE_PATH_STYLE_ENDPOINT: ${AWS_USE_PATH_STYLE_ENDPOINT:-true}
-    volumes:
-      - ./:/var/www/html
-    depends_on:
-      - app
-      - postgres
-      - redis
     networks:
       - poc
 
@@ -184,29 +137,6 @@ services:
       done;
       mc mb --ignore-existing local/${AWS_BUCKET:-nexum-local};
       "
-    networks:
-      - poc
-
-  mailpit:
-    image: axllent/mailpit:v1.24
-    ports:
-      - "${MAILPIT_SMTP_PORT:-1025}:1025"
-      - "${MAILPIT_UI_PORT:-8025}:8025"
-    networks:
-      - poc
-
-  ai-worker:
-    build:
-      context: ./ai-worker
-    environment:
-      AI_WORKER_ENV: ${AI_WORKER_ENV:-local}
-      OCR_DRIVER: ${DOCUMENT_OCR_DRIVER:-local}
-      ANALYSIS_DRIVER: ${DOCUMENT_CLASSIFIER_DRIVER:-fake}
-      POC_CONFIDENCE_THRESHOLD: ${POC_CONFIDENCE_THRESHOLD:-80}
-      TEXTRACT_ENABLED: ${TEXTRACT_ENABLED:-false}
-      BEDROCK_ENABLED: ${BEDROCK_ENABLED:-false}
-    ports:
-      - "${AI_WORKER_PORT:-8001}:8000"
     networks:
       - poc
 

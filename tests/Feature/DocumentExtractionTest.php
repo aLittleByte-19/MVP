@@ -1,8 +1,8 @@
 <?php
 
-use App\Models\ExtractedData;
-use App\Models\SubDocument;
-use App\Services\BedrockService;
+use App\Poc\Models\ExtractedData;
+use App\Poc\Models\SubDocument;
+use App\Poc\Services\BedrockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);

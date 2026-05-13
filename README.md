@@ -8,12 +8,10 @@ L'architettura è stata progettata per essere scalabile, modulare e facilmente i
 
 *   **Backend: Laravel 12**
     *   *Perché:* Garantisce robustezza, sicurezza e una gestione eccellente di code (Queues) e task asincroni, fondamentali per l'elaborazione documentale.
-*   **Admin Panel & UI: Filament PHP**
-    *   *Perché:* Consente di prototipare rapidamente interfacce di gestione dati (dashboard, tabelle, form) ad alte prestazioni, mantenendo un'esperienza utente coerente e professionale.
+*   **Interfaccia: Blade + CSS/JS custom**
+    *   *Perché:* Permette di mantenere un flusso applicativo guidato e aderente alla UX della PoC, senza introdurre un pannello gestionale separato.
 *   **AI Engine: Amazon Bedrock (Model: Nova / Anthropic Claude)**
     *   *Perché:* Offre l'accesso a modelli LLM state-of-the-art tramite API serverless. La PoC sfrutta le capacità native di analisi dei documenti (PDF) per evitare complessi passaggi di pre-elaborazione.
-*   **AI Worker Ausiliario: Python (FastAPI)**
-    *   *Perché:* Predisposto per task intensivi di computer vision e OCR locale. In questa fase agisce come microservizio di supporto per l'espansione della pipeline documentale.
 *   **Infrastruttura: Docker & Cloud Native Stack**
     *   **PostgreSQL:** Database relazionale per la persistenza dei dati strutturati.
     *   **Redis:** Gestione delle code di lavorazione e caching.
@@ -35,10 +33,23 @@ L'applicazione implementa una pipeline di elaborazione asincrona e reattiva:
 *   **Prompt Engineering:** L'utente fornisce i parametri di input (testo, tono, stile). Il sistema applica dei template di sistema per contestualizzare la richiesta ad Amazon Bedrock.
 *   **Generazione Bozza:** L'LLM restituisce un oggetto JSON strutturato. Il backend lo trasforma in una risorsa `Communication` in stato "Bozza", pronta per essere editata o finalizzata dall'utente.
 
+## Organizzazione del Codice
+
+Il codice specifico della PoC è raccolto sotto `app/Poc`, in modo da separarlo dalla struttura Laravel di base e rendere più chiaro dove intervenire:
+
+*   `app/Poc/Controllers`: controller HTTP dell'applicativo e della configurazione PoC.
+*   `app/Poc/Models`: modelli Eloquent legati ai documenti, ai dati estratti e alle comunicazioni.
+*   `app/Poc/Services`: logica applicativa riusabile, integrazione Bedrock e pipeline documentale.
+*   `app/Poc/Jobs`: job asincroni usati dalla coda Redis.
+*   `app/Poc/Enums`: stati e valori enumerati condivisi tra modelli, servizi e test.
+*   `app/Poc/Commands`: comandi operativi dedicati alla PoC.
+
+Le view custom sono raccolte direttamente in `resources/views/poc`, mentre gli asset statici della UI sono in `public/poc`.
+
 
 ## Amministrazione & Configurazione (Dashboard)
 
-L'applicativo include un'area di amministrazione dedicata al percorso `/admin`, denominata **Amministrazione PoC**. A differenza di un back-office tradizionale, questa dashboard funge da centro di controllo operativo per il comportamento dell'intelligenza artificiale e del runtime di sistema.
+L'applicativo include un'area di amministrazione Blade dedicata al percorso `/admin`, denominata **Amministrazione PoC**. A differenza di un back-office tradizionale, questa dashboard funge da centro di controllo operativo per il comportamento dell'intelligenza artificiale e del runtime di sistema.
 
 *   **Punto di Accesso:** `http://localhost:8080/admin`
 *   **Configurazione Dinamica AI:** Permette di modificare in tempo reale i driver di elaborazione (passando da simulazione a Bedrock/Textract reale), impostare i modelli LLM (es. Amazon Nova) e variare le soglie di confidenza per l'estrazione dati.
@@ -58,7 +69,6 @@ L'applicativo include un'area di amministrazione dedicata al percorso `/admin`, 
     ```
 3.  **Accesso:**
     *   Applicazione: `http://localhost:8080`
-    *   Mailpit (Mail Test): `http://localhost:8025`
     *   MinIO Console: `http://localhost:9001`
 
 ## Configurazione AI
