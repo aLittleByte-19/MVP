@@ -9,6 +9,14 @@
             <div class="nexum-toolbar-actions">
                 <button
                     type="button"
+                    class="nexum-button nexum-button-secondary"
+                    wire:click="useSimulationDefaults"
+                >
+                    Preset simulazione
+                </button>
+
+                <button
+                    type="button"
                     class="nexum-button nexum-button-danger"
                     wire:click="resetData"
                     wire:confirm="Saranno eliminati comunicazioni generate, documenti caricati, split e dati estratti. Continuare?"
@@ -22,11 +30,30 @@
             </div>
         </section>
 
+        <dl class="nexum-status-strip">
+            <div>
+                <dt>Bedrock</dt>
+                <dd>{{ $this->runtimeStatus['bedrock'] }}</dd>
+            </div>
+            <div>
+                <dt>Credenziali AWS</dt>
+                <dd>{{ $this->runtimeStatus['credentials'] }}</dd>
+            </div>
+            <div>
+                <dt>Analisi</dt>
+                <dd>{{ $this->runtimeStatus['analysis'] }}</dd>
+            </div>
+            <div>
+                <dt>OCR</dt>
+                <dd>{{ $this->runtimeStatus['ocr'] }}</dd>
+            </div>
+        </dl>
+
         <form id="admin-settings-form" wire:submit="save" class="nexum-admin-grid">
             <section class="nexum-panel">
                 <div class="nexum-section-heading">
-                    <h2>AWS Bedrock</h2>
-                    <span>{{ filter_var(env('BEDROCK_ENABLED', false), FILTER_VALIDATE_BOOL) ? 'Reale' : 'Simulato' }}</span>
+                    <h2>Modalità</h2>
+                    <span>PoC</span>
                 </div>
 
                 <div class="nexum-form-grid">
@@ -38,50 +65,6 @@
                         <input type="checkbox" wire:model="settings.bedrock_enabled" @checked($this->settings['bedrock_enabled'] ?? false)>
                     </label>
 
-                    <label class="nexum-field">
-                        <span>AWS access key ID</span>
-                        <input type="text" wire:model="settings.aws_access_key_id" value="{{ $this->settings['aws_access_key_id'] ?? '' }}" autocomplete="off">
-                    </label>
-
-                    <label class="nexum-field">
-                        <span>AWS secret access key</span>
-                        <input
-                            type="password"
-                            wire:model="settings.aws_secret_access_key"
-                            autocomplete="new-password"
-                            placeholder="{{ filled(env('AWS_SECRET_ACCESS_KEY')) ? 'Gia configurata: lascia vuoto per conservarla' : '' }}"
-                        >
-                    </label>
-
-                    <label class="nexum-field nexum-field-wide">
-                        <span>AWS session token</span>
-                        <input
-                            type="password"
-                            wire:model="settings.aws_session_token"
-                            autocomplete="new-password"
-                            placeholder="{{ filled(env('AWS_SESSION_TOKEN')) ? 'Gia configurato: lascia vuoto per conservarlo' : '' }}"
-                        >
-                    </label>
-
-                    <label class="nexum-field">
-                        <span>Regione AWS</span>
-                        <input type="text" wire:model="settings.aws_default_region" value="{{ $this->settings['aws_default_region'] ?? '' }}" required>
-                    </label>
-
-                    <label class="nexum-field">
-                        <span>Bedrock model ID</span>
-                        <input type="text" wire:model="settings.bedrock_model_id" value="{{ $this->settings['bedrock_model_id'] ?? '' }}" required>
-                    </label>
-                </div>
-            </section>
-
-            <section class="nexum-panel">
-                <div class="nexum-section-heading">
-                    <h2>Elaborazioni</h2>
-                    <span>{{ env('DOCUMENT_CLASSIFIER_DRIVER', 'fake') === 'bedrock' ? 'Bedrock' : 'Simulata' }}</span>
-                </div>
-
-                <div class="nexum-form-grid">
                     <label class="nexum-field">
                         <span>Analisi documenti</span>
                         <select wire:model="settings.document_classifier_driver">
@@ -118,26 +101,77 @@
                 </div>
             </section>
 
-            <section class="nexum-panel nexum-admin-status">
+            <section class="nexum-panel">
                 <div class="nexum-section-heading">
-                    <h2>Runtime</h2>
+                    <h2>AWS Bedrock</h2>
+                    <span>{{ $this->awsCredentialsStatus }}</span>
                 </div>
 
-                <dl class="nexum-meta-grid">
-                    <div>
-                        <dt>Bedrock</dt>
-                        <dd>{{ filter_var(env('BEDROCK_ENABLED', false), FILTER_VALIDATE_BOOL) ? 'Reale' : 'Simulato' }}</dd>
-                    </div>
-                    <div>
-                        <dt>Analisi</dt>
-                        <dd>{{ env('DOCUMENT_CLASSIFIER_DRIVER', 'fake') === 'bedrock' ? 'Bedrock' : 'Simulata' }}</dd>
-                    </div>
-                    <div>
-                        <dt>OCR</dt>
-                        <dd>{{ env('DOCUMENT_OCR_DRIVER', 'local') === 'textract' ? 'Textract' : 'Locale' }}</dd>
-                    </div>
-                </dl>
+                <div class="nexum-credential-grid">
+                    @foreach ($this->awsCredentialRows as $credential)
+                        <div class="nexum-credential-item">
+                            <span>{{ $credential['label'] }}</span>
+                            <strong>{{ $credential['configured'] ? 'Configurata' : 'Non configurata' }}</strong>
+                        </div>
+                    @endforeach
+                </div>
 
+                <div class="nexum-form-grid">
+                    <div class="nexum-field-note">
+                        I campi credenziali sono sempre vuoti: inserisci un valore solo se vuoi sostituire quello salvato.
+                    </div>
+
+                    <label class="nexum-field">
+                        <span>Nuova access key ID</span>
+                        <input
+                            type="password"
+                            wire:model="settings.aws_access_key_id"
+                            autocomplete="new-password"
+                            placeholder="Lascia vuoto per mantenere"
+                        >
+                    </label>
+
+                    <label class="nexum-field">
+                        <span>Nuova secret access key</span>
+                        <input
+                            type="password"
+                            wire:model="settings.aws_secret_access_key"
+                            autocomplete="new-password"
+                            placeholder="Lascia vuoto per mantenere"
+                        >
+                    </label>
+
+                    <label class="nexum-field nexum-field-wide">
+                        <span>Nuovo session token</span>
+                        <input
+                            type="password"
+                            wire:model="settings.aws_session_token"
+                            autocomplete="new-password"
+                            placeholder="Lascia vuoto per mantenere"
+                        >
+                    </label>
+
+                    <label class="nexum-field">
+                        <span>Regione AWS</span>
+                        <input type="text" wire:model="settings.aws_default_region" value="{{ $this->settings['aws_default_region'] ?? '' }}" required>
+                    </label>
+
+                    <label class="nexum-field">
+                        <span>Bedrock model ID</span>
+                        <input type="text" wire:model="settings.bedrock_model_id" value="{{ $this->settings['bedrock_model_id'] ?? '' }}" required>
+                    </label>
+
+                    <div class="nexum-inline-actions">
+                        <button
+                            type="button"
+                            class="nexum-button nexum-button-danger-soft"
+                            wire:click="clearAwsCredentials"
+                            wire:confirm="Rimuovere access key, secret e session token dal file .env?"
+                        >
+                            Rimuovi credenziali
+                        </button>
+                    </div>
+                </div>
             </section>
         </form>
     </div>
