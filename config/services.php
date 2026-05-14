@@ -36,8 +36,28 @@ return [
     ],
 
     'bedrock' => [
-        'model_id' => env('BEDROCK_MODEL_ID', 'us.anthropic.claude-3-5-sonnet-20241022-v2:0'),
-        'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+        'enabled' => env('BEDROCK_ENABLED', false),
+        'model_id' => env('BEDROCK_MODEL_ID'),
+        'region' => env('AWS_DEFAULT_REGION', 'eu-north-1'),
+        'credentials' => [
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'token' => env('AWS_SESSION_TOKEN'),
+        ],
+        'poc_confidence_threshold' => (int) env('POC_CONFIDENCE_THRESHOLD', 80),
+    ],
+
+    'textract' => [
+        'enabled' => env('TEXTRACT_ENABLED', false),
+        'region' => env('TEXTRACT_AWS_REGION', env('AWS_DEFAULT_REGION', 'eu-central-1')),
+        's3_bucket' => env('TEXTRACT_S3_BUCKET'),
+        'sns_topic_arn' => env('TEXTRACT_SNS_TOPIC_ARN'),
+        'role_arn' => env('TEXTRACT_ROLE_ARN'),
+    ],
+
+    'documents' => [
+        'ocr_driver' => env('DOCUMENT_OCR_DRIVER', 'local'),
+        'classifier_driver' => env('DOCUMENT_CLASSIFIER_DRIVER', 'fake'),
     ],
 
 ];

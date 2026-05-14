@@ -16,6 +16,7 @@ return new class extends Migration
             $table->smallInteger('start_page');
             $table->smallInteger('end_page');
             $table->string('send_status', 20)->default('pending');
+            $table->text('error_message')->nullable();
             $table->timestamps();
 
             $table->index('original_document_id');

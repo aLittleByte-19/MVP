@@ -1,8 +1,8 @@
 <?php
 
-use App\Enums\CommunicationStatus;
-use App\Models\Communication;
-use App\Services\BedrockService;
+use App\Poc\Enums\CommunicationStatus;
+use App\Poc\Models\Communication;
+use App\Poc\Services\BedrockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);

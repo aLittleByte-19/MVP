@@ -1,6 +1,6 @@
 <?php
 
-use App\Services\BedrockService;
+use App\Poc\Services\BedrockService;
 use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\Command;
 use Aws\Exception\AwsException;

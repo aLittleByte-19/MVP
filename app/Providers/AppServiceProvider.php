@@ -2,34 +2,41 @@
 
 namespace App\Providers;
 
-use App\Services\BedrockService;
-use App\Services\DocumentProcessingService;
+use App\Poc\Services\BedrockService;
+use App\Poc\Services\DocumentProcessingService;
 use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
         $this->app->singleton(BedrockRuntimeClient::class, function () {
-            return new BedrockRuntimeClient([
+            $credentials = config('services.bedrock.credentials');
+
+            $config = [
                 'version' => 'latest',
                 'region' => config('services.bedrock.region'),
-                'credentials' => [
-                    'key' => env('AWS_ACCESS_KEY_ID'),
-                    'secret' => env('AWS_SECRET_ACCESS_KEY'),
-                    'token' => env('AWS_SESSION_TOKEN'),
+                'http' => [
+                    'timeout' => 300,
+                    'connect_timeout' => 15,
                 ],
-            ]);
+            ];
+
+            if (filled($credentials['key'] ?? null) && filled($credentials['secret'] ?? null)) {
+                $config['credentials'] = array_filter($credentials, filled(...));
+            }
+
+            return new BedrockRuntimeClient($config);
         });
 
         $this->app->singleton(BedrockService::class, function ($app) {
+            $bedrockEnabled = (bool) config('services.bedrock.enabled');
+
             return new BedrockService(
-                $app->make(BedrockRuntimeClient::class),
+                $bedrockEnabled ? $app->make(BedrockRuntimeClient::class) : null,
                 config('services.bedrock.model_id'),
+                $bedrockEnabled,
             );
         });
 
@@ -38,11 +45,5 @@ class AppServiceProvider extends ServiceProvider
         });
     }
 
-    /**
-     * Bootstrap any application services.
-     */
-    public function boot(): void
-    {
-        //
-    }
+    public function boot(): void {}
 }

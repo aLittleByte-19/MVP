@@ -1,0 +1,162 @@
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - app
+    ports:
+      - "${NGINX_PORT:-8080}:80"
+    volumes:
+      - ./:/var/www/html:ro
+      - vendor:/var/www/html/vendor:ro
+      - storage:/var/www/html/storage:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - poc
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    environment:
+      COMPOSER_INSTALL_ON_STARTUP: ${COMPOSER_INSTALL_ON_STARTUP:-true}
+      LARAVEL_AUTOMATED_SETUP: ${LARAVEL_AUTOMATED_SETUP:-true}
+      LARAVEL_SETUP_RETRIES: ${LARAVEL_SETUP_RETRIES:-30}
+      POC_RESET_PROCESSING_DATA_ON_STARTUP: ${POC_RESET_PROCESSING_DATA_ON_STARTUP:-true}
+      VIEW_COMPILED_PATH: ${VIEW_COMPILED_PATH:-/tmp/laravel-views}
+      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-nexum}
+      DB_USERNAME: ${DB_USERNAME:-nexum}
+      DB_PASSWORD: ${DB_PASSWORD:-nexum}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
+      REDIS_QUEUE_RETRY_AFTER: ${REDIS_QUEUE_RETRY_AFTER:-360}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      FILESYSTEM_DISK: ${FILESYSTEM_DISK:-s3}
+      AWS_STORAGE_ACCESS_KEY_ID: ${AWS_STORAGE_ACCESS_KEY_ID:-minioadmin}
+      AWS_STORAGE_SECRET_ACCESS_KEY: ${AWS_STORAGE_SECRET_ACCESS_KEY:-minioadmin}
+      AWS_STORAGE_SESSION_TOKEN: ${AWS_STORAGE_SESSION_TOKEN:-}
+      AWS_BUCKET: ${AWS_BUCKET:-nexum-local}
+      AWS_ENDPOINT: ${AWS_ENDPOINT:-http://minio:9000}
+      AWS_USE_PATH_STYLE_ENDPOINT: ${AWS_USE_PATH_STYLE_ENDPOINT:-true}
+    volumes:
+      - ./:/var/www/html
+      - vendor:/var/www/html/vendor
+      - storage:/var/www/html/storage
+      - ./docker/php/entrypoint.sh:/usr/local/bin/poc-entrypoint:ro
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - poc
+
+  queue:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    command: php artisan queue:work redis --sleep=3 --tries=3 --timeout=330
+    restart: unless-stopped
+    environment:
+      COMPOSER_INSTALL_ON_STARTUP: ${COMPOSER_INSTALL_ON_STARTUP:-true}
+      LARAVEL_WAIT_FOR_SETUP: ${LARAVEL_WAIT_FOR_SETUP:-true}
+      LARAVEL_SETUP_WAIT_SECONDS: ${LARAVEL_SETUP_WAIT_SECONDS:-120}
+      VIEW_COMPILED_PATH: ${VIEW_COMPILED_PATH:-/tmp/laravel-views}
+      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-nexum}
+      DB_USERNAME: ${DB_USERNAME:-nexum}
+      DB_PASSWORD: ${DB_PASSWORD:-nexum}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
+      REDIS_QUEUE_RETRY_AFTER: ${REDIS_QUEUE_RETRY_AFTER:-360}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      FILESYSTEM_DISK: ${FILESYSTEM_DISK:-s3}
+      AWS_STORAGE_ACCESS_KEY_ID: ${AWS_STORAGE_ACCESS_KEY_ID:-minioadmin}
+      AWS_STORAGE_SECRET_ACCESS_KEY: ${AWS_STORAGE_SECRET_ACCESS_KEY:-minioadmin}
+      AWS_STORAGE_SESSION_TOKEN: ${AWS_STORAGE_SESSION_TOKEN:-}
+      AWS_BUCKET: ${AWS_BUCKET:-nexum-local}
+      AWS_ENDPOINT: ${AWS_ENDPOINT:-http://minio:9000}
+      AWS_USE_PATH_STYLE_ENDPOINT: ${AWS_USE_PATH_STYLE_ENDPOINT:-true}
+    volumes:
+      - ./:/var/www/html
+      - vendor:/var/www/html/vendor
+      - storage:/var/www/html/storage
+      - ./docker/php/entrypoint.sh:/usr/local/bin/poc-entrypoint:ro
+    depends_on:
+      app:
+        condition: service_started
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - poc
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-nexum}
+      POSTGRES_USER: ${DB_USERNAME:-nexum}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-nexum}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - poc
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - poc
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - poc
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin}; do
+        sleep 2;
+      done;
+      mc mb --ignore-existing local/${AWS_BUCKET:-nexum-local};
+      "
+    networks:
+      - poc
+
+networks:
+  poc:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  vendor:
+  storage:
