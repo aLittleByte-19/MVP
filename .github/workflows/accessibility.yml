@@ -45,17 +45,19 @@ jobs:
       - name: Run axe
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+          npm_config_ignore_scripts: "false"
         run: |
-          npx --yes @axe-core/cli http://localhost:8080
-          npx --yes @axe-core/cli http://localhost:8080/admin
+          npx --yes --ignore-scripts=false @axe-core/cli --chrome-path "$CHROME_PATH" --chrome-options="no-sandbox,disable-dev-shm-usage" http://localhost:8080
+          npx --yes --ignore-scripts=false @axe-core/cli --chrome-path "$CHROME_PATH" --chrome-options="no-sandbox,disable-dev-shm-usage" http://localhost:8080/admin
 
       - name: Run Pa11y
         env:
           PUPPETEER_EXECUTABLE_PATH: ${{ steps.chrome.outputs.chrome-path }}
           PUPPETEER_SKIP_DOWNLOAD: "true"
+          npm_config_ignore_scripts: "false"
         run: |
-          npx --yes pa11y http://localhost:8080
-          npx --yes pa11y http://localhost:8080/admin
+          npx --yes --ignore-scripts=false pa11y http://localhost:8080
+          npx --yes --ignore-scripts=false pa11y http://localhost:8080/admin
 
       - name: Stop application
         if: always()
