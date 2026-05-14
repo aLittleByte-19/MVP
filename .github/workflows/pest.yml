@@ -27,7 +27,14 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Create .env file
+        run: cp .env.example .env
+
       - name: Run Pest
+        env:
+          DOCUMENT_OCR_DRIVER: local
+          DOCUMENT_CLASSIFIER_DRIVER: fake
+          BEDROCK_ENABLED: false
         run: |
           php artisan config:clear
           php artisan test --display-warnings
