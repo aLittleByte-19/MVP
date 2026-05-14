@@ -1,9 +1,9 @@
 # NEXUM / aLittleByte - Document Intelligence PoC
 
 <p align="center">
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/pint.yml"><img alt="Pint" src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/pint.yml?branch=develop&label=Pint&style=flat-square"></a>
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/pest.yml"><img alt="Pest" src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/pest.yml?branch=develop&label=Pest&style=flat-square"></a>
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/accessibility.yml"><img alt="Accessibility" src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/accessibility.yml?branch=develop&label=A11y&style=flat-square"></a>
+  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/pint.yml"><img alt="Pint" src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/pint.yml?branch=main&label=Pint&style=flat-square"></a>
+  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/pest.yml"><img alt="Pest" src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/pest.yml?branch=main&label=Pest&style=flat-square"></a>
+  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/accessibility.yml"><img alt="Accessibility" src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/accessibility.yml?branch=main&label=A11y&style=flat-square"></a>
 </p>
 
 Proof of Concept per validare l'uso di AI generativa e AI documentale nei flussi NEXUM.
