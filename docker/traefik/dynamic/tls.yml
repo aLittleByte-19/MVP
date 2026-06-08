@@ -1,0 +1,7 @@
+tls:
+  certificates:
+    - certFile: /etc/traefik/certs/poc-local.test.crt
+      keyFile: /etc/traefik/certs/poc-local.test.key
+  options:
+    default:
+      minVersion: VersionTLS12

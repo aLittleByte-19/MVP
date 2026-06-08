@@ -16,7 +16,8 @@ let violationsCount = 0;
 
 try {
   for (const url of urls) {
-    const page = await browser.newPage();
+    const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    const page = await context.newPage();
     await page.goto(url, { waitUntil: 'networkidle' });
     await page.addScriptTag({ content: axe.source });
 
@@ -39,7 +40,7 @@ try {
       violationsCount += result.violations.length;
     }
 
-    await page.close();
+    await context.close();
   }
 } finally {
   await browser.close();

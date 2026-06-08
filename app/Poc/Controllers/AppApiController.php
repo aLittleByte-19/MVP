@@ -12,26 +12,31 @@ use App\Poc\Models\OriginalDocument;
 use App\Poc\Models\SubDocument;
 use App\Poc\Requests\GenerateCommunicationRequest;
 use App\Poc\Requests\UploadDocumentRequest;
+use App\Poc\Security\PocUser;
+use App\Poc\Services\AuditLogger;
 use App\Poc\Services\BedrockService;
 use App\Poc\Services\DocumentProcessingService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AppApiController
 {
-    public function state(): JsonResponse
+    public function state(Request $request): JsonResponse
     {
-        return response()->json($this->stateData());
+        return response()->json($this->stateData($this->actor($request)));
     }
 
     /**
      * @throws AiServiceException
      */
-    public function generateCommunication(GenerateCommunicationRequest $request, BedrockService $bedrock): JsonResponse
+    public function generateCommunication(GenerateCommunicationRequest $request, BedrockService $bedrock, AuditLogger $audit): JsonResponse
     {
         $validated = $request->validated();
+        $actor = $this->actor($request);
 
         try {
             $generated = $bedrock->generateCommunication(
@@ -50,6 +55,8 @@ class AppApiController
         }
 
         $communication = Communication::create([
+            'tenant_id' => $actor->tenantId,
+            'created_by' => $actor->id,
             'prompt' => $validated['prompt'],
             'tone' => $validated['tone'],
             'style' => $validated['style'],
@@ -57,35 +64,55 @@ class AppApiController
             'generated_body' => $generated['body'],
             'status' => CommunicationStatus::Draft,
         ]);
+        $audit->record(
+            'poc-communication-generated',
+            $actor,
+            'communication',
+            (string) $communication->id,
+            ['tone' => $communication->tone, 'style' => $communication->style],
+            $request,
+        );
 
         return response()->json([
             'message' => 'Bozza generata correttamente.',
             'communication' => $this->serializeCommunication($communication),
-            'state' => $this->stateData(),
+            'state' => $this->stateData($actor),
         ], 201);
     }
 
-    public function runDocumentOcr(UploadDocumentRequest $request, DocumentProcessingService $documents): JsonResponse
+    public function runDocumentOcr(UploadDocumentRequest $request, DocumentProcessingService $documents, AuditLogger $audit): JsonResponse
     {
         $validated = $request->validated();
+        $actor = $this->actor($request);
 
-        $original = $documents->storeUpload($validated['document']);
+        $original = $documents->storeUpload($validated['document'], $actor);
         $original->update(['processing_status' => ProcessingStatus::Processing]);
+        $audit->record(
+            'poc-document-upload-accepted',
+            $actor,
+            'original_document',
+            (string) $original->id,
+            ['filename' => $original->original_filename],
+            $request,
+        );
 
         ProcessOriginalDocumentJob::dispatch($original);
 
         return response()->json([
             'message' => 'Documento caricato. Elaborazione avviata in coda.',
-            'streamUrl' => route('poc.api.documents.stream', $original),
+            'streamUrl' => route('api.v1.documents.stream', $original),
         ], 202);
     }
 
     /**
      * Poll the database and stream sub-documents via SSE as the queue job commits them one at a time.
      */
-    public function streamDocumentProcessing(OriginalDocument $originalDocument): StreamedResponse
+    public function streamDocumentProcessing(Request $request, OriginalDocument $originalDocument): StreamedResponse
     {
-        return response()->stream(function () use ($originalDocument): void {
+        $actor = $this->actor($request);
+        $this->authorizeOriginalDocument($originalDocument, $actor);
+
+        return response()->stream(function () use ($originalDocument, $actor): void {
             if (app()->runningUnitTests()) {
                 return;
             }
@@ -127,7 +154,7 @@ class AppApiController
                 }
 
                 if ($freshDocument->processing_status === ProcessingStatus::Completed) {
-                    $send('done', ['state' => $this->stateData()]);
+                    $send('done', ['state' => $this->stateData($actor)]);
 
                     return;
                 }
@@ -157,14 +184,28 @@ class AppApiController
         ]);
     }
 
-    public function deleteSubDocument(SubDocument $subDocument): JsonResponse
+    public function deleteSubDocument(Request $request, SubDocument $subDocument, AuditLogger $audit): JsonResponse
     {
         $original = $subDocument->originalDocument;
+        $actor = $this->actor($request);
+
+        if ($original) {
+            $this->authorizeOriginalDocument($original, $actor);
+        }
+
         $disk = config('filesystems.default', 'local');
         $subFilePath = $subDocument->file_path;
 
         $subDocument->delete();
         Storage::disk($disk)->delete($subFilePath);
+        $audit->record(
+            'poc-sub-document-deleted',
+            $actor,
+            'sub_document',
+            (string) $subDocument->id,
+            ['original_document_id' => $original?->id],
+            $request,
+        );
 
         if ($original && $original->subDocuments()->doesntExist()) {
             $originalFilePath = $original->file_path;
@@ -174,12 +215,16 @@ class AppApiController
 
         return response()->json([
             'message' => 'Documento eliminato.',
-            'state' => $this->stateData(),
+            'state' => $this->stateData($actor),
         ]);
     }
 
-    public function previewSubDocument(SubDocument $subDocument): StreamedResponse
+    public function previewSubDocument(Request $request, SubDocument $subDocument): StreamedResponse
     {
+        if ($subDocument->originalDocument) {
+            $this->authorizeOriginalDocument($subDocument->originalDocument, $this->actor($request));
+        }
+
         $disk = Storage::disk(config('filesystems.default', 'local'));
 
         abort_unless($disk->exists($subDocument->file_path), 404);
@@ -209,22 +254,23 @@ class AppApiController
      *
      * @return array<string, mixed>
      */
-    private function stateData(): array
+    private function stateData(PocUser $actor): array
     {
         return [
-            'assistant' => $this->getAssistantState(),
-            'copilot' => $this->getCopilotState(),
+            'assistant' => $this->getAssistantState($actor),
+            'copilot' => $this->getCopilotState($actor),
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function getAssistantState(): array
+    private function getAssistantState(PocUser $actor): array
     {
-        $total = Communication::query()->count();
-        $drafts = Communication::query()->where('status', CommunicationStatus::Draft)->count();
-        $history = Communication::query()->latest()->limit(10)->get();
+        $baseQuery = Communication::query()->where('tenant_id', $actor->tenantId);
+        $total = (clone $baseQuery)->count();
+        $drafts = (clone $baseQuery)->where('status', CommunicationStatus::Draft)->count();
+        $history = (clone $baseQuery)->latest()->limit(10)->get();
 
         return [
             'metrics' => [
@@ -238,26 +284,48 @@ class AppApiController
     /**
      * @return array<string, mixed>
      */
-    private function getCopilotState(): array
+    private function getCopilotState(PocUser $actor): array
     {
         $documents = SubDocument::query()
             ->with(['originalDocument', 'extractedData'])
+            ->whereHas('originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))
             ->latest()
             ->limit(40)
             ->get();
 
-        $originalCount = OriginalDocument::query()->count();
+        $originalCount = OriginalDocument::query()->where('tenant_id', $actor->tenantId)->count();
         $confidenceThreshold = (int) config('services.bedrock.poc_confidence_threshold', 80);
 
         return [
             'metrics' => [
                 ['value' => $originalCount, 'label' => 'Documenti analizzati'],
-                ['value' => SubDocument::query()->count(), 'label' => 'Sotto-documenti rilevati'],
-                ['value' => ExtractedData::query()->where('confidence_score', '>=', $confidenceThreshold)->count(), 'label' => 'Campi con confidenza'],
-                ['value' => ExtractedData::query()->where(fn ($q) => $q->where('confidence_score', '<', $confidenceThreshold)->orWhereNull('confidence_score'))->count(), 'label' => 'Da verificare'],
+                ['value' => SubDocument::query()->whereHas('originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))->count(), 'label' => 'Sotto-documenti rilevati'],
+                ['value' => ExtractedData::query()->whereHas('subDocument.originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))->where('confidence_score', '>=', $confidenceThreshold)->count(), 'label' => 'Campi con confidenza'],
+                ['value' => ExtractedData::query()->whereHas('subDocument.originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))->where(fn ($q) => $q->where('confidence_score', '<', $confidenceThreshold)->orWhereNull('confidence_score'))->count(), 'label' => 'Da verificare'],
             ],
             'documents' => $documents->map(fn ($d) => $this->serializeDocument($d))->values()->all(),
         ];
+    }
+
+    private function actor(Request $request): PocUser
+    {
+        $actor = $request->user();
+
+        if (! $actor instanceof PocUser) {
+            throw new \RuntimeException('PoC identity middleware did not provide a structured user.');
+        }
+
+        return $actor;
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    private function authorizeOriginalDocument(OriginalDocument $document, PocUser $actor): void
+    {
+        if ($document->tenant_id !== $actor->tenantId) {
+            throw new AuthorizationException('Documento non autorizzato per il tenant corrente.');
+        }
     }
 
     /**
@@ -293,7 +361,7 @@ class AppApiController
         $previewLines = [
             'Split iniziale: pagine '.$subDocument->start_page.'-'.$subDocument->end_page.'.',
             'File originale: '.($original?->original_filename ?: 'Non disponibile').'.',
-            'Campi OCR rilevati dal servizio AI configurato o dal fallback PoC.',
+            'Campi rilevati dal servizio AI configurato.',
         ];
 
         if ($subDocument->error_message) {
@@ -312,7 +380,7 @@ class AppApiController
             'description' => $data?->description,
             'confidence' => $confidence,
             'error' => $subDocument->error_message,
-            'previewUrl' => route('poc.documents.preview', ['subDocument' => $subDocument->id]),
+            'previewUrl' => route('api.v1.documents.preview', ['subDocument' => $subDocument->id]),
             'previewLines' => $previewLines,
         ];
     }

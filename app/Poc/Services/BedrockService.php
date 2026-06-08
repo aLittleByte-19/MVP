@@ -11,9 +11,8 @@ use Illuminate\Support\Facades\Storage;
 class BedrockService
 {
     public function __construct(
-        private readonly ?BedrockRuntimeClient $client,
+        private readonly BedrockRuntimeClient $client,
         private readonly ?string $modelId,
-        private readonly bool $enabled = true,
     ) {}
 
     /**
@@ -23,10 +22,6 @@ class BedrockService
      */
     public function generateCommunication(string $prompt, string $tone, string $style): array
     {
-        if (! $this->enabled) {
-            return $this->fallbackCommunication($prompt, $tone, $style);
-        }
-
         $this->ensureConfigured();
 
         $aiPrompt = $this->buildCommunicationPrompt($prompt, $tone, $style);
@@ -81,17 +76,6 @@ class BedrockService
         return is_array($decoded) ? $decoded : [];
     }
 
-    /**
-     * @return array{title: string, body: string}
-     */
-    private function fallbackCommunication(string $prompt, string $tone, string $style): array
-    {
-        return [
-            'title' => 'Bozza NEXUM (Simulata)',
-            'body' => "LOGICA POC: Generazione disabilitata.\nPrompt: {$prompt}\nTono: {$tone}\nStile: {$style}",
-        ];
-    }
-
     private function buildCommunicationPrompt(string $userPrompt, string $tone, string $style): string
     {
         return "Agisci come un assistente HR. Genera una comunicazione con tono '{$tone}' e stile '{$style}'.\n"
@@ -108,12 +92,6 @@ class BedrockService
      */
     public function splitDocument(string $pdfPath): array
     {
-        if (! $this->enabled) {
-            return [
-                ['employee_name' => 'Mario Rossi', 'start_page' => 1, 'end_page' => 1],
-            ];
-        }
-
         $this->ensureConfigured();
 
         $pdfContent = Storage::disk($this->documentDisk())->get($pdfPath);
@@ -164,18 +142,6 @@ class BedrockService
      */
     public function extractFields(string $subPdfPath): array
     {
-        if (! $this->enabled) {
-            return [
-                'employee_first_name' => 'Mario',
-                'employee_last_name' => 'Rossi',
-                'company_name' => 'Azienda Demo Srl',
-                'document_date' => now()->toDateString(),
-                'document_type' => 'Cedolino',
-                'description' => 'Dati estratti in modalita PoC.',
-                'confidence_score' => (int) config('services.bedrock.poc_confidence_threshold', 80),
-            ];
-        }
-
         $this->ensureConfigured();
 
         $pdfContent = Storage::disk($this->documentDisk())->get($subPdfPath);
@@ -225,21 +191,21 @@ class BedrockService
     }
 
     /**
-     * @throws \RuntimeException when Bedrock is enabled without the required client/model config.
+     * @throws \RuntimeException when Bedrock is missing required runtime configuration.
      */
     private function ensureConfigured(): void
     {
-        if (! $this->client || ! $this->modelId) {
-            throw new \RuntimeException('Bedrock non configurato: impostare BEDROCK_ENABLED=true e BEDROCK_MODEL_ID.');
+        if (! $this->modelId) {
+            throw new \RuntimeException('Bedrock non configurato: BEDROCK_MODEL_ID deve arrivare da Parameter Store.');
         }
     }
 
-    public static function formatUserError(\Throwable $e, string $fallback): string
+    public static function formatUserError(\Throwable $e, string $defaultMessage): string
     {
         $message = strtolower($e->getMessage());
 
         if (str_contains($message, 'expiredtoken')) {
-            return 'Le credenziali AWS temporanee sono scadute. Aggiorna AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY e AWS_SESSION_TOKEN nel pannello admin.';
+            return 'Le credenziali runtime AWS sono scadute. Aggiorna il ruolo applicativo o il segreto runtime in Secrets Manager.';
         }
 
         if (str_contains($message, 'model access is denied')) {
@@ -247,10 +213,10 @@ class BedrockService
         }
 
         if (str_contains($message, 'on-demand throughput') || str_contains($message, 'inference profile')) {
-            return 'Il modello Bedrock richiede un inference profile. Aggiorna BEDROCK_MODEL_ID nel pannello admin.';
+            return 'Il modello Bedrock richiede un inference profile. Aggiorna BEDROCK_MODEL_ID in Parameter Store.';
         }
 
-        return $fallback;
+        return $defaultMessage;
     }
 
     private function documentDisk(): string

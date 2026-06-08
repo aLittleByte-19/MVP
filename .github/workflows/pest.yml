@@ -5,7 +5,7 @@ on:
     branches:
       - develop
       - main
-      - migration/full-blade
+      - migration/new_techs
   pull_request:
 
 jobs:
@@ -17,24 +17,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.4"
-          extensions: dom, fileinfo, mbstring, pdo_sqlite, sqlite3
-          coverage: none
-
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress
-
-      - name: Create .env file
-        run: cp .env.example .env
+      - name: Build PHP runtime
+        run: docker compose build app
 
       - name: Run Pest
-        env:
-          DOCUMENT_OCR_DRIVER: local
-          DOCUMENT_CLASSIFIER_DRIVER: fake
-          BEDROCK_ENABLED: false
-        run: |
-          php artisan config:clear
-          php artisan test --display-warnings
+        run: >
+          docker compose run --rm --no-deps
+          -e CONFIG_SOURCE=env
+          -e APP_ENV=testing
+          -e CACHE_STORE=array
+          -e SESSION_DRIVER=array
+          -e QUEUE_CONNECTION=sync
+          -e DB_CONNECTION=sqlite
+          -e DB_DATABASE=:memory:
+          -e DB_HOST=
+          -e DB_PORT=
+          -e DB_USERNAME=
+          -e DB_PASSWORD=
+          app php artisan test --display-warnings

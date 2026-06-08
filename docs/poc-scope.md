@@ -1,54 +1,43 @@
-# Perimetro funzionale della PoC
+# Perimetro funzionale
 
-Questa PoC dimostra solo i flussi principali descritti nell'Analisi dei Requisiti.
-La rifinitura di dettaglio, le regole complete e le scelte definitive di UI/UX sono rimandate al PB.
+Il progetto copre i flussi principali di Document Intelligence per comunicazioni HR e analisi documentale. L'ambiente locale usa LocalStack e Terraform per modellare le dipendenze AWS-like in modo ripetibile.
 
 ## AI Assistant Generativo
 
-La PoC include:
+Sono inclusi:
 
 - generazione di una bozza a partire da prompt, tono e stile;
-- validazione minima del prompt mancante o insufficiente;
-- anteprima di titolo, testo e immagine di copertina placeholder;
+- validazione del prompt;
+- anteprima di titolo e testo;
 - modifica manuale di titolo e testo;
-- rigenerazione della bozza tramite provider fake o Bedrock se configurato;
-- eliminazione della bozza corrente;
-- salvataggio in bozza;
-- invio email simulato tramite Mailpit;
-- storico delle generazioni con ricerca e filtro base;
-- rating da 1 a 5 e commento opzionale;
-- dashboard minima con numero generazioni, prompt salvati, rating medio e feedback recenti.
+- salvataggio, approvazione, scarto e storico delle generazioni;
+- rating e commento opzionale;
+- metriche operative sulle generazioni.
 
-## AI Co-Pilot documentale
+La generazione usa il servizio AI configurato. Errori di configurazione, credenziali o modello vengono esposti come errori applicativi, senza contenuti sostitutivi.
 
-La PoC include:
+## AI Co-Pilot Documentale
 
-- upload singolo di documenti PDF;
-- controllo minimo di formato e duplicato tramite hash del file;
-- inserimento opzionale di classificazione e metadati iniziali in upload;
-- avvio asincrono dell'analisi documentale tramite Laravel Queue;
-- OCR/parsing placeholder tramite AI worker locale;
-- classificazione documento placeholder;
-- estrazione metadati principali: dipendente, azienda, nome file, data, pagine, tipologia, descrizione;
-- calcolo o simulazione del confidence score;
-- split documentale placeholder, con collegamento tra documento originale e porzione destinata al dipendente;
-- storico documenti ordinato dal piu recente;
-- filtri principali: ricerca libera, stato invio, soglia di confidenza, mese e anno;
-- vista dettaglio documento con dati estratti;
-- modifica manuale dei campi editabili;
-- generazione bozza di invio con destinatario, oggetto e testo;
-- invio simulato tramite Mailpit;
-- dashboard minima AI Co-Pilot con documenti analizzati, classificazioni corrette simulate, documenti sotto soglia, destinatari riconosciuti e tempo medio di analisi.
+Sono inclusi:
 
-## Esclusioni consapevoli dalla PoC
+- upload singolo di PDF;
+- controllo formato e duplicato tramite hash;
+- avvio asincrono via Laravel Queue su SQS;
+- split documentale tramite Bedrock;
+- estrazione dei campi principali tramite Bedrock;
+- persistenza di documento originale, sotto-documenti e dati estratti;
+- preview PDF del sotto-documento;
+- stato `failed` esplicito quando split o estrazione non riescono;
+- storico e filtri principali;
+- metriche operative su documenti elaborati e soglie di confidenza.
 
-Non sono inclusi nella PoC iniziale:
+## Esclusioni
 
-- gestione avanzata di ruoli, permessi e policy;
-- audit trail completo e policy di conservazione;
-- retry avanzato, prove di consegna e tracciamento letture;
-- entity resolution completa su anagrafiche reali;
-- split PDF realmente affidabile per documenti complessi;
-- OCR/Textract e Bedrock in modalita production;
-- dashboard analitiche avanzate o esportazioni complesse;
-- Kubernetes, Terraform, monitoring enterprise e integrazioni NEXUM reali.
+Non sono ancora inclusi:
+
+- identity provider reale e policy RBAC/ABAC complete;
+- audit trail append-only completo;
+- workflow Step Functions collegato end-to-end al worker Laravel;
+- integrazione SES per invio effettivo;
+- OpenTelemetry collector e dashboard metriche;
+- contract OpenAPI completo.

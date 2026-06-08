@@ -3,9 +3,6 @@
 use App\Poc\Enums\CommunicationStatus;
 use App\Poc\Models\Communication;
 use App\Poc\Services\BedrockService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-uses(RefreshDatabase::class);
 
 test('successful generation creates a draft communication record with all fields', function () {
     $this->mock(BedrockService::class, function ($mock) {

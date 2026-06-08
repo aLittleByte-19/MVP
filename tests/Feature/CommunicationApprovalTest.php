@@ -2,9 +2,6 @@
 
 use App\Poc\Enums\CommunicationStatus;
 use App\Poc\Models\Communication;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-uses(RefreshDatabase::class);
 
 test('approved is a valid communication status', function () {
     $communication = Communication::factory()->draft()->create();

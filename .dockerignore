@@ -5,6 +5,7 @@
 
 vendor
 node_modules
+apps/frontend/dist
 
 .env
 .env.*
@@ -15,6 +16,8 @@ storage/framework/cache/*
 storage/framework/sessions/*
 storage/framework/views/*
 storage/logs/*
+docker/traefik/certs/*.crt
+docker/traefik/certs/*.key
 
 ai-worker/.venv
 ai-worker/__pycache__

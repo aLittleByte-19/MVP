@@ -17,6 +17,7 @@
 /.zed
 /auth.json
 /node_modules
+/apps/frontend/dist
 /public/build
 /public/fonts-manifest.dev.json
 /public/hot
@@ -41,3 +42,11 @@ Homestead.yaml
 Thumbs.db
 
 /documenti_ocr
+
+/infra/local/.terraform/
+/infra/local/terraform.tfstate
+/infra/local/terraform.tfstate.backup
+/infra/local/*.tfplan
+
+/docker/traefik/certs/*.crt
+/docker/traefik/certs/*.key

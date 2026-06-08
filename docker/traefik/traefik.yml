@@ -1,0 +1,23 @@
+global:
+  sendAnonymousUsage: false
+
+entryPoints:
+  web:
+    address: ":8080"
+  websecure:
+    address: ":8443"
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+api:
+  dashboard: false
+
+log:
+  level: INFO
+  format: json
+
+accessLog:
+  format: json

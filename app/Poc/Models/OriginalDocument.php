@@ -12,6 +12,8 @@ class OriginalDocument extends Model
     use HasFactory;
 
     protected $fillable = [
+        'tenant_id',
+        'created_by',
         'file_path',
         'original_filename',
         'processing_status',

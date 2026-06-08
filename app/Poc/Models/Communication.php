@@ -11,6 +11,8 @@ class Communication extends Model
     use HasFactory;
 
     protected $fillable = [
+        'tenant_id',
+        'created_by',
         'prompt',
         'tone',
         'style',

@@ -2,16 +2,37 @@
 
 use App\Poc\Commands\ResetPocData;
 use App\Poc\Exceptions\AiServiceException;
+use App\Poc\Middleware\AuthorizePocAccess;
+use App\Poc\Middleware\CorrelateRequests;
+use App\Poc\Middleware\ResolvePocIdentity;
+use App\Poc\Support\RuntimeConfigurationLoader;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Configuration\ApplicationBuilder;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Session\TokenMismatchException;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-return Application::configure(basePath: dirname(__DIR__))
+RuntimeConfigurationLoader::load();
+
+$app = new Application(dirname(__DIR__));
+$app->useEnvironmentPath('/dev');
+$app->loadEnvironmentFrom('null');
+
+return (new ApplicationBuilder($app))
+    ->withKernels()
+    ->withEvents()
+    ->withCommands()
+    ->withProviders()
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
@@ -19,34 +40,93 @@ return Application::configure(basePath: dirname(__DIR__))
         ResetPocData::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
-        // Keep this step so Laravel registers the default "web" middleware group.
+        $middleware->append(CorrelateRequests::class);
+        $middleware->alias([
+            'poc.identity' => ResolvePocIdentity::class,
+            'poc.authorize' => AuthorizePocAccess::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->render(function (AiServiceException $exception, Request $request) {
-            if ($request->is('poc/*') || $request->expectsJson()) {
-                return response()->json([
-                    'message' => $exception->getMessage(),
-                ], $exception->getCode() ?: 502);
+        $expectsApiJson = static fn (Request $request): bool => $request->is('api/*') || $request->expectsJson();
+
+        $jsonError = static function (Request $request, string $code, string $message, int $status, array $extra = []) {
+            return response()->json([
+                'error' => array_merge([
+                    'code' => $code,
+                    'message' => $message,
+                    'requestId' => $request->attributes->get('request_id'),
+                    'correlationId' => $request->attributes->get('correlation_id'),
+                ], $extra),
+            ], $status);
+        };
+
+        $exceptions->render(function (AiServiceException $exception, Request $request) use ($expectsApiJson, $jsonError) {
+            if ($expectsApiJson($request)) {
+                return $jsonError($request, 'upstream_unavailable', $exception->getMessage(), $exception->getCode() ?: 502);
             }
 
             return null;
         });
 
-        $exceptions->render(function (TokenMismatchException $exception, Request $request) {
-            if ($request->is('poc/*') || $request->expectsJson()) {
-                return response()->json([
-                    'message' => "La pagina è rimasta aperta troppo a lungo. Ricaricala e riprova l'operazione.",
-                ], 419);
+        $exceptions->render(function (TokenMismatchException $exception, Request $request) use ($expectsApiJson, $jsonError) {
+            if ($expectsApiJson($request)) {
+                return $jsonError($request, 'csrf_token_mismatch', "La pagina è rimasta aperta troppo a lungo. Ricaricala e riprova l'operazione.", 419);
             }
 
             return null;
         });
 
-        $exceptions->render(function (HttpException $exception, Request $request) {
-            if ($exception->getStatusCode() === 419 && ($request->is('poc/*') || $request->expectsJson())) {
-                return response()->json([
-                    'message' => "La pagina è rimasta aperta troppo a lungo. Ricaricala e riprova l'operazione.",
-                ], 419);
+        $exceptions->render(function (ValidationException $exception, Request $request) use ($expectsApiJson, $jsonError) {
+            if ($expectsApiJson($request)) {
+                return $jsonError($request, 'validation_failed', 'I dati inviati non sono validi.', 422, [
+                    'fields' => $exception->errors(),
+                ]);
+            }
+
+            return null;
+        });
+
+        $exceptions->render(function (AuthenticationException $exception, Request $request) use ($expectsApiJson, $jsonError) {
+            if ($expectsApiJson($request)) {
+                return $jsonError($request, 'unauthorized', 'Autenticazione richiesta.', 401);
+            }
+
+            return null;
+        });
+
+        $exceptions->render(function (AuthorizationException $exception, Request $request) use ($expectsApiJson, $jsonError) {
+            if ($expectsApiJson($request)) {
+                return $jsonError($request, 'forbidden', 'Operazione non autorizzata.', 403);
+            }
+
+            return null;
+        });
+
+        $exceptions->render(function (ModelNotFoundException|NotFoundHttpException $exception, Request $request) use ($expectsApiJson, $jsonError) {
+            if ($expectsApiJson($request)) {
+                return $jsonError($request, 'not_found', 'Risorsa non trovata.', 404);
+            }
+
+            return null;
+        });
+
+        $exceptions->render(function (HttpException $exception, Request $request) use ($expectsApiJson, $jsonError) {
+            if ($expectsApiJson($request)) {
+                $status = $exception->getStatusCode();
+
+                return $jsonError(
+                    $request,
+                    match ($status) {
+                        401 => 'unauthorized',
+                        403 => 'forbidden',
+                        404 => 'not_found',
+                        409 => 'conflict',
+                        419 => 'csrf_token_mismatch',
+                        default => $status >= 500 ? 'server_error' : 'http_error',
+                    },
+                    $status >= 500 ? 'Errore interno del server.' : ($exception->getMessage() ?: 'Richiesta non valida.'),
+                    $status,
+                );
             }
 
             return null;

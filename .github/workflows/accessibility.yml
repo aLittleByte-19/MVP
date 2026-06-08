@@ -5,7 +5,7 @@ on:
     branches:
       - develop
       - main
-      - migration/full-blade
+      - migration/new_techs
   pull_request:
 
 jobs:
@@ -17,24 +17,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
       - name: Install Node dependencies
-        run: npm ci --ignore-scripts=false
+        run: docker compose --profile tools run --rm node npm ci --ignore-scripts
 
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+      - name: Generate local TLS certificate
+        run: make local-tls
+
+      - name: Start infrastructure
+        run: make infra-up
+
+      - name: Apply LocalStack infrastructure
+        run: make infra-apply
+
+      - name: Run database migrations
+        run: make release
 
       - name: Start application
-        run: docker compose up -d --build
+        run: docker compose up -d --build app nginx traefik
 
       - name: Wait for application
         run: |
           for attempt in {1..120}; do
-            if curl --silent --fail http://localhost:8080 > /dev/null; then
+            if curl --silent --fail --insecure https://localhost:8443/health > /dev/null; then
               exit 0
             fi
 
@@ -45,12 +49,10 @@ jobs:
           exit 1
 
       - name: Run axe
-        run: node scripts/a11y/axe-playwright.mjs http://localhost:8080 http://localhost:8080/admin
+        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/axe-playwright.mjs https://traefik:8443
 
       - name: Run Pa11y
-        run: |
-          npx pa11y http://localhost:8080
-          npx pa11y http://localhost:8080/admin
+        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/pa11y-runner.mjs https://traefik:8443
 
       - name: Stop application
         if: always()

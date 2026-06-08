@@ -1,4 +1,6 @@
-FROM php:8.4-fpm-bookworm
+FROM public.ecr.aws/docker/library/php:8.4-fpm-bookworm
+
+ARG COMPOSER_INSTALL_DEV=true
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -26,7 +28,8 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY --from=public.ecr.aws/docker/library/composer:2 /usr/bin/composer /usr/bin/composer
+COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/zz-opcache.ini
 
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
@@ -34,7 +37,11 @@ WORKDIR /var/www/html
 
 # Install dependencies first to leverage Docker cache
 COPY composer.json composer.lock ./
-RUN composer install --no-interaction --no-scripts --no-autoloader --prefer-dist
+RUN if [ "$COMPOSER_INSTALL_DEV" = "true" ]; then \
+        composer install --no-interaction --no-scripts --no-autoloader --prefer-dist; \
+    else \
+        composer install --no-dev --no-interaction --no-scripts --no-autoloader --prefer-dist; \
+    fi
 
 # Copy the rest of the application
 COPY . .
@@ -43,10 +50,32 @@ COPY . .
 RUN composer dump-autoload --no-interaction --optimize \
     && composer_hash=$(sha256sum composer.lock | awk '{ print $1 }') \
     && echo "$composer_hash" > vendor/.composer-lock.false.sha256 \
-    && echo "$composer_hash" > vendor/.composer-lock.true.sha256
+    && echo "$composer_hash" > vendor/.composer-lock.true.sha256 \
+    && mkdir -p \
+        storage/app/public \
+        storage/app/private \
+        storage/app/tmp/poc-processing \
+        storage/framework/cache/data \
+        storage/framework/sessions \
+        storage/framework/testing \
+        storage/framework/views \
+        storage/logs \
+        bootstrap/cache \
+        /tmp/laravel-views \
+    && if [ -d vendor/pestphp/pest-plugin-mutate ]; then \
+        mkdir -p vendor/pestphp/pest-plugin-mutate/.temp/pest-mutate-cache; \
+    fi \
+    && if [ -d vendor/pestphp/pest ]; then \
+        mkdir -p vendor/pestphp/pest/.temp; \
+    fi \
+    && chown -R www-data:www-data storage bootstrap/cache /tmp/laravel-views \
+    && if [ -d vendor/pestphp/pest-plugin-mutate/.temp ]; then \
+        chown -R www-data:www-data vendor/pestphp/pest-plugin-mutate/.temp; \
+    fi \
+    && if [ -d vendor/pestphp/pest/.temp ]; then \
+        chown -R www-data:www-data vendor/pestphp/pest/.temp; \
+    fi
 
-COPY docker/php/entrypoint.sh /usr/local/bin/poc-entrypoint
-RUN chmod +x /usr/local/bin/poc-entrypoint
+USER www-data
 
-ENTRYPOINT ["poc-entrypoint"]
 CMD ["php-fpm"]

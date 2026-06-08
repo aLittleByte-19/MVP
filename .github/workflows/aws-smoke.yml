@@ -1,0 +1,37 @@
+name: AWS Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      aws_role_arn:
+        description: IAM role ARN assumable through GitHub OIDC.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  smoke:
+    name: Optional real AWS smoke
+    runs-on: ubuntu-latest
+    if: ${{ inputs.aws_role_arn != '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.aws_role_arn }}
+          aws-region: eu-north-1
+
+      - name: Verify caller identity
+        run: aws sts get-caller-identity
+
+      - name: Placeholder for real AWS service smoke
+        run: |
+          echo "Enterprise IAM role is available."
+          echo "Add scoped S3, Textract and Bedrock smoke calls once account-specific ARNs and model access are provided."

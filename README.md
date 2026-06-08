@@ -1,114 +1,93 @@
-# NEXUM / aLittleByte - Document Intelligence PoC
+# NEXUM Document Intelligence
 
-<p align="center">
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/pint.yml"><img alt="Pint" src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/pint.yml?branch=main&label=Pint&style=flat-square"></a>
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/pest.yml"><img alt="Pest" src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/pest.yml?branch=main&label=Pest&style=flat-square"></a>
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/accessibility.yml"><img alt="Accessibility" src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/accessibility.yml?branch=main&label=A11y&style=flat-square"></a>
-</p>
+Applicazione Laravel per generazione assistita di comunicazioni HR e analisi di PDF multi-destinatario. Il runtime locale usa Docker Compose, LocalStack e Terraform containerizzato per avvicinare l'ambiente di sviluppo a un modello di produzione ripetibile.
 
-Proof of Concept per validare l'uso di AI generativa e AI documentale nei flussi NEXUM.
+## Runtime
 
-La PoC copre due casi d'uso:
+- PHP-FPM e Nginx sono immagini immutabili: codice e dipendenze sono inclusi in build.
+- Terraform gira nel servizio Compose `terraform` e provisiona LocalStack.
+- I valori non sensibili sono in SSM Parameter Store sotto `/nexum/poc/app`.
+- I segreti runtime sono in Secrets Manager nel secret `/nexum/poc/app/runtime`.
+- Laravel carica la configurazione da SSM e Secrets Manager prima del bootstrap framework.
+- Storage documentale e code usano S3 e SQS su LocalStack.
+- La pipeline documentale non applica sostituzioni automatiche: errori Bedrock, split vuoti o estrazioni fallite producono stato `failed` esplicito.
 
-* generazione assistita di comunicazioni HR;
-* analisi di PDF multi-destinatario, divisione in sotto-documenti ed estrazione di dati strutturati.
+## Avvio Locale
 
-La demo funziona in locale anche senza servizi AI reali. Quando serve una prova più realistica, può essere collegata ad Amazon Bedrock.
-
-## Scope della PoC
-
-La PoC serve a verificare:
-
-* se un PDF con più destinatari può essere diviso automaticamente in documenti separati;
-* se i dati principali dei documenti possono essere precompilati per ridurre il data-entry manuale;
-* se un assistente AI può generare bozze di comunicazioni HR controllabili dall'utente;
-* se l'esperienza locale è sufficientemente fluida per una demo end-to-end.
-
-Il flusso è pensato per restare utilizzabile anche quando l'estrazione dei campi non riesce: il sotto-documento resta visibile e può essere verificato manualmente.
-
-## Stack
-
-* **Laravel 12** per backend, validazione, persistenza e code.
-* **Blade + CSS/JS custom** per l'interfaccia della PoC.
-* **Docker, PostgreSQL, Redis e MinIO** per l'ambiente locale.
-* **Amazon Bedrock** opzionale per generazione contenuti, split documentale ed estrazione dati.
-
-## Installazione Rapida
-
-1. Crea il file ambiente:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Avvia lo stack:
-
-   ```bash
-   docker compose up -d --build
-   ```
-
-3. Apri i servizi:
-
-   * Applicazione: `http://localhost:8080`
-   * Admin PoC: `http://localhost:8080/admin`
-   * MinIO Console: `http://localhost:9001`
-
-L'entrypoint Docker installa le dipendenze, prepara Laravel e applica le migrazioni al primo avvio.
-
-## Configurazione
-
-La configurazione predefinita è adatta alla demo locale: Bedrock è disabilitato, lo split è simulato e l'estrazione OCR usa dati dimostrativi.
-
-```env
-BEDROCK_ENABLED=false
-BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
-DOCUMENT_CLASSIFIER_DRIVER=fake
-DOCUMENT_OCR_DRIVER=local
-POC_CONFIDENCE_THRESHOLD=80
+```bash
+make setup
 ```
 
-Per usare Bedrock reale:
+Il comando esegue build delle immagini, avvia PostgreSQL/Redis/LocalStack, inizializza e applica Terraform, lancia le migrazioni e avvia app, Nginx e worker SQS.
 
-```env
-BEDROCK_ENABLED=true
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-AWS_SESSION_TOKEN=...
-AWS_DEFAULT_REGION=eu-north-1
-DOCUMENT_CLASSIFIER_DRIVER=bedrock
-DOCUMENT_OCR_DRIVER=bedrock
+Comandi equivalenti passo-passo:
+
+```bash
+make infra-up
+make infra-apply
+make release
+docker compose up -d app nginx queue
 ```
 
-Valori supportati:
+Endpoint locali:
 
-* `DOCUMENT_CLASSIFIER_DRIVER`: `fake` oppure `bedrock`
-* `DOCUMENT_OCR_DRIVER`: `local` oppure `bedrock`
-* `BEDROCK_ENABLED`: `false` per simulazione, `true` per chiamate reali
+- Applicazione: http://localhost:8080
+- Console operativa: http://localhost:8080/admin
+- LocalStack edge: http://localhost:4566
 
-Le stesse impostazioni possono essere gestite dalla dashboard admin:
+## Configurazione Runtime
 
-```text
-http://localhost:8080/admin
+La configurazione applicativa non viene passata ai container come environment diretti. Compose fornisce solo i valori bootstrap necessari a leggere LocalStack:
+
+- `CONFIG_SOURCE=aws`
+- `CONFIG_SSM_PATH=/nexum/poc/app`
+- `CONFIG_SECRET_IDS=/nexum/poc/app/runtime`
+- `CONFIG_AWS_ENDPOINT=http://localstack:4566`
+- `CONFIG_AWS_REGION=eu-north-1`
+
+Terraform crea e aggiorna:
+
+- bucket S3 documentale;
+- coda SQS e DLQ;
+- EventBridge bus/rule;
+- Step Functions state machine;
+- identita SES locale;
+- parametri SSM applicativi;
+- secret runtime con `APP_KEY`, password database e credenziali SDK LocalStack.
+
+Valori bootstrap e porte possono essere sovrascritti con variabili shell usando i nomi presenti in `.env.example`; i valori runtime dell'applicazione restano in SSM/Secrets.
+
+## Terraform LocalStack
+
+Terraform non richiede installazione host. I target Make usano `docker compose --profile tools run --rm terraform`.
+
+```bash
+make infra-init
+make infra-plan
+make infra-apply
+make infra-destroy
 ```
 
-Da qui si possono cambiare modello Bedrock, driver documentali, soglia di confidenza, credenziali AWS e dati demo. Le impostazioni vengono salvate nel file `.env`.
+Lo stato Terraform locale resta sotto `infra/local`; la cache plugin è in un volume Docker dedicato.
 
-Le variabili Textract sono presenti in `.env.example`, ma sono disattivate per questa PoC.
-
-## Test
-
-Per eseguire la suite:
+## Test E Qualita
 
 ```bash
 make test
+make pint
 ```
 
-Comandi utili:
+I test impostano `CONFIG_SOURCE=env` e usano driver isolati, quindi non richiedono LocalStack. I mock Bedrock sono ammessi solo nei test unitari/feature isolati; il flusso applicativo principale fallisce esplicitamente quando un servizio richiesto non risponde correttamente.
+
+## Operazioni
 
 ```bash
-make fresh
 make logs
-docker compose exec -T app ./vendor/bin/pint --test
+make fresh
+make release
+docker compose down
 ```
 
-`make fresh` resetta database e dati generati dalla PoC. `make logs` mostra i log dei container principali.
+- `make logs` segue app, worker, Nginx e LocalStack.
+- `make fresh` ricrea il database e cancella i dati applicativi generati.
+- `make release` esegue le migrazioni come job esplicito.

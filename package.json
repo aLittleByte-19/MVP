@@ -2,6 +2,18 @@
     "$schema": "https://www.schemastore.org/package.json",
     "private": true,
     "type": "module",
+    "workspaces": [
+        "apps/frontend"
+    ],
+    "scripts": {
+        "frontend:dev": "npm run dev --workspace apps/frontend",
+        "frontend:build": "npm run build --workspace apps/frontend",
+        "frontend:test": "npm run test --workspace apps/frontend",
+        "frontend:typecheck": "npm run typecheck --workspace apps/frontend",
+        "openapi:generate": "npm run openapi:generate --workspace apps/frontend",
+        "openapi:check": "npm run openapi:check --workspace apps/frontend",
+        "a11y:axe": "node scripts/a11y/axe-playwright.mjs"
+    },
     "devDependencies": {
         "axe-core": "^4.11.4",
         "concurrently": "^9.0.1",

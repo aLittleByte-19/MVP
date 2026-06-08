@@ -5,7 +5,7 @@ on:
     branches:
       - develop
       - main
-      - migration/full-blade
+      - migration/new_techs
   pull_request:
 
 jobs:
@@ -17,15 +17,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.4"
-          extensions: dom, fileinfo, mbstring
-          coverage: none
-
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Build PHP runtime
+        run: docker compose build app
 
       - name: Run Pint
-        run: ./vendor/bin/pint --test
+        run: docker compose run --rm --no-deps app php vendor/bin/pint --test

@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Poc\Services\AuditLogger;
 use App\Poc\Services\BedrockService;
 use App\Poc\Services\DocumentProcessingService;
 use Aws\BedrockRuntime\BedrockRuntimeClient;
@@ -12,8 +13,6 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(BedrockRuntimeClient::class, function () {
-            $credentials = config('services.bedrock.credentials');
-
             $config = [
                 'version' => 'latest',
                 'region' => config('services.bedrock.region'),
@@ -23,27 +22,25 @@ class AppServiceProvider extends ServiceProvider
                 ],
             ];
 
-            if (filled($credentials['key'] ?? null) && filled($credentials['secret'] ?? null)) {
-                $config['credentials'] = array_filter($credentials, filled(...));
+            if (filled(config('services.bedrock.endpoint'))) {
+                $config['endpoint'] = config('services.bedrock.endpoint');
             }
 
             return new BedrockRuntimeClient($config);
         });
 
         $this->app->singleton(BedrockService::class, function ($app) {
-            $bedrockEnabled = (bool) config('services.bedrock.enabled');
-
             return new BedrockService(
-                $bedrockEnabled ? $app->make(BedrockRuntimeClient::class) : null,
+                $app->make(BedrockRuntimeClient::class),
                 config('services.bedrock.model_id'),
-                $bedrockEnabled,
             );
         });
 
         $this->app->singleton(DocumentProcessingService::class, function ($app) {
-            return new DocumentProcessingService($app->make(BedrockService::class));
+            return new DocumentProcessingService(
+                $app->make(BedrockService::class),
+                $app->make(AuditLogger::class),
+            );
         });
     }
-
-    public function boot(): void {}
 }

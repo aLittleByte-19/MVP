@@ -19,6 +19,8 @@ class OriginalDocumentFactory extends Factory
     public function definition(): array
     {
         return [
+            'tenant_id' => 'poc-local-tenant',
+            'created_by' => 'poc-local-user',
             'file_path' => 'documents/originals/'.fake()->uuid().'.pdf',
             'original_filename' => fake()->word().'_cedolini.pdf',
             'processing_status' => fake()->randomElement(ProcessingStatus::cases()),

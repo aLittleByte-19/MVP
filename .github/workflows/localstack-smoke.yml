@@ -1,0 +1,55 @@
+name: LocalStack Smoke
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+      - migration/new_techs
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Compose, Terraform and HTTPS smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate local TLS certificate
+        run: make local-tls
+
+      - name: Build images
+        run: docker compose build
+
+      - name: Start dependencies
+        run: docker compose up -d postgres redis localstack
+
+      - name: Apply LocalStack infrastructure
+        run: docker compose --profile tools run --rm terraform init && docker compose --profile tools run --rm terraform apply -auto-approve
+
+      - name: Run migrations
+        run: docker compose --profile release run --rm migrate
+
+      - name: Start runtime
+        run: docker compose up -d app queue nginx traefik
+
+      - name: Smoke HTTPS endpoints
+        run: |
+          for attempt in {1..120}; do
+            if curl --silent --fail --insecure https://localhost:8443/health > /dev/null; then
+              break
+            fi
+
+            sleep 2
+          done
+
+          curl --silent --fail --insecure https://localhost:8443/health
+          curl --silent --fail --insecure https://localhost:8443/ready
+          curl --silent --fail --insecure https://localhost:8443/api/v1/state
+
+      - name: Stop application
+        if: always()
+        run: docker compose down --volumes --remove-orphans

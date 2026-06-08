@@ -36,14 +36,9 @@ return [
     ],
 
     'bedrock' => [
-        'enabled' => env('BEDROCK_ENABLED', false),
         'model_id' => env('BEDROCK_MODEL_ID'),
         'region' => env('AWS_DEFAULT_REGION', 'eu-north-1'),
-        'credentials' => [
-            'key' => env('AWS_ACCESS_KEY_ID'),
-            'secret' => env('AWS_SECRET_ACCESS_KEY'),
-            'token' => env('AWS_SESSION_TOKEN'),
-        ],
+        'endpoint' => env('BEDROCK_ENDPOINT'),
         'poc_confidence_threshold' => (int) env('POC_CONFIDENCE_THRESHOLD', 80),
     ],
 
@@ -53,11 +48,6 @@ return [
         's3_bucket' => env('TEXTRACT_S3_BUCKET'),
         'sns_topic_arn' => env('TEXTRACT_SNS_TOPIC_ARN'),
         'role_arn' => env('TEXTRACT_ROLE_ARN'),
-    ],
-
-    'documents' => [
-        'ocr_driver' => env('DOCUMENT_OCR_DRIVER', 'local'),
-        'classifier_driver' => env('DOCUMENT_CLASSIFIER_DRIVER', 'fake'),
     ],
 
 ];

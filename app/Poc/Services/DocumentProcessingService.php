@@ -6,6 +6,7 @@ use App\Poc\Enums\ProcessingStatus;
 use App\Poc\Models\ExtractedData;
 use App\Poc\Models\OriginalDocument;
 use App\Poc\Models\SubDocument;
+use App\Poc\Security\PocUser;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -15,12 +16,15 @@ use setasign\Fpdi\Fpdi;
 
 class DocumentProcessingService
 {
-    public function __construct(private readonly BedrockService $bedrock) {}
+    public function __construct(
+        private readonly BedrockService $bedrock,
+        private readonly AuditLogger $audit,
+    ) {}
 
     /**
      * @throws \RuntimeException when the upload cannot be persisted to the configured disk.
      */
-    public function storeUpload(UploadedFile $file): OriginalDocument
+    public function storeUpload(UploadedFile $file, PocUser $actor): OriginalDocument
     {
         $path = $file->store('documents/originals', $this->documentDisk());
 
@@ -30,12 +34,14 @@ class DocumentProcessingService
 
         $safeName = preg_replace('/[^\w.\-]/u', '_', $file->getClientOriginalName()) ?: 'documento.pdf';
 
-        return $this->handleStoredFile($path, $safeName);
+        return $this->handleStoredFile($path, $safeName, $actor);
     }
 
-    public function handleStoredFile(string $path, string $filename): OriginalDocument
+    public function handleStoredFile(string $path, string $filename, ?PocUser $actor = null): OriginalDocument
     {
         return OriginalDocument::create([
+            'tenant_id' => $actor?->tenantId ?? 'poc-local-tenant',
+            'created_by' => $actor?->id,
             'file_path' => $path,
             'original_filename' => $filename,
             'processing_status' => ProcessingStatus::Pending,
@@ -57,9 +63,10 @@ class DocumentProcessingService
                 'message' => $e->getMessage(),
             ]);
             $subDocument->update([
-                'error_message' => BedrockService::formatUserError($e, 'Estrazione campi non disponibile. Verifica la configurazione AI nel pannello admin.'),
+                'error_message' => BedrockService::formatUserError($e, 'Estrazione campi non disponibile. Verifica configurazione e permessi Bedrock.'),
             ]);
-            $this->createEmptyExtractedData($subDocument);
+
+            throw $e;
         }
     }
 
@@ -76,6 +83,13 @@ class DocumentProcessingService
                 'processing_status' => ProcessingStatus::Processing,
                 'error_message' => null,
             ]);
+            $this->audit->record(
+                'poc-document-processing-started',
+                resourceType: 'original_document',
+                resourceId: (string) $original->id,
+                metadata: ['status' => ProcessingStatus::Processing->value],
+                tenantId: $original->tenant_id,
+            );
 
             $absoluteSource = $this->copyStorageFileToTemporaryPath($original->file_path);
             $pdf = new Fpdi;
@@ -105,6 +119,13 @@ class DocumentProcessingService
                 'processing_status' => ProcessingStatus::Completed,
                 'error_message' => null,
             ]);
+            $this->audit->record(
+                'poc-document-processing-completed',
+                resourceType: 'original_document',
+                resourceId: (string) $original->id,
+                metadata: ['status' => ProcessingStatus::Completed->value],
+                tenantId: $original->tenant_id,
+            );
         } catch (\Throwable $e) {
             $this->handleProcessingFailure($original, $e);
         } finally {
@@ -160,8 +181,18 @@ class DocumentProcessingService
 
         $original->update([
             'processing_status' => ProcessingStatus::Failed,
-            'error_message' => BedrockService::formatUserError($e, 'Analisi documento non disponibile. Verifica la configurazione AI nel pannello admin.'),
+            'error_message' => BedrockService::formatUserError($e, 'Analisi documento non disponibile. Verifica configurazione e permessi Bedrock.'),
         ]);
+        $this->audit->record(
+            'poc-document-processing-failed',
+            resourceType: 'original_document',
+            resourceId: (string) $original->id,
+            metadata: [
+                'status' => ProcessingStatus::Failed->value,
+                'message' => BedrockService::formatUserError($e, 'Analisi documento non disponibile. Verifica configurazione e permessi Bedrock.'),
+            ],
+            tenantId: $original->tenant_id,
+        );
 
         throw $e;
     }
@@ -203,20 +234,13 @@ class DocumentProcessingService
     }
 
     /**
-     * Keep the PoC useful even when the split model cannot identify multiple recipients:
-     * one fallback segment still allows field extraction on the uploaded PDF.
-     *
      * @param  array<int, array{employee_name?: string, start_page?: int, end_page?: int}>  $segments
      * @return array<int, array{employee_name: string, start_page: int, end_page: int}>
      */
     private function normalizeSegments(array $segments, int $pageCount): array
     {
         if ($segments === []) {
-            return [[
-                'employee_name' => 'documento',
-                'start_page' => 1,
-                'end_page' => $pageCount,
-            ]];
+            throw new \RuntimeException('Il classificatore documentale non ha restituito segmenti elaborabili.');
         }
 
         return array_values(array_map(function (array $segment) use ($pageCount): array {
@@ -231,70 +255,29 @@ class DocumentProcessingService
         }, $segments));
     }
 
-    private function createEmptyExtractedData(SubDocument $subDocument): void
-    {
-        ExtractedData::updateOrCreate(['sub_document_id' => $subDocument->id], [
-            'employee_first_name' => null,
-            'employee_last_name' => null,
-            'company_name' => null,
-            'document_date' => null,
-            'document_type' => null,
-            'description' => null,
-            'confidence_score' => null,
-        ]);
-    }
-
     public function documentDisk(): string
     {
         return config('filesystems.default', 'local');
     }
 
     /**
-     * Split the document using the configured classifier.
+     * Split the document using the configured Bedrock classifier.
      *
      * @return array<int, array{employee_name: string, start_page: int, end_page: int}>
      */
     private function splitDocument(string $pdfPath): array
     {
-        if (config('services.documents.classifier_driver', 'fake') === 'fake') {
-            return [
-                ['employee_name' => 'Mario Rossi', 'start_page' => 1, 'end_page' => 1],
-            ];
-        }
-
         return $this->bedrock->splitDocument($pdfPath);
     }
 
     /**
-     * Extract fields from the document using the configured OCR driver.
+     * Extract fields from the document using the configured Bedrock model.
      *
      * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}
      */
     private function extractFields(string $subPdfPath): array
     {
-        if (config('services.documents.ocr_driver', 'local') === 'local') {
-            return $this->fallbackExtractedFields();
-        }
-
         return $this->bedrock->extractFields($subPdfPath);
-    }
-
-    /**
-     * Return deterministic local fields for the simulation driver.
-     *
-     * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}
-     */
-    private function fallbackExtractedFields(): array
-    {
-        return [
-            'employee_first_name' => 'Mario',
-            'employee_last_name' => 'Rossi',
-            'company_name' => 'Azienda Demo Srl',
-            'document_date' => now()->toDateString(),
-            'document_type' => 'Cedolino',
-            'description' => 'Dati estratti in modalita PoC.',
-            'confidence_score' => (int) config('services.bedrock.poc_confidence_threshold', 80),
-        ];
     }
 
     /**
