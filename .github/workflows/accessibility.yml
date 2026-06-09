@@ -8,6 +8,9 @@ on:
       - migration/new_techs
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   accessibility:
     name: Axe and Pa11y

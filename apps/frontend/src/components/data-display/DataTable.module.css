@@ -1,0 +1,30 @@
+.tableWrapper {
+  overflow-x: auto;
+  border: 1px solid var(--poc-border);
+  border-radius: var(--poc-radius);
+  background: var(--poc-surface-muted);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: var(--poc-space-3);
+  border-bottom: 1px solid var(--poc-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table th {
+  background: var(--poc-surface-soft);
+  color: var(--poc-muted);
+  font-size: var(--poc-font-xs);
+  text-transform: uppercase;
+}
+
+.table tr:last-child td {
+  border-bottom: 0;
+}

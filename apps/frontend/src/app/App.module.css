@@ -1,0 +1,67 @@
+.view {
+  display: grid;
+  gap: 18px;
+}
+
+.flowGrid {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.92fr) minmax(0, 1.08fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.themeToggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 72px;
+  min-width: 72px;
+  min-height: 38px;
+  padding: 4px;
+  border: 1px solid var(--poc-border);
+  border-radius: 999px;
+  background: var(--poc-surface);
+  color: var(--poc-muted);
+  box-shadow: var(--poc-shadow);
+}
+
+.themeToggle::before {
+  position: absolute;
+  left: 4px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--poc-primary);
+  content: "";
+  transition: transform 160ms ease;
+}
+
+[data-poc-theme="dark"] .themeToggle::before {
+  transform: translateX(32px);
+}
+
+.themeToggle svg {
+  position: relative;
+  z-index: 1;
+  width: 30px;
+  color: #ffffff;
+}
+
+.themeToggle svg + svg {
+  color: var(--poc-muted);
+}
+
+[data-poc-theme="dark"] .themeToggle svg {
+  color: var(--poc-muted);
+}
+
+[data-poc-theme="dark"] .themeToggle svg + svg {
+  color: #ffffff;
+}
+
+@media (max-width: 920px) {
+  .flowGrid {
+    grid-template-columns: 1fr;
+  }
+}

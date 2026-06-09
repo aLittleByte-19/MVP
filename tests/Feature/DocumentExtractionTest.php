@@ -1,8 +1,8 @@
 <?php
 
-use App\Poc\Models\ExtractedData;
-use App\Poc\Models\SubDocument;
-use App\Poc\Services\BedrockService;
+use App\Copilot\Ai\BedrockService;
+use App\Models\Copilot\ExtractedData;
+use App\Models\Copilot\SubDocument;
 
 test('extractFields returns all expected keys on success', function () {
     $this->mock(BedrockService::class, function ($mock) {

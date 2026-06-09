@@ -1,4 +1,4 @@
-# Local Development Runbook
+# Local Production-Like Runbook
 
 ## Start
 
@@ -8,21 +8,27 @@ make setup
 
 Il target esegue:
 
+- generazione TLS locale tramite container;
 - build delle immagini applicative;
 - avvio di PostgreSQL, Redis e LocalStack;
 - `terraform init` e `terraform apply` dal container Compose `terraform`;
 - migrazioni applicative;
-- avvio di app, Nginx e worker SQS.
+- avvio di app, Nginx, worker SQS, Traefik, OTel Collector, Prometheus, Tempo, Alertmanager e Grafana.
 
 Endpoint:
 
-- App: http://localhost:8080
-- Console operativa: http://localhost:8080/admin
+- App: https://localhost:8443
+- Health: https://localhost:8443/health
+- Readiness: https://localhost:8443/ready
+- Prometheus: http://localhost:9090
+- Alertmanager: http://localhost:9093
+- Grafana: http://localhost:3000
+- Tempo: http://localhost:3200
 - LocalStack edge: http://localhost:4566
 
 ## Terraform
 
-Terraform vive in `infra/local` ma viene eseguito solo tramite Docker Compose:
+Terraform vive in `infra/localstack` ma viene eseguito solo tramite Docker Compose:
 
 ```bash
 make infra-up
@@ -38,27 +44,52 @@ Il servizio `terraform` usa l'endpoint interno `http://localstack:4566` e crea S
 
 I container applicativi ricevono solo parametri bootstrap `CONFIG_*`. I valori runtime sono caricati da:
 
-- SSM Parameter Store: `/nexum/poc/app`
-- Secrets Manager: `/nexum/poc/app/runtime`
+- SSM Parameter Store: `/poc/app`
+- Secrets Manager: `/poc/app/runtime`
 
 Se una chiave obbligatoria manca, il bootstrap Laravel fallisce. Questa scelta evita configurazioni implicite e rende visibili errori di provisioning.
+
+## Observability
+
+```bash
+make observability-config
+make observability-up
+```
+
+Il Collector scrapea:
+
+- metriche applicative interne da `nginx:8080/internal/metrics`;
+- metriche Traefik da `traefik:9100/metrics`;
+- metriche del Collector da `otel-collector:8888`.
+
+Prometheus legge l'exporter del Collector su `otel-collector:9464`, invia alert ad Alertmanager e Grafana carica datasource/dashboard da file.
 
 ## Checks
 
 ```bash
 make test
 make pint
+make frontend-typecheck
+make frontend-test
+make frontend-build
+make frontend-audit
+make frontend-a11y
+make verify-fast
+make verify
 ```
 
 La suite imposta `CONFIG_SOURCE=env` per restare indipendente da LocalStack. I test di pipeline usano mock mirati dei servizi AI e non modificano il contratto runtime.
 
-## Operations
+## Real AWS OCR/AI
+
+La configurazione locale standard usa LocalStack S3 e `TEXTRACT_ENABLED=false`. Per validare il percorso critico con S3/Textract reali, impostare esplicitamente:
 
 ```bash
-make logs
-make fresh
-make release
-docker compose down
+POC_DOCUMENT_DISK=real_s3
+AWS_REAL_REGION=...
+AWS_REAL_S3_BUCKET=...
+AWS_REAL_S3_PREFIX=documents/
+TEXTRACT_ENABLED=true
 ```
 
-`make fresh` ricrea database e dati applicativi. `make release` esegue solo le migrazioni con la configurazione caricata da SSM/Secrets.
+Non salvare valori reali in repository. Bedrock richiede `BEDROCK_REGION` e `BEDROCK_MODEL_ID` con accesso gia' abilitato nell'account.

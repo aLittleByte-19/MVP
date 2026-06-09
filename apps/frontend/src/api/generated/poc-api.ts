@@ -51,6 +51,9 @@ export const getGetPocStateUrl = () => {
   return `/api/v1/state`
 }
 
+/**
+ * @summary Get current PoC state
+ */
 export const getPocState = async ( options?: RequestInit): Promise<getPocStateResponse> => {
 
   const res = await fetch(getGetPocStateUrl(),
@@ -103,6 +106,9 @@ export const getGeneratePocCommunicationUrl = () => {
   return `/api/v1/communications`
 }
 
+/**
+ * @summary Generate a communication draft
+ */
 export const generatePocCommunication = async (generateCommunicationRequest: GenerateCommunicationRequest, options?: RequestInit): Promise<generatePocCommunicationResponse> => {
 
   const res = await fetch(getGeneratePocCommunicationUrl(),
@@ -150,6 +156,9 @@ export const getUploadPocDocumentUrl = () => {
   return `/api/v1/documents/ocr`
 }
 
+/**
+ * @summary Upload a document for OCR and AI extraction
+ */
 export const uploadPocDocument = async (uploadPocDocumentBody: UploadPocDocumentBody, options?: RequestInit): Promise<uploadPocDocumentResponse> => {
     const formData = new FormData();
 formData.append(`document`, uploadPocDocumentBody.document);
@@ -199,6 +208,9 @@ export const getStreamPocDocumentProcessingUrl = (originalDocument: number,) => 
   return `/api/v1/documents/${originalDocument}/stream`
 }
 
+/**
+ * @summary Stream document processing events
+ */
 export const streamPocDocumentProcessing = async (originalDocument: number, options?: RequestInit): Promise<streamPocDocumentProcessingResponse> => {
 
   const res = await fetch(getStreamPocDocumentProcessingUrl(originalDocument),
@@ -246,6 +258,9 @@ export const getDeletePocSubDocumentUrl = (subDocument: number,) => {
   return `/api/v1/documents/${subDocument}`
 }
 
+/**
+ * @summary Delete a processed sub-document
+ */
 export const deletePocSubDocument = async (subDocument: number, options?: RequestInit): Promise<deletePocSubDocumentResponse> => {
 
   const res = await fetch(getDeletePocSubDocumentUrl(subDocument),
@@ -293,6 +308,9 @@ export const getPreviewPocSubDocumentUrl = (subDocument: number,) => {
   return `/api/v1/documents/${subDocument}/preview`
 }
 
+/**
+ * @summary Preview a processed sub-document PDF
+ */
 export const previewPocSubDocument = async (subDocument: number, options?: RequestInit): Promise<previewPocSubDocumentResponse> => {
 
   const res = await fetch(getPreviewPocSubDocumentUrl(subDocument),

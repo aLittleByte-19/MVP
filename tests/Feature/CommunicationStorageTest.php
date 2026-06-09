@@ -1,8 +1,8 @@
 <?php
 
-use App\Poc\Enums\CommunicationStatus;
-use App\Poc\Models\Communication;
-use App\Poc\Services\BedrockService;
+use App\Copilot\Ai\BedrockService;
+use App\Copilot\Communications\Enums\CommunicationStatus;
+use App\Models\Copilot\Communication;
 
 test('successful generation creates a draft communication record with all fields', function () {
     $this->mock(BedrockService::class, function ($mock) {

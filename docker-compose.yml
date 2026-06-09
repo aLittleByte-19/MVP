@@ -7,6 +7,12 @@ x-backend-environment: &backend-environment
   CONFIG_AWS_ACCESS_KEY_ID: ${LOCALSTACK_AWS_ACCESS_KEY_ID:-test}
   CONFIG_AWS_SECRET_ACCESS_KEY: ${LOCALSTACK_AWS_SECRET_ACCESS_KEY:-test}
   CONFIG_AWS_SESSION_TOKEN: ${LOCALSTACK_AWS_SESSION_TOKEN:-}
+  OTEL_SERVICE_NAMESPACE: ${OTEL_SERVICE_NAMESPACE:-alittlebyte}
+  OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-poc-document-pipeline}
+  OTEL_DEPLOYMENT_ENVIRONMENT: ${OTEL_DEPLOYMENT_ENVIRONMENT:-local}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+  POC_RELEASE_VERSION: ${POC_RELEASE_VERSION:-local}
+  POC_METRICS_ENABLED: ${POC_METRICS_ENABLED:-true}
 
 services:
   traefik:
@@ -23,6 +29,86 @@ services:
     depends_on:
       nginx:
         condition: service_healthy
+    networks:
+      - poc
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.153.0
+    command:
+      - --config=/etc/otelcol-contrib/config.yml
+    volumes:
+      - ./docker/otel-collector/config.yml:/etc/otelcol-contrib/config.yml:ro
+    depends_on:
+      nginx:
+        condition: service_healthy
+      traefik:
+        condition: service_started
+    networks:
+      - poc
+
+  prometheus:
+    image: prom/prometheus:v3.9.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      otel-collector:
+        condition: service_started
+      alertmanager:
+        condition: service_started
+    networks:
+      - poc
+
+  tempo:
+    image: grafana/tempo:2.9.0
+    command:
+      - -config.file=/etc/tempo/tempo.yml
+    ports:
+      - "${TEMPO_PORT:-3200}:3200"
+    volumes:
+      - ./docker/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+    networks:
+      - poc
+
+  alertmanager:
+    image: prom/alertmanager:v0.29.0
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./docker/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    networks:
+      - poc
+
+  grafana:
+    image: grafana/grafana:12.3.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_started
+      tempo:
+        condition: service_started
     networks:
       - poc
 
@@ -70,7 +156,7 @@ services:
       dockerfile: docker/php/Dockerfile
       args:
         COMPOSER_INSTALL_DEV: ${COMPOSER_INSTALL_DEV:-true}
-    command: php artisan queue:work sqs --sleep=3 --tries=3 --timeout=330
+    command: php artisan poc:workflow:consume --max=0 --wait=10
     restart: unless-stopped
     environment:
       <<: *backend-environment
@@ -109,7 +195,7 @@ services:
 
   terraform:
     image: hashicorp/terraform:1.10.5
-    working_dir: /workspace/infra/local
+    working_dir: /workspace/infra/localstack
     entrypoint: ["terraform"]
     profiles:
       - tools
@@ -127,7 +213,20 @@ services:
       TF_VAR_db_username: ${POC_DB_USERNAME:-poc}
       TF_VAR_db_password: ${POC_DB_PASSWORD:-poc-local-password}
       TF_VAR_bedrock_model_id: ${POC_BEDROCK_MODEL_ID:-amazon.nova-lite-v1:0}
+      TF_VAR_bedrock_region: ${BEDROCK_REGION:-eu-north-1}
+      TF_VAR_bedrock_endpoint: ${BEDROCK_ENDPOINT:-not-configured}
       TF_VAR_confidence_threshold: ${POC_CONFIDENCE_THRESHOLD:-80}
+      TF_VAR_document_disk: ${POC_DOCUMENT_DISK:-s3}
+      TF_VAR_real_aws_region: ${AWS_REAL_REGION:-eu-central-1}
+      TF_VAR_real_aws_access_key_id: ${AWS_REAL_ACCESS_KEY_ID:-}
+      TF_VAR_real_aws_secret_access_key: ${AWS_REAL_SECRET_ACCESS_KEY:-}
+      TF_VAR_real_aws_session_token: ${AWS_REAL_SESSION_TOKEN:-}
+      TF_VAR_real_s3_bucket: ${AWS_REAL_S3_BUCKET:-not-configured}
+      TF_VAR_real_s3_prefix: ${AWS_REAL_S3_PREFIX:-documents/}
+      TF_VAR_textract_enabled: ${TEXTRACT_ENABLED:-false}
+      TF_VAR_textract_region: ${TEXTRACT_REGION:-eu-central-1}
+      TF_VAR_textract_max_pages: ${TEXTRACT_MAX_PAGES:-0}
+      TF_VAR_textract_max_bytes: ${TEXTRACT_MAX_BYTES:-0}
     volumes:
       - ./infra:/workspace/infra
       - terraform-plugin-cache:/terraform/plugin-cache
@@ -238,6 +337,10 @@ volumes:
   postgres-data:
   redis-data:
   localstack-data:
+  prometheus-data:
+  tempo-data:
+  alertmanager-data:
+  grafana-data:
   terraform-plugin-cache:
   node-modules:
   npm-cache:

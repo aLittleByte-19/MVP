@@ -1,0 +1,22 @@
+.previewFrame {
+  width: 100%;
+  min-height: 520px;
+  border: 1px solid var(--poc-border);
+  border-radius: var(--poc-radius);
+  background: var(--poc-surface-muted);
+}
+
+.previewLines {
+  display: grid;
+  gap: var(--poc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.previewLines li {
+  padding: 9px 11px;
+  border-radius: var(--poc-radius);
+  background: var(--poc-surface-muted);
+  color: var(--poc-muted);
+}

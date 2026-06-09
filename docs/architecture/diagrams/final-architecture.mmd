@@ -1,0 +1,35 @@
+flowchart LR
+  spa["React SPA"]
+  edge["Traefik TLS"]
+  nginx["Nginx static/API proxy"]
+  api["Laravel API"]
+  worker["Laravel workflow worker"]
+  pg["PostgreSQL"]
+  redis["Redis"]
+  localstack["LocalStack: Step Functions, SQS, DLQ, SSM, Secrets, EventBridge"]
+  realaws["Real AWS: S3, Textract, Bedrock"]
+  otel["OTel Collector"]
+  prometheus["Prometheus"]
+  tempo["Tempo"]
+  grafana["Grafana"]
+  alertmanager["Alertmanager"]
+  ci["GitHub Actions"]
+
+  spa --> edge --> nginx --> api
+  api --> pg
+  api --> redis
+  api --> localstack
+  api --> realaws
+  localstack --> worker
+  worker --> localstack
+  worker --> pg
+  worker --> realaws
+  api --> otel
+  worker --> otel
+  otel --> prometheus
+  otel --> tempo
+  prometheus --> alertmanager
+  prometheus --> grafana
+  tempo --> grafana
+  ci --> api
+  ci --> localstack

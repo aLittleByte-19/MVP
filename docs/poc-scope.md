@@ -31,13 +31,23 @@ Sono inclusi:
 - storico e filtri principali;
 - metriche operative su documenti elaborati e soglie di confidenza.
 
+## Observability e Sicurezza Operativa
+
+Sono inclusi:
+
+- request ID e correlation ID su risposte HTTP e log;
+- audit trail append-only per azioni rilevanti;
+- metriche HTTP e di dominio in formato Prometheus;
+- OpenTelemetry Collector come gateway locale;
+- Prometheus con regole SRE iniziali su error ratio, latenza e readiness;
+- blocco runtime delle superfici non appartenenti alla SPA/API.
+
 ## Esclusioni
 
 Non sono ancora inclusi:
 
 - identity provider reale e policy RBAC/ABAC complete;
-- audit trail append-only completo;
 - workflow Step Functions collegato end-to-end al worker Laravel;
 - integrazione SES per invio effettivo;
-- OpenTelemetry collector e dashboard metriche;
-- contract OpenAPI completo.
+- dashboard Grafana o backend osservabilità enterprise;
+- contract OpenAPI completo per ogni evento operativo interno.

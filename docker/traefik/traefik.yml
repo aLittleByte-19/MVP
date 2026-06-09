@@ -6,6 +6,8 @@ entryPoints:
     address: ":8080"
   websecure:
     address: ":8443"
+  metrics:
+    address: ":9100"
 
 providers:
   file:
@@ -21,3 +23,10 @@ log:
 
 accessLog:
   format: json
+
+metrics:
+  prometheus:
+    entryPoint: metrics
+    addEntryPointsLabels: true
+    addRoutersLabels: true
+    addServicesLabels: true

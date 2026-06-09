@@ -1,0 +1,22 @@
+groups:
+  - name: poc-queue-alerts
+    rules:
+      - alert: QueueBacklogHigh
+        expr: increase(poc_sqs_messages_received_total[30m]) == 0 and poc_original_documents_total{status="processing"} > 0
+        for: 15m
+        labels:
+          severity: warning
+          service_namespace: alittlebyte
+        annotations:
+          summary: "Workflow queue may be stalled"
+          description: "Documents are processing but no SQS messages were consumed recently."
+
+      - alert: DLQNotEmpty
+        expr: poc_dlq_messages_total > 0
+        for: 1m
+        labels:
+          severity: warning
+          service_namespace: alittlebyte
+        annotations:
+          summary: "Document workflow DLQ contains messages"
+          description: "Run php artisan poc:dlq:list to inspect failed messages."

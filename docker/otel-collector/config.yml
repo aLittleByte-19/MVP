@@ -1,0 +1,105 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: poc-app
+          scrape_interval: 15s
+          metrics_path: /internal/metrics
+          static_configs:
+            - targets:
+                - nginx:8080
+              labels:
+                service_namespace: alittlebyte
+                service_name: poc-document-pipeline
+
+        - job_name: poc-traefik
+          scrape_interval: 15s
+          metrics_path: /metrics
+          static_configs:
+            - targets:
+                - traefik:9100
+              labels:
+                service_namespace: alittlebyte
+                service_name: poc-edge
+
+        - job_name: poc-otel-collector
+          scrape_interval: 30s
+          static_configs:
+            - targets:
+                - otel-collector:8888
+              labels:
+                service_namespace: alittlebyte
+                service_name: poc-otel-collector
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:9464
+    resource_to_telemetry_conversion:
+      enabled: false
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions:
+    - health_check
+  telemetry:
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+                without_type_suffix: true
+                without_units: true
+  pipelines:
+    metrics:
+      receivers:
+        - prometheus
+        - otlp
+      processors:
+        - memory_limiter
+        - batch
+      exporters:
+        - prometheus
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - batch
+      exporters:
+        - otlp/tempo
+        - debug
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - batch
+      exporters:
+        - debug

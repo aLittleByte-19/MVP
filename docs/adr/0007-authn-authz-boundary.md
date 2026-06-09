@@ -1,10 +1,10 @@
 # ADR 0007 - Authn Authz Boundary
 
-Status: Accepted for migration baseline
+Status: Accepted and implemented baseline
 
 ## Context
 
-The current PoC routes are public and do not model enterprise identity. The target architecture must simulate that authentication has already happened through a corporate IdP while implementing authorization in Laravel.
+The runtime must simulate that authentication has already happened through a corporate IdP while implementing authorization in Laravel.
 
 ## Decision
 
@@ -22,4 +22,3 @@ Use Laravel policies/services to enforce RBAC plus ABAC server-side. The fronten
 
 - OWASP ASVS: https://owasp.org/www-project-application-security-verification-standard/
 - GitHub Actions AWS OIDC model for future CI credentials: https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
-

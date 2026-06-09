@@ -1,22 +1,13 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { PocApp } from "./PocApp";
-import "./styles.css";
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1
-    }
-  }
-});
+import { App } from "./app/App";
+import { AppProviders } from "./app/AppProviders";
+import "./styles/globals.css";
 
 ReactDOM.createRoot(document.getElementById("poc-root") as HTMLElement).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <PocApp />
-    </QueryClientProvider>
+    <AppProviders>
+      <App />
+    </AppProviders>
   </React.StrictMode>
 );

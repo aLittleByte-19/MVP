@@ -1,0 +1,18 @@
+.card {
+  display: grid;
+  gap: var(--poc-space-1);
+  padding: var(--poc-space-3);
+  border: 1px solid var(--poc-border);
+  border-radius: var(--poc-radius);
+  background: var(--poc-surface);
+}
+
+.value {
+  color: var(--poc-text);
+  font-size: 1.38rem;
+  font-weight: 800;
+}
+
+.label {
+  color: var(--poc-muted);
+}

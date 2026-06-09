@@ -1,11 +1,14 @@
 <?php
 
-use App\Poc\Commands\ResetPocData;
-use App\Poc\Exceptions\AiServiceException;
-use App\Poc\Middleware\AuthorizePocAccess;
-use App\Poc\Middleware\CorrelateRequests;
-use App\Poc\Middleware\ResolvePocIdentity;
-use App\Poc\Support\RuntimeConfigurationLoader;
+use App\Console\Commands\ConsumeWorkflowTasks;
+use App\Console\Commands\ListDlqMessages;
+use App\Console\Commands\ResetPocData;
+use App\Copilot\Support\RuntimeConfigurationLoader;
+use App\Exceptions\Copilot\AiServiceException;
+use App\Http\Middleware\AuthorizePocAccess;
+use App\Http\Middleware\CorrelateRequests;
+use App\Http\Middleware\RecordHttpMetrics;
+use App\Http\Middleware\ResolvePocIdentity;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -37,10 +40,13 @@ return (new ApplicationBuilder($app))
         health: '/up',
     )
     ->withCommands([
+        ConsumeWorkflowTasks::class,
+        ListDlqMessages::class,
         ResetPocData::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(CorrelateRequests::class);
+        $middleware->append(RecordHttpMetrics::class);
         $middleware->alias([
             'poc.identity' => ResolvePocIdentity::class,
             'poc.authorize' => AuthorizePocAccess::class,

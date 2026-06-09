@@ -1,13 +1,13 @@
 <?php
 
-use App\Poc\Jobs\ProcessOriginalDocumentJob;
-use App\Poc\Models\AuditEvent;
-use App\Poc\Models\Communication;
-use App\Poc\Models\ExtractedData;
-use App\Poc\Models\OriginalDocument;
-use App\Poc\Models\SubDocument;
-use App\Poc\Services\BedrockService;
-use App\Poc\Services\DocumentProcessingService;
+use App\Copilot\Ai\BedrockService;
+use App\Copilot\Workflow\Services\DocumentWorkflowService;
+use App\Copilot\Workflow\Services\DocumentWorkflowTaskHandler;
+use App\Models\Copilot\AuditEvent;
+use App\Models\Copilot\Communication;
+use App\Models\Copilot\ExtractedData;
+use App\Models\Copilot\OriginalDocument;
+use App\Models\Copilot\SubDocument;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -21,6 +21,40 @@ function pocPdfUpload(string $filename = 'cedolino.pdf'): UploadedFile
     $pdf->Cell(0, 10, 'Cedolino aziendale');
 
     return UploadedFile::fake()->createWithContent($filename, $pdf->Output('S'));
+}
+
+function pocMockWorkflowStart(object $test): void
+{
+    $mock = Mockery::mock(DocumentWorkflowService::class);
+    $mock->shouldReceive('start')
+        ->once()
+        ->andReturnUsing(fn (OriginalDocument $document) => $document);
+
+    app()->instance(DocumentWorkflowService::class, $mock);
+}
+
+function pocMockWorkflowNotStarted(): void
+{
+    $mock = Mockery::mock(DocumentWorkflowService::class);
+    $mock->shouldNotReceive('start');
+
+    app()->instance(DocumentWorkflowService::class, $mock);
+}
+
+/**
+ * @return array{callback_required: bool, output: array<string, mixed>}
+ */
+function pocRunWorkflowTask(OriginalDocument $document, string $taskType = 'bedrock.extract'): array
+{
+    return app(DocumentWorkflowTaskHandler::class)->handle([
+        'taskToken' => 'test-token-'.$taskType.'-'.$document->id.'-'.str()->uuid(),
+        'taskType' => $taskType,
+        'documentId' => $document->id,
+        'tenantId' => $document->tenant_id,
+        'correlationId' => 'test-correlation',
+        's3Bucket' => 'poc-test-bucket',
+        's3Key' => $document->file_path,
+    ]);
 }
 
 test('runtime admin console is not exposed', function () {
@@ -81,6 +115,7 @@ test('document upload performs initial split and field extraction', function () 
 
     Queue::fake();
     Storage::fake('s3');
+    pocMockWorkflowStart($this);
 
     $this->mock(BedrockService::class, function ($mock) {
         $mock->shouldReceive('splitDocument')
@@ -109,10 +144,10 @@ test('document upload performs initial split and field extraction', function () 
     expect(OriginalDocument::query()->count())->toBe(1);
     $document = OriginalDocument::query()->first();
     Storage::disk('s3')->assertExists($document->file_path);
+    Queue::assertNothingPushed();
 
-    // Run the job manually: commits each sub-document individually as in production.
-    (new ProcessOriginalDocumentJob($document))
-        ->handle(app(DocumentProcessingService::class));
+    // Run the workflow task manually: this mirrors the SQS callback-token worker path.
+    pocRunWorkflowTask($document);
 
     // Stream finds the document already completed and flushes all results.
     $streamResponse = $this->get($uploadResponse->json('streamUrl'))->assertOk();
@@ -132,6 +167,19 @@ test('document upload performs initial split and field extraction', function () 
         ->and(AuditEvent::query()->where('event_type', 'poc-document-processing-completed')->count())->toBe(1);
 });
 
+test('document upload rejects executable files before workflow start', function () {
+    Storage::fake('s3');
+    pocMockWorkflowNotStarted();
+
+    $this->postJson('/api/v1/documents/ocr', [
+        'document' => UploadedFile::fake()->createWithContent('payload.php', '<?php echo "blocked";'),
+    ])
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+
+    expect(OriginalDocument::query()->count())->toBe(0);
+});
+
 test('document processing fails when classifier returns no usable segments', function () {
     config([
         'filesystems.default' => 's3',
@@ -139,6 +187,7 @@ test('document processing fails when classifier returns no usable segments', fun
 
     Queue::fake();
     Storage::fake('s3');
+    pocMockWorkflowStart($this);
 
     $this->mock(BedrockService::class, function ($mock) {
         $mock->shouldReceive('splitDocument')
@@ -154,8 +203,7 @@ test('document processing fails when classifier returns no usable segments', fun
 
     $document = OriginalDocument::query()->first();
 
-    expect(fn () => (new ProcessOriginalDocumentJob($document))
-        ->handle(app(DocumentProcessingService::class)))
+    expect(fn () => pocRunWorkflowTask($document))
         ->toThrow(RuntimeException::class, 'segmenti elaborabili');
 
     expect(SubDocument::query()->count())->toBe(0)
@@ -172,6 +220,7 @@ test('document processing clamps model page ranges to the uploaded pdf page coun
 
     Queue::fake();
     Storage::fake('s3');
+    pocMockWorkflowStart($this);
 
     $this->mock(BedrockService::class, function ($mock) {
         $mock->shouldReceive('splitDocument')
@@ -197,8 +246,7 @@ test('document processing clamps model page ranges to the uploaded pdf page coun
         ->assertStatus(202);
 
     $document = OriginalDocument::query()->first();
-    (new ProcessOriginalDocumentJob($document))
-        ->handle(app(DocumentProcessingService::class));
+    pocRunWorkflowTask($document);
 
     $subDocument = SubDocument::query()->first();
 
@@ -215,6 +263,7 @@ test('document processing keeps split visible when field extraction fails', func
 
     Queue::fake();
     Storage::fake('s3');
+    pocMockWorkflowStart($this);
 
     $expectedMessage = 'Le credenziali runtime AWS sono scadute. Aggiorna il ruolo applicativo o il segreto runtime in Secrets Manager.';
 
@@ -234,8 +283,7 @@ test('document processing keeps split visible when field extraction fails', func
         ->assertStatus(202);
 
     $document = OriginalDocument::query()->first();
-    expect(fn () => (new ProcessOriginalDocumentJob($document))
-        ->handle(app(DocumentProcessingService::class)))
+    expect(fn () => pocRunWorkflowTask($document))
         ->toThrow(RuntimeException::class);
 
     $subDocument = SubDocument::query()->first();

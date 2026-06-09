@@ -8,6 +8,9 @@ on:
       - migration/new_techs
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   frontend:
     name: OpenAPI, test and build SPA

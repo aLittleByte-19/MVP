@@ -1,0 +1,24 @@
+{
+  "uid": "poc-queues-and-dlq",
+  "title": "Queues and DLQ",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "SQS received/failed",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(poc_sqs_messages_received_total[5m])", "legendFormat": "received {{task_type}}" },
+        { "expr": "rate(poc_sqs_messages_failed_total[5m])", "legendFormat": "failed {{task_type}}" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "DLQ observed messages",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [{ "expr": "poc_dlq_messages_total", "legendFormat": "{{queue}}" }]
+    }
+  ]
+}

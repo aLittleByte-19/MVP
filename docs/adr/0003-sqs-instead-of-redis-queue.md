@@ -1,10 +1,10 @@
 # ADR 0003 - SQS Instead Of Redis Queue
 
-Status: Accepted for migration baseline
+Status: Accepted and implemented
 
 ## Context
 
-The current PoC uses Redis as the queue backend and starts `php artisan queue:work redis` in Docker Compose. The target architecture requires Amazon SQS as the primary queue and explicitly excludes Laravel Horizon.
+The runtime uses Amazon SQS as the primary queue backend. Local development provides SQS through LocalStack, and Laravel Horizon is intentionally excluded.
 
 ## Decision
 
@@ -23,4 +23,3 @@ Redis remains in the architecture for cache, sessions, rate limiting, and tempor
 - Laravel queues: https://laravel.com/docs/12.x/queues
 - Amazon SQS: https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html
 - LocalStack SQS: https://docs.localstack.cloud/aws/services/sqs/
-

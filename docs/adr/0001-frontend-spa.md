@@ -1,27 +1,20 @@
 # ADR 0001 - Frontend SPA
 
-Status: Accepted
+Status: Accepted and implemented
 
 ## Context
 
-The current PoC UI is Laravel Blade plus static JavaScript and CSS under `resources/views/poc` and `public/poc`. The target architecture requires a frontend separated from Laravel, typed API access, client-side routing, and frontend tests.
+The runtime serves a React + TypeScript + Vite SPA from the Nginx image. Laravel is the backend API provider and does not render product UI views.
 
 ## Decision
 
-Create the target frontend under `apps/frontend` as a React + TypeScript + Vite SPA. Use React Router for routing, TanStack Query for server state, React Hook Form and Zod for forms, Vitest and React Testing Library for unit/component tests, and Playwright for representative flows.
+Keep the frontend under `apps/frontend`. Generate the TypeScript client from `openapi/v1/alittlebyte-poc-api.yaml` through Orval, use TanStack Query for server state, React Hook Form for form handling, Vitest for component tests, and containerized axe/Pa11y checks for representative accessibility validation.
 
-The SPA must consume Laravel through a generated TypeScript client from the OpenAPI contract. It must not own authorization decisions; all permission enforcement remains server-side.
+Authorization decisions remain server-side. The SPA may hide actions for ergonomics, but it must never be the source of truth for access control.
 
 ## Consequences
 
-- Laravel becomes an API provider for main flows.
-- Existing Blade pages remain operational until the SPA reaches parity.
-- Frontend CI must include lint, typecheck, tests, and representative browser checks.
-- The generated client becomes a contract boundary and should not be hand-edited.
-
-## References
-
-- Vite: https://vite.dev/guide/
-- React: https://react.dev/
-- OpenAPI: https://spec.openapis.org/oas/latest.html
-- Frontend quality checks in this repo: `scripts/a11y/axe-playwright.mjs`, `pa11y.json`
+- The Nginx runtime image owns static SPA delivery.
+- Laravel owns `/api/v1/*`, `/health`, `/ready`, and internal metrics.
+- Generated API clients are contract artifacts and must not be hand-edited.
+- Frontend tooling runs through Docker Compose, not host Node.

@@ -1,0 +1,31 @@
+{
+  "uid": "poc-ai-ocr-quality",
+  "title": "AI and OCR Quality",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Textract jobs",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(poc_textract_jobs_started_total[5m])", "legendFormat": "started" },
+        { "expr": "rate(poc_textract_jobs_completed_total[5m])", "legendFormat": "completed" },
+        { "expr": "rate(poc_textract_jobs_failed_total[5m])", "legendFormat": "failed" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Textract confidence avg",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [{ "expr": "poc_textract_confidence_sum / clamp_min(poc_textract_confidence_count, 1)", "legendFormat": "confidence" }]
+    },
+    {
+      "type": "stat",
+      "title": "Manual review candidates",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [{ "expr": "poc_sub_documents_total{state=\"failed\"}", "legendFormat": "failed extraction" }]
+    }
+  ]
+}

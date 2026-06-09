@@ -55,6 +55,26 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
 
+      - name: Build image for security scan
+        run: >
+          docker build
+          --build-arg COMPOSER_INSTALL_DEV=false
+          --tag local/poc-${{ matrix.image.name }}:${{ github.sha }}
+          --file ${{ matrix.image.dockerfile }}
+          .
+
+      - name: Scan image with Trivy
+        run: >
+          docker run --rm
+          -v /var/run/docker.sock:/var/run/docker.sock
+          -v "$PWD/.trivy-cache:/root/.cache"
+          aquasec/trivy:0.66.0
+          image
+          --exit-code 1
+          --severity HIGH,CRITICAL
+          --ignore-unfixed
+          local/poc-${{ matrix.image.name }}:${{ github.sha }}
+
       - name: Build image
         uses: docker/build-push-action@v6
         with:

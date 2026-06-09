@@ -1,14 +1,14 @@
 # ADR 0004 - LocalStack And Terraform
 
-Status: Accepted for migration baseline
+Status: Accepted and implemented
 
 ## Context
 
-The original migration baseline mixed container lifecycle with service-specific bootstrap logic such as local bucket creation. The target architecture separates container lifecycle from AWS-like resource provisioning.
+The local runtime separates container lifecycle from AWS-like resource provisioning. Containers start processes; Terraform creates AWS-like resources in LocalStack.
 
 ## Decision
 
-Use Docker Compose to run local processes and LocalStack. Use Terraform under `infra/local` to create AWS-like local resources: SQS queues and DLQ, Step Functions state machine, SSM parameters, Secrets Manager secrets, EventBridge bus/rules, SES identity, and local S3 bucket for contract/local tests.
+Use Docker Compose to run local processes and LocalStack. Use Terraform under `infra/localstack` to create AWS-like local resources: SQS queues and DLQ, Step Functions state machine, SSM parameters, Secrets Manager secrets, EventBridge bus/rules, SES identity, and local S3 bucket for contract/local tests.
 
 Terraform modules for reusable future AWS infrastructure belong under `infra/modules`.
 

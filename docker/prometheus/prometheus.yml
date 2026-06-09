@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    service_namespace: alittlebyte
+    environment: local
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  - job_name: poc-otel-collector-exporter
+    static_configs:
+      - targets:
+          - otel-collector:9464
+
+  - job_name: poc-prometheus
+    static_configs:
+      - targets:
+          - prometheus:9090

@@ -1,26 +1,26 @@
 # ADR 0006 - Observability And Audit
 
-Status: Accepted for migration baseline
+Status: Accepted and implemented baseline
 
 ## Context
 
-The current app logs some failures, but it does not have consistent JSON logs, request IDs, correlation IDs, OpenTelemetry traces/metrics/log correlation, or an append-only audit table.
+The runtime needs actionable telemetry for production-like operation: request/correlation IDs, structured logs, security/business audit records, SRE golden-signal metrics, and a vendor-neutral telemetry gateway.
 
 ## Decision
 
-Introduce request ID and correlation ID propagation across API requests, queue jobs, workflow steps, domain events, dispatch attempts, and audit records. Emit structured JSON logs and add OpenTelemetry locally through a collector.
+Introduce request ID and correlation ID propagation across HTTP requests and audit records. Emit structured JSON logs and run OpenTelemetry Collector locally as the telemetry gateway.
 
-Create an append-only `audit_events` table for security- and business-relevant actions, including upload requested/finalized, pipeline started, OCR completed/failed, Bedrock completed/failed, output validation completed/failed, dispatch requested/completed/failed, access denied events, and document status changes.
+Create an append-only `audit_events` table for security- and business-relevant actions. Expose application metrics internally in Prometheus text format and scrape them through OTel Collector into Prometheus.
 
 ## Consequences
 
 - Logs and audit records must not include secrets or sensitive document content.
 - Pipeline failures must retain enough context for support without leaking data.
-- Metrics should align with Google SRE golden signals: latency, traffic, errors, and saturation.
+- Metrics align with Google SRE golden signals: latency, traffic, errors, and saturation.
+- OTel Collector remains the vendor-neutral boundary for future OTLP traces and log export.
 
 ## References
 
 - Google SRE monitoring: https://sre.google/sre-book/monitoring-distributed-systems/
 - OpenTelemetry docs: https://opentelemetry.io/docs/
 - OpenTelemetry logs: https://opentelemetry.io/docs/specs/otel/logs/
-

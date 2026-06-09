@@ -1,0 +1,126 @@
+<?php
+
+namespace App\Console\Commands;
+
+use App\Copilot\Workflow\Services\DocumentWorkflowTaskHandler;
+use Aws\Sfn\SfnClient;
+use Aws\Sqs\SqsClient;
+use Illuminate\Console\Command;
+
+class ConsumeWorkflowTasks extends Command
+{
+    protected $signature = 'poc:workflow:consume {--once : Stop after one polling cycle} {--max=0 : Maximum messages before exit; 0 means unlimited} {--wait= : Long polling wait seconds}';
+
+    protected $description = 'Consume Step Functions callback-token tasks from SQS and report completion back to Step Functions.';
+
+    public function handle(SqsClient $sqs, SfnClient $stepFunctions, DocumentWorkflowTaskHandler $handler): int
+    {
+        $queueUrl = $this->queueUrl();
+        $maxMessages = max(0, (int) $this->option('max'));
+        $waitSeconds = $this->option('wait') !== null
+            ? max(0, (int) $this->option('wait'))
+            : max(0, (int) config('poc.workflow.poll_wait_seconds', 10));
+        $processed = 0;
+
+        if ($queueUrl === '') {
+            $this->error('DOCUMENT_PIPELINE_TASK_QUEUE_URL o SQS_PREFIX/SQS_QUEUE non configurati.');
+
+            return self::FAILURE;
+        }
+
+        do {
+            $result = $sqs->receiveMessage([
+                'QueueUrl' => $queueUrl,
+                'MaxNumberOfMessages' => min(10, max(1, (int) config('poc.workflow.max_messages', 5))),
+                'WaitTimeSeconds' => $waitSeconds,
+                'MessageAttributeNames' => ['All'],
+            ]);
+
+            foreach ($result->get('Messages') ?? [] as $message) {
+                $processed++;
+                $receiptHandle = (string) ($message['ReceiptHandle'] ?? '');
+                $body = $this->decodeBody((string) ($message['Body'] ?? ''));
+                $taskToken = (string) ($body['taskToken'] ?? $body['task_token'] ?? '');
+
+                try {
+                    $taskResult = $handler->handle($body);
+
+                    if ($taskResult['callback_required']) {
+                        $stepFunctions->sendTaskSuccess([
+                            'taskToken' => $taskToken,
+                            'output' => json_encode($taskResult['output'], JSON_THROW_ON_ERROR),
+                        ]);
+                    }
+
+                    $this->deleteMessage($sqs, $queueUrl, $receiptHandle);
+                    $this->info('Workflow task handled: '.($body['taskType'] ?? $body['task_type'] ?? 'unknown'));
+                } catch (\Throwable $e) {
+                    if ($taskToken !== '') {
+                        $stepFunctions->sendTaskFailure([
+                            'taskToken' => $taskToken,
+                            'error' => 'DocumentWorkflowTaskFailed',
+                            'cause' => substr($e->getMessage(), 0, 32000),
+                        ]);
+                        $this->deleteMessage($sqs, $queueUrl, $receiptHandle);
+                    }
+
+                    $this->error($e->getMessage());
+                }
+
+                if ($maxMessages > 0 && $processed >= $maxMessages) {
+                    return self::SUCCESS;
+                }
+            }
+
+            if ($this->option('once')) {
+                break;
+            }
+        } while (true);
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeBody(string $body): array
+    {
+        $decoded = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+
+        if (is_string($decoded)) {
+            $decoded = json_decode($decoded, true, flags: JSON_THROW_ON_ERROR);
+        }
+
+        if (! is_array($decoded)) {
+            throw new \InvalidArgumentException('SQS message body is not a JSON object.');
+        }
+
+        return $decoded;
+    }
+
+    private function deleteMessage(SqsClient $sqs, string $queueUrl, string $receiptHandle): void
+    {
+        if ($receiptHandle === '') {
+            return;
+        }
+
+        $sqs->deleteMessage([
+            'QueueUrl' => $queueUrl,
+            'ReceiptHandle' => $receiptHandle,
+        ]);
+    }
+
+    private function queueUrl(): string
+    {
+        $configured = (string) config('services.sqs.queue_url');
+
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        $prefix = rtrim((string) config('queue.connections.sqs.prefix'), '/');
+        $queue = (string) config('queue.connections.sqs.queue');
+
+        return $prefix !== '' && $queue !== '' ? "{$prefix}/{$queue}" : '';
+    }
+}

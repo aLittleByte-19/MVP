@@ -1,0 +1,21 @@
+.badge {
+  width: fit-content;
+  padding: var(--poc-space-1) var(--poc-space-2);
+  border-radius: 999px;
+  background: var(--poc-surface-soft);
+  color: var(--poc-primary-deep);
+  font-size: var(--poc-font-xs);
+  font-weight: 800;
+}
+
+.success {
+  color: var(--poc-success);
+}
+
+.warning {
+  color: var(--poc-warning);
+}
+
+.danger {
+  color: var(--poc-danger);
+}

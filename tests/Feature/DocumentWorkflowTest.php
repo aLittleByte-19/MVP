@@ -1,0 +1,83 @@
+<?php
+
+use App\Copilot\Audit\Services\AuditLogger;
+use App\Copilot\Documents\Enums\ProcessingStatus;
+use App\Copilot\Observability\MetricsRecorder;
+use App\Copilot\Workflow\Services\DocumentWorkflowService;
+use App\Copilot\Workflow\Services\DocumentWorkflowTaskHandler;
+use App\Models\Copilot\AuditEvent;
+use App\Models\Copilot\DocumentWorkflowTask;
+use App\Models\Copilot\OriginalDocument;
+use Aws\Result;
+use Aws\Sfn\SfnClient;
+
+test('document workflow service starts a Step Functions execution and stores metadata', function () {
+    config([
+        'services.workflow.state_machine_arn' => 'arn:aws:states:eu-north-1:000000000000:stateMachine:poc-document-pipeline',
+        'services.workflow.task_queue_url' => 'http://localstack:4566/000000000000/poc-documents',
+        'filesystems.default' => 's3',
+        'filesystems.disks.s3.bucket' => 'poc-documents-local',
+        'filesystems.disks.s3.root' => null,
+    ]);
+
+    $client = Mockery::mock(SfnClient::class);
+    $client->shouldReceive('startExecution')
+        ->once()
+        ->with(Mockery::on(function (array $payload): bool {
+            $input = json_decode($payload['input'], true);
+
+            return $payload['stateMachineArn'] === 'arn:aws:states:eu-north-1:000000000000:stateMachine:poc-document-pipeline'
+                && str_starts_with($payload['name'], 'poc-doc-')
+                && $input['document_id'] > 0
+                && $input['task_queue_url'] === 'http://localstack:4566/000000000000/poc-documents'
+                && $input['s3_bucket'] === 'poc-documents-local';
+        }))
+        ->andReturn(new Result([
+            'executionArn' => 'arn:aws:states:eu-north-1:000000000000:execution:poc-document-pipeline:test',
+        ]));
+
+    $document = OriginalDocument::factory()->create([
+        'processing_status' => ProcessingStatus::Pending,
+        'file_path' => 'documents/originals/test.pdf',
+    ]);
+    $service = new DocumentWorkflowService($client, app(AuditLogger::class), app(MetricsRecorder::class));
+
+    $started = $service->start($document);
+
+    expect($started->processing_status)->toBe(ProcessingStatus::Processing)
+        ->and($started->workflow_execution_arn)->toBe('arn:aws:states:eu-north-1:000000000000:execution:poc-document-pipeline:test')
+        ->and($started->s3_bucket)->toBe('poc-documents-local')
+        ->and($started->s3_key)->toBe('documents/originals/test.pdf')
+        ->and(AuditEvent::query()->where('event_type', 'poc-document-workflow-started')->count())->toBe(1);
+});
+
+test('workflow task handler processes textract task idempotently when textract is disabled', function () {
+    config(['services.textract.enabled' => false]);
+
+    $document = OriginalDocument::factory()->create([
+        'processing_status' => ProcessingStatus::Processing,
+        's3_bucket' => 'real-bucket',
+        's3_key' => 'documents/test.pdf',
+    ]);
+    $handler = app(DocumentWorkflowTaskHandler::class);
+    $message = [
+        'taskToken' => 'opaque-token',
+        'taskType' => 'textract.ocr',
+        'documentId' => $document->id,
+        'tenantId' => $document->tenant_id,
+        'correlationId' => 'corr-1',
+        'requestId' => 'req-1',
+        's3Bucket' => 'real-bucket',
+        's3Key' => 'documents/test.pdf',
+        'taskQueueUrl' => 'http://localstack/queue',
+    ];
+
+    $first = $handler->handle($message);
+    $second = $handler->handle($message);
+
+    expect($first['callback_required'])->toBeTrue()
+        ->and($first['output']['task_result']['status'])->toBe('skipped')
+        ->and($second['callback_required'])->toBeFalse()
+        ->and(DocumentWorkflowTask::query()->count())->toBe(1)
+        ->and(DocumentWorkflowTask::query()->first()->status)->toBe('skipped');
+});

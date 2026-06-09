@@ -26,6 +26,18 @@ test('readiness endpoint reports required dependency checks', function () {
         ]);
 });
 
+test('internal metrics endpoint exposes application and http telemetry', function () {
+    $this->getJson('/health')->assertOk();
+
+    $this->get('/internal/metrics')
+        ->assertOk()
+        ->assertHeader('content-type', 'text/plain; version=0.0.4; charset=utf-8')
+        ->assertSee('poc_app_info', false)
+        ->assertSee('poc_http_requests_total', false)
+        ->assertSee('route="health"', false)
+        ->assertSee('poc_readiness_status', false);
+});
+
 test('versioned api exposes existing poc state contract', function () {
     $this->getJson('/api/v1/state')
         ->assertOk()

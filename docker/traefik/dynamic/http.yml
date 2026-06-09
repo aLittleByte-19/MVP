@@ -4,8 +4,6 @@ http:
       rule: Host(`localhost`) || Host(`poc.localhost`) || Host(`traefik`)
       entryPoints:
         - web
-      middlewares:
-        - poc-redirect-https
       service: poc-nginx
     poc-nginx-websecure:
       rule: Host(`localhost`) || Host(`poc.localhost`) || Host(`traefik`)
@@ -13,12 +11,6 @@ http:
         - websecure
       service: poc-nginx
       tls: {}
-
-  middlewares:
-    poc-redirect-https:
-      redirectScheme:
-        scheme: https
-        port: "8443"
 
   services:
     poc-nginx:

@@ -2,7 +2,7 @@ import { defineConfig } from "orval";
 
 export default defineConfig({
   pocApi: {
-    input: "../../openapi/poc-api.v1.yaml",
+    input: "../../openapi/v1/alittlebyte-poc-api.yaml",
     output: {
       mode: "single",
       client: "fetch",

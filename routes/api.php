@@ -1,31 +1,33 @@
 <?php
 
-use App\Poc\Controllers\AppApiController;
+use App\Http\Controllers\Api\V1\Copilot\CommunicationController;
+use App\Http\Controllers\Api\V1\Copilot\DocumentController;
+use App\Http\Controllers\Api\V1\Copilot\StateController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')
     ->name('api.v1.')
     ->middleware(['poc.identity', 'poc.authorize', 'throttle:60,1'])
     ->group(function () {
-        Route::get('/state', [AppApiController::class, 'state'])->name('state');
+        Route::get('/state', StateController::class)->name('state');
 
-        Route::post('/communications', [AppApiController::class, 'generateCommunication'])
+        Route::post('/communications', [CommunicationController::class, 'store'])
             ->middleware('throttle:20,1')
             ->name('communications.generate');
 
-        Route::post('/documents/ocr', [AppApiController::class, 'runDocumentOcr'])
+        Route::post('/documents/ocr', [DocumentController::class, 'store'])
             ->middleware('throttle:20,1')
             ->name('documents.ocr');
 
-        Route::get('/documents/{originalDocument}/stream', [AppApiController::class, 'streamDocumentProcessing'])
+        Route::get('/documents/{originalDocument}/stream', [DocumentController::class, 'stream'])
             ->whereNumber('originalDocument')
             ->name('documents.stream');
 
-        Route::delete('/documents/{subDocument}', [AppApiController::class, 'deleteSubDocument'])
+        Route::delete('/documents/{subDocument}', [DocumentController::class, 'destroy'])
             ->whereNumber('subDocument')
             ->name('documents.delete');
 
-        Route::get('/documents/{subDocument}/preview', [AppApiController::class, 'previewSubDocument'])
+        Route::get('/documents/{subDocument}/preview', [DocumentController::class, 'preview'])
             ->whereNumber('subDocument')
             ->name('documents.preview');
     });

@@ -1,0 +1,13 @@
+.recipient {
+  display: grid;
+  gap: var(--poc-space-1);
+}
+
+.recipient small {
+  color: var(--poc-muted);
+}
+
+.action {
+  min-height: 34px;
+  padding: 0 var(--poc-space-3);
+}

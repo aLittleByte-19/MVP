@@ -1,4 +1,4 @@
-.PHONY: help test pint node-install frontend-build frontend-test frontend-typecheck frontend-audit frontend-a11y openapi-generate local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy
+.PHONY: help test pint node-install frontend-build frontend-test frontend-typecheck frontend-audit frontend-a11y openapi-generate openapi-validate observability-config observability-up local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke
 
 # Colori per l'output
 BLUE  := \033[34m
@@ -29,6 +29,9 @@ help:
 	@echo "  $(BLUE)make frontend-audit$(RESET) Audit npm production dependencies"
 	@echo "  $(BLUE)make frontend-a11y$(RESET)  Esegue axe e Pa11y sullo stack HTTPS locale"
 	@echo "  $(BLUE)make openapi-generate$(RESET) Rigenera il client TypeScript"
+	@echo "  $(BLUE)make openapi-validate$(RESET) Valida il contratto OpenAPI"
+	@echo "  $(BLUE)make observability-config$(RESET) Valida la configurazione OTel Collector"
+	@echo "  $(BLUE)make observability-up$(RESET) Avvia OTel Collector e Prometheus"
 	@echo "  $(BLUE)make local-tls$(RESET) Genera il certificato TLS locale per Traefik"
 	@echo "  $(BLUE)make fresh$(RESET)     Resetta database e dati generati (documenti e bozze)"
 	@echo "  $(BLUE)make logs$(RESET)      Segue i log dei container app e queue"
@@ -41,6 +44,39 @@ help:
 	@echo "  $(BLUE)make infra-plan$(RESET)    Pianifica le risorse LocalStack"
 	@echo "  $(BLUE)make infra-apply$(RESET)   Applica le risorse LocalStack"
 	@echo "  $(BLUE)make infra-destroy$(RESET) Distrugge le risorse LocalStack"
+	@echo "  $(BLUE)make verify-fast$(RESET)   Esegue i controlli locali rapidi"
+	@echo "  $(BLUE)make verify$(RESET)        Esegue la batteria completa locale"
+	@echo "  $(BLUE)make aws-smoke$(RESET)     Smoke opzionale su AWS reale, richiede credenziali"
+
+# Quality gate rapido: usa solo container e non richiede credenziali AWS reali.
+verify-fast: verify-backend verify-frontend verify-infra verify-observability
+
+# Quality gate completo locale: include contratto OpenAPI e audit dipendenze frontend.
+verify: verify-fast openapi-validate frontend-audit
+
+verify-backend:
+	docker compose build app
+	docker compose run --rm --no-deps app composer validate --strict
+	docker compose run --rm --no-deps $(TEST_ENV) app php artisan route:list
+	docker compose run --rm --no-deps $(TEST_ENV) app php artisan test
+	docker compose run --rm --no-deps app php vendor/bin/pint --test
+	docker compose run --rm --no-deps $(TEST_ENV) app sh -lc 'if [ -x vendor/bin/phpstan ]; then vendor/bin/phpstan analyse --memory-limit=1G; else echo "phpstan non installato in vendor: skip locale"; fi'
+
+verify-frontend: node-install
+	$(NODE) npm run openapi:generate
+	$(NODE) npm run frontend:typecheck
+	$(NODE) npm run frontend:test
+	$(NODE) npm run frontend:build
+
+verify-infra:
+	docker compose config --quiet
+	$(TERRAFORM) fmt -check
+	$(TERRAFORM) init -backend=false
+	$(TERRAFORM) validate
+
+verify-observability: observability-config
+
+verify-ci-local: verify-fast openapi-validate
 
 test:
 	docker compose build app
@@ -53,10 +89,10 @@ frontend-build: node-install
 	$(NODE) npm run openapi:generate
 	$(NODE) npm run frontend:build
 
-frontend-test: node-install
+frontend-test: openapi-generate
 	$(NODE) npm run frontend:test
 
-frontend-typecheck: node-install
+frontend-typecheck: openapi-generate
 	$(NODE) npm run frontend:typecheck
 
 frontend-audit: node-install
@@ -68,6 +104,16 @@ frontend-a11y: node-install
 
 openapi-generate: node-install
 	$(NODE) npm run openapi:generate
+
+openapi-validate: node-install
+	$(NODE) npx --yes @redocly/cli@latest lint openapi/v1/alittlebyte-poc-api.yaml
+
+observability-config:
+	docker compose run --rm --no-deps otel-collector validate --config=/etc/otelcol-contrib/config.yml
+	docker compose run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
+
+observability-up:
+	docker compose up -d otel-collector prometheus tempo alertmanager grafana
 
 pint:
 	docker compose build app
@@ -95,9 +141,10 @@ setup:
 	docker compose up -d postgres redis localstack
 	$(MAKE) infra-apply
 	$(MAKE) release
-	docker compose up -d app nginx queue traefik
+	docker compose up -d app nginx queue traefik otel-collector prometheus tempo alertmanager grafana
 	@echo "$(BLUE)L'ambiente è stato configurato ed è in fase di avvio.$(RESET)"
 	@echo "$(BLUE)Endpoint locale: https://localhost:8443$(RESET)"
+	@echo "$(BLUE)Grafana: http://localhost:3000$(RESET)"
 	@echo "$(BLUE)Puoi monitorare il progresso con: make logs$(RESET)"
 
 release:
@@ -118,3 +165,10 @@ infra-apply: infra-init
 
 infra-destroy: infra-init
 	$(TERRAFORM) destroy -auto-approve
+
+aws-smoke:
+	@test -n "$$AWS_REAL_REGION" || (echo "AWS_REAL_REGION obbligatoria" && exit 1)
+	@test -n "$$AWS_REAL_S3_BUCKET" || (echo "AWS_REAL_S3_BUCKET obbligatoria" && exit 1)
+	@test -n "$$BEDROCK_MODEL_ID" || (echo "BEDROCK_MODEL_ID obbligatorio" && exit 1)
+	@test "$$TEXTRACT_ENABLED" = "true" || (echo "TEXTRACT_ENABLED=true obbligatorio per aws-smoke" && exit 1)
+	docker compose run --rm --no-deps app php artisan about --only=environment

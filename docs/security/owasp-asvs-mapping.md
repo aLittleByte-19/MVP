@@ -2,20 +2,21 @@
 
 This mapping is a PoC baseline, not a claim of full ASVS compliance.
 
-| Area | Implemented now | Target PB | Evidence/tests |
-| --- | --- | --- | --- |
-| Input validation | Form Requests validate upload, communication generation, and settings inputs. | Versioned API Form Requests for every write endpoint; strict file size/content type checks; OpenAPI schema validation in CI. | `app/Poc/Requests/*`, `tests/Feature/*` |
-| Authentication | Current PoC is public. | Local/test-only structured identity claims; production mode expects enterprise IdP-authenticated identity at the boundary. | ADR 0007 |
-| Authorization | No RBAC/ABAC enforcement exists yet. | Laravel policies/services enforce RBAC plus ABAC for tenant, document ownership, action, and attributes. | Future policy tests |
-| Error handling | Some JSON errors exist for AI/token exceptions. | Consistent JSON error envelope for validation, unauthorized, forbidden, not found, conflict, and server error without sensitive leakage. | Future `/api/v1` tests |
-| Secrets | Runtime secrets are loaded from Secrets Manager; non-sensitive values are loaded from SSM Parameter Store. | Scoped cloud identity, no static AWS credentials in CI, no secrets in logs. | Runbook `aws-permissions-needed.md` |
-| Logging | Some ad hoc logs exist. | JSON logs with request/correlation IDs and redaction rules. | ADR 0006 |
-| Audit | No append-only audit table yet. | Append-only `audit_events` table for upload, pipeline, dispatch, access denied, and document state changes. | Future migration and tests |
-| Upload security | Upload request exists for PDFs. | Validate content type, extension, size, object key ownership, and S3 finalization metadata server-side. | Future S3 upload tests |
-| Access control for documents | Preview/delete routes are public today. | Backend authorization on every document read/write/delete/preview action. | Future policy tests |
-| Rate limiting | Current `/poc/api/*` routes use Laravel throttling. | Apply scoped API rate limits using Redis and identity/tenant-aware keys. | `routes/web.php`, future API middleware tests |
-| Security headers/CORS | Not explicitly baselined yet. | Configure CORS for SPA/API boundary and security headers at Traefik/Nginx/Laravel where appropriate. | Future browser and header tests |
+| Area | Implemented baseline | Remaining production work |
+| --- | --- | --- |
+| Input validation | Form Requests validate communication generation and PDF upload; JSON validation errors use a stable envelope. | Add contract validation gate for every OpenAPI request/response shape. |
+| Authentication | Local mode injects structured user claims; trusted-header mode requires complete identity claims. | Replace local mode with enterprise IdP boundary in the deployment tier. |
+| Authorization | API routes enforce configured roles and document tenant ownership server-side. | Add policy classes for each action and deny-event audit for every rejected privileged action. |
+| Error handling | API exceptions return consistent JSON envelopes with request and correlation IDs. | Add centralized redaction tests for every upstream provider error class. |
+| Secrets/config | Runtime values load from SSM Parameter Store and Secrets Manager; no runtime admin UI edits credentials. | Attach scoped IAM role and remove LocalStack credentials from production profile. |
+| Logging/monitoring | JSON logs, request/correlation IDs, audit events, internal metrics, OTel Collector and Prometheus alerts. | Export production telemetry to the enterprise backend and define alert routing/escalation. |
+| Audit | `audit_events` records communication generation, document upload, processing lifecycle, and deletion events. | Add immutable retention controls and SIEM forwarding. |
+| Upload security | PDF uploads are validated and stored on configured object storage. | Move to presigned S3 finalization with server-side metadata validation and malware scanning hook. |
+| Rate limiting | `/api/v1/*` routes use Laravel throttling, with stricter write limits. | Move to identity/tenant-aware Redis keys and document abuse thresholds. |
+| Security headers/CORS | Nginx blocks removed runtime surfaces and hidden files. | Finalize production CORS and security header policy at Traefik/Nginx. |
 
-## Primary Reference
+## Primary References
 
 - OWASP ASVS: https://owasp.org/www-project-application-security-verification-standard/
+- OWASP Top 10 A09 Logging and Monitoring: https://owasp.org/Top10/2021/A09_2021-Security_Logging_and_Monitoring_Failures/
+- OWASP API Security Top 10 2023: https://owasp.org/API-Security/editions/2023/en/0x00-header/

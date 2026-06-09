@@ -1,0 +1,30 @@
+{
+  "uid": "poc-document-pipeline",
+  "title": "Document Pipeline",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Documents by status",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [{ "expr": "poc_original_documents_total", "legendFormat": "{{status}}" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Workflow starts/failures",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(poc_stepfunctions_executions_started_total[5m])", "legendFormat": "started" },
+        { "expr": "rate(poc_stepfunctions_executions_failed_total[5m])", "legendFormat": "failed" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Stuck processing",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [{ "expr": "poc_document_stuck_processing_total", "legendFormat": "stuck" }]
+    }
+  ]
+}

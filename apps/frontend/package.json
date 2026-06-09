@@ -9,8 +9,8 @@
         "preview": "vite preview",
         "test": "vitest run --config vitest.config.ts",
         "typecheck": "tsc -b --pretty false",
-        "openapi:generate": "orval --config ./orval.config.ts",
-        "openapi:check": "orval --config ./orval.config.ts && git diff --exit-code -- src/api/generated"
+        "openapi:generate": "orval --config ./orval.config.ts && node scripts/write-generated-readme.mjs",
+        "openapi:check": "npm run openapi:generate && git diff --exit-code -- src/api/generated"
     },
     "dependencies": {
         "@tanstack/react-query": "^5.90.0",

@@ -1,16 +1,18 @@
 # AWS Well-Architected Mapping
 
-This mapping explains how the target PoC migration aligns with the AWS Well-Architected pillars. It is not a formal AWS review.
+This mapping explains how the current PoC aligns with AWS Well-Architected. It is not a formal AWS review and does not claim production certification.
 
-| Pillar | PoC choice | Reason | Current limit | Product Baseline target |
-| --- | --- | --- | --- | --- |
-| Operational excellence | ADRs, runbooks, Terraform for LocalStack, expanded CI target. | Make operations repeatable and decisions visible. | Local bootstrap is automated; CI is still limited. | Automated local/CI bootstrap, smoke tests, runbooks, and observable deployments. |
-| Security | SSM/Secrets split, no credential editing in the app UI, OIDC planned, RBAC/ABAC target, audit table target. | Reduce credential exposure and enforce permissions server-side. | Routes are still public and use no enterprise identity boundary. | Enterprise identity boundary, scoped IAM role, backend authorization, safe logging, audit. |
-| Reliability | SQS with DLQ, Step Functions workflow, explicit failure states, no automatic main-flow fallbacks. | Make failures visible and recoverable. | Step Functions is provisioned but not yet orchestrating the worker end-to-end. | SQS/DLQ workers, state machine failure handling, idempotency, retries/backoff where appropriate. |
-| Performance efficiency | PHP-FPM with OPcache, SPA separation, presigned S3 uploads, async OCR/extraction. | Avoid routing large uploads through app workers and keep long tasks asynchronous. | Current upload goes through Laravel and splits documents synchronously inside a queued job. | Direct S3 upload, async Textract/Bedrock workflow, measured latency and saturation. |
-| Cost optimization | LocalStack for local/CI AWS-like tests; real AWS smoke tests conditional. | Avoid unnecessary AWS spend while preserving portability. | No cost controls or real AWS usage model yet. | Explicit local vs real AWS modes, bounded smoke tests, lifecycle policies. |
-| Sustainability | Container hardening, smaller images target, conditional real cloud tests, resource lifecycle through Terraform. | Reduce waste from oversized images and unnecessary cloud runs. | Current image is not minimized and Compose keeps broad services. | Multi-stage images, focused services, repeatable teardown, limited real AWS smoke scope. |
+| Pillar | Current implementation | Remaining production work |
+| --- | --- | --- |
+| Operational excellence | Docker-first lifecycle, Make targets, LocalStack/Terraform provisioning, release migration job, health/readiness, OTel Collector, Prometheus rules, CI workflows. | Define owned SLOs, on-call policy, production dashboards, incident process, and release approvals. |
+| Security | No runtime admin UI, SSM/Secrets split, structured identity middleware, RBAC/ABAC checks, tenant scoping, audit events, blocked legacy routes, no static IAM credentials in ordinary CI. | Replace local identity with enterprise IdP boundary, attach scoped AWS IAM role, add image/SBOM scanning gate, finalize CORS/security headers. |
+| Reliability | SQS worker, DLQ resources, explicit failed states, no automatic AI fallbacks, readiness checks, LocalStack smoke path. | Connect Step Functions end-to-end, add idempotency keys for write operations, define retry budgets and DLQ replay runbook. |
+| Performance efficiency | SPA served statically by Nginx, PHP-FPM with OPcache, async document pipeline, HTTP latency histogram, bounded request body size. | Move large uploads to presigned S3 finalization and set capacity targets from observed traffic. |
+| Cost optimization | Real AWS smoke is optional/manual, local AWS-like resources run in LocalStack, Prometheus is local. | Add cloud cost allocation tags, budgets, object lifecycle policies, and bounded production smoke schedules. |
+| Sustainability | Dockerized tooling avoids host drift, multi-stage frontend build, local teardown through Compose/Terraform, minimized real-cloud execution. | Add image size budgets and explicit retention policies for logs, metrics, and documents. |
 
-## Primary Reference
+## Primary References
 
 - AWS Well-Architected Framework: https://docs.aws.amazon.com/wellarchitected/latest/framework/the-pillars-of-the-framework.html
+- OpenTelemetry Collector: https://opentelemetry.io/docs/collector/
+- Google SRE monitoring: https://sre.google/sre-book/monitoring-distributed-systems/

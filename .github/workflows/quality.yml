@@ -1,0 +1,91 @@
+name: Quality Gates
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+      - migration/new_techs
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-static:
+    name: Composer and PHPStan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build PHP runtime
+        run: docker compose build app
+
+      - name: Validate Composer manifest
+        run: docker compose run --rm --no-deps app composer validate --strict
+
+      - name: Run Larastan
+        run: >
+          docker compose run --rm --no-deps
+          -e CONFIG_SOURCE=env
+          -e APP_ENV=testing
+          -e CACHE_STORE=array
+          -e SESSION_DRIVER=array
+          -e QUEUE_CONNECTION=sync
+          -e DB_CONNECTION=sqlite
+          -e DB_DATABASE=:memory:
+          -e DB_HOST=
+          -e DB_PORT=
+          -e DB_USERNAME=
+          -e DB_PASSWORD=
+          app vendor/bin/phpstan analyse --memory-limit=1G
+
+  api-contract:
+    name: OpenAPI validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node dependencies
+        run: docker compose --profile tools run --rm node npm ci --ignore-scripts
+
+      - name: Lint OpenAPI contract
+        run: docker compose --profile tools run --rm node npx --yes @redocly/cli@latest lint openapi/v1/alittlebyte-poc-api.yaml
+
+      - name: Regenerate API client
+        run: docker compose --profile tools run --rm node npm run openapi:generate
+
+      - name: Check generated client is committed
+        run: git diff --exit-code -- apps/frontend/src/api/generated
+
+  terraform:
+    name: Terraform validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Format check
+        run: docker compose --profile tools run --rm terraform fmt -check
+
+      - name: Init providers
+        run: docker compose --profile tools run --rm terraform init -backend=false
+
+      - name: Validate LocalStack module
+        run: docker compose --profile tools run --rm terraform validate
+
+  observability:
+    name: Observability config
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate collectors and rules
+        run: make observability-config

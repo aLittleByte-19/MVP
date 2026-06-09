@@ -2,10 +2,15 @@
 
 namespace App\Providers;
 
-use App\Poc\Services\AuditLogger;
-use App\Poc\Services\BedrockService;
-use App\Poc\Services\DocumentProcessingService;
+use App\Copilot\Ai\BedrockService;
+use App\Copilot\Audit\Services\AuditLogger;
+use App\Copilot\Documents\Services\DocumentProcessingService;
+use App\Copilot\Observability\MetricsRecorder;
+use App\Copilot\Ocr\Services\TextractService;
 use Aws\BedrockRuntime\BedrockRuntimeClient;
+use Aws\Sfn\SfnClient;
+use Aws\Sqs\SqsClient;
+use Aws\Textract\TextractClient;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -33,6 +38,58 @@ class AppServiceProvider extends ServiceProvider
             return new BedrockService(
                 $app->make(BedrockRuntimeClient::class),
                 config('services.bedrock.model_id'),
+            );
+        });
+
+        $this->app->singleton(SfnClient::class, function () {
+            $config = [
+                'version' => 'latest',
+                'region' => config('services.workflow.region'),
+            ];
+
+            if (filled(config('services.workflow.endpoint'))) {
+                $config['endpoint'] = config('services.workflow.endpoint');
+            }
+
+            return new SfnClient($config);
+        });
+
+        $this->app->singleton(SqsClient::class, function () {
+            $config = [
+                'version' => 'latest',
+                'region' => config('services.sqs.region'),
+            ];
+
+            if (filled(config('services.sqs.endpoint'))) {
+                $config['endpoint'] = config('services.sqs.endpoint');
+            }
+
+            return new SqsClient($config);
+        });
+
+        $this->app->singleton(TextractClient::class, function () {
+            $config = [
+                'version' => 'latest',
+                'region' => config('services.textract.region'),
+                'http' => [
+                    'timeout' => (int) config('services.textract.timeout_seconds', 300) + 30,
+                    'connect_timeout' => 15,
+                ],
+            ];
+
+            $credentials = array_filter((array) config('services.textract.credentials'));
+
+            if ($credentials !== []) {
+                $config['credentials'] = $credentials;
+            }
+
+            return new TextractClient($config);
+        });
+
+        $this->app->singleton(TextractService::class, function ($app) {
+            return new TextractService(
+                $app->make(TextractClient::class),
+                $app->make(MetricsRecorder::class),
             );
         });
 

@@ -25,4 +25,21 @@ return [
     'authorization' => [
         'roles' => ['poc-operator', 'poc-admin'],
     ],
+
+    'documents' => [
+        'storage_disk' => env('POC_DOCUMENT_DISK', env('FILESYSTEM_DISK', 's3')),
+    ],
+
+    'document_limits' => [
+        'max_upload_mb' => (int) env('POC_MAX_UPLOAD_MB', env('DOCUMENT_MAX_UPLOAD_MB', 20)),
+        'max_pdf_pages' => (int) env('POC_MAX_PDF_PAGES', 50),
+        'processing_timeout_seconds' => (int) env('POC_PROCESSING_TIMEOUT_SECONDS', 600),
+        'textract_timeout_seconds' => (int) env('TEXTRACT_TIMEOUT_SECONDS', 300),
+    ],
+
+    'workflow' => [
+        'driver' => env('WORKFLOW_DRIVER', 'localstack'),
+        'poll_wait_seconds' => (int) env('POC_WORKFLOW_SQS_WAIT_SECONDS', 10),
+        'max_messages' => (int) env('POC_WORKFLOW_SQS_MAX_MESSAGES', 5),
+    ],
 ];

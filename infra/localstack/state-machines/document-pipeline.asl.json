@@ -1,0 +1,176 @@
+{
+  "Comment": "LocalStack Step Functions model for the Alittlebyte PoC document pipeline using SQS callback task tokens.",
+  "StartAt": "ValidateDocument",
+  "States": {
+    "ValidateDocument": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.metadata.valid",
+          "BooleanEquals": false,
+          "Next": "Failed"
+        }
+      ],
+      "Default": "RunTextract"
+    },
+    "RunTextract": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+      "TimeoutSeconds": 420,
+      "Parameters": {
+        "QueueUrl.$": "$.task_queue_url",
+        "MessageBody": {
+          "taskToken.$": "$$.Task.Token",
+          "taskType": "textract.ocr",
+          "documentId.$": "$.document_id",
+          "tenantId.$": "$.tenant_id",
+          "correlationId.$": "$.correlation_id",
+          "requestId.$": "$.request_id",
+          "s3Bucket.$": "$.s3_bucket",
+          "s3Key.$": "$.s3_key",
+          "taskQueueUrl.$": "$.task_queue_url"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "States.Timeout"],
+          "IntervalSeconds": 5,
+          "BackoffRate": 2,
+          "MaxAttempts": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.failure",
+          "Next": "Failed"
+        }
+      ],
+      "Next": "RunBedrockExtraction"
+    },
+    "RunBedrockExtraction": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+      "TimeoutSeconds": 720,
+      "Parameters": {
+        "QueueUrl.$": "$.taskQueueUrl",
+        "MessageBody": {
+          "taskToken.$": "$$.Task.Token",
+          "taskType": "bedrock.extract",
+          "documentId.$": "$.documentId",
+          "tenantId.$": "$.tenantId",
+          "correlationId.$": "$.correlationId",
+          "requestId.$": "$.requestId",
+          "s3Bucket.$": "$.s3Bucket",
+          "s3Key.$": "$.s3Key",
+          "taskQueueUrl.$": "$.taskQueueUrl"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "States.Timeout"],
+          "IntervalSeconds": 10,
+          "BackoffRate": 2,
+          "MaxAttempts": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.failure",
+          "Next": "Failed"
+        }
+      ],
+      "Next": "ValidateStructuredOutput"
+    },
+    "ValidateStructuredOutput": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.task_result.status",
+          "StringEquals": "failed",
+          "Next": "Failed"
+        }
+      ],
+      "Default": "PersistResults"
+    },
+    "PersistResults": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+      "TimeoutSeconds": 120,
+      "Parameters": {
+        "QueueUrl.$": "$.taskQueueUrl",
+        "MessageBody": {
+          "taskToken.$": "$$.Task.Token",
+          "taskType": "persist.results",
+          "documentId.$": "$.documentId",
+          "tenantId.$": "$.tenantId",
+          "correlationId.$": "$.correlationId",
+          "requestId.$": "$.requestId",
+          "s3Bucket.$": "$.s3Bucket",
+          "s3Key.$": "$.s3Key",
+          "taskQueueUrl.$": "$.taskQueueUrl"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "States.Timeout"],
+          "IntervalSeconds": 5,
+          "BackoffRate": 2,
+          "MaxAttempts": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.failure",
+          "Next": "Failed"
+        }
+      ],
+      "Next": "EmitDomainEvent"
+    },
+    "EmitDomainEvent": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+      "TimeoutSeconds": 120,
+      "Parameters": {
+        "QueueUrl.$": "$.taskQueueUrl",
+        "MessageBody": {
+          "taskToken.$": "$$.Task.Token",
+          "taskType": "dispatch.domain_event",
+          "documentId.$": "$.documentId",
+          "tenantId.$": "$.tenantId",
+          "correlationId.$": "$.correlationId",
+          "requestId.$": "$.requestId",
+          "s3Bucket.$": "$.s3Bucket",
+          "s3Key.$": "$.s3Key",
+          "taskQueueUrl.$": "$.taskQueueUrl"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "States.Timeout"],
+          "IntervalSeconds": 5,
+          "BackoffRate": 2,
+          "MaxAttempts": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.failure",
+          "Next": "Failed"
+        }
+      ],
+      "Next": "Completed"
+    },
+    "Completed": {
+      "Type": "Succeed"
+    },
+    "Failed": {
+      "Type": "Fail",
+      "Error": "DocumentPipelineFailed",
+      "Cause": "The document pipeline entered an explicit failure path."
+    }
+  }
+}

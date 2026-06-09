@@ -9,6 +9,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   smoke:
     name: Compose, Terraform and HTTPS smoke
@@ -24,6 +27,9 @@ jobs:
       - name: Build images
         run: docker compose build
 
+      - name: Validate observability config
+        run: make observability-config
+
       - name: Start dependencies
         run: docker compose up -d postgres redis localstack
 
@@ -34,7 +40,7 @@ jobs:
         run: docker compose --profile release run --rm migrate
 
       - name: Start runtime
-        run: docker compose up -d app queue nginx traefik
+        run: docker compose up -d app queue nginx traefik otel-collector prometheus tempo alertmanager grafana
 
       - name: Smoke HTTPS endpoints
         run: |
@@ -49,6 +55,10 @@ jobs:
           curl --silent --fail --insecure https://localhost:8443/health
           curl --silent --fail --insecure https://localhost:8443/ready
           curl --silent --fail --insecure https://localhost:8443/api/v1/state
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure https://localhost:8443/internal/metrics)" = "404"
+          curl --silent --fail http://localhost:9090/-/ready
+          curl --silent --fail http://localhost:9093/-/ready
+          curl --silent --fail http://localhost:3000/api/health
 
       - name: Stop application
         if: always()
