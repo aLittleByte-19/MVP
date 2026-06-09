@@ -1,15 +1,15 @@
 .card {
   display: grid;
-  gap: var(--poc-space-1);
-  padding: var(--poc-space-3);
-  border: 1px solid var(--poc-border);
+  gap: 6px;
+  padding: var(--poc-space-4);
+  border: 1px solid var(--poc-border-soft);
   border-radius: var(--poc-radius);
-  background: var(--poc-surface);
+  background: var(--poc-surface-muted);
 }
 
 .value {
-  color: var(--poc-text);
-  font-size: 1.38rem;
+  color: var(--poc-primary-deep);
+  font-size: 1.28rem;
   font-weight: 800;
 }
 

@@ -10,9 +10,11 @@ type DataTableProps<TRow> = {
   columns: DataTableColumn<TRow>[];
   rows: TRow[];
   getRowKey: (row: TRow) => string;
+  /** Optional per-row status tone, renders a colored left strip (e.g. "needs-review", "confirmed", "sent"). */
+  getRowTone?: (row: TRow) => string | undefined;
 };
 
-export function DataTable<TRow>({ columns, rows, getRowKey }: DataTableProps<TRow>) {
+export function DataTable<TRow>({ columns, rows, getRowKey, getRowTone }: DataTableProps<TRow>) {
   return (
     <div className={styles.tableWrapper}>
       <table className={styles.table}>
@@ -27,7 +29,7 @@ export function DataTable<TRow>({ columns, rows, getRowKey }: DataTableProps<TRo
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={getRowKey(row)}>
+            <tr key={getRowKey(row)} data-tone={getRowTone?.(row)}>
               {columns.map((column) => (
                 <td key={column.key}>{column.render(row)}</td>
               ))}

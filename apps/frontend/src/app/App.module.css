@@ -3,15 +3,11 @@
   gap: 18px;
 }
 
-.flowGrid {
-  display: grid;
-  grid-template-columns: minmax(320px, 0.92fr) minmax(0, 1.08fr);
-  gap: 18px;
-  align-items: start;
-}
-
 .themeToggle {
-  position: relative;
+  position: fixed;
+  top: var(--poc-space-6);
+  right: var(--poc-space-6);
+  z-index: 50;
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
@@ -58,10 +54,4 @@
 
 [data-poc-theme="dark"] .themeToggle svg + svg {
   color: #ffffff;
-}
-
-@media (max-width: 920px) {
-  .flowGrid {
-    grid-template-columns: 1fr;
-  }
 }

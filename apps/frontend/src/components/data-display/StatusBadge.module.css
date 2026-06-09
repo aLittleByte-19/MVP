@@ -1,6 +1,7 @@
 .badge {
   width: fit-content;
   padding: var(--poc-space-1) var(--poc-space-2);
+  border: 1px solid var(--poc-border);
   border-radius: 999px;
   background: var(--poc-surface-soft);
   color: var(--poc-primary-deep);
@@ -9,13 +10,19 @@
 }
 
 .success {
+  border-color: #c9e5d3;
+  background: var(--poc-success-soft);
   color: var(--poc-success);
 }
 
 .warning {
+  border-color: #f0bf98;
+  background: var(--poc-warning-soft);
   color: var(--poc-warning);
 }
 
 .danger {
+  border-color: #e0b4b4;
+  background: var(--poc-accent-soft);
   color: var(--poc-danger);
 }

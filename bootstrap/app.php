@@ -45,6 +45,10 @@ return (new ApplicationBuilder($app))
         ResetPocData::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
+        // The app sits behind Traefik (TLS termination) and Nginx; trust forwarded
+        // headers so HTTPS scheme detection, generated URLs (e.g. SSE streamUrl) and
+        // secure cookies work correctly.
+        $middleware->trustProxies(at: '*');
         $middleware->append(CorrelateRequests::class);
         $middleware->append(RecordHttpMetrics::class);
         $middleware->alias([

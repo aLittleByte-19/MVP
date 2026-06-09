@@ -109,6 +109,35 @@ services:
         condition: service_started
       tempo:
         condition: service_started
+      loki:
+        condition: service_started
+    networks:
+      - poc
+
+  loki:
+    image: grafana/loki:3.3.2
+    command:
+      - -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./docker/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    networks:
+      - poc
+
+  alloy:
+    image: grafana/alloy:v1.5.1
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+    volumes:
+      - ./docker/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy/data
+    depends_on:
+      loki:
+        condition: service_started
     networks:
       - poc
 
@@ -147,6 +176,10 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    volumes:
+      # Shared with the queue worker so domain metrics recorded by the consumer
+      # (Textract, SQS, workflow completion) reach the /internal/metrics exporter.
+      - observability-metrics:/var/www/html/storage/app/private/observability
     networks:
       - poc
 
@@ -169,6 +202,8 @@ services:
         condition: service_started
       localstack:
         condition: service_healthy
+    volumes:
+      - observability-metrics:/var/www/html/storage/app/private/observability
     networks:
       - poc
 
@@ -334,6 +369,9 @@ networks:
     driver: bridge
 
 volumes:
+  observability-metrics:
+  loki-data:
+  alloy-data:
   postgres-data:
   redis-data:
   localstack-data:

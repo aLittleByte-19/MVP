@@ -17,6 +17,7 @@ This document describes the implemented PoC architecture. It is a strong end-to-
 | Persistence | PostgreSQL | Documents, sub-documents, extraction data, audit and workflow task state. |
 | Cache/session | Redis | Runtime cache/session support, not source of record. |
 | Observability | OTel Collector, Prometheus, Tempo, Grafana, Alertmanager | Local metrics, traces, dashboards and alerts. |
+| Logs | Grafana Alloy, Loki | Container log collection and storage, queried in Grafana. |
 
 ## LocalStack vs Real AWS
 
@@ -47,6 +48,7 @@ Standard tests and CI do not call real S3, Textract or Bedrock.
 | OWASP ASVS/API baseline | Server-side upload validation, tenant ownership checks, rate limits, structured auth boundary. |
 | Google SRE monitoring | Golden-signal API metrics, document pipeline metrics, queue/DLQ alerts and runbooks. |
 | OpenTelemetry model | Collector receives OTLP, exports metrics to Prometheus and traces to Tempo. |
+| Centralised logging | Grafana Alloy ships every container's logs to Loki, correlated in Grafana with metrics and traces. |
 
 ## Primary References
 

@@ -1,4 +1,4 @@
-.PHONY: help test pint node-install frontend-build frontend-test frontend-typecheck frontend-audit frontend-a11y openapi-generate openapi-validate observability-config observability-up local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke
+.PHONY: help test pint node-install frontend-build frontend-test frontend-typecheck frontend-audit frontend-a11y openapi-generate openapi-validate observability-config observability-up local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke
 
 # Colori per l'output
 BLUE  := \033[34m
@@ -44,6 +44,7 @@ help:
 	@echo "  $(BLUE)make infra-plan$(RESET)    Pianifica le risorse LocalStack"
 	@echo "  $(BLUE)make infra-apply$(RESET)   Applica le risorse LocalStack"
 	@echo "  $(BLUE)make infra-destroy$(RESET) Distrugge le risorse LocalStack"
+	@echo "  $(BLUE)make refresh-runtime$(RESET) Riapplica SSM/Secrets e ricarica app+queue (dopo modifiche al .env)"
 	@echo "  $(BLUE)make verify-fast$(RESET)   Esegue i controlli locali rapidi"
 	@echo "  $(BLUE)make verify$(RESET)        Esegue la batteria completa locale"
 	@echo "  $(BLUE)make aws-smoke$(RESET)     Smoke opzionale su AWS reale, richiede credenziali"
@@ -113,7 +114,7 @@ observability-config:
 	docker compose run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
 
 observability-up:
-	docker compose up -d otel-collector prometheus tempo alertmanager grafana
+	docker compose up -d otel-collector prometheus tempo alertmanager grafana loki alloy
 
 pint:
 	docker compose build app
@@ -141,7 +142,7 @@ setup:
 	docker compose up -d postgres redis localstack
 	$(MAKE) infra-apply
 	$(MAKE) release
-	docker compose up -d app nginx queue traefik otel-collector prometheus tempo alertmanager grafana
+	docker compose up -d app nginx queue traefik otel-collector prometheus tempo alertmanager grafana loki alloy
 	@echo "$(BLUE)L'ambiente è stato configurato ed è in fase di avvio.$(RESET)"
 	@echo "$(BLUE)Endpoint locale: https://localhost:8443$(RESET)"
 	@echo "$(BLUE)Grafana: http://localhost:3000$(RESET)"
@@ -166,9 +167,19 @@ infra-apply: infra-init
 infra-destroy: infra-init
 	$(TERRAFORM) destroy -auto-approve
 
+# Riscrive SSM/Secrets Manager con i valori correnti del .env (es. dopo aver
+# aggiornato le credenziali AWS_REAL_*) e ricrea app e queue per ricaricare la
+# configurazione runtime caricata dal bootstrap Laravel.
+refresh-runtime: infra-apply
+	docker compose up -d --no-deps --force-recreate app queue
+	@echo "$(BLUE)Runtime aggiornato: SSM/Secrets riscritti, app e queue ricreati.$(RESET)"
+
+# Legge i valori dal .env (gestendo i commenti inline) anziche' dalla shell:
+# docker compose carica .env da solo, ma make no, quindi li estraiamo qui.
 aws-smoke:
-	@test -n "$$AWS_REAL_REGION" || (echo "AWS_REAL_REGION obbligatoria" && exit 1)
-	@test -n "$$AWS_REAL_S3_BUCKET" || (echo "AWS_REAL_S3_BUCKET obbligatoria" && exit 1)
-	@test -n "$$BEDROCK_MODEL_ID" || (echo "BEDROCK_MODEL_ID obbligatorio" && exit 1)
-	@test "$$TEXTRACT_ENABLED" = "true" || (echo "TEXTRACT_ENABLED=true obbligatorio per aws-smoke" && exit 1)
+	@get() { sed -n "s/^$$1=//p" .env 2>/dev/null | head -1 | sed 's/[[:space:]]*#.*$$//;s/[[:space:]]*$$//'; }; \
+	test -n "$$(get AWS_REAL_REGION)"   || { echo "AWS_REAL_REGION obbligatoria nel .env"; exit 1; }; \
+	test -n "$$(get AWS_REAL_S3_BUCKET)" || { echo "AWS_REAL_S3_BUCKET obbligatoria nel .env"; exit 1; }; \
+	test -n "$$(get BEDROCK_MODEL_ID)"  || { echo "BEDROCK_MODEL_ID obbligatorio nel .env"; exit 1; }; \
+	test "$$(get TEXTRACT_ENABLED)" = "true" || { echo "TEXTRACT_ENABLED=true obbligatorio nel .env"; exit 1; }; \
 	docker compose run --rm --no-deps app php artisan about --only=environment

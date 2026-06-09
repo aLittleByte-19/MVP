@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
         image:
           - name: app
@@ -30,9 +31,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Generate local TLS certificate
-        run: make local-tls
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -72,6 +70,7 @@ jobs:
           image
           --exit-code 1
           --severity HIGH,CRITICAL
+          --scanners vuln,secret,config
           --ignore-unfixed
           local/poc-${{ matrix.image.name }}:${{ github.sha }}
 

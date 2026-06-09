@@ -89,6 +89,7 @@
 }
 
 .subitemActive {
+  background: var(--poc-surface-soft);
   color: var(--poc-primary-deep);
 }
 

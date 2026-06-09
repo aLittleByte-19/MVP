@@ -3,6 +3,7 @@ FROM public.ecr.aws/docker/library/php:8.4-fpm-bookworm
 ARG COMPOSER_INSTALL_DEV=true
 
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
         curl \
         git \
@@ -31,7 +32,7 @@ RUN apt-get update \
 COPY --from=public.ecr.aws/docker/library/composer:2 /usr/bin/composer /usr/bin/composer
 COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/zz-opcache.ini
 
-ENV COMPOSER_ALLOW_SUPERUSER=1
+ARG COMPOSER_ALLOW_SUPERUSER=1
 
 WORKDIR /var/www/html
 
@@ -46,7 +47,9 @@ RUN if [ "$COMPOSER_INSTALL_DEV" = "true" ]; then \
 # Copy the rest of the application
 COPY . .
 
-# Finish composer installation
+# Finish composer installation and apply runtime security settings.
+# security.ini is copied here (after all Composer downloads) because it disables
+# allow_url_fopen, which Composer needs to fetch packages via HTTPS.
 RUN composer dump-autoload --no-interaction --optimize \
     && composer_hash=$(sha256sum composer.lock | awk '{ print $1 }') \
     && echo "$composer_hash" > vendor/.composer-lock.false.sha256 \
@@ -76,6 +79,8 @@ RUN composer dump-autoload --no-interaction --optimize \
     && if [ -d vendor/pestphp/pest/.temp ]; then \
         chown -R www-data:www-data vendor/pestphp/pest/.temp; \
     fi
+
+COPY docker/php/security.ini /usr/local/etc/php/conf.d/zz-security.ini
 
 USER www-data
 

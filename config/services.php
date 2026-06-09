@@ -39,6 +39,13 @@ return [
         'model_id' => env('BEDROCK_MODEL_ID'),
         'region' => env('BEDROCK_REGION', env('AWS_DEFAULT_REGION', 'eu-north-1')),
         'endpoint' => env('BEDROCK_ENDPOINT') === 'not-configured' ? null : env('BEDROCK_ENDPOINT'),
+        // Shared real-AWS credentials (same set used by real S3 and Textract).
+        // Left empty in LocalStack mode, where the SDK default chain applies.
+        'credentials' => [
+            'key' => env('AWS_REAL_ACCESS_KEY_ID'),
+            'secret' => env('AWS_REAL_SECRET_ACCESS_KEY'),
+            'token' => env('AWS_REAL_SESSION_TOKEN'),
+        ],
         'poc_confidence_threshold' => (int) env('POC_CONFIDENCE_THRESHOLD', 80),
     ],
 

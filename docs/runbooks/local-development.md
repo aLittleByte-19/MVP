@@ -13,7 +13,7 @@ Il target esegue:
 - avvio di PostgreSQL, Redis e LocalStack;
 - `terraform init` e `terraform apply` dal container Compose `terraform`;
 - migrazioni applicative;
-- avvio di app, Nginx, worker SQS, Traefik, OTel Collector, Prometheus, Tempo, Alertmanager e Grafana.
+- avvio di app, Nginx, worker SQS, Traefik, OTel Collector, Prometheus, Tempo, Alertmanager, Grafana, Loki e Grafana Alloy.
 
 Endpoint:
 
@@ -64,6 +64,8 @@ Il Collector scrapea:
 
 Prometheus legge l'exporter del Collector su `otel-collector:9464`, invia alert ad Alertmanager e Grafana carica datasource/dashboard da file.
 
+Grafana Alloy raccoglie i log di tutti i container del progetto tramite il socket Docker e li invia a Loki; Grafana li interroga con il datasource Loki (dashboard `Logs and Errors` e pannelli log delle altre dashboard). Le metriche di dominio del worker raggiungono `/internal/metrics` grazie al volume `observability-metrics` condiviso tra `app` e `queue`.
+
 ## Checks
 
 ```bash
@@ -90,6 +92,13 @@ AWS_REAL_REGION=...
 AWS_REAL_S3_BUCKET=...
 AWS_REAL_S3_PREFIX=documents/
 TEXTRACT_ENABLED=true
+TEXTRACT_REGION=...   # stessa regione del bucket S3
 ```
 
-Non salvare valori reali in repository. Bedrock richiede `BEDROCK_REGION` e `BEDROCK_MODEL_ID` con accesso gia' abilitato nell'account.
+Dopo ogni modifica al `.env`, applicare i nuovi valori a SSM/Secrets e ricaricare i processi:
+
+```bash
+make refresh-runtime
+```
+
+Le credenziali `AWS_REAL_*` sono condivise da S3, Textract e Bedrock e non vanno salvate in repository. Bedrock richiede `BEDROCK_REGION` e `BEDROCK_MODEL_ID` con accesso gia' abilitato nell'account.

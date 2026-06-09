@@ -1,0 +1,75 @@
+{
+  "uid": "poc-logs-errors",
+  "title": "Logs and Errors",
+  "tags": ["alittlebyte", "logs", "loki"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Errori per servizio (container)",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }
+    },
+    {
+      "type": "stat",
+      "title": "Errori totali (intervallo)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 0, "y": 1, "w": 6, "h": 6 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [{ "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "expr": "sum(count_over_time({project=\"poc\"} |~ \"(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))\" != \"No such container\" [$__range]))", "instant": true }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Tasso errori per servizio",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 6, "y": 1, "w": 18, "h": 6 },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 60, "stacking": { "mode": "normal" } }, "unit": "logs" } },
+      "targets": [{ "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "expr": "sum by (service) (rate({project=\"poc\"} |~ \"(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))\" != \"No such container\" [5m]))", "legendFormat": "{{service}}" }]
+    },
+    {
+      "type": "table",
+      "title": "Conteggio errori per servizio (intervallo)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 0, "y": 7, "w": 8, "h": 9 },
+      "fieldConfig": { "defaults": {}, "overrides": [{ "matcher": { "id": "byName", "options": "Errori" }, "properties": [{ "id": "custom.cellOptions", "value": { "type": "color-background" } }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } }] }] },
+      "options": { "showHeader": true, "cellHeight": "sm" },
+      "targets": [{ "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "expr": "sum by (service) (count_over_time({project=\"poc\"} |~ \"(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))\" != \"No such container\" [$__range]))", "instant": true, "format": "table" }],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "service": "Servizio", "Value": "Errori" } } },
+        { "id": "sortBy", "options": { "fields": "", "sort": [{ "field": "Errori", "desc": true }] } }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Tutti gli errori dello stack",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 8, "y": 7, "w": 16, "h": 9 },
+      "options": { "showTime": true, "wrapLogMessage": true, "prettifyLogMessage": true, "enableLogDetails": true, "dedupStrategy": "exact", "sortOrder": "Descending" },
+      "targets": [{ "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "expr": "{project=\"poc\"} |~ \"(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))\" != \"No such container\"", "maxLines": 300 }]
+    },
+    {
+      "type": "row",
+      "title": "Log per servizio",
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 1 }
+    },
+    {
+      "type": "logs",
+      "title": "Worker pipeline (queue)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 0, "y": 17, "w": 12, "h": 11 },
+      "options": { "showTime": true, "wrapLogMessage": true, "prettifyLogMessage": true, "enableLogDetails": true, "dedupStrategy": "none", "sortOrder": "Descending" },
+      "targets": [{ "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "expr": "{project=\"poc\", service=\"queue\"}", "maxLines": 200 }]
+    },
+    {
+      "type": "logs",
+      "title": "Applicazione (app)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 12, "y": 17, "w": 12, "h": 11 },
+      "options": { "showTime": true, "wrapLogMessage": true, "prettifyLogMessage": true, "enableLogDetails": true, "dedupStrategy": "none", "sortOrder": "Descending" },
+      "targets": [{ "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "expr": "{project=\"poc\", service=\"app\"}", "maxLines": 200 }]
+    }
+  ]
+}

@@ -27,6 +27,12 @@ class AppServiceProvider extends ServiceProvider
                 ],
             ];
 
+            $credentials = array_filter((array) config('services.bedrock.credentials'));
+
+            if ($credentials !== []) {
+                $config['credentials'] = $credentials;
+            }
+
             if (filled(config('services.bedrock.endpoint'))) {
                 $config['endpoint'] = config('services.bedrock.endpoint');
             }

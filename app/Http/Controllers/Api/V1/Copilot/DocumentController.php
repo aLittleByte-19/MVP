@@ -128,7 +128,7 @@ class DocumentController
             $this->authorizeOriginalDocument($original, $actor);
         }
 
-        $disk = config('filesystems.default', 'local');
+        $disk = config('poc.documents.storage_disk', config('filesystems.default', 'local'));
         $subFilePath = $subDocument->file_path;
 
         $subDocument->delete();
@@ -160,7 +160,7 @@ class DocumentController
             $this->authorizeOriginalDocument($subDocument->originalDocument, $this->actor($request));
         }
 
-        $disk = Storage::disk(config('filesystems.default', 'local'));
+        $disk = Storage::disk(config('poc.documents.storage_disk', config('filesystems.default', 'local')));
 
         abort_unless($disk->exists($subDocument->file_path), 404);
 

@@ -12,6 +12,8 @@
   <img src="https://img.shields.io/badge/OpenTelemetry-Collector-000000?logo=opentelemetry&logoColor=white" />
   <img src="https://img.shields.io/badge/Prometheus-3.9-E6522C?logo=prometheus&logoColor=white" />
   <img src="https://img.shields.io/badge/Grafana-12.3-F46800?logo=grafana&logoColor=white" />
+  <img src="https://img.shields.io/badge/Loki-3.3-F5A800?logo=grafana&logoColor=white" />
+  <img src="https://img.shields.io/badge/Alloy-logs-F5A800?logo=grafana&logoColor=white" />
 </p>
 
 <p align="center">
@@ -33,7 +35,8 @@ Applicazione per generazione assistita di comunicazioni interne e analisi docume
 - Upload PDF, archiviazione S3, OCR Textract opzionale, split documentale e persistenza dei risultati.
 - Workflow asincrono Step Functions + SQS task token, con DLQ e worker dedicato.
 - Configurazione runtime da SSM Parameter Store e Secrets Manager.
-- Observability con OpenTelemetry Collector, Prometheus, Tempo, Alertmanager e Grafana.
+- Observability con OpenTelemetry Collector, Prometheus, Tempo e Grafana; alerting con Alertmanager.
+- Aggregazione log di tutti i container con Grafana Alloy e Loki, consultabile in Grafana.
 - Superficie runtime ridotta: `/admin` e vecchi endpoint legacy rispondono 404.
 
 ## Architettura
@@ -58,6 +61,10 @@ flowchart LR
   OTel --> Tempo[Tempo]
   Prometheus --> Grafana[Grafana]
   Prometheus --> Alertmanager[Alertmanager]
+  Tempo --> Grafana
+  Logs[Container logs] --> Alloy[Grafana Alloy]
+  Alloy --> Loki[Loki]
+  Loki --> Grafana
 ```
 
 La pipeline documentale usa LocalStack per S3, SQS, Step Functions, SSM, Secrets Manager, EventBridge e SES locale. S3, Textract e Bedrock possono essere instradati verso AWS reale tramite parametri runtime, lasciando il resto dello stack in locale.
@@ -159,21 +166,20 @@ POC_BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
 BEDROCK_ENDPOINT=
 ```
 
-Poi applicare la configurazione e riavviare lo stack:
+Dopo ogni modifica a questi valori, riscrivere SSM/Secrets e ricaricare i processi applicativi:
 
 ```bash
-make local-tls
-docker compose build
-docker compose up -d postgres redis localstack
-make infra-apply
-make release
-docker compose up -d app queue nginx traefik otel-collector prometheus tempo alertmanager grafana
+make refresh-runtime
 ```
+
+`make refresh-runtime` esegue `make infra-apply` e ricrea i container `app` e `queue`, che ricaricano la configurazione runtime.
 
 Note operative:
 
-- `AWS_REAL_REGION` e `TEXTRACT_REGION` devono rappresentare la regione operativa della coppia S3/Textract.
+- Le credenziali `AWS_REAL_ACCESS_KEY_ID` / `AWS_REAL_SECRET_ACCESS_KEY` / `AWS_REAL_SESSION_TOKEN` sono condivise da S3, Textract e Bedrock: lo stesso principal IAM deve avere accesso ai tre servizi (un ruolo limitato al solo Bedrock non basta per S3/Textract).
+- `AWS_REAL_REGION` e `TEXTRACT_REGION` devono rappresentare la stessa regione: Textract legge l'oggetto dal bucket S3 e richiede che si trovino nella medesima regione.
 - `BEDROCK_REGION` e indipendente e deve essere una regione dove il modello scelto e abilitato per l'account.
+- Con `TEXTRACT_ENABLED=true`, `POC_DOCUMENT_DISK` deve essere `real_s3`: i documenti devono risiedere su S3 reale, altrimenti l'avvio del workflow viene rifiutato con un errore esplicito.
 - Le credenziali reali non vanno committate. Con IAM aziendale, preferire credenziali temporanee/OIDC/role assumption e secret injection gestita.
 - La workflow orchestration resta locale finche non viene aggiunto Terraform AWS reale per Step Functions, SQS, SSM e Secrets Manager.
 
@@ -183,19 +189,23 @@ Servizi locali:
 
 | Servizio | URL | Uso |
 | --- | --- | --- |
-| Grafana | `http://localhost:3000` | Dashboard applicative e trace drill-down. |
+| Grafana | `http://localhost:3000` | Dashboard applicative, log e trace drill-down. |
 | Prometheus | `http://localhost:9090` | Metriche e regole di alerting. |
 | Alertmanager | `http://localhost:9093` | Routing alert. |
 | Tempo | `http://localhost:3200` | Storage trace OTLP. |
+| Loki | interno `loki:3100` | Storage log dei container. |
+| Grafana Alloy | interno `alloy:12345` | Raccolta log dei container e invio a Loki. |
 
-Credenziali Grafana di default:
+Metriche, trace e log convergono in Grafana, che carica da file i datasource Prometheus, Tempo e Loki. Grafana Alloy raccoglie i log di tutti i container del progetto e li invia a Loki; nella dashboard `Logs and Errors` e nei pannelli log delle altre dashboard si filtrano per servizio (es. `{project="poc", service="queue"}`) e per livello di errore. Le metriche di dominio del worker (Textract, SQS, completamenti) sono esposte tramite un volume condiviso tra `app` e `queue`, così da raggiungere l'endpoint `/internal/metrics` scrappato da Prometheus.
+
+Credenziali Grafana di default (da cambiare se Grafana viene esposto oltre `localhost`):
 
 ```env
 GRAFANA_ADMIN_USER=admin
 GRAFANA_ADMIN_PASSWORD=admin
 ```
 
-Le dashboard sono provisioning-as-code in `docker/grafana/dashboards`. Per modificarle:
+Le dashboard sono provisioning-as-code in `docker/grafana/dashboards` (`api-golden-signals`, `document-pipeline`, `ai-ocr-quality`, `queues-and-dlq`, `logs-and-errors`). Per modificarle:
 
 1. Aprire Grafana e modificare una dashboard.
 2. Esportare il JSON aggiornato.
@@ -211,6 +221,7 @@ Prometheus carica regole da `docker/prometheus/rules`; Alertmanager da `docker/a
 | --- | --- |
 | `make setup` | Setup completo locale. |
 | `make release` | Esegue le migrazioni applicative. |
+| `make refresh-runtime` | Riapplica SSM/Secrets e ricrea app e worker dopo modifiche al `.env`. |
 | `make logs` | Segue log app, worker, Nginx e LocalStack. |
 | `make fresh` | Resetta database e dati generati. |
 | `make verify-fast` | Backend, frontend, infra e observability senza audit estesi. |
@@ -255,6 +266,9 @@ CI/CD GitHub Actions:
 - Worker asincrono con DLQ e idempotenza task-token.
 - Metriche interne non esposte attraverso Traefik pubblico.
 - Container runtime separati per app, worker, Nginx e tool.
+- Hardening runtime PHP (`docker/php/security.ini`): `expose_php` off, errori non in output, `allow_url_fopen`/`allow_url_include` off, cookie di sessione `HttpOnly`/`Secure`/`SameSite=Strict`, `disable_functions` sulle funzioni di esecuzione shell.
+- Header di sicurezza su Nginx (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `server_tokens off`).
+- Laravel riconosce TLS dietro Traefik tramite trusted proxy e header `X-Forwarded-*`.
 - Scansione immagini con Trivy su vulnerabilita HIGH/CRITICAL.
 - Mapping OWASP ASVS e IAM in `docs/security`.
 

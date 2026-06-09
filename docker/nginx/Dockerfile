@@ -13,7 +13,8 @@ RUN npm run openapi:generate \
 
 FROM public.ecr.aws/docker/library/nginx:1.27-alpine
 
-RUN rm -f /etc/nginx/conf.d/default.conf \
+RUN apk upgrade --no-cache \
+    && rm -f /etc/nginx/conf.d/default.conf \
     && mkdir -p /run /var/cache/nginx /var/run /var/www/html/public \
     && chown -R nginx:nginx /run /var/cache/nginx /var/run /var/www/html
 

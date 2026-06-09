@@ -27,6 +27,10 @@ The eventual AWS role needs scoped permissions for:
 - CloudWatch Logs/metrics or OpenTelemetry collector export target permissions when real AWS observability is introduced.
 - ECR/GHCR-equivalent deployment permissions only when the deployment target is defined.
 
+## Local Real-AWS Smoke
+
+The local hybrid mode (`POC_DOCUMENT_DISK=real_s3`, `TEXTRACT_ENABLED=true`) reads a single shared credential set from `.env` (`AWS_REAL_ACCESS_KEY_ID` / `AWS_REAL_SECRET_ACCESS_KEY` / `AWS_REAL_SESSION_TOKEN`) used by S3, Textract and Bedrock. That principal must therefore hold S3 object access, Textract async detection and Bedrock `InvokeModel` at once. S3 and Textract must share the same region; Bedrock may use a different region where the model is enabled.
+
 ## Current Blockers
 
 - No enterprise AWS account role ARN has been provided.

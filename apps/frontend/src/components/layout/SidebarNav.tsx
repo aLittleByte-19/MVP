@@ -20,6 +20,7 @@ export type SidebarNavGroup<TValue extends string> = {
 
 type SidebarNavProps<TValue extends string> = {
   activeId: TValue;
+  activeChildId?: string | null;
   brandLabel?: string;
   groups: SidebarNavGroup<TValue>[];
   logoAlt: string;
@@ -30,6 +31,7 @@ type SidebarNavProps<TValue extends string> = {
 
 export function SidebarNav<TValue extends string>({
   activeId,
+  activeChildId,
   brandLabel,
   groups,
   logoAlt,
@@ -62,16 +64,21 @@ export function SidebarNav<TValue extends string>({
                     {Icon ? <Icon aria-hidden="true" size={18} /> : null}
                     <span>{item.label}</span>
                   </button>
-                  {item.children?.map((child) => (
-                    <button
-                      className={isActive ? `${styles.subitem} ${styles.subitemActive}` : styles.subitem}
-                      key={child.targetId}
-                      type="button"
-                      onClick={() => onSelect(item.id, child.targetId)}
-                    >
-                      {child.label}
-                    </button>
-                  ))}
+                  {item.children?.map((child) => {
+                    const isChildActive = isActive && child.targetId === activeChildId;
+
+                    return (
+                      <button
+                        className={isChildActive ? `${styles.subitem} ${styles.subitemActive}` : styles.subitem}
+                        key={child.targetId}
+                        type="button"
+                        aria-current={isChildActive ? "location" : undefined}
+                        onClick={() => onSelect(item.id, child.targetId)}
+                      >
+                        {child.label}
+                      </button>
+                    );
+                  })}
                 </div>
               );
             })}

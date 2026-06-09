@@ -1,8 +1,8 @@
 .tableWrapper {
   overflow-x: auto;
-  border: 1px solid var(--poc-border);
+  border: 1px solid var(--poc-border-soft);
   border-radius: var(--poc-radius);
-  background: var(--poc-surface-muted);
+  background: var(--poc-surface);
 }
 
 .table {
@@ -13,7 +13,7 @@
 .table th,
 .table td {
   padding: var(--poc-space-3);
-  border-bottom: 1px solid var(--poc-border);
+  border-bottom: 1px solid var(--poc-border-soft);
   text-align: left;
   vertical-align: middle;
 }
@@ -22,9 +22,23 @@
   background: var(--poc-surface-soft);
   color: var(--poc-muted);
   font-size: var(--poc-font-xs);
+  font-weight: 800;
   text-transform: uppercase;
 }
 
-.table tr:last-child td {
+.table tbody tr:last-child td {
   border-bottom: 0;
+}
+
+/* Optional left status strip (mirrors mockup .document-row::before). */
+.table tbody tr[data-tone="needs-review"] td:first-child {
+  box-shadow: inset 4px 0 0 #d99a3f;
+}
+
+.table tbody tr[data-tone="confirmed"] td:first-child {
+  box-shadow: inset 4px 0 0 #6bb58a;
+}
+
+.table tbody tr[data-tone="sent"] td:first-child {
+  box-shadow: inset 4px 0 0 var(--poc-border-strong);
 }

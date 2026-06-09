@@ -34,6 +34,13 @@ class DocumentWorkflowService
             throw new \RuntimeException('Workflow documentale non configurato: DOCUMENT_PIPELINE_STATE_MACHINE_ARN e DOCUMENT_PIPELINE_TASK_QUEUE_URL sono obbligatori.');
         }
 
+        // Real Textract can only read objects from real S3. If OCR is enabled while
+        // documents live on the LocalStack disk, Textract fails with a cryptic
+        // InvalidS3ObjectException, so fail fast with an actionable message instead.
+        if ((bool) config('services.textract.enabled') && config('poc.documents.storage_disk') !== 'real_s3') {
+            throw new \RuntimeException('Textract è abilitato (TEXTRACT_ENABLED=true) ma POC_DOCUMENT_DISK non è "real_s3": i documenti restano su S3 LocalStack e Textract reale non può leggerli. Imposta POC_DOCUMENT_DISK=real_s3 ed esegui "make refresh-runtime".');
+        }
+
         $input = $this->workflowInput($document, $taskQueueUrl, $request);
 
         try {
@@ -171,11 +178,11 @@ class DocumentWorkflowService
         $disk = (string) config('poc.documents.storage_disk', config('filesystems.default'));
         $root = trim((string) config("filesystems.disks.{$disk}.root", ''), '/');
 
-        if ($root === '' || str_starts_with($document->file_path, $root.'/')) {
-            return $document->file_path;
-        }
-
-        return $root.'/'.$document->file_path;
+        // file_path is always disk-relative (no root prefix), while Textract needs
+        // the raw S3 key, which includes the disk root. Always prepend it; the
+        // previous str_starts_with shortcut was fooled when the upload folder
+        // happened to start with the root (e.g. root "documents" + "documents/originals").
+        return $root === '' ? $document->file_path : $root.'/'.$document->file_path;
     }
 
     private function shortName(string $arn): string

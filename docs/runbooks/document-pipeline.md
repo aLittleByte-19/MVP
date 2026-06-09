@@ -22,8 +22,10 @@
 | `SQS_DLQ_URL` | DLQ diagnostics | Used by `poc:dlq:list`. |
 | `POC_DOCUMENT_DISK` | Upload storage | Use `s3` for LocalStack demo, `real_s3` for real Textract validation. |
 | `AWS_REAL_*` | Real S3/Textract | Must not be committed. |
-| `TEXTRACT_ENABLED` | OCR | Defaults false in local/CI. |
+| `TEXTRACT_ENABLED` | OCR | Defaults false in local/CI. Requires `POC_DOCUMENT_DISK=real_s3`. |
 | `BEDROCK_MODEL_ID` | AI extraction | Real Bedrock access must be granted externally. |
+
+When `TEXTRACT_ENABLED=true`, `POC_DOCUMENT_DISK` must be `real_s3`: real Textract can only read objects from real S3, so `DocumentWorkflowService::start()` rejects the workflow up front with an explicit error if OCR is enabled while documents live on the LocalStack disk. The S3 key passed to Textract includes the document disk root prefix (`AWS_REAL_S3_PREFIX`).
 
 ## Manual Smoke
 
@@ -39,6 +41,8 @@ Upload a small PDF from the SPA, then watch:
 make logs
 docker compose exec app php artisan poc:dlq:list
 ```
+
+Worker logs are also available in Grafana (Loki): see the `document-pipeline` and `ai-ocr-quality` dashboards or query `{project="poc", service="queue"}` in the `Logs and Errors` dashboard.
 
 Real AWS OCR smoke is intentionally separate:
 

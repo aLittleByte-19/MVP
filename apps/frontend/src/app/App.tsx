@@ -1,5 +1,5 @@
 import { Moon, Sun } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import alittlebyteLogo from "../assets/alittlebyte-logo.png";
 import { ErrorState } from "../components/feedback/ErrorState";
 import { AppShell } from "../components/layout/AppShell";
@@ -20,6 +20,7 @@ import { MetricsPanel } from "../features/observability/components/MetricsPanel"
 import { SystemStatePanel } from "../features/state/components/SystemStatePanel";
 import { usePocState } from "../features/state/hooks/usePocState";
 import { getErrorMessage } from "../lib/errors";
+import { useScrollSpy } from "../hooks/useScrollSpy";
 import { useTheme } from "../hooks/useTheme";
 import { pocNavGroups, pocViewTitles, type PocView } from "./routes";
 import styles from "./App.module.css";
@@ -35,6 +36,16 @@ export function App() {
   const upload = useDocumentUpload({ onDocumentReceived: selectDocument });
   const deleteDocument = useDeleteDocument(() => selectDocument(null));
 
+  const activeChildIds = useMemo(
+    () =>
+      pocNavGroups
+        .flatMap((group) => group.items)
+        .find((item) => item.id === activeView)
+        ?.children?.map((child) => child.targetId) ?? [],
+    [activeView],
+  );
+  const activeChildId = useScrollSpy(activeChildIds);
+
   const navigate = useCallback((view: PocView, targetId?: string) => {
     setActiveView(view);
 
@@ -49,6 +60,7 @@ export function App() {
       sidebar={
         <SidebarNav
           activeId={activeView}
+          activeChildId={activeChildId}
           groups={pocNavGroups}
           logoAlt="Alittlebyte"
           logoSrc={alittlebyteLogo}
@@ -95,18 +107,11 @@ export function App() {
 
       {activeView === "copilot" ? (
         <section className={styles.view} aria-label="AI Co-Pilot per i CdL">
-          <div className={styles.flowGrid}>
-            <DocumentUploadPanel
-              isUploading={upload.isUploading}
-              onUpload={upload.upload}
-              status={upload.status}
-            />
-            <SubDocumentList
-              documentItem={selectedDocument}
-              isDeleting={deleteDocument.isDeleting}
-              onDelete={deleteDocument.deleteDocument}
-            />
-          </div>
+          <DocumentUploadPanel
+            isUploading={upload.isUploading}
+            onUpload={upload.upload}
+            status={upload.status}
+          />
           <Section id="copilot-documents" title="Storico invii" actions={<span>{documents.length} record</span>}>
             <DocumentList
               documents={documents}
@@ -114,6 +119,11 @@ export function App() {
               selectedDocumentId={selectedDocumentId}
             />
           </Section>
+          <SubDocumentList
+            documentItem={selectedDocument}
+            isDeleting={deleteDocument.isDeleting}
+            onDelete={deleteDocument.deleteDocument}
+          />
           <Section id="copilot-metrics" title="Qualita e performance OCR">
             <MetricsPanel isLoading={stateQuery.isLoading} metrics={state?.copilot.metrics} />
           </Section>

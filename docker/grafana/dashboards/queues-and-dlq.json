@@ -1,24 +1,103 @@
 {
   "uid": "poc-queues-and-dlq",
   "title": "Queues and DLQ",
+  "tags": ["alittlebyte", "queue", "sqs"],
   "schemaVersion": 39,
-  "version": 1,
+  "version": 3,
   "refresh": "15s",
+  "time": { "from": "now-6h", "to": "now" },
   "panels": [
     {
-      "type": "timeseries",
-      "title": "SQS received/failed",
-      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "type": "row",
+      "title": "Code SQS e dead-letter",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }
+    },
+    {
+      "type": "stat",
+      "title": "Messaggi in DLQ",
+      "gridPos": { "x": 0, "y": 1, "w": 8, "h": 4 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [{ "refId": "A", "expr": "sum(poc_dlq_messages_total)", "instant": true, "legendFormat": "dlq" }]
+    },
+    {
+      "type": "stat",
+      "title": "Messaggi ricevuti (totale)",
+      "gridPos": { "x": 8, "y": 1, "w": 8, "h": 4 },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
+      "targets": [{ "refId": "A", "expr": "sum(poc_sqs_messages_received_total)", "instant": true, "legendFormat": "ricevuti" }]
+    },
+    {
+      "type": "stat",
+      "title": "Messaggi falliti (totale)",
+      "gridPos": { "x": 16, "y": 1, "w": 8, "h": 4 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [{ "refId": "A", "expr": "sum(poc_sqs_messages_failed_total)", "instant": true, "legendFormat": "falliti" }]
+    },
+    {
+      "type": "table",
+      "title": "Code per task (ricevuti vs falliti)",
+      "gridPos": { "x": 0, "y": 5, "w": 12, "h": 9 },
+      "fieldConfig": { "defaults": {}, "overrides": [{ "matcher": { "id": "byName", "options": "Falliti" }, "properties": [{ "id": "custom.cellOptions", "value": { "type": "color-background" } }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } }] }] },
+      "options": { "showHeader": true, "cellHeight": "sm" },
       "targets": [
-        { "expr": "rate(poc_sqs_messages_received_total[5m])", "legendFormat": "received {{task_type}}" },
-        { "expr": "rate(poc_sqs_messages_failed_total[5m])", "legendFormat": "failed {{task_type}}" }
+        { "refId": "A", "expr": "sum by (task_type) (poc_sqs_messages_received_total)", "instant": true, "format": "table" },
+        { "refId": "B", "expr": "sum by (task_type) (poc_sqs_messages_failed_total)", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "task_type": "Task", "Value #A": "Ricevuti", "Value #B": "Falliti" } } },
+        { "id": "sortBy", "options": { "fields": "", "sort": [{ "field": "Ricevuti", "desc": true }] } }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Throughput coda (rate 5m)",
+      "gridPos": { "x": 12, "y": 5, "w": 12, "h": 9 },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10 }, "unit": "ops" } },
+      "targets": [
+        { "refId": "A", "expr": "sum by (task_type) (rate(poc_sqs_messages_received_total[5m]))", "legendFormat": "ricevuti {{task_type}}" },
+        { "refId": "B", "expr": "sum by (task_type) (rate(poc_sqs_messages_failed_total[5m]))", "legendFormat": "falliti {{task_type}}" }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Stato dipendenze (readiness)",
+      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 7 },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "type": "value", "options": { "0": { "text": "KO", "color": "red", "index": 0 }, "1": { "text": "OK", "color": "green", "index": 1 } } }],
+          "custom": { "cellOptions": { "type": "color-background" } }
+        }
+      },
+      "options": { "showHeader": true, "cellHeight": "sm" },
+      "targets": [{ "refId": "A", "expr": "max by (check) (poc_readiness_status)", "instant": true, "format": "table" }],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "check": "Check", "Value": "Stato" } } }
       ]
     },
     {
       "type": "stat",
-      "title": "DLQ observed messages",
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
-      "targets": [{ "expr": "poc_dlq_messages_total", "legendFormat": "{{queue}}" }]
+      "title": "Workflow completati (rate 5m)",
+      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "ops", "color": { "mode": "fixed", "fixedColor": "green" } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "targets": [{ "refId": "A", "expr": "sum(rate(poc_document_workflow_completed_total[5m]))", "legendFormat": "completati/s" }]
+    },
+    {
+      "type": "row",
+      "title": "Log code / worker",
+      "gridPos": { "x": 0, "y": 21, "w": 24, "h": 1 }
+    },
+    {
+      "type": "logs",
+      "title": "Log worker (container queue)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 10 },
+      "options": { "showTime": true, "wrapLogMessage": true, "prettifyLogMessage": true, "enableLogDetails": true, "dedupStrategy": "none", "sortOrder": "Descending" },
+      "targets": [{ "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "expr": "{project=\"poc\", service=\"queue\"}", "maxLines": 200 }]
     }
   ]
 }
