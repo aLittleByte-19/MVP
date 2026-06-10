@@ -39,8 +39,9 @@ make observability-up
 
 1. Grafana Alloy discovers the project's containers through the Docker socket (`com.docker.compose.project=poc`).
 2. Alloy reads each container's log stream and ships it to Loki, labelling lines with `service`, `container` and `project`.
-3. Loki stores logs on a local filesystem volume with a 7-day retention.
-4. Grafana queries Loki for the logs panels and the `Logs and Errors` dashboard.
+3. Application logs sent over OTLP reach the OTel Collector, which forwards them to Loki's native OTLP ingestion endpoint (`loki:3100/otlp`).
+4. Loki stores logs on a local filesystem volume with a 7-day retention.
+5. Grafana queries Loki for the logs panels and the `Logs and Errors` dashboard.
 
 Useful LogQL queries:
 
@@ -56,7 +57,7 @@ Monolog application logs are JSON with `level_name`; infrastructure containers u
 
 Dashboard JSON lives in `docker/grafana/dashboards`:
 
-- `api-golden-signals.json` — request rate, error rate, p95/p99 latency and a per-endpoint golden-signals table.
+- `api-golden-signals.json` — request rate, error rate, p95/p99 latency, a per-endpoint golden-signals table and a saturation row (edge open connections, pipeline backlog, collector memory) covering all four golden signals.
 - `document-pipeline.json` — document status, pipeline steps (SQS), Step Functions failures and a pipeline error log panel.
 - `queues-and-dlq.json` — SQS throughput, DLQ, dependency readiness and worker logs.
 - `ai-ocr-quality.json` — Textract confidence/duration, failures by error code, communications by status and OCR error logs.
@@ -72,5 +73,7 @@ Rules live in `docker/prometheus/rules`:
 - `pipeline-alerts.yml`
 - `queue-alerts.yml`
 - `ai-alerts.yml`
+
+Every alert carries a `runbook` annotation linking to the relevant runbook in `docs/runbooks/`. `DLQNotEmpty` is `critical` (terminal failure path); the remaining alerts are `warning` except `TargetDown` (`critical`).
 
 The local Alertmanager receiver is intentionally a demo receiver. Do not configure real email, Slack or paging secrets in this repository.

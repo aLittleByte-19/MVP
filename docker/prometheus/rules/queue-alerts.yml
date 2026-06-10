@@ -10,13 +10,15 @@ groups:
         annotations:
           summary: "Workflow queue may be stalled"
           description: "Documents are processing but no SQS messages were consumed recently."
+          runbook: "https://github.com/aLittleByte-19/PoC/blob/main/docs/runbooks/document-pipeline.md"
 
       - alert: DLQNotEmpty
         expr: poc_dlq_messages_total > 0
         for: 1m
         labels:
-          severity: warning
+          severity: critical
           service_namespace: alittlebyte
         annotations:
           summary: "Document workflow DLQ contains messages"
           description: "Run php artisan poc:dlq:list to inspect failed messages."
+          runbook: "https://github.com/aLittleByte-19/PoC/blob/main/docs/runbooks/dlq-recovery.md"

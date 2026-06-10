@@ -59,12 +59,23 @@ export function SubDocumentList({ documentItem, isDeleting, onDelete }: SubDocum
           <p className={styles.eyebrow}>Anteprima documento</p>
           <div className={styles.previewFrame}>
             <strong>{formatFallback(documentItem.file, "Documento")}</strong>
-            <span>Apertura del documento originale direttamente nell'applicativo.</span>
             {documentItem.previewUrl ? (
-              <a className={styles.previewLink} href={documentItem.previewUrl} target="_blank" rel="noreferrer">
-                Apri originale
-              </a>
-            ) : null}
+              <>
+                <object
+                  className={styles.previewDocument}
+                  data={documentItem.previewUrl}
+                  type="application/pdf"
+                  aria-label={`Anteprima di ${formatFallback(documentItem.file, "documento")}`}
+                >
+                  <span>Il browser non supporta l'anteprima PDF integrata: usa il link qui sotto.</span>
+                </object>
+                <a className={styles.previewLink} href={documentItem.previewUrl} target="_blank" rel="noreferrer">
+                  Apri in una nuova scheda
+                </a>
+              </>
+            ) : (
+              <span>Anteprima non ancora disponibile per questo documento.</span>
+            )}
           </div>
           {documentItem.previewLines.length ? (
             <ul className={styles.previewLines}>

@@ -15,6 +15,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use League\Flysystem\FilesystemException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DocumentController
@@ -162,7 +163,13 @@ class DocumentController
 
         $disk = Storage::disk(config('poc.documents.storage_disk', config('filesystems.default', 'local')));
 
-        abort_unless($disk->exists($subDocument->file_path), 404);
+        try {
+            abort_unless($disk->exists($subDocument->file_path), 404);
+        } catch (FilesystemException $exception) {
+            report($exception);
+
+            abort(503, 'Storage documenti non raggiungibile.');
+        }
 
         $filename = $subDocument->originalDocument?->original_filename ?: 'documento.pdf';
 

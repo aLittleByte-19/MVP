@@ -26,6 +26,7 @@ provider "aws" {
     cloudwatch     = var.localstack_endpoint
     events         = var.localstack_endpoint
     iam            = var.localstack_endpoint
+    kms            = var.localstack_endpoint
     s3             = var.localstack_endpoint
     secretsmanager = var.localstack_endpoint
     ses            = var.localstack_endpoint

@@ -3,6 +3,12 @@
 .idea
 .vscode
 
+# IaC: non deve finire nell'immagine runtime (superficie d'attacco + finding Trivy config)
+infra
+*.tfstate
+*.tfstate.backup
+.terraform
+
 vendor
 node_modules
 apps/frontend/dist

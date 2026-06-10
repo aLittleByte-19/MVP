@@ -56,6 +56,10 @@ exporters:
     endpoint: tempo:4317
     tls:
       insecure: true
+  # Loki 3.x espone ingestion OTLP nativa: i log applicativi inviati via OTLP
+  # finiscono in Loki accanto a quelli raccolti da Alloy (docker logs).
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
   debug:
     verbosity: basic
 
@@ -102,4 +106,4 @@ service:
         - memory_limiter
         - batch
       exporters:
-        - debug
+        - otlphttp/loki

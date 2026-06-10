@@ -17,6 +17,9 @@ providers:
 api:
   dashboard: false
 
+ping:
+  entryPoint: metrics
+
 log:
   level: INFO
   format: json

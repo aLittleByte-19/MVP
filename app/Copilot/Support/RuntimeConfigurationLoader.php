@@ -35,9 +35,18 @@ class RuntimeConfigurationLoader
         'BEDROCK_MODEL_ID',
     ];
 
+    /**
+     * @var array<string, string>
+     */
+    private static array $collected = [];
+
     public static function load(): void
     {
         if (self::source() !== 'aws') {
+            return;
+        }
+
+        if (self::applyCachedValues()) {
             return;
         }
 
@@ -70,6 +79,78 @@ class RuntimeConfigurationLoader
         } catch (AwsException $exception) {
             throw new \RuntimeException('Runtime configuration could not be loaded from AWS configuration stores: '.$exception->getAwsErrorMessage(), previous: $exception);
         }
+
+        self::persistCache();
+    }
+
+    /**
+     * PHP-FPM riesegue il bootstrap a ogni richiesta: senza una cache locale
+     * ogni request farebbe round-trip verso SSM/Secrets Manager (latenza e
+     * throttling su AWS reale). La cache vive nel filesystem del container e
+     * si rigenera quando il container viene ricreato: `make refresh-runtime`
+     * resta quindi il flusso per propagare modifiche alla configurazione.
+     */
+    private static function applyCachedValues(): bool
+    {
+        $path = self::cachePath();
+
+        if (! is_file($path)) {
+            return false;
+        }
+
+        $cached = @include $path;
+
+        if (! is_array($cached)
+            || ($cached['fingerprint'] ?? null) !== self::fingerprint()
+            || ! is_array($cached['values'] ?? null)) {
+            return false;
+        }
+
+        foreach ($cached['values'] as $key => $value) {
+            self::setRuntimeValue((string) $key, (string) $value);
+        }
+
+        return true;
+    }
+
+    private static function persistCache(): void
+    {
+        $path = self::cachePath();
+        $payload = '<?php return '.var_export([
+            'fingerprint' => self::fingerprint(),
+            'values' => self::$collected,
+        ], true).';';
+
+        $temporary = $path.'.'.bin2hex(random_bytes(6)).'.tmp';
+
+        // La cache è solo un'ottimizzazione: se la scrittura fallisce si
+        // continua a leggere da AWS a ogni bootstrap.
+        if (@file_put_contents($temporary, $payload, LOCK_EX) === false) {
+            return;
+        }
+
+        @chmod($temporary, 0600);
+
+        if (! @rename($temporary, $path)) {
+            @unlink($temporary);
+        }
+    }
+
+    private static function cachePath(): string
+    {
+        $override = self::bootstrapValue('CONFIG_CACHE_PATH');
+
+        return $override !== '' ? $override : dirname(__DIR__, 3).'/bootstrap/cache/runtime-config.php';
+    }
+
+    private static function fingerprint(): string
+    {
+        return hash('sha256', implode('|', [
+            self::bootstrapValue('CONFIG_AWS_REGION'),
+            self::bootstrapValue('CONFIG_AWS_ENDPOINT'),
+            self::bootstrapValue('CONFIG_SSM_PATH'),
+            self::bootstrapValue('CONFIG_SECRET_IDS'),
+        ]));
     }
 
     private static function source(): string
@@ -163,6 +244,7 @@ class RuntimeConfigurationLoader
 
     private static function setRuntimeValue(string $key, string $value): void
     {
+        self::$collected[$key] = $value;
         $_ENV[$key] = $value;
         $_SERVER[$key] = $value;
         putenv("{$key}={$value}");

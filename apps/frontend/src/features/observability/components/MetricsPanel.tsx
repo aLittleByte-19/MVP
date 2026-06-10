@@ -2,7 +2,6 @@ import type { Metric } from "../../../api/generated/model";
 import { MetricCard } from "../../../components/data-display/MetricCard";
 import { EmptyState } from "../../../components/feedback/EmptyState";
 import { LoadingState } from "../../../components/feedback/LoadingState";
-import { useMetrics } from "../hooks/useMetrics";
 import styles from "./MetricsPanel.module.css";
 
 type MetricsPanelProps = {
@@ -11,7 +10,7 @@ type MetricsPanelProps = {
 };
 
 export function MetricsPanel({ isLoading, metrics }: MetricsPanelProps) {
-  const visibleMetrics = useMetrics(metrics);
+  const visibleMetrics = metrics ?? [];
 
   if (isLoading) {
     return <LoadingState label="Caricamento metriche." />;

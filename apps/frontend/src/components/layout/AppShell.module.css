@@ -25,7 +25,9 @@
 
 @media (max-width: 920px) {
   .shell {
-    grid-template-columns: 1fr;
+    /* minmax(0, …): senza, il min-content di contenuti non spezzabili
+       (filename lunghi) allarga shell e sidebar oltre il viewport */
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .workspace {

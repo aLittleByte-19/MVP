@@ -97,14 +97,16 @@ resource "random_password" "app_key" {
 }
 
 resource "aws_sqs_queue" "documents_dlq" {
-  name = "${var.name_prefix}-documents-dlq"
-  tags = local.tags
+  name                    = "${var.name_prefix}-documents-dlq"
+  sqs_managed_sse_enabled = true
+  tags                    = local.tags
 }
 
 resource "aws_sqs_queue" "documents" {
   name                       = "${var.name_prefix}-documents"
   visibility_timeout_seconds = 330
   message_retention_seconds  = 345600
+  sqs_managed_sse_enabled    = true
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.documents_dlq.arn
@@ -114,10 +116,38 @@ resource "aws_sqs_queue" "documents" {
   tags = local.tags
 }
 
+resource "aws_kms_key" "documents" {
+  description         = "CMK for ${var.name_prefix} documents bucket"
+  enable_key_rotation = true
+  tags                = local.tags
+}
+
 resource "aws_s3_bucket" "documents" {
   bucket        = "${var.name_prefix}-documents-local"
   force_destroy = true
   tags          = local.tags
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "documents" {
+  bucket = aws_s3_bucket.documents.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.documents.arn
+    }
+
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "documents" {
+  bucket = aws_s3_bucket.documents.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 resource "aws_ssm_parameter" "app_runtime" {

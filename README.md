@@ -172,7 +172,7 @@ Dopo ogni modifica a questi valori, riscrivere SSM/Secrets e ricaricare i proces
 make refresh-runtime
 ```
 
-`make refresh-runtime` esegue `make infra-apply` e ricrea i container `app` e `queue`, che ricaricano la configurazione runtime.
+`make refresh-runtime` esegue `make infra-apply` e ricrea i container `app` e `queue`, che ricaricano la configurazione runtime. I valori risolti da SSM/Secrets vengono cachati nel filesystem del container (`bootstrap/cache/runtime-config.php`): ricreare i container e quindi il modo corretto per propagare le modifiche.
 
 Note operative:
 
@@ -196,7 +196,7 @@ Servizi locali:
 | Loki | interno `loki:3100` | Storage log dei container. |
 | Grafana Alloy | interno `alloy:12345` | Raccolta log dei container e invio a Loki. |
 
-Metriche, trace e log convergono in Grafana, che carica da file i datasource Prometheus, Tempo e Loki. Grafana Alloy raccoglie i log di tutti i container del progetto e li invia a Loki; nella dashboard `Logs and Errors` e nei pannelli log delle altre dashboard si filtrano per servizio (es. `{project="poc", service="queue"}`) e per livello di errore. Le metriche di dominio del worker (Textract, SQS, completamenti) sono esposte tramite un volume condiviso tra `app` e `queue`, così da raggiungere l'endpoint `/internal/metrics` scrappato da Prometheus.
+Metriche, trace e log convergono in Grafana, che carica da file i datasource Prometheus, Tempo e Loki. Grafana Alloy raccoglie i log di tutti i container del progetto e li invia a Loki; i log applicativi inviati via OTLP raggiungono Loki attraverso il Collector. Nella dashboard `Logs and Errors` e nei pannelli log delle altre dashboard si filtrano per servizio (es. `{project="poc", service="queue"}`) e per livello di errore. La dashboard `API Golden Signals` copre tutti e quattro i segnali SRE (latency, traffic, errors, saturation) e ogni alert Prometheus rimanda al runbook pertinente in `docs/runbooks/`. Le metriche di dominio del worker (Textract, SQS, completamenti) sono esposte tramite un volume condiviso tra `app` e `queue`, così da raggiungere l'endpoint `/internal/metrics` scrappato da Prometheus.
 
 Credenziali Grafana di default (da cambiare se Grafana viene esposto oltre `localhost`):
 
@@ -224,6 +224,7 @@ Prometheus carica regole da `docker/prometheus/rules`; Alertmanager da `docker/a
 | `make refresh-runtime` | Riapplica SSM/Secrets e ricrea app e worker dopo modifiche al `.env`. |
 | `make logs` | Segue log app, worker, Nginx e LocalStack. |
 | `make fresh` | Resetta database e dati generati. |
+| `make reset-all` | Reset totale: volumi locali + bucket S3 reale, poi setup da zero (`FORCE=1` per saltare la conferma). |
 | `make verify-fast` | Backend, frontend, infra e observability senza audit estesi. |
 | `make verify` | Quality gate completo locale. |
 | `make frontend-a11y` | Axe e Pa11y sullo stack HTTPS locale. |
@@ -255,7 +256,7 @@ CI/CD GitHub Actions:
 - `Accessibility`: Axe e Pa11y sullo stack locale.
 - `LocalStack Smoke`: Compose, Terraform, migrazioni, health/readiness/API e dashboard locali.
 - `Containers`: build immagini runtime, Trivy scan, publish GHCR su branch/tag abilitati.
-- `AWS Smoke`: workflow manuale per role OIDC aziendale quando disponibile.
+- `AWS Smoke`: workflow manuale e non bloccante che verifica S3, Textract e Bedrock reali; usa il role OIDC aziendale quando disponibile, in alternativa credenziali effimere caricate come secrets (vedi `docs/runbooks/ci-cd.md`).
 
 ## Sicurezza
 

@@ -25,6 +25,11 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 RuntimeConfigurationLoader::load();
 
 $app = new Application(dirname(__DIR__));
+
+// Con CONFIG_SOURCE=aws la configurazione arriva da SSM/Secrets Manager (loader
+// sopra) o dall'ambiente del container: puntare dotenv su /dev/null garantisce
+// che un eventuale .env presente nel filesystem non possa sovrascriverla.
+// Laravel non espone un'API per disabilitare dotenv, da cui questo idioma.
 $app->useEnvironmentPath('/dev');
 $app->loadEnvironmentFrom('null');
 

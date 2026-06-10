@@ -1,4 +1,4 @@
-.PHONY: help test pint node-install frontend-build frontend-test frontend-typecheck frontend-audit frontend-a11y openapi-generate openapi-validate observability-config observability-up local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke
+.PHONY: help test pint node-install frontend-build frontend-test frontend-typecheck frontend-audit frontend-a11y openapi-generate openapi-validate observability-config observability-up local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke reset-all
 
 # Colori per l'output
 BLUE  := \033[34m
@@ -48,6 +48,7 @@ help:
 	@echo "  $(BLUE)make verify-fast$(RESET)   Esegue i controlli locali rapidi"
 	@echo "  $(BLUE)make verify$(RESET)        Esegue la batteria completa locale"
 	@echo "  $(BLUE)make aws-smoke$(RESET)     Smoke opzionale su AWS reale, richiede credenziali"
+	@echo "  $(BLUE)make reset-all$(RESET)     Reset TOTALE: volumi locali + S3 reale, poi setup da zero (FORCE=1 senza conferma)"
 
 # Quality gate rapido: usa solo container e non richiede credenziali AWS reali.
 verify-fast: verify-backend verify-frontend verify-infra verify-observability
@@ -173,6 +174,35 @@ infra-destroy: infra-init
 refresh-runtime: infra-apply
 	docker compose up -d --no-deps --force-recreate app queue
 	@echo "$(BLUE)Runtime aggiornato: SSM/Secrets riscritti, app e queue ricreati.$(RESET)"
+
+# Reset TOTALE della PoC: ferma lo stack, elimina tutti i volumi locali
+# (PostgreSQL, Redis, LocalStack, osservabilita'), svuota il prefisso del
+# bucket S3 reale se configurato nel .env e riparte da zero con make setup.
+# Distruttivo per design (e' una PoC): FORCE=1 salta la conferma interattiva.
+reset-all:
+	@if [ "$(FORCE)" != "1" ]; then \
+		printf "Verranno eliminati TUTTI i dati locali e gli oggetti del bucket S3 reale. Continuare? [y/N] "; \
+		read answer; case "$$answer" in [yY]) ;; *) echo "Annullato."; exit 1;; esac; \
+	fi
+	@get() { sed -n "s/^$$1=//p" .env 2>/dev/null | head -1 | sed 's/[[:space:]]*#.*$$//;s/[[:space:]]*$$//'; }; \
+	bucket="$$(get AWS_REAL_S3_BUCKET)"; \
+	if [ -n "$$bucket" ] && [ "$$bucket" != "not-configured" ]; then \
+		prefix="$$(get AWS_REAL_S3_PREFIX)"; prefix="$${prefix:-documents/}"; \
+		region="$$(get AWS_REAL_REGION)"; region="$${region:-eu-central-1}"; \
+		token="$$(get AWS_REAL_SESSION_TOKEN)"; \
+		echo "$(BLUE)Svuoto s3://$$bucket/$$prefix ($$region)$(RESET)"; \
+		docker run --rm \
+			-e AWS_ACCESS_KEY_ID="$$(get AWS_REAL_ACCESS_KEY_ID)" \
+			-e AWS_SECRET_ACCESS_KEY="$$(get AWS_REAL_SECRET_ACCESS_KEY)" \
+			$${token:+-e AWS_SESSION_TOKEN="$$token"} \
+			-e AWS_DEFAULT_REGION="$$region" \
+			public.ecr.aws/aws-cli/aws-cli s3 rm "s3://$$bucket/$${prefix%/}" --recursive; \
+	else \
+		echo "$(BLUE)S3 reale non configurato nel .env: salto la pulizia remota.$(RESET)"; \
+	fi
+	docker compose --profile tools --profile release down --volumes --remove-orphans
+	$(MAKE) setup
+	@echo "$(BLUE)PoC ripartita da zero: dati locali e remoti azzerati.$(RESET)"
 
 # Legge i valori dal .env (gestendo i commenti inline) anziche' dalla shell:
 # docker compose carica .env da solo, ma make no, quindi li estraiamo qui.
