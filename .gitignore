@@ -67,3 +67,4 @@ Homestead.yaml
 
 /docker/traefik/certs/*.crt
 /docker/traefik/certs/*.key
+/reports/
