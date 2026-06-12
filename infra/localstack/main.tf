@@ -29,6 +29,7 @@ locals {
     REDIS_HOST                          = "redis"
     REDIS_PORT                          = "6379"
     CACHE_STORE                         = "redis"
+    CACHE_LIMITER_STORE                 = "limiter"
     SESSION_DRIVER                      = "redis"
     SESSION_ENCRYPT                     = "true"
     SESSION_SECURE_COOKIE               = "true"
@@ -82,6 +83,7 @@ locals {
   app_secrets = {
     APP_KEY                    = "base64:${base64encode(random_password.app_key.result)}"
     DB_PASSWORD                = var.db_password
+    REDIS_PASSWORD             = var.redis_password
     AWS_ACCESS_KEY_ID          = "test"
     AWS_SECRET_ACCESS_KEY      = "test"
     AWS_SESSION_TOKEN          = ""

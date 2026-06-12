@@ -1,0 +1,75 @@
+name: Mirror base images
+
+# Copia su GHCR le immagini esterne usate dalla CI (vedi
+# scripts/ci/resolve-images.sh). I runner Actions autenticati con
+# GITHUB_TOKEN non subiscono rate limit su GHCR, quindi la CI pulla dal
+# mirror invece che da Docker Hub / ECR Public (anonimi, limitati per IP).
+# Gira settimanalmente e quando cambia la lista delle immagini; i pacchetti
+# pubblicati con GITHUB_TOKEN restano collegati a questa repo, quindi la CI
+# può leggerli anche se privati.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+  push:
+    branches:
+      - develop
+      - main
+      - migration/new_techs
+    paths:
+      - docker-compose.yml
+      - docker/php/Dockerfile
+      - docker/nginx/Dockerfile
+      - scripts/ci/resolve-images.sh
+      - .github/workflows/mirror-images.yml
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  mirror:
+    name: Copy images to GHCR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install crane
+        run: |
+          curl -sSL https://github.com/google/go-containerregistry/releases/download/v0.20.2/go-containerregistry_Linux_x86_64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin crane
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | crane auth login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Mirror images
+        run: |
+          failed=0
+
+          while IFS= read -r image; do
+            [ -n "$image" ] || continue
+
+            if ! mirror="$(bash scripts/ci/mirror-ref.sh "$image" 2>/dev/null)"; then
+              echo "${image}: già su GHCR, salto"
+              continue
+            fi
+
+            # crane copy è idempotente: trasferisce solo i layer mancanti
+            if crane copy "$image" "$mirror"; then
+              echo "${image} -> ${mirror}"
+            else
+              echo "::warning::Mirror fallito per ${image} (probabile rate limit upstream): resta la copia precedente"
+              failed=1
+            fi
+
+            sleep 5
+          done < <(bash scripts/ci/resolve-images.sh)
+
+          exit $failed

@@ -19,6 +19,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Rate Limiter Store
+    |--------------------------------------------------------------------------
+    |
+    | Store usato dal RateLimiter (middleware throttle). Se nullo viene usato
+    | lo store di default: nei test (CACHE_STORE=array) resta quindi in
+    | memoria, mentre a runtime SSM imposta CACHE_LIMITER_STORE=limiter.
+    |
+    */
+
+    'limiter' => env('CACHE_LIMITER_STORE'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Cache Stores
     |--------------------------------------------------------------------------
     |
@@ -76,6 +89,12 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_CACHE_CONNECTION', 'cache'),
             'lock_connection' => env('REDIS_CACHE_LOCK_CONNECTION', 'default'),
+        ],
+
+        'limiter' => [
+            'driver' => 'redis',
+            'connection' => 'limiter',
+            'lock_connection' => 'limiter',
         ],
 
         'dynamodb' => [

@@ -97,17 +97,21 @@ make setup
 - migrazioni Laravel;
 - avvio app, worker, Nginx, Traefik e servizi di osservabilita.
 
-Endpoint:
+Endpoint (tutto passa da Traefik su `:8443`; la `:8080` redirige su HTTPS):
 
-- Applicazione HTTP: `http://localhost:8080`
-- Applicazione HTTPS locale: `https://localhost:8443`
+- Applicazione: `https://localhost:8443`
 - Health: `https://localhost:8443/health`
 - Readiness: `https://localhost:8443/ready`
-- Prometheus: `http://localhost:9090`
-- Alertmanager: `http://localhost:9093`
-- Grafana: `http://localhost:3000`
-- Tempo: `http://localhost:3200`
-- LocalStack edge: `http://localhost:4566`
+- Grafana: `https://grafana.localhost:8443` (login Grafana)
+- Prometheus: `https://prometheus.localhost:8443` (basic auth: `poc` / `poc-obs-local-password`)
+- Alertmanager: `https://alertmanager.localhost:8443` (basic auth come sopra)
+- Tempo: `https://tempo.localhost:8443` (basic auth come sopra)
+- LocalStack edge: `http://localhost:4566` (bind solo su 127.0.0.1)
+
+I servizi di osservabilità non espongono più porte sull'host: vivono su una rete
+Docker dedicata e sono raggiungibili solo attraverso Traefik. I nomi `*.localhost`
+sono risolti automaticamente dai browser; da CLI usare
+`curl --resolve grafana.localhost:8443:127.0.0.1 ...` o aggiungere le voci a `/etc/hosts`.
 
 Il certificato TLS locale e self-signed. Firefox o altri browser possono mostrare un warning finche il certificato in `docker/traefik/certs` non viene considerato attendibile dal trust store locale.
 
@@ -189,12 +193,15 @@ Servizi locali:
 
 | Servizio | URL | Uso |
 | --- | --- | --- |
-| Grafana | `http://localhost:3000` | Dashboard applicative, log e trace drill-down. |
-| Prometheus | `http://localhost:9090` | Metriche e regole di alerting. |
-| Alertmanager | `http://localhost:9093` | Routing alert. |
-| Tempo | `http://localhost:3200` | Storage trace OTLP. |
+| Grafana | `https://grafana.localhost:8443` | Dashboard applicative, log e trace drill-down (login Grafana). |
+| Prometheus | `https://prometheus.localhost:8443` | Metriche e regole di alerting (basic auth). |
+| Alertmanager | `https://alertmanager.localhost:8443` | Routing alert (basic auth). |
+| Tempo | `https://tempo.localhost:8443` | Storage trace OTLP (basic auth). |
 | Loki | interno `loki:3100` | Storage log dei container. |
 | Grafana Alloy | interno `alloy:12345` | Raccolta log dei container e invio a Loki. |
+
+Le UI passano da Traefik (rete `observability` interna, nessuna porta host);
+credenziali basic auth di default in `docker/traefik/usersfile`.
 
 Metriche, trace e log convergono in Grafana, che carica da file i datasource Prometheus, Tempo e Loki. Grafana Alloy raccoglie i log di tutti i container del progetto e li invia a Loki; i log applicativi inviati via OTLP raggiungono Loki attraverso il Collector. Nella dashboard `Logs and Errors` e nei pannelli log delle altre dashboard si filtrano per servizio (es. `{project="poc", service="queue"}`) e per livello di errore. La dashboard `API Golden Signals` copre tutti e quattro i segnali SRE (latency, traffic, errors, saturation) e ogni alert Prometheus rimanda al runbook pertinente in `docs/runbooks/`. Le metriche di dominio del worker (Textract, SQS, completamenti) sono esposte tramite un volume condiviso tra `app` e `queue`, così da raggiungere l'endpoint `/internal/metrics` scrappato da Prometheus.
 

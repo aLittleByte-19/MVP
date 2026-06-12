@@ -1,0 +1,348 @@
+name: CI
+
+# Pipeline a 3 macroaree parallele con responsabilità separate:
+#   backend  — build immagine app (dev) + check PHP (Composer, Pint, Larastan, Pest)
+#   frontend — suite SPA + contratto OpenAPI (solo immagine node)
+#   stack    — IaC/observability statici, build produzione, scan Trivy,
+#              smoke HTTPS, accessibilità, push GHCR
+# Ogni job acquisisce le immagini esterne senza pull anonimi: mirror GHCR
+# (autenticato, nessun rate limit per-IP) con fallback upstream; il job stack
+# usa anche la cache di Actions (zero pull a cache hit). Vedi
+# scripts/ci/resolve-images.sh e .github/workflows/mirror-images.yml.
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+      - migration/new_techs
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  # secrets non è disponibile in steps[*].if: va mappato su env
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+jobs:
+  backend:
+    name: Backend checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Pull PHP base image
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin \
+            || echo "::warning::Login GHCR fallito, uso solo gli upstream"
+          grep -E '^FROM ' docker/php/Dockerfile | awk '{print $2}' > /tmp/base-images.txt
+          bash scripts/ci/pull-images.sh /tmp/base-images.txt
+
+      - name: Build app image
+        run: docker compose build app
+
+      - name: Validate Composer manifest
+        run: docker compose run --rm --no-deps app composer validate --strict
+
+      - name: Run Pint
+        run: docker compose run --rm --no-deps app php vendor/bin/pint --test
+
+      - name: Run Larastan
+        run: >
+          docker compose run --rm --no-deps
+          -e CONFIG_SOURCE=env
+          -e APP_ENV=testing
+          -e CACHE_STORE=array
+          -e SESSION_DRIVER=array
+          -e QUEUE_CONNECTION=sync
+          -e DB_CONNECTION=sqlite
+          -e DB_DATABASE=:memory:
+          -e DB_HOST=
+          -e DB_PORT=
+          -e DB_USERNAME=
+          -e DB_PASSWORD=
+          app vendor/bin/phpstan analyse --memory-limit=1G
+
+      - name: Run Pest
+        run: >
+          docker compose run --rm --no-deps
+          -e CONFIG_SOURCE=env
+          -e APP_ENV=testing
+          -e CACHE_STORE=array
+          -e SESSION_DRIVER=array
+          -e QUEUE_CONNECTION=sync
+          -e DB_CONNECTION=sqlite
+          -e DB_DATABASE=:memory:
+          -e DB_HOST=
+          -e DB_PORT=
+          -e DB_USERNAME=
+          -e DB_PASSWORD=
+          app php artisan test --display-warnings
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Pull node image
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin \
+            || echo "::warning::Login GHCR fallito, uso solo gli upstream"
+          docker compose --profile tools config --format json | jq -er '.services.node.image' > /tmp/node-image.txt
+          bash scripts/ci/pull-images.sh /tmp/node-image.txt
+
+      - name: Install Node dependencies
+        run: docker compose --profile tools run --rm node npm ci --ignore-scripts
+
+      - name: Lint OpenAPI contract
+        run: docker compose --profile tools run --rm node npx --yes @redocly/cli@latest lint openapi/v1/alittlebyte-poc-api.yaml
+
+      - name: Generate OpenAPI client
+        run: docker compose --profile tools run --rm node npm run openapi:generate
+
+      - name: Check generated client is committed
+        run: git diff --exit-code -- apps/frontend/src/api/generated
+
+      - name: Typecheck SPA
+        run: docker compose --profile tools run --rm node npm run frontend:typecheck
+
+      - name: Test SPA
+        run: docker compose --profile tools run --rm node npm run frontend:test
+
+      - name: Build SPA
+        run: docker compose --profile tools run --rm node npm run frontend:build
+
+      - name: Audit production Node dependencies
+        run: docker compose --profile tools run --rm node npm audit --omit=dev --audit-level=high
+
+  stack:
+    name: Stack, security and a11y
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Login to Docker Hub
+        if: env.DOCKERHUB_USERNAME != ''
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Acquisizione immagini in ordine di preferenza: cache di Actions
+      # (zero pull) -> mirror GHCR -> upstream pubblico con retry. Include
+      # le basi dei Dockerfile, così le build non toccano i registry.
+      - name: Resolve external images
+        id: images
+        run: |
+          bash scripts/ci/resolve-images.sh > /tmp/ci-images.txt
+          echo "Immagini esterne richieste:"
+          cat /tmp/ci-images.txt
+          echo "key=$(sha256sum /tmp/ci-images.txt | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore image cache
+        id: image-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/ci-images.tar.zst
+          key: docker-images-${{ steps.images.outputs.key }}
+
+      - name: Load images from cache
+        if: steps.image-cache.outputs.cache-hit == 'true'
+        run: zstd -dc /tmp/ci-images.tar.zst | docker load
+
+      - name: Pull images (mirror GHCR, fallback upstream)
+        if: steps.image-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin \
+            || echo "::warning::Login GHCR fallito, uso solo gli upstream"
+          bash scripts/ci/pull-images.sh /tmp/ci-images.txt
+
+      # L'archivio viene caricato in cache dal post-step di actions/cache
+      - name: Save image archive for cache
+        if: steps.image-cache.outputs.cache-hit != 'true'
+        run: docker save $(cat /tmp/ci-images.txt) | zstd -T0 -o /tmp/ci-images.tar.zst
+
+      # --- Check statici senza build (fail fast) ---
+
+      - name: Terraform format check
+        run: docker compose --profile tools run --rm terraform fmt -check
+
+      - name: Terraform init providers
+        run: docker compose --profile tools run --rm terraform init -backend=false
+
+      - name: Terraform validate
+        run: docker compose --profile tools run --rm terraform validate
+
+      - name: Validate observability config
+        run: make observability-config
+
+      # --- Build immagini (una sola volta su questo runner) ---
+
+      - name: Build images
+        run: docker compose build
+
+      - name: Build production images
+        run: |
+          docker build \
+            --build-arg COMPOSER_INSTALL_DEV=false \
+            --tag local/poc-app:${{ github.sha }} \
+            --file docker/php/Dockerfile \
+            .
+          docker build \
+            --tag local/poc-nginx:${{ github.sha }} \
+            --file docker/nginx/Dockerfile \
+            .
+
+      - name: Scan images with Trivy
+        run: |
+          for image in app nginx; do
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$PWD/.trivy-cache:/root/.cache" \
+              ghcr.io/aquasecurity/trivy:0.66.0 \
+              image \
+              --exit-code 1 \
+              --severity HIGH,CRITICAL \
+              --scanners vuln,secret,config \
+              --ignore-unfixed \
+              "local/poc-${image}:${{ github.sha }}"
+          done
+
+      # --- Stack completo: smoke HTTPS + accessibilità sullo stesso ambiente ---
+
+      - name: Generate local TLS certificate
+        run: |
+          mkdir -p docker/traefik/certs
+          openssl req -x509 -newkey rsa:2048 -sha256 \
+            -keyout docker/traefik/certs/poc-local.test.key \
+            -out docker/traefik/certs/poc-local.test.crt \
+            -days 365 -nodes \
+            -subj "/CN=poc.localhost" \
+            -addext "subjectAltName=DNS:localhost,DNS:poc.localhost,DNS:traefik,IP:127.0.0.1"
+          chmod 600 docker/traefik/certs/poc-local.test.key
+
+      - name: Start dependencies
+        run: docker compose up -d postgres redis localstack
+
+      - name: Apply LocalStack infrastructure
+        run: docker compose --profile tools run --rm terraform init && docker compose --profile tools run --rm terraform apply -auto-approve
+
+      - name: Run migrations
+        run: docker compose --profile release run --rm migrate
+
+      - name: Start runtime
+        run: docker compose up -d app queue nginx traefik otel-collector prometheus tempo alertmanager grafana
+
+      - name: Smoke HTTPS endpoints
+        run: |
+          # Le dashboard non espongono più porte host: si passa da Traefik con
+          # routing per hostname (*.localhost) e basic auth (docker/traefik/usersfile).
+          wait_for() {
+            for _ in {1..120}; do
+              if curl --silent --fail --insecure "$@" > /dev/null; then
+                return 0
+              fi
+
+              sleep 2
+            done
+
+            echo "::error::Timeout waiting for $1"
+            return 1
+          }
+
+          obs_curl() {
+            local host="$1" path="$2"
+            wait_for "https://${host}:8443${path}" \
+              --resolve "${host}:8443:127.0.0.1" \
+              --user "poc:poc-obs-local-password"
+          }
+
+          wait_for https://localhost:8443/health
+
+          curl --silent --fail --insecure https://localhost:8443/health
+          curl --silent --fail --insecure https://localhost:8443/ready
+          curl --silent --fail --insecure https://localhost:8443/api/v1/state
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure https://localhost:8443/internal/metrics)" = "404"
+          obs_curl prometheus.localhost /-/ready
+          obs_curl alertmanager.localhost /-/ready
+          wait_for https://grafana.localhost:8443/api/health \
+            --resolve grafana.localhost:8443:127.0.0.1
+          # Senza credenziali le UI protette devono rispondere 401
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure --resolve prometheus.localhost:8443:127.0.0.1 https://prometheus.localhost:8443/-/ready)" = "401"
+
+      - name: Run axe
+        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/axe-playwright.mjs https://traefik:8443
+
+      - name: Run Pa11y
+        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/pa11y-runner.mjs https://traefik:8443
+
+      - name: Stop application
+        if: always()
+        run: docker compose down --volumes --remove-orphans
+
+      # --- Pubblicazione su GHCR (come il vecchio workflow Containers:
+      #     indipendente dagli esiti di backend/frontend) ---
+
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata (app)
+        if: github.event_name != 'pull_request'
+        id: meta-app
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/poc-app
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=ref,event=tag
+
+      - name: Docker metadata (nginx)
+        if: github.event_name != 'pull_request'
+        id: meta-nginx
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/poc-nginx
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=ref,event=tag
+
+      - name: Push images to GHCR
+        if: github.event_name != 'pull_request'
+        env:
+          APP_TAGS: ${{ steps.meta-app.outputs.tags }}
+          NGINX_TAGS: ${{ steps.meta-nginx.outputs.tags }}
+        run: |
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker tag "local/poc-app:${{ github.sha }}" "$tag"
+            docker push "$tag"
+          done <<< "$APP_TAGS"
+
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker tag "local/poc-nginx:${{ github.sha }}" "$tag"
+            docker push "$tag"
+          done <<< "$NGINX_TAGS"

@@ -26,6 +26,7 @@ services:
       - ./docker/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./docker/traefik/dynamic:/etc/traefik/dynamic:ro
       - ./docker/traefik/certs:/etc/traefik/certs:ro
+      - ./docker/traefik/usersfile:/etc/traefik/usersfile:ro
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9100/ping"]
       interval: 30s
@@ -35,7 +36,8 @@ services:
       nginx:
         condition: service_healthy
     networks:
-      - poc
+      - edge
+      - observability
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.153.0
@@ -48,17 +50,20 @@ services:
         condition: service_healthy
       traefik:
         condition: service_started
+    # backend: riceve OTLP da app/queue e scrappa nginx; observability: esporta
+    # verso tempo/loki e scrappa traefik:9100
     networks:
-      - poc
+      - backend
+      - observability
 
   prometheus:
     image: prom/prometheus:v3.9.0
+    # Nessuna porta esposta sull'host: la UI è servita da Traefik su
+    # https://prometheus.localhost:8443 dietro basic auth. Niente
+    # --web.enable-lifecycle: esponeva /-/reload e /-/quit senza auth.
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      - --web.enable-lifecycle
-    ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
     volumes:
       - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./docker/prometheus/rules:/etc/prometheus/rules:ro
@@ -69,42 +74,43 @@ services:
       alertmanager:
         condition: service_started
     networks:
-      - poc
+      - observability
 
   tempo:
     image: grafana/tempo:2.9.0
+    # Nessuna porta esposta sull'host: UI/API via https://tempo.localhost:8443
+    # (basic auth); Grafana e otel-collector vi accedono dalla rete interna.
     command:
       - -config.file=/etc/tempo/tempo.yml
-    ports:
-      - "${TEMPO_PORT:-3200}:3200"
     volumes:
       - ./docker/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
       - tempo-data:/var/tempo
     networks:
-      - poc
+      - observability
 
   alertmanager:
     image: prom/alertmanager:v0.29.0
+    # Nessuna porta esposta sull'host: UI via https://alertmanager.localhost:8443
+    # (basic auth); Prometheus vi inoltra gli alert dalla rete interna.
     command:
       - --config.file=/etc/alertmanager/alertmanager.yml
       - --storage.path=/alertmanager
-    ports:
-      - "${ALERTMANAGER_PORT:-9093}:9093"
     volumes:
       - ./docker/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager-data:/alertmanager
     networks:
-      - poc
+      - observability
 
   grafana:
     image: grafana/grafana:12.3.0
+    # Nessuna porta esposta sull'host: servita da Traefik su
+    # https://grafana.localhost:8443 con la sua autenticazione nativa.
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_USERS_ALLOW_SIGN_UP: "false"
-    ports:
-      - "${GRAFANA_PORT:-3000}:3000"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-https://grafana.localhost:8443}
     volumes:
       - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -117,7 +123,7 @@ services:
       loki:
         condition: service_started
     networks:
-      - poc
+      - observability
 
   loki:
     image: grafana/loki:3.3.2
@@ -127,7 +133,7 @@ services:
       - ./docker/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki-data:/loki
     networks:
-      - poc
+      - observability
 
   alloy:
     image: grafana/alloy:v1.5.1
@@ -144,7 +150,7 @@ services:
       loki:
         condition: service_started
     networks:
-      - poc
+      - observability
 
   nginx:
     build:
@@ -158,8 +164,10 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
+    # edge: riceve da traefik; backend: inoltra a php-fpm (app)
     networks:
-      - poc
+      - edge
+      - backend
 
   app:
     build:
@@ -186,7 +194,7 @@ services:
       # (Textract, SQS, workflow completion) reach the /internal/metrics exporter.
       - observability-metrics:/var/www/html/storage/app/private/observability
     networks:
-      - poc
+      - backend
 
   queue:
     build:
@@ -210,7 +218,7 @@ services:
     volumes:
       - observability-metrics:/var/www/html/storage/app/private/observability
     networks:
-      - poc
+      - backend
 
   migrate:
     build:
@@ -231,7 +239,7 @@ services:
       localstack:
         condition: service_healthy
     networks:
-      - poc
+      - backend
 
   terraform:
     image: hashicorp/terraform:1.10.5
@@ -252,6 +260,7 @@ services:
       TF_VAR_db_database: ${POC_DB_DATABASE:-poc}
       TF_VAR_db_username: ${POC_DB_USERNAME:-poc}
       TF_VAR_db_password: ${POC_DB_PASSWORD:-poc-local-password}
+      TF_VAR_redis_password: ${POC_REDIS_PASSWORD:-poc-redis-local-password}
       TF_VAR_bedrock_model_id: ${POC_BEDROCK_MODEL_ID:-amazon.nova-lite-v1:0}
       TF_VAR_bedrock_region: ${BEDROCK_REGION:-eu-north-1}
       TF_VAR_bedrock_endpoint: ${BEDROCK_ENDPOINT:-not-configured}
@@ -274,7 +283,7 @@ services:
       localstack:
         condition: service_healthy
     networks:
-      - poc
+      - backend
 
   node:
     image: public.ecr.aws/docker/library/node:22-bookworm-slim
@@ -290,8 +299,9 @@ services:
       - node-modules:/workspace/node_modules
       - npm-cache:/npm-cache
       - playwright-cache:/root/.cache/ms-playwright
+    # edge: serve solo l'egress npm; nessun accesso a datastore o telemetria
     networks:
-      - poc
+      - edge
 
   frontend-audit:
     image: mcr.microsoft.com/playwright:v1.60.0-noble
@@ -306,27 +316,31 @@ services:
       - .:/workspace
       - node-modules:/workspace/node_modules
       - npm-cache:/npm-cache
+    # edge: gli audit a11y passano da https://traefik:8443
     networks:
-      - poc
+      - edge
 
   tls-tool:
-    image: public.ecr.aws/docker/library/php:8.4-cli-bookworm
+    image: alpine/openssl:3.5.4
     working_dir: /workspace
     profiles:
       - tools
+    # L'entrypoint dell'immagine è "openssl": si sovrascrive con sh per
+    # eseguire scripts/tls/generate-local-cert.sh
+    entrypoint: ["/bin/sh"]
     volumes:
       - .:/workspace
-    networks:
-      - poc
+    # Genera solo cert su filesystem: nessuna rete necessaria
+    network_mode: none
 
   postgres:
     image: public.ecr.aws/docker/library/postgres:16-alpine
+    # Nessuna porta esposta sull'host: vi accedono solo i servizi sulla rete
+    # interna. Per il debug: docker compose exec postgres psql -U poc -d poc
     environment:
       POSTGRES_DB: ${POC_DB_DATABASE:-poc}
       POSTGRES_USER: ${POC_DB_USERNAME:-poc}
       POSTGRES_PASSWORD: ${POC_DB_PASSWORD:-poc-local-password}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -335,12 +349,25 @@ services:
       timeout: 5s
       retries: 10
     networks:
-      - poc
+      - backend
 
   redis:
     image: public.ecr.aws/docker/library/redis:7-alpine
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+    # Nessuna porta esposta sull'host: vi accedono solo app e queue sulla rete
+    # interna. Per il debug: docker compose exec redis redis-cli
+    # volatile-lru e non allkeys-lru: sessioni, cache e contatori di throttle
+    # hanno tutti TTL; evictare chiavi senza TTL azzererebbe i rate limit.
+    command:
+      - redis-server
+      - --requirepass
+      - ${POC_REDIS_PASSWORD:-poc-redis-local-password}
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - volatile-lru
+    environment:
+      # Autentica redis-cli (healthcheck e make fresh) senza password in argv
+      REDISCLI_AUTH: ${POC_REDIS_PASSWORD:-poc-redis-local-password}
     volumes:
       - redis-data:/data
     healthcheck:
@@ -349,7 +376,7 @@ services:
       timeout: 5s
       retries: 10
     networks:
-      - poc
+      - backend
 
   localstack:
     image: localstack/localstack:4.5
@@ -357,8 +384,9 @@ services:
       AWS_DEFAULT_REGION: ${POC_AWS_DEFAULT_REGION:-eu-north-1}
       DEBUG: ${LOCALSTACK_DEBUG:-0}
       SERVICES: s3,sqs,stepfunctions,ssm,secretsmanager,events,ses,iam,sts,logs
+    # Bind solo su loopback: serve a terraform/aws CLI dall'host, non alla LAN
     ports:
-      - "${LOCALSTACK_PORT:-4566}:4566"
+      - "127.0.0.1:${LOCALSTACK_PORT:-4566}:4566"
     volumes:
       - localstack-data:/var/lib/localstack
     healthcheck:
@@ -367,10 +395,19 @@ services:
       timeout: 5s
       retries: 30
     networks:
-      - poc
+      - backend
 
+# Segmentazione di rete (least privilege):
+# - edge: traffico HTTP in ingresso (traefik <-> nginx) e tool di audit frontend
+# - backend: app, worker, datastore e AWS locale — non raggiungibile da grafana & co.
+# - observability: telemetria (otel, prometheus, tempo, loki, alloy, grafana);
+#   traefik vi partecipa solo per instradare le dashboard e per lo scrape :9100
 networks:
-  poc:
+  edge:
+    driver: bridge
+  backend:
+    driver: bridge
+  observability:
     driver: bridge
 
 volumes:

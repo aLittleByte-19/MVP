@@ -33,7 +33,7 @@ help:
 	@echo "  $(BLUE)make observability-config$(RESET) Valida la configurazione OTel Collector"
 	@echo "  $(BLUE)make observability-up$(RESET) Avvia OTel Collector e Prometheus"
 	@echo "  $(BLUE)make local-tls$(RESET) Genera il certificato TLS locale per Traefik"
-	@echo "  $(BLUE)make fresh$(RESET)     Resetta database e dati generati (documenti e bozze)"
+	@echo "  $(BLUE)make fresh$(RESET)     Resetta database, Redis (sessioni/cache/rate limit) e dati generati"
 	@echo "  $(BLUE)make logs$(RESET)      Segue i log dei container app e queue"
 	@echo "  $(BLUE)make sh$(RESET)        Apre una shell nel container applicativo"
 	@echo "  $(BLUE)make restart$(RESET)   Riavvia tutti i servizi Docker"
@@ -122,11 +122,13 @@ pint:
 	docker compose run --rm --no-deps app php vendor/bin/pint --test
 
 local-tls:
-	$(TLS_TOOL) php scripts/tls/generate-local-cert.php docker/traefik/certs/poc-local.test.crt docker/traefik/certs/poc-local.test.key
+	$(TLS_TOOL) scripts/tls/generate-local-cert.sh docker/traefik/certs/poc-local.test.crt docker/traefik/certs/poc-local.test.key
 
 fresh:
 	docker compose --profile release run --rm migrate php artisan migrate:fresh --seed --force
 	docker compose run --rm app php artisan poc:reset-data --force
+	docker compose up -d redis
+	docker compose exec -T redis redis-cli FLUSHALL
 
 logs:
 	docker compose logs -f app queue nginx localstack
@@ -146,7 +148,7 @@ setup:
 	docker compose up -d app nginx queue traefik otel-collector prometheus tempo alertmanager grafana loki alloy
 	@echo "$(BLUE)L'ambiente è stato configurato ed è in fase di avvio.$(RESET)"
 	@echo "$(BLUE)Endpoint locale: https://localhost:8443$(RESET)"
-	@echo "$(BLUE)Grafana: http://localhost:3000$(RESET)"
+	@echo "$(BLUE)Grafana: https://grafana.localhost:8443$(RESET)"
 	@echo "$(BLUE)Puoi monitorare il progresso con: make logs$(RESET)"
 
 release:

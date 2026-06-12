@@ -53,6 +53,13 @@ variable "db_password" {
   default     = "poc-local-password"
 }
 
+variable "redis_password" {
+  description = "Redis requirepass stored in Secrets Manager."
+  type        = string
+  sensitive   = true
+  default     = "poc-redis-local-password"
+}
+
 variable "bedrock_model_id" {
   description = "Bedrock model or inference profile identifier used by the application."
   type        = string

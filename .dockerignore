@@ -2,6 +2,7 @@
 .github
 .idea
 .vscode
+.trivy-cache
 
 # IaC: non deve finire nell'immagine runtime (superficie d'attacco + finding Trivy config)
 infra

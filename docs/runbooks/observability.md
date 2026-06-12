@@ -4,13 +4,19 @@
 
 | Service | URL | Purpose |
 | --- | --- | --- |
-| Prometheus | http://localhost:9090 | Metrics store and alert rule evaluation. |
-| Alertmanager | http://localhost:9093 | Local/demo alert routing. |
-| Grafana | http://localhost:3000 | Provisioned dashboards, logs and traces. |
-| Tempo | http://localhost:3200 | Trace storage queried by Grafana. |
+| Prometheus | https://prometheus.localhost:8443 (basic auth) | Metrics store and alert rule evaluation. |
+| Alertmanager | https://alertmanager.localhost:8443 (basic auth) | Local/demo alert routing. |
+| Grafana | https://grafana.localhost:8443 (Grafana login) | Provisioned dashboards, logs and traces. |
+| Tempo | https://tempo.localhost:8443 (basic auth) | Trace storage queried by Grafana. |
 | OTel Collector | internal `otel-collector:4317/4318` | OTLP ingest and Prometheus scraping. |
 | Loki | internal `loki:3100` | Log storage queried by Grafana. |
 | Grafana Alloy | internal `alloy:12345` | Collects container logs and ships them to Loki. |
+
+No host ports: the UIs are reachable only through Traefik on the internal
+`observability` network. Default basic auth credentials live in
+`docker/traefik/usersfile` (`poc` / `poc-obs-local-password`, local only).
+Browsers resolve `*.localhost` natively; for `curl` add
+`--resolve prometheus.localhost:8443:127.0.0.1` (or `/etc/hosts` entries).
 
 ## Start and Validate
 

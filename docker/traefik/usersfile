@@ -1,0 +1,5 @@
+# Basic auth per le UI di osservabilità senza autenticazione nativa
+# (prometheus/alertmanager/tempo dietro Traefik). Credenziali di default
+# SOLO per sviluppo locale: poc / poc-obs-local-password
+# Per cambiarle: htpasswd -nbB <user> <password> e sostituire la riga.
+poc:$2y$05$J3keWUZrTmSH/XQRgniBGeEwfuk9Fo2H0jSEy.Oq4cUYEfSq7CuWy

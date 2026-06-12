@@ -8,4 +8,4 @@ Generate them from the repository root with:
 make local-tls
 ```
 
-The generator writes files through `scripts/tls/generate-local-cert.php`.
+The generator writes files through `scripts/tls/generate-local-cert.sh`.

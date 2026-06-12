@@ -20,11 +20,14 @@ Endpoint:
 - App: https://localhost:8443
 - Health: https://localhost:8443/health
 - Readiness: https://localhost:8443/ready
-- Prometheus: http://localhost:9090
-- Alertmanager: http://localhost:9093
-- Grafana: http://localhost:3000
-- Tempo: http://localhost:3200
-- LocalStack edge: http://localhost:4566
+- Grafana: https://grafana.localhost:8443 (login Grafana)
+- Prometheus: https://prometheus.localhost:8443 (basic auth `poc` / `poc-obs-local-password`)
+- Alertmanager: https://alertmanager.localhost:8443 (basic auth)
+- Tempo: https://tempo.localhost:8443 (basic auth)
+- LocalStack edge: http://localhost:4566 (bind solo 127.0.0.1)
+
+Le dashboard non espongono porte sull'host: si passa sempre da Traefik
+(`*.localhost` è risolto dai browser; da CLI usare `curl --resolve`).
 
 ## Terraform
 
