@@ -227,15 +227,9 @@ jobs:
       # --- Stack completo: smoke HTTPS + accessibilità sullo stesso ambiente ---
 
       - name: Generate local TLS certificate
-        run: |
-          mkdir -p docker/traefik/certs
-          openssl req -x509 -newkey rsa:2048 -sha256 \
-            -keyout docker/traefik/certs/poc-local.test.key \
-            -out docker/traefik/certs/poc-local.test.crt \
-            -days 365 -nodes \
-            -subj "/CN=poc.localhost" \
-            -addext "subjectAltName=DNS:localhost,DNS:poc.localhost,DNS:traefik,IP:127.0.0.1"
-          chmod 600 docker/traefik/certs/poc-local.test.key
+        # Stesso script di make local-tls: i SAN (incluso *.localhost per le
+        # dashboard) vivono in un posto solo
+        run: sh scripts/tls/generate-local-cert.sh docker/traefik/certs/poc-local.test.crt docker/traefik/certs/poc-local.test.key
 
       - name: Start dependencies
         run: docker compose up -d postgres redis localstack
@@ -285,6 +279,11 @@ jobs:
             --resolve grafana.localhost:8443:127.0.0.1
           # Senza credenziali le UI protette devono rispondere 401
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure --resolve prometheus.localhost:8443:127.0.0.1 https://prometheus.localhost:8443/-/ready)" = "401"
+
+      # Il volume node-modules è per-job: l'npm ci del job frontend non è
+      # disponibile qui e va rieseguito prima degli audit a11y
+      - name: Install audit dependencies
+        run: docker compose --profile tools run --rm node npm ci --ignore-scripts
 
       - name: Run axe
         run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/axe-playwright.mjs https://traefik:8443
