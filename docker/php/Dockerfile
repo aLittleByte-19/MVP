@@ -1,4 +1,4 @@
-FROM public.ecr.aws/docker/library/php:8.4-fpm-bookworm
+FROM php:8.4-fpm-bookworm
 
 ARG COMPOSER_INSTALL_DEV=true
 
@@ -30,7 +30,7 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=public.ecr.aws/docker/library/composer:2 /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/zz-opcache.ini
 
 ARG COMPOSER_ALLOW_SUPERUSER=1

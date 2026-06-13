@@ -32,6 +32,10 @@ permissions:
   contents: read
   packages: write
 
+env:
+  # secrets non è disponibile in steps[*].if: va mappato su env
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
 jobs:
   mirror:
     name: Copy images to GHCR
@@ -48,6 +52,12 @@ jobs:
 
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | crane auth login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      # Le basi ufficiali (php/node/nginx/postgres/redis/composer) sono su Docker
+      # Hub: autenticati per evitare il rate limit anonimo per-IP dei runner.
+      - name: Login to Docker Hub
+        if: env.DOCKERHUB_USERNAME != ''
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | crane auth login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
       - name: Mirror images
         run: |

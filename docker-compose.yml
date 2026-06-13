@@ -286,7 +286,7 @@ services:
       - backend
 
   node:
-    image: public.ecr.aws/docker/library/node:22-bookworm-slim
+    image: node:22-bookworm-slim
     working_dir: /workspace
     profiles:
       - tools
@@ -334,7 +334,7 @@ services:
     network_mode: none
 
   postgres:
-    image: public.ecr.aws/docker/library/postgres:16-alpine
+    image: postgres:16-alpine
     # Nessuna porta esposta sull'host: vi accedono solo i servizi sulla rete
     # interna. Per il debug: docker compose exec postgres psql -U poc -d poc
     environment:
@@ -352,7 +352,7 @@ services:
       - backend
 
   redis:
-    image: public.ecr.aws/docker/library/redis:7-alpine
+    image: redis:7-alpine
     # Nessuna porta esposta sull'host: vi accedono solo app e queue sulla rete
     # interna. Per il debug: docker compose exec redis redis-cli
     # volatile-lru e non allkeys-lru: sessioni, cache e contatori di throttle

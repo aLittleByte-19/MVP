@@ -1,4 +1,4 @@
-FROM public.ecr.aws/docker/library/node:22-bookworm-slim AS frontend-build
+FROM node:22-bookworm-slim AS frontend-build
 
 WORKDIR /workspace
 
@@ -11,7 +11,7 @@ COPY apps/frontend apps/frontend
 RUN npm run openapi:generate \
     && npm run frontend:build
 
-FROM public.ecr.aws/docker/library/nginx:1.27-alpine
+FROM nginx:1.27-alpine
 
 RUN apk upgrade --no-cache \
     && rm -f /etc/nginx/conf.d/default.conf \
