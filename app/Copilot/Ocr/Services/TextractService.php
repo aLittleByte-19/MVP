@@ -3,6 +3,7 @@
 namespace App\Copilot\Ocr\Services;
 
 use App\Copilot\Observability\MetricsRecorder;
+use App\Copilot\Workflow\Services\WorkflowTaskHeartbeat;
 use App\Models\Copilot\OriginalDocument;
 use Aws\Exception\AwsException;
 use Aws\Textract\TextractClient;
@@ -13,6 +14,7 @@ class TextractService
     public function __construct(
         private readonly TextractClient $client,
         private readonly MetricsRecorder $metrics,
+        private readonly WorkflowTaskHeartbeat $heartbeat,
     ) {}
 
     /**
@@ -98,6 +100,8 @@ class TextractService
         $confidences = [];
 
         while (true) {
+            $this->heartbeat->beat();
+
             if (microtime(true) - $startedAt > $timeout) {
                 throw new \RuntimeException("Timeout Textract dopo {$timeout} secondi.");
             }

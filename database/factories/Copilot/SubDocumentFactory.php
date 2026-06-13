@@ -3,6 +3,7 @@
 namespace Database\Factories\Copilot;
 
 use App\Copilot\Communications\Enums\SendStatus;
+use App\Copilot\Documents\Enums\ReviewStatus;
 use App\Models\Copilot\OriginalDocument;
 use App\Models\Copilot\SubDocument;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -27,6 +28,7 @@ class SubDocumentFactory extends Factory
             'start_page' => $startPage,
             'end_page' => $startPage + fake()->numberBetween(1, 10),
             'send_status' => SendStatus::Pending,
+            'review_status' => ReviewStatus::NeedsReview,
         ];
     }
 

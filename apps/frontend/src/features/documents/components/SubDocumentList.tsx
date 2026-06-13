@@ -1,5 +1,6 @@
-import { Trash2 } from "lucide-react";
-import type { SubDocument } from "../../../api/generated/model";
+import { CheckCircle2, Pencil, Save, Trash2, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import type { SubDocument, UpdateExtractedDataRequest } from "../../../api/generated/model";
 import { EmptyState } from "../../../components/feedback/EmptyState";
 import { Button } from "../../../components/inputs/Button";
 import { Section } from "../../../components/layout/Section";
@@ -10,12 +11,115 @@ import styles from "./SubDocumentList.module.css";
 type SubDocumentListProps = {
   documentItem: SubDocument | null;
   isDeleting: boolean;
+  isSavingReview: boolean;
   onDelete: (documentId: string) => void;
+  onMarkReviewed: (documentId: string) => void;
+  onSaveReview: (payload: { documentId: string; payload: UpdateExtractedDataRequest }) => void;
+  reviewError?: string | null;
 };
 
-type DetailField = { label: string; value: string; full?: boolean };
+type ReviewFormState = {
+  employeeName: string;
+  employeeFirstName: string;
+  employeeLastName: string;
+  companyName: string;
+  documentDate: string;
+  documentType: string;
+  description: string;
+};
 
-export function SubDocumentList({ documentItem, isDeleting, onDelete }: SubDocumentListProps) {
+const emptyReviewForm: ReviewFormState = {
+  employeeName: "",
+  employeeFirstName: "",
+  employeeLastName: "",
+  companyName: "",
+  documentDate: "",
+  documentType: "",
+  description: ""
+};
+
+function compactEmployeeName(documentItem: SubDocument): string {
+  const fromAtomicFields = [documentItem.employeeFirstName, documentItem.employeeLastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return documentItem.employee ?? fromAtomicFields;
+}
+
+function toReviewForm(documentItem: SubDocument | null): ReviewFormState {
+  if (!documentItem) {
+    return emptyReviewForm;
+  }
+
+  return {
+    employeeName: compactEmployeeName(documentItem),
+    employeeFirstName: documentItem.employeeFirstName ?? "",
+    employeeLastName: documentItem.employeeLastName ?? "",
+    companyName: documentItem.companyName ?? documentItem.company ?? "",
+    documentDate: documentItem.documentDate ?? "",
+    documentType: documentItem.documentType ?? documentItem.type ?? "",
+    description: documentItem.description ?? ""
+  };
+}
+
+function nullableTrim(value: string): string | null {
+  const trimmed = value.trim();
+
+  return trimmed === "" ? null : trimmed;
+}
+
+function splitEmployeeName(formState: ReviewFormState): Pick<
+  UpdateExtractedDataRequest,
+  "employeeFirstName" | "employeeLastName"
+> {
+  const employeeName = formState.employeeName.trim().replace(/\s+/g, " ");
+  const previousName = [formState.employeeFirstName, formState.employeeLastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim()
+    .replace(/\s+/g, " ");
+
+  if (employeeName === "") {
+    return { employeeFirstName: null, employeeLastName: null };
+  }
+
+  if (employeeName === previousName) {
+    return {
+      employeeFirstName: nullableTrim(formState.employeeFirstName),
+      employeeLastName: nullableTrim(formState.employeeLastName)
+    };
+  }
+
+  const parts = employeeName.split(" ");
+
+  if (parts.length === 1) {
+    return { employeeFirstName: parts[0], employeeLastName: null };
+  }
+
+  return {
+    employeeFirstName: parts.slice(0, -1).join(" "),
+    employeeLastName: parts[parts.length - 1] ?? null
+  };
+}
+
+export function SubDocumentList({
+  documentItem,
+  isDeleting,
+  isSavingReview,
+  onDelete,
+  onMarkReviewed,
+  onSaveReview,
+  reviewError
+}: SubDocumentListProps) {
+  const [formState, setFormState] = useState<ReviewFormState>(() => toReviewForm(documentItem));
+  const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    setFormState(toReviewForm(documentItem));
+    setIsEditing(false);
+  }, [documentItem]);
+
   if (!documentItem) {
     return (
       <Section title="Verifica documento">
@@ -24,19 +128,30 @@ export function SubDocumentList({ documentItem, isDeleting, onDelete }: SubDocum
     );
   }
 
-  const fields: DetailField[] = [
-    { label: "Nome e cognome", value: formatFallback(documentItem.employee) },
-    { label: "Azienda", value: formatFallback(documentItem.company) },
-    { label: "Nome file", value: formatFallback(documentItem.file) },
-    { label: "Data documento", value: formatFallback(documentItem.date) },
-    { label: "Numero pagine", value: formatFallback(documentItem.pages) },
-    { label: "Tipologia documento", value: formatFallback(documentItem.type) },
-    {
-      label: "Confidenza",
-      value: documentItem.confidence != null ? `${documentItem.confidence}%` : "Da verificare"
-    },
-    { label: "Descrizione", value: formatFallback(documentItem.description), full: true }
-  ];
+  const setField = (field: keyof ReviewFormState, value: string) => {
+    setFormState((current) => ({ ...current, [field]: value }));
+  };
+  const buildPayload = (markAsValidated: boolean): UpdateExtractedDataRequest => {
+    const employee = splitEmployeeName(formState);
+
+    return {
+      ...employee,
+      companyName: nullableTrim(formState.companyName),
+      documentDate: formState.documentDate || null,
+      documentType: nullableTrim(formState.documentType),
+      description: nullableTrim(formState.description),
+      markAsValidated
+    };
+  };
+  const saveReview = (markAsValidated: boolean) => {
+    onSaveReview({ documentId: documentItem.id, payload: buildPayload(markAsValidated) });
+  };
+  const confidenceDisplay = documentItem.confidence != null ? `${documentItem.confidence}%` : "Da verificare";
+  const inspectorClassName = [
+    styles.inspectorForm,
+    isEditing ? styles.isEditing : null,
+    documentItem.confidence != null && documentItem.confidence < 80 ? styles.confidenceLow : null
+  ].filter(Boolean).join(" ");
 
   return (
     <Section
@@ -61,14 +176,11 @@ export function SubDocumentList({ documentItem, isDeleting, onDelete }: SubDocum
             <strong>{formatFallback(documentItem.file, "Documento")}</strong>
             {documentItem.previewUrl ? (
               <>
-                <object
+                <iframe
                   className={styles.previewDocument}
-                  data={documentItem.previewUrl}
-                  type="application/pdf"
-                  aria-label={`Anteprima di ${formatFallback(documentItem.file, "documento")}`}
-                >
-                  <span>Il browser non supporta l'anteprima PDF integrata: usa il link qui sotto.</span>
-                </object>
+                  src={documentItem.previewUrl}
+                  title={`Anteprima di ${formatFallback(documentItem.file, "documento")}`}
+                />
                 <a className={styles.previewLink} href={documentItem.previewUrl} target="_blank" rel="noreferrer">
                   Apri in una nuova scheda
                 </a>
@@ -87,16 +199,123 @@ export function SubDocumentList({ documentItem, isDeleting, onDelete }: SubDocum
         </article>
 
         <article className={styles.extracted}>
-          <p className={styles.eyebrow}>Dati estratti dall'OCR</p>
+          <div className={styles.inspectorHeading}>
+            <p className={styles.eyebrow}>Dati estratti dall'OCR</p>
+            <div className={styles.fieldLegend} aria-label="Legenda campi">
+              <span><i className={styles.editableDot} />Modificabile</span>
+              <span><i className={styles.lockedDot} />Sola lettura</span>
+            </div>
+          </div>
           {documentItem.error ? <p className={styles.errorNote}>{documentItem.error}</p> : null}
-          <dl className={styles.fieldGrid}>
-            {fields.map((field) => (
-              <div key={field.label} className={field.full ? styles.fieldFull : undefined}>
-                <dt>{field.label}</dt>
-                <dd>{field.value}</dd>
-              </div>
-            ))}
-          </dl>
+          {reviewError ? <p className={styles.errorNote}>{reviewError}</p> : null}
+
+          <form className={inspectorClassName} onSubmit={(event) => {
+            event.preventDefault();
+            saveReview(false);
+          }}>
+            <div className={styles.inspectorGrid}>
+              <label className={`${styles.field} ${styles.editableField}`}>
+                <span>Nome e cognome</span>
+                <input
+                  value={formState.employeeName}
+                  readOnly={!isEditing}
+                  aria-readonly={!isEditing}
+                  onChange={(event) => setField("employeeName", event.target.value)}
+                />
+              </label>
+              <label className={`${styles.field} ${styles.editableField}`}>
+                <span>Azienda</span>
+                <input
+                  value={formState.companyName}
+                  readOnly={!isEditing}
+                  aria-readonly={!isEditing}
+                  onChange={(event) => setField("companyName", event.target.value)}
+                />
+              </label>
+              <label className={`${styles.field} ${styles.lockedField}`}>
+                <span>Nome file</span>
+                <input value={formatFallback(documentItem.file)} readOnly disabled tabIndex={-1} />
+              </label>
+              <label className={`${styles.field} ${styles.editableField}`}>
+                <span>Data documento</span>
+                <input
+                  type="date"
+                  value={formState.documentDate}
+                  readOnly={!isEditing}
+                  aria-readonly={!isEditing}
+                  onChange={(event) => setField("documentDate", event.target.value)}
+                />
+              </label>
+              <label className={`${styles.field} ${styles.lockedField}`}>
+                <span>Numero pagine</span>
+                <input value={formatFallback(documentItem.pages)} readOnly disabled tabIndex={-1} />
+              </label>
+              <label className={`${styles.field} ${styles.editableField}`}>
+                <span>Tipologia documento</span>
+                <input
+                  value={formState.documentType}
+                  readOnly={!isEditing}
+                  aria-readonly={!isEditing}
+                  onChange={(event) => setField("documentType", event.target.value)}
+                />
+              </label>
+              <label className={`${styles.field} ${styles.lockedField}`}>
+                <span>Confidenza</span>
+                <input value={confidenceDisplay} readOnly disabled tabIndex={-1} />
+              </label>
+              <label className={`${styles.field} ${styles.lockedField}`}>
+                <span>Stato revisione</span>
+                <input value={documentItem.reviewStatusLabel} readOnly disabled tabIndex={-1} />
+              </label>
+              <label className={`${styles.field} ${styles.editableField} ${styles.formFull}`}>
+                <span>Descrizione</span>
+                <textarea
+                  rows={3}
+                  value={formState.description}
+                  readOnly={!isEditing}
+                  aria-readonly={!isEditing}
+                  onChange={(event) => setField("description", event.target.value)}
+                />
+              </label>
+            </div>
+
+            <div className={styles.reviewActions}>
+              {isEditing ? (
+                <>
+                  <Button variant="secondary" disabled={isSavingReview} onClick={() => {
+                    setFormState(toReviewForm(documentItem));
+                    setIsEditing(false);
+                  }}>
+                    <X aria-hidden="true" size={16} />
+                    Annulla
+                  </Button>
+                  <Button variant="secondary" type="submit" disabled={isSavingReview}>
+                    <Save aria-hidden="true" size={16} />
+                    Salva correzioni
+                  </Button>
+                  <Button disabled={isSavingReview} onClick={() => saveReview(true)}>
+                    <CheckCircle2 aria-hidden="true" size={16} />
+                    Salva e valida
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="secondary"
+                    disabled={isSavingReview}
+                    onClick={() => onMarkReviewed(documentItem.id)}
+                  >
+                    <CheckCircle2 aria-hidden="true" size={16} />
+                    Conferma dati correnti
+                  </Button>
+                  <Button variant="secondary" disabled={isSavingReview} onClick={() => setIsEditing(true)}>
+                    <Pencil aria-hidden="true" size={16} />
+                    Modifica
+                  </Button>
+                </>
+              )}
+            </div>
+          </form>
         </article>
       </div>
     </Section>

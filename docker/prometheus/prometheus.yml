@@ -14,7 +14,8 @@ alerting:
         - targets:
             - alertmanager:9093
 
-# Flusso metriche: app (/internal/metrics via nginx) e traefik vengono raschiati
+# Flusso metriche: app (/internal/metrics via listener interno nginx:8081)
+# e traefik vengono raschiati
 # dall'OTel Collector (docker/otel-collector/config.yml), che li re-espone sul
 # proprio exporter Prometheus :9464. Prometheus scrappa quindi solo il collector:
 # un unico punto di raccolta sia per le metriche scrape sia per quelle OTLP push.

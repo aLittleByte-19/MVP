@@ -2,6 +2,7 @@
 
 namespace App\Copilot\Ai;
 
+use App\Exceptions\Copilot\InvalidAiOutputException;
 use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\Exception\AwsException;
 use Aws\Result;
@@ -13,6 +14,7 @@ class BedrockService
     public function __construct(
         private readonly BedrockRuntimeClient $client,
         private readonly ?string $modelId,
+        private readonly AiOutputValidator $validator,
     ) {}
 
     /**
@@ -36,16 +38,9 @@ class BedrockService
                 'inferenceConfig' => ['maxTokens' => 2048, 'temperature' => 0.7],
             ]);
 
-            $jsonResponse = $this->extractJsonFromAiResponse($response->toArray());
+            $jsonResponse = $this->extractJsonFromAiResponse($response->toArray(), 'generateCommunication');
 
-            if (! isset($jsonResponse['title'], $jsonResponse['body'])) {
-                throw new \RuntimeException('Risposta Bedrock incompleta: chiavi title/body mancanti.');
-            }
-
-            return [
-                'title' => (string) $jsonResponse['title'],
-                'body' => (string) $jsonResponse['body'],
-            ];
+            return $this->validator->validateGenerateCommunication($jsonResponse);
         } catch (AwsException $e) {
             Log::error('AI Generation Error', ['error' => $e->getMessage()]);
             throw new \RuntimeException("Errore di connessione con Bedrock: {$e->getMessage()}", 0, $e);
@@ -56,9 +51,11 @@ class BedrockService
      * Bedrock responses may wrap JSON in markdown fences or short prose.
      *
      * @param  array<string, mixed>  $rawResponse
-     * @return array<string, mixed>
+     * @return array<int|string, mixed>
+     *
+     * @throws InvalidAiOutputException when the response text is not decodable JSON.
      */
-    private function extractJsonFromAiResponse(array $rawResponse): array
+    private function extractJsonFromAiResponse(array $rawResponse, string $operation): array
     {
         $text = $rawResponse['output']['message']['content'][0]['text'] ?? '';
 
@@ -73,7 +70,11 @@ class BedrockService
 
         $decoded = json_decode($cleanJson, true);
 
-        return is_array($decoded) ? $decoded : [];
+        if (! is_array($decoded)) {
+            throw new InvalidAiOutputException($operation, ['la risposta del modello non è JSON decodificabile']);
+        }
+
+        return $decoded;
     }
 
     private function buildCommunicationPrompt(string $userPrompt, string $tone, string $style): string
@@ -124,9 +125,9 @@ class BedrockService
                 'inferenceConfig' => ['maxTokens' => 1024, 'temperature' => 0.1],
             ]);
 
-            $decoded = $this->extractJsonFromAiResponse($result->toArray());
+            $decoded = $this->extractJsonFromAiResponse($result->toArray(), 'splitDocument');
 
-            return $this->normalizeSplitResponse($decoded);
+            return $this->validator->validateSplitDocument($decoded);
         } catch (AwsException $e) {
             Log::error('Bedrock splitDocument error', ['path' => $pdfPath, 'message' => $e->getMessage()]);
             throw new \RuntimeException('Errore nella chiamata a Bedrock (split): '.$e->getMessage(), previous: $e);
@@ -173,17 +174,9 @@ class BedrockService
                 'inferenceConfig' => ['maxTokens' => 512, 'temperature' => 0.1],
             ]);
 
-            $decoded = $this->extractJsonFromAiResponse($result->toArray());
+            $decoded = $this->extractJsonFromAiResponse($result->toArray(), 'extractFields');
 
-            return [
-                'employee_first_name' => $decoded['employee_first_name'] ?? null,
-                'employee_last_name' => $decoded['employee_last_name'] ?? null,
-                'company_name' => $decoded['company_name'] ?? null,
-                'document_date' => $decoded['document_date'] ?? null,
-                'document_type' => $decoded['document_type'] ?? null,
-                'description' => $decoded['description'] ?? null,
-                'confidence_score' => isset($decoded['confidence_score']) ? (int) $decoded['confidence_score'] : null,
-            ];
+            return $this->validator->validateExtractFields($decoded);
         } catch (AwsException $e) {
             Log::error('Bedrock extractFields error', ['path' => $subPdfPath, 'message' => $e->getMessage()]);
             throw new \RuntimeException('Errore nella chiamata a Bedrock (extract): '.$e->getMessage(), previous: $e);
@@ -222,28 +215,5 @@ class BedrockService
     private function documentDisk(): string
     {
         return (string) config('poc.documents.storage_disk', config('filesystems.default', 'local'));
-    }
-
-    /**
-     * @param  array<string, mixed>  $decoded
-     * @return array<int, array{employee_name: string, start_page: int, end_page: int}>
-     */
-    private function normalizeSplitResponse(array $decoded): array
-    {
-        $segments = [];
-
-        foreach ($decoded as $item) {
-            if (! is_array($item)) {
-                continue;
-            }
-
-            $segments[] = [
-                'employee_name' => trim((string) ($item['employee_name'] ?? 'documento')) ?: 'documento',
-                'start_page' => max(1, (int) ($item['start_page'] ?? 1)),
-                'end_page' => max(1, (int) ($item['end_page'] ?? ($item['start_page'] ?? 1))),
-            ];
-        }
-
-        return $segments;
     }
 }

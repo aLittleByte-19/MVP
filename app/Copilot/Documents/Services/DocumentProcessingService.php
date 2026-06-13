@@ -5,7 +5,11 @@ namespace App\Copilot\Documents\Services;
 use App\Copilot\Ai\BedrockService;
 use App\Copilot\Audit\Services\AuditLogger;
 use App\Copilot\Documents\Enums\ProcessingStatus;
+use App\Copilot\Documents\Enums\ReviewStatus;
 use App\Copilot\Identity\PocUser;
+use App\Copilot\Observability\MetricsRecorder;
+use App\Copilot\Workflow\Services\WorkflowTaskHeartbeat;
+use App\Exceptions\Copilot\InvalidAiOutputException;
 use App\Models\Copilot\ExtractedData;
 use App\Models\Copilot\OriginalDocument;
 use App\Models\Copilot\SubDocument;
@@ -21,6 +25,8 @@ class DocumentProcessingService
     public function __construct(
         private readonly BedrockService $bedrock,
         private readonly AuditLogger $audit,
+        private readonly WorkflowTaskHeartbeat $heartbeat,
+        private readonly MetricsRecorder $metrics,
     ) {}
 
     /**
@@ -54,11 +60,60 @@ class DocumentProcessingService
     {
         try {
             $fields = $this->extractFields($subDocument->file_path);
-            $subDocument->update(['error_message' => null]);
+            $reviewStatus = $this->reviewStatusForConfidence($fields['confidence_score']);
+            $subDocument->update([
+                'review_status' => $reviewStatus,
+                'error_message' => null,
+            ]);
             ExtractedData::updateOrCreate(
                 ['sub_document_id' => $subDocument->id],
-                $fields,
+                array_merge($fields, ['ai_payload' => $fields]),
             );
+            $this->metrics->recordDomainCounter('ai_extractions_total', [
+                'review_status' => $reviewStatus->value,
+            ]);
+            $this->audit->record(
+                $reviewStatus === ReviewStatus::AutoValidated
+                    ? 'poc-sub-document-auto-validated'
+                    : 'poc-sub-document-needs-review',
+                resourceType: 'sub_document',
+                resourceId: (string) $subDocument->id,
+                metadata: [
+                    'confidence_score' => $fields['confidence_score'],
+                    'confidence_threshold' => $this->confidenceThreshold(),
+                    'review_status' => $reviewStatus->value,
+                ],
+                tenantId: $subDocument->originalDocument?->tenant_id,
+            );
+        } catch (InvalidAiOutputException $e) {
+            $safeMessage = 'Output AI non conforme: sotto-documento in quarantena.';
+            Log::warning('DocumentProcessingService: AI output quarantined', [
+                'sub_document_id' => $subDocument->id,
+                'operation' => $e->operation(),
+                'errors' => $e->errors(),
+            ]);
+
+            ExtractedData::query()
+                ->where('sub_document_id', $subDocument->id)
+                ->delete();
+            $subDocument->update([
+                'review_status' => ReviewStatus::Quarantined,
+                'error_message' => $safeMessage,
+            ]);
+            $this->audit->record(
+                'poc-sub-document-ai-output-quarantined',
+                resourceType: 'sub_document',
+                resourceId: (string) $subDocument->id,
+                metadata: [
+                    'operation' => $e->operation(),
+                    'errors' => $e->errors(),
+                    'review_status' => ReviewStatus::Quarantined->value,
+                ],
+                tenantId: $subDocument->originalDocument?->tenant_id,
+            );
+            $this->metrics->recordDomainCounter('ai_outputs_invalid_total', [
+                'operation' => $e->operation(),
+            ]);
         } catch (\Throwable $e) {
             Log::error('DocumentProcessingService: extraction failed', [
                 'sub_document_id' => $subDocument->id,
@@ -97,6 +152,11 @@ class DocumentProcessingService
             $pdf = new Fpdi;
             $pageCount = max(1, $pdf->setSourceFile($absoluteSource));
 
+            // La chiamata di split a Bedrock e' sincrona e puo' durare minuti:
+            // si manda un heartbeat subito prima, e l'ASL prevede un
+            // HeartbeatSeconds abbastanza ampio da coprirla (240s).
+            $this->heartbeat->beat(force: true);
+
             $segments = $this->normalizeSegments(
                 $this->splitDocument($original->file_path),
                 $pageCount
@@ -106,6 +166,7 @@ class DocumentProcessingService
             $this->deleteStoragePaths($oldSplitPaths);
 
             foreach ($segments as $segment) {
+                $this->heartbeat->beat();
                 $preparedSegment = $this->prepareSplitSegment($original, $segment, $absoluteSource);
                 try {
                     $subDocument = $this->createSubDocumentFromPreparedSegment($original, $preparedSegment);
@@ -181,9 +242,15 @@ class DocumentProcessingService
             'error' => $e->getMessage(),
         ]);
 
+        // Un output AI non conforme non e' un problema di configurazione:
+        // il messaggio utente deve distinguerlo dagli errori Bedrock/AWS.
+        $userMessage = $e instanceof InvalidAiOutputException
+            ? 'Il classificatore AI ha restituito un output non valido: il documento non può essere elaborato automaticamente.'
+            : BedrockService::formatUserError($e, 'Analisi documento non disponibile. Verifica configurazione e permessi Bedrock.');
+
         $original->update([
             'processing_status' => ProcessingStatus::Failed,
-            'error_message' => BedrockService::formatUserError($e, 'Analisi documento non disponibile. Verifica configurazione e permessi Bedrock.'),
+            'error_message' => $userMessage,
         ]);
         $this->audit->record(
             'poc-document-processing-failed',
@@ -191,12 +258,32 @@ class DocumentProcessingService
             resourceId: (string) $original->id,
             metadata: [
                 'status' => ProcessingStatus::Failed->value,
-                'message' => BedrockService::formatUserError($e, 'Analisi documento non disponibile. Verifica configurazione e permessi Bedrock.'),
+                'message' => $userMessage,
             ],
             tenantId: $original->tenant_id,
         );
 
+        if ($e instanceof InvalidAiOutputException) {
+            $this->metrics->recordDomainCounter('ai_outputs_invalid_total', [
+                'operation' => $e->operation(),
+            ]);
+        }
+
         throw $e;
+    }
+
+    private function reviewStatusForConfidence(?int $confidenceScore): ReviewStatus
+    {
+        if ($confidenceScore !== null && $confidenceScore >= $this->confidenceThreshold()) {
+            return ReviewStatus::AutoValidated;
+        }
+
+        return ReviewStatus::NeedsReview;
+    }
+
+    private function confidenceThreshold(): int
+    {
+        return max(0, min(100, (int) config('services.bedrock.poc_confidence_threshold', 80)));
     }
 
     /**

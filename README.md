@@ -1,290 +1,211 @@
-# Alittlebyte Document Pipeline
+# PoC - aLittleByte
 
-<p align="center">
-  <img src="https://img.shields.io/badge/PHP-8.4-777BB4?logo=php&logoColor=white" />
-  <img src="https://img.shields.io/badge/Laravel-12-FF2D20?logo=laravel&logoColor=white" />
-  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111111" />
-  <img src="https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white" />
-  <img src="https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white" />
-  <img src="https://img.shields.io/badge/Docker_Compose-runtime-2496ED?logo=docker&logoColor=white" />
-  <img src="https://img.shields.io/badge/Terraform-1.10-844FBA?logo=terraform&logoColor=white" />
-  <img src="https://img.shields.io/badge/LocalStack-4.5-00A6B2" />
-  <img src="https://img.shields.io/badge/OpenTelemetry-Collector-000000?logo=opentelemetry&logoColor=white" />
-  <img src="https://img.shields.io/badge/Prometheus-3.9-E6522C?logo=prometheus&logoColor=white" />
-  <img src="https://img.shields.io/badge/Grafana-12.3-F46800?logo=grafana&logoColor=white" />
-  <img src="https://img.shields.io/badge/Loki-3.3-F5A800?logo=grafana&logoColor=white" />
-  <img src="https://img.shields.io/badge/Alloy-logs-F5A800?logo=grafana&logoColor=white" />
-</p>
+Proof of Concept per workflow HR e documentali assistiti da AI, con generazione di comunicazioni, pipeline asincrona di elaborazione PDF, integrazione AWS-like locale e osservabilità end-to-end.
 
-<p align="center">
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/pint.yml"><img src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/pint.yml?label=Pint" /></a>
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/pest.yml"><img src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/pest.yml?label=Pest" /></a>
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/quality.yml"><img src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/quality.yml?label=PHPStan" /></a>
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/containers.yml"><img src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/containers.yml?label=Trivy" /></a>
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/accessibility.yml"><img src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/accessibility.yml?label=Axe" /></a>
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/accessibility.yml"><img src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/accessibility.yml?label=Pa11y" /></a>
-</p>
+<table align="center">
+  <tr>
+    <td align="center" width="25%">
+      <strong>Application</strong><br><br>
+      <img src="https://img.shields.io/badge/Laravel-API-red?logo=laravel&logoColor=white" alt="Laravel">
+      <br>
+      <img src="https://img.shields.io/badge/PHP-8.4-777BB4?logo=php&logoColor=white" alt="PHP">
+      <br>
+      <img src="https://img.shields.io/badge/React-SPA-61DAFB?logo=react&logoColor=black" alt="React">
+      <br>
+      <img src="https://img.shields.io/badge/TypeScript-frontend-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+    </td>
+    <td align="center" width="25%">
+      <strong>Data & Storage</strong><br><br>
+      <img src="https://img.shields.io/badge/PostgreSQL-persistence-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL">
+      <br>
+      <img src="https://img.shields.io/badge/Redis-cache%20%26%20rate%20limit-DC382D?logo=redis&logoColor=white" alt="Redis">
+      <br>
+      <img src="https://img.shields.io/badge/S3--compatible-document%20storage-569A31?logo=amazons3&logoColor=white" alt="S3-compatible storage">
+    </td>
+    <td align="center" width="25%">
+      <strong>Workflow & AI</strong><br><br>
+      <img src="https://img.shields.io/badge/LocalStack-AWS%20emulation-FF9900?logo=amazonaws&logoColor=white" alt="LocalStack">
+      <br>
+      <img src="https://img.shields.io/badge/Step%20Functions-orchestration-FF9900?logo=amazonaws&logoColor=white" alt="Step Functions">
+      <br>
+      <img src="https://img.shields.io/badge/SQS-task%20queue-FF9900?logo=amazonaws&logoColor=white" alt="SQS">
+      <br>
+      <img src="https://img.shields.io/badge/Bedrock-LLM%20provider-FF9900?logo=amazonaws&logoColor=white" alt="Bedrock">
+    </td>
+    <td align="center" width="25%">
+      <strong>Observability</strong><br><br>
+      <img src="https://img.shields.io/badge/OpenTelemetry-collector-000000?logo=opentelemetry&logoColor=white" alt="OpenTelemetry">
+      <br>
+      <img src="https://img.shields.io/badge/Prometheus-metrics-E6522C?logo=prometheus&logoColor=white" alt="Prometheus">
+      <br>
+      <img src="https://img.shields.io/badge/Grafana-dashboards-F46800?logo=grafana&logoColor=white" alt="Grafana">
+      <br>
+      <img src="https://img.shields.io/badge/Loki%20%2B%20Tempo-logs%20%26%20traces-F46800?logo=grafana&logoColor=white" alt="Loki and Tempo">
+    </td>
+  </tr>
+</table>
 
-Applicazione per generazione assistita di comunicazioni interne e analisi documentale PDF. Lo stack locale e completamente orchestrato con Docker Compose: non richiede PHP, Composer, Node.js, npm, Terraform o tool AWS installati sull'host.
+<table align="center">
+  <tr>
+    <td align="center">
+      <strong>CI / Quality Gate</strong><br><br>
+      <img src="https://img.shields.io/badge/Pest-backend%20tests-6E9F18" alt="Pest">
+      <img src="https://img.shields.io/badge/Vitest-frontend%20tests-6E9F18?logo=vitest&logoColor=white" alt="Vitest">
+      <img src="https://img.shields.io/badge/Trivy-image%20scan-1904DA?logo=trivy&logoColor=white" alt="Trivy">
+      <img src="https://img.shields.io/badge/axe%20%2B%20pa11y-accessibility-654FF0" alt="Accessibility">
+      <img src="https://img.shields.io/badge/Terraform-validated-844FBA?logo=terraform&logoColor=white" alt="Terraform"> <br><br>
+      <img src="https://github.com/alittlebyte-19/PoC/actions/workflows/ci.yml/badge.svg" alt="CI">
+    </td>
+  </tr>
+</table>
 
-## Funzionalita
+## Contesto
 
-- SPA React/Vite/TypeScript servita da Nginx.
-- API JSON Laravel versionata sotto `/api/v1`.
-- Generazione di comunicazioni tramite Bedrock.
-- Upload PDF, archiviazione S3, OCR Textract opzionale, split documentale e persistenza dei risultati.
-- Workflow asincrono Step Functions + SQS task token, con DLQ e worker dedicato.
-- Configurazione runtime da SSM Parameter Store e Secrets Manager.
-- Observability con OpenTelemetry Collector, Prometheus, Tempo e Grafana; alerting con Alertmanager.
-- Aggregazione log di tutti i container con Grafana Alloy e Loki, consultabile in Grafana.
-- Superficie runtime ridotta: `/admin` e vecchi endpoint legacy rispondono 404.
+Questa Proof of Concept nasce nel contesto del progetto proposto da **Eggon**, orientato all’evoluzione di processi HR e documentali tramite funzionalità intelligenti, automazione operativa e integrazione con strumenti digitali già presenti nell’ecosistema aziendale.
 
-## Architettura
+Il lavoro si concentra su due aree applicative principali: un assistente generativo per comunicazioni HR e un Co-Pilot documentale per supportare l’elaborazione di PDF multi-destinatario. La PoC esplora come un’interfaccia web, un backend API, una pipeline asincrona, uno storage documentale e servizi AI possano cooperare in un flusso tecnico end-to-end, riproducibile in locale e osservabile durante l’esecuzione.
 
-```mermaid
-flowchart LR
-  Browser[Browser] --> Traefik[Traefik HTTP/TLS]
-  Traefik --> Nginx[Nginx + SPA]
-  Nginx --> Laravel[Laravel API]
-  Laravel --> Postgres[(PostgreSQL)]
-  Laravel --> Redis[(Redis)]
-  Laravel --> S3[(S3 / LocalStack)]
-  Laravel --> SFN[Step Functions]
-  SFN --> SQS[SQS task queue]
-  SQS --> Worker[Workflow worker]
-  Worker --> Textract[Textract]
-  Worker --> Bedrock[Bedrock]
-  Worker --> Postgres
-  Laravel --> OTel[OTel Collector]
-  Worker --> OTel
-  OTel --> Prometheus[Prometheus]
-  OTel --> Tempo[Tempo]
-  Prometheus --> Grafana[Grafana]
-  Prometheus --> Alertmanager[Alertmanager]
-  Tempo --> Grafana
-  Logs[Container logs] --> Alloy[Grafana Alloy]
-  Alloy --> Loki[Loki]
-  Loki --> Grafana
-```
+Il valore principale del progetto è architetturale e dimostrativo: ogni fase del processo viene resa esplicita, tracciabile e verificabile, dalla richiesta utente alla persistenza, dall’avvio del workflow alla lavorazione asincrona, fino alla raccolta di metriche, log, trace e risultati applicativi.
 
-La pipeline documentale usa LocalStack per S3, SQS, Step Functions, SSM, Secrets Manager, EventBridge e SES locale. S3, Textract e Bedrock possono essere instradati verso AWS reale tramite parametri runtime, lasciando il resto dello stack in locale.
+## Cosa dimostra la PoC
 
-## Struttura Repository
+La PoC dimostra un modello applicativo composto da più livelli cooperanti:
 
-- `app/Copilot`: dominio applicativo, servizi AI/OCR/workflow, audit e supporto runtime.
-- `app/Http`: controller API, middleware, request validation e risposte HTTP.
-- `app/Models/Copilot`: model Eloquent.
-- `apps/frontend`: SPA React organizzata per `app`, `components`, `features`, `hooks`, `lib`, `styles`.
-- `openapi/v1/alittlebyte-poc-api.yaml`: contratto API versionato, sorgente del client TypeScript generato.
-- `infra/localstack`: Terraform per dipendenze AWS-like locali.
-- `infra/aws`: area riservata alla baseline AWS reale quando IAM, remote state e ownership saranno definiti.
-- `docker`: immagini runtime, Traefik, Nginx, observability e certificati locali.
-- `docs`: architettura, runbook, sicurezza, operation guide e diagrammi.
+* una **SPA React/Vite/TypeScript** per l’interazione operatore;
+* un backend **Laravel/PHP** per API, validazione, autorizzazione, orchestrazione applicativa e persistenza;
+* **PostgreSQL** per dati strutturati, stati applicativi, audit e risultati di elaborazione;
+* **Redis** per cache, sessioni e rate limiting;
+* storage documentale **S3-compatible** per PDF originali e sotto-documenti generati;
+* **LocalStack** per emulare localmente servizi AWS come SQS, Step Functions, SSM, Secrets Manager e S3;
+* integrazione AI tramite astrazione verso **Bedrock** e predisposizione OCR tramite **Textract**;
+* stack di osservabilità con **OpenTelemetry, Prometheus, Grafana, Tempo, Loki, Alloy e Alertmanager**;
+* CI con test backend/frontend, scansione immagini, validazione infrastrutturale e audit accessibilità.
 
-## Avvio Locale
+La separazione tra richiesta HTTP e workflow asincrono è uno dei punti centrali: l’utente avvia l’elaborazione, il backend registra lo stato e il worker si occupa dei task più lunghi tramite una pipeline orchestrata.
+
+## Architettura generale
+
+L’architettura locale è organizzata intorno a un entrypoint edge, un layer applicativo, servizi dati, workflow asincroni e osservabilità.
+
+Traefik gestisce l’ingresso verso i servizi esposti e instrada il traffico verso Nginx. Nginx serve la SPA frontend e inoltra le richieste API al runtime Laravel/PHP-FPM. Laravel gestisce le API, valida le richieste, applica le regole applicative, registra eventi di audit e avvia i workflow documentali. PostgreSQL conserva lo stato persistente, Redis supporta componenti runtime a bassa latenza, mentre LocalStack fornisce servizi AWS-like in ambiente locale.
+
+I worker Laravel consumano task asincroni da SQS e comunicano con Step Functions tramite callback task token. Questo permette di rappresentare una pipeline documentale composta da stati espliciti, retry, gestione errori, idempotenza e aggiornamento progressivo dello stato.
+
+## Flusso generativo: AI Assistant
+
+Il flusso AI Assistant supporta la generazione di comunicazioni HR a partire da un prompt, con tono e stile selezionati dall’operatore.
+
+La richiesta parte dalla SPA e arriva alle API Laravel, dove viene validata e normalizzata. Il backend invoca il servizio AI configurato, interpreta la risposta, verifica la struttura dei dati ottenuti e registra il risultato come comunicazione applicativa. La generazione viene tracciata attraverso audit event e metriche, così da rendere osservabile l’intero processo.
+
+Il flusso evidenzia il ruolo del backend come livello di controllo tra interfaccia e modello AI: il provider genera il contenuto, mentre l’applicazione mantiene responsabilità su validazione, persistenza, stato e tracciabilità.
+
+## Flusso documentale: Co-Pilot CdL
+
+Il flusso Co-Pilot documentale gestisce PDF multi-destinatario caricati dall’operatore. Dopo l’upload, il backend valida il file, registra il documento originale, salva il contenuto nello storage S3-compatible e avvia una state machine in LocalStack Step Functions.
+
+La state machine pubblica task su SQS usando il callback pattern con task token. I worker Laravel consumano i messaggi, eseguono le fasi previste e notificano a Step Functions il completamento o il fallimento del task. Le fasi principali comprendono OCR, split logico del documento, estrazione dei dati, generazione dei sotto-documenti, aggiornamento dello stato e registrazione degli eventi applicativi.
+
+Il risultato è una pipeline documentale composta da passaggi isolati, monitorabili e riavviabili, con persistenza dello stato e visibilità sui risultati prodotti.
+
+## Monitoring e osservabilità
+
+La PoC integra un layer di osservabilità locale per seguire il comportamento dell’applicazione e della pipeline documentale.
+
+Le metriche applicative e infrastrutturali vengono raccolte tramite OpenTelemetry Collector e Prometheus. Le trace vengono inviate a Tempo, i log sono centralizzati su Loki tramite Alloy, mentre Grafana fornisce dashboard per API, workflow documentale, qualità AI/OCR, code, DLQ, log ed errori. Alertmanager completa il flusso operativo con regole collegate a runbook dedicati.
+
+Questa impostazione rende visibili latency, traffico, errori, saturazione, stato dei worker, andamento della pipeline e qualità delle elaborazioni AI.
+
+## CI e quality gate
+
+La pipeline CI verifica la qualità della repository attraverso controlli backend, frontend, infrastrutturali e di sicurezza.
+
+Il backend viene controllato con formattazione, analisi statica e test automatici. Il frontend viene verificato tramite typecheck, test, build e generazione del client API. Lo stack locale viene validato attraverso Terraform, configurazioni di osservabilità, build delle immagini, scansione Trivy, smoke test e audit di accessibilità con axe e pa11y.
+
+La CI agisce come quality gate del progetto: ogni modifica significativa deve mantenere coerenti codice applicativo, contratto API, infrastruttura locale e comportamento osservabile dello stack.
+
+## Setup locale
+
+### Requisiti
+
+* Docker e Docker Compose
+* Make
+* Git
+* ambiente Unix-like consigliato per script e comandi di supporto
+
+### Avvio rapido
 
 ```bash
-cp .env.example .env
+git clone https://github.com/alittlebyte-19/PoC.git
+cd PoC
+
 make setup
+make up
 ```
 
-`make setup` esegue:
-
-- generazione certificato TLS locale;
-- build immagini Docker;
-- avvio PostgreSQL, Redis e LocalStack;
-- `terraform init/apply` su `infra/localstack`;
-- migrazioni Laravel;
-- avvio app, worker, Nginx, Traefik e servizi di osservabilita.
-
-Endpoint (tutto passa da Traefik su `:8443`; la `:8080` redirige su HTTPS):
-
-- Applicazione: `https://localhost:8443`
-- Health: `https://localhost:8443/health`
-- Readiness: `https://localhost:8443/ready`
-- Grafana: `https://grafana.localhost:8443` (login Grafana)
-- Prometheus: `https://prometheus.localhost:8443` (basic auth: `poc` / `poc-obs-local-password`)
-- Alertmanager: `https://alertmanager.localhost:8443` (basic auth come sopra)
-- Tempo: `https://tempo.localhost:8443` (basic auth come sopra)
-- LocalStack edge: `http://localhost:4566` (bind solo su 127.0.0.1)
-
-I servizi di osservabilità non espongono più porte sull'host: vivono su una rete
-Docker dedicata e sono raggiungibili solo attraverso Traefik. I nomi `*.localhost`
-sono risolti automaticamente dai browser; da CLI usare
-`curl --resolve grafana.localhost:8443:127.0.0.1 ...` o aggiungere le voci a `/etc/hosts`.
-
-Il certificato TLS locale e self-signed. Firefox o altri browser possono mostrare un warning finche il certificato in `docker/traefik/certs` non viene considerato attendibile dal trust store locale.
-
-## Configurazione
-
-I container ricevono solo il bootstrap necessario a leggere la configurazione runtime:
-
-```env
-CONFIG_SOURCE=aws
-CONFIG_SSM_PATH=/poc/app
-CONFIG_SECRET_IDS=/poc/app/runtime
-CONFIG_AWS_ENDPOINT=http://localstack:4566
-CONFIG_AWS_REGION=eu-north-1
-```
-
-Terraform scrive i parametri applicativi in SSM e i segreti in Secrets Manager. I valori principali si impostano in `.env` prima di `make infra-apply`.
-
-Parametri applicativi:
-
-| Variabile | Uso |
-| --- | --- |
-| `POC_APP_URL` | URL pubblico usato da Laravel. |
-| `POC_DOCUMENT_DISK` | `s3` per LocalStack, `real_s3` per S3 reale. |
-| `POC_MAX_UPLOAD_MB` | Limite upload PDF. |
-| `POC_MAX_PDF_PAGES` | Limite pagine PDF. |
-| `POC_PROCESSING_TIMEOUT_SECONDS` | Timeout massimo pipeline documentale. |
-| `POC_CONFIDENCE_THRESHOLD` | Soglia di confidenza per revisione. |
-| `POC_IDENTITY_MODE` | Modalita identita locale o header trusted. |
-
-## AWS Reale per S3, Textract e Bedrock
-
-Questa modalita usa un runtime ibrido controllato: LocalStack resta responsabile di SSM, Secrets, SQS e Step Functions; S3, Textract e Bedrock puntano ad AWS reale. Impostare in `.env`:
-
-```env
-POC_DOCUMENT_DISK=real_s3
-
-# Regione e bucket usati per gli oggetti sorgente S3.
-AWS_REAL_REGION=eu-central-1
-AWS_REAL_S3_BUCKET=nome-bucket-documenti
-AWS_REAL_S3_PREFIX=documents/
-
-# Credenziali temporanee o access key dedicate allo smoke locale.
-AWS_REAL_ACCESS_KEY_ID=
-AWS_REAL_SECRET_ACCESS_KEY=
-AWS_REAL_SESSION_TOKEN=
-
-# Textract usa la regione OCR/S3.
-TEXTRACT_ENABLED=true
-TEXTRACT_REGION=eu-central-1
-TEXTRACT_MAX_PAGES=50
-TEXTRACT_MAX_BYTES=20971520
-
-# Bedrock puo usare una regione diversa.
-BEDROCK_REGION=eu-north-1
-POC_BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
-BEDROCK_ENDPOINT=
-```
-
-Dopo ogni modifica a questi valori, riscrivere SSM/Secrets e ricaricare i processi applicativi:
-
-```bash
-make refresh-runtime
-```
-
-`make refresh-runtime` esegue `make infra-apply` e ricrea i container `app` e `queue`, che ricaricano la configurazione runtime. I valori risolti da SSM/Secrets vengono cachati nel filesystem del container (`bootstrap/cache/runtime-config.php`): ricreare i container e quindi il modo corretto per propagare le modifiche.
-
-Note operative:
-
-- Le credenziali `AWS_REAL_ACCESS_KEY_ID` / `AWS_REAL_SECRET_ACCESS_KEY` / `AWS_REAL_SESSION_TOKEN` sono condivise da S3, Textract e Bedrock: lo stesso principal IAM deve avere accesso ai tre servizi (un ruolo limitato al solo Bedrock non basta per S3/Textract).
-- `AWS_REAL_REGION` e `TEXTRACT_REGION` devono rappresentare la stessa regione: Textract legge l'oggetto dal bucket S3 e richiede che si trovino nella medesima regione.
-- `BEDROCK_REGION` e indipendente e deve essere una regione dove il modello scelto e abilitato per l'account.
-- Con `TEXTRACT_ENABLED=true`, `POC_DOCUMENT_DISK` deve essere `real_s3`: i documenti devono risiedere su S3 reale, altrimenti l'avvio del workflow viene rifiutato con un errore esplicito.
-- Le credenziali reali non vanno committate. Con IAM aziendale, preferire credenziali temporanee/OIDC/role assumption e secret injection gestita.
-- La workflow orchestration resta locale finche non viene aggiunto Terraform AWS reale per Step Functions, SQS, SSM e Secrets Manager.
-
-## Observability
-
-Servizi locali:
-
-| Servizio | URL | Uso |
-| --- | --- | --- |
-| Grafana | `https://grafana.localhost:8443` | Dashboard applicative, log e trace drill-down (login Grafana). |
-| Prometheus | `https://prometheus.localhost:8443` | Metriche e regole di alerting (basic auth). |
-| Alertmanager | `https://alertmanager.localhost:8443` | Routing alert (basic auth). |
-| Tempo | `https://tempo.localhost:8443` | Storage trace OTLP (basic auth). |
-| Loki | interno `loki:3100` | Storage log dei container. |
-| Grafana Alloy | interno `alloy:12345` | Raccolta log dei container e invio a Loki. |
-
-Le UI passano da Traefik (rete `observability` interna, nessuna porta host);
-credenziali basic auth di default in `docker/traefik/usersfile`.
-
-Metriche, trace e log convergono in Grafana, che carica da file i datasource Prometheus, Tempo e Loki. Grafana Alloy raccoglie i log di tutti i container del progetto e li invia a Loki; i log applicativi inviati via OTLP raggiungono Loki attraverso il Collector. Nella dashboard `Logs and Errors` e nei pannelli log delle altre dashboard si filtrano per servizio (es. `{project="poc", service="queue"}`) e per livello di errore. La dashboard `API Golden Signals` copre tutti e quattro i segnali SRE (latency, traffic, errors, saturation) e ogni alert Prometheus rimanda al runbook pertinente in `docs/runbooks/`. Le metriche di dominio del worker (Textract, SQS, completamenti) sono esposte tramite un volume condiviso tra `app` e `queue`, così da raggiungere l'endpoint `/internal/metrics` scrappato da Prometheus.
-
-Credenziali Grafana di default (da cambiare se Grafana viene esposto oltre `localhost`):
-
-```env
-GRAFANA_ADMIN_USER=admin
-GRAFANA_ADMIN_PASSWORD=admin
-```
-
-Le dashboard sono provisioning-as-code in `docker/grafana/dashboards` (`api-golden-signals`, `document-pipeline`, `ai-ocr-quality`, `queues-and-dlq`, `logs-and-errors`). Per modificarle:
-
-1. Aprire Grafana e modificare una dashboard.
-2. Esportare il JSON aggiornato.
-3. Sostituire il file corrispondente in `docker/grafana/dashboards`.
-4. Riavviare Grafana con `docker compose restart grafana`.
-5. Validare la configurazione con `make observability-config`.
-
-Prometheus carica regole da `docker/prometheus/rules`; Alertmanager da `docker/alertmanager/alertmanager.yml`; OTel Collector da `docker/otel-collector/config.yml`.
-
-## Comandi Principali
-
-| Comando | Descrizione |
-| --- | --- |
-| `make setup` | Setup completo locale. |
-| `make release` | Esegue le migrazioni applicative. |
-| `make refresh-runtime` | Riapplica SSM/Secrets e ricrea app e worker dopo modifiche al `.env`. |
-| `make logs` | Segue log app, worker, Nginx e LocalStack. |
-| `make fresh` | Resetta database e dati generati. |
-| `make reset-all` | Reset totale: volumi locali + bucket S3 reale, poi setup da zero (`FORCE=1` per saltare la conferma). |
-| `make verify-fast` | Backend, frontend, infra e observability senza audit estesi. |
-| `make verify` | Quality gate completo locale. |
-| `make frontend-a11y` | Axe e Pa11y sullo stack HTTPS locale. |
-| `make aws-smoke` | Smoke opzionale, richiede parametri AWS reali. |
-
-## Test e Quality Gate
-
-Tutti i controlli sono containerizzati.
+### Verifica dello stack
 
 ```bash
 make test
-make pint
-make frontend-typecheck
-make frontend-test
-make frontend-build
-make frontend-audit
-make openapi-validate
-make observability-config
-make verify-fast
-make verify
+make logs
 ```
 
-CI/CD GitHub Actions:
+### Accesso ai servizi
 
-- `Pest`: test Laravel.
-- `Pint`: code style PHP.
-- `Frontend`: OpenAPI client generation, TypeScript, Vitest, build e npm audit production.
-- `Quality Gates`: Composer validate, Larastan/PHPStan, OpenAPI lint, Terraform validate, observability config.
-- `Accessibility`: Axe e Pa11y sullo stack locale.
-- `LocalStack Smoke`: Compose, Terraform, migrazioni, health/readiness/API e dashboard locali.
-- `Containers`: build immagini runtime, Trivy scan, publish GHCR su branch/tag abilitati.
-- `AWS Smoke`: workflow manuale e non bloccante che verifica S3, Textract e Bedrock reali; usa il role OIDC aziendale quando disponibile, in alternativa credenziali effimere caricate come secrets (vedi `docs/runbooks/ci-cd.md`).
+| Servizio     | URL                                   |
+| ------------ | ------------------------------------- |
+| Applicazione | `https://localhost:8443`              |
+| Grafana      | `https://grafana.localhost:8443`      |
+| Prometheus   | `https://prometheus.localhost:8443`   |
+| Alertmanager | `https://alertmanager.localhost:8443` |
+| Tempo        | `https://tempo.localhost:8443`        |
+| LocalStack   | `http://127.0.0.1:4566`               |
 
-## Sicurezza
+I comandi disponibili sono raccolti nel `Makefile`, che funge da interfaccia operativa per setup, avvio, test, log, reset e controlli locali.
 
-- Nessuna interfaccia `/admin` a runtime.
-- API JSON versionata e documentata da OpenAPI.
-- Configurazione separata tra parametri non sensibili e segreti.
-- Upload PDF limitati per dimensione e pagine.
-- Worker asincrono con DLQ e idempotenza task-token.
-- Metriche interne non esposte attraverso Traefik pubblico.
-- Container runtime separati per app, worker, Nginx e tool.
-- Hardening runtime PHP (`docker/php/security.ini`): `expose_php` off, errori non in output, `allow_url_fopen`/`allow_url_include` off, cookie di sessione `HttpOnly`/`Secure`/`SameSite=Strict`, `disable_functions` sulle funzioni di esecuzione shell.
-- Header di sicurezza su Nginx (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `server_tokens off`).
-- Laravel riconosce TLS dietro Traefik tramite trusted proxy e header `X-Forwarded-*`.
-- Scansione immagini con Trivy su vulnerabilita HIGH/CRITICAL.
-- Mapping OWASP ASVS e IAM in `docs/security`.
+## Collegamento ad AWS reale
 
-## Riferimenti
+La PoC è progettata per lavorare in locale tramite LocalStack, mantenendo un modello di integrazione compatibile con servizi AWS reali. Il codice applicativo dialoga con servizi astratti tramite configurazione, endpoint e credenziali, rendendo possibile indirizzare gli stessi flussi verso ambienti cloud configurati.
 
-- [AWS Well-Architected Framework](https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html)
-- [OWASP ASVS](https://owasp.org/www-project-application-security-verification-standard/)
-- [Google SRE: Monitoring Distributed Systems](https://sre.google/sre-book/monitoring-distributed-systems/)
-- [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/)
-- [Amazon Textract StartDocumentTextDetection](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentTextDetection.html)
-- [Amazon Bedrock model access](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html)
+Le aree predisposte per integrazione AWS reale includono:
+
+* object storage S3 per documenti originali e sotto-documenti;
+* SQS per code applicative e task asincroni;
+* Step Functions per orchestrazione dei workflow;
+* SSM Parameter Store per configurazione runtime;
+* Secrets Manager per segreti applicativi;
+* Bedrock per generazione e analisi AI;
+* Textract per OCR su documenti archiviati in S3;
+* SES per successive evoluzioni del dispaccio documentale.
+
+Il passaggio a servizi reali richiede configurazione di account, regioni, IAM policy, bucket, code, state machine, segreti, parametri e permessi coerenti con l’ambiente di destinazione.
+
+## Evoluzioni future
+
+La struttura della PoC è predisposta per successive estensioni verso scenari più vicini a un ambiente production-like.
+
+Le principali aree di evoluzione riguardano:
+
+* integrazione con un identity provider centralizzato;
+* hardening avanzato della gestione documentale;
+* policy di retention e lifecycle sui file;
+* procedure di backup e restore;
+* dispatch documentale verso canali reali;
+* gestione completa di ruoli, permessi e tenant;
+* validazione operativa su servizi AWS reali;
+* tuning di scalabilità, resilienza e monitoraggio;
+* estensione dei flussi di revisione human-in-the-loop.
+
+## Documentazione tecnica
+
+| Documento                      | Contenuto                                    |
+| ------------------------------ | -------------------------------------------- |
+| `docs/architecture.md`         | Architettura applicativa e infrastrutturale  |
+| `docs/workflows.md`            | Flussi AI Assistant e Co-Pilot documentale   |
+| `docs/observability.md`        | Metriche, trace, log, dashboard e alert      |
+| `docs/security.md`             | Identità, autorizzazione, audit e hardening  |
+| `docs/aws-real-integration.md` | Note per collegamento a servizi AWS reali    |
+| `docs/runbooks/`               | Runbook operativi e troubleshooting          |
+| `openapi/v1/`                  | Contratto API OpenAPI                        |
+| `infra/localstack/`            | Terraform e risorse AWS-like locali          |
+| `docker/`                      | Configurazioni runtime, edge e osservabilità |
+| `.github/workflows/`           | Pipeline CI e quality gate                   |

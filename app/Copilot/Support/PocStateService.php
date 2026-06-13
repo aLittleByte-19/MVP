@@ -3,6 +3,7 @@
 namespace App\Copilot\Support;
 
 use App\Copilot\Communications\Enums\CommunicationStatus;
+use App\Copilot\Documents\Enums\ReviewStatus;
 use App\Copilot\Identity\PocUser;
 use App\Models\Copilot\Communication;
 use App\Models\Copilot\ExtractedData;
@@ -61,7 +62,8 @@ class PocStateService
                 ['value' => $originalCount, 'label' => 'Documenti analizzati'],
                 ['value' => SubDocument::query()->whereHas('originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))->count(), 'label' => 'Sotto-documenti rilevati'],
                 ['value' => ExtractedData::query()->whereHas('subDocument.originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))->where('confidence_score', '>=', $confidenceThreshold)->count(), 'label' => 'Campi con confidenza'],
-                ['value' => ExtractedData::query()->whereHas('subDocument.originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))->where(fn ($q) => $q->where('confidence_score', '<', $confidenceThreshold)->orWhereNull('confidence_score'))->count(), 'label' => 'Da verificare'],
+                ['value' => SubDocument::query()->whereHas('originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))->where('review_status', ReviewStatus::NeedsReview)->count(), 'label' => 'Da verificare'],
+                ['value' => SubDocument::query()->whereHas('originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))->where('review_status', ReviewStatus::Quarantined)->count(), 'label' => 'In quarantena'],
             ],
             'documents' => $documents->map(fn ($document) => $this->document($document))->values()->all(),
         ];
@@ -110,14 +112,21 @@ class PocStateService
         return [
             'id' => 'sub-'.$subDocument->id,
             'title' => $data?->document_type ?: $original?->original_filename,
+            'employeeFirstName' => $data?->employee_first_name,
+            'employeeLastName' => $data?->employee_last_name,
             'employee' => $employee !== '' ? $employee : null,
+            'companyName' => $data?->company_name,
             'company' => $data?->company_name,
             'file' => $original?->original_filename,
+            'documentDate' => $data?->document_date?->format('Y-m-d'),
             'date' => $data?->document_date?->format('d/m/Y'),
             'pages' => $pages,
+            'documentType' => $data?->document_type,
             'type' => $data?->document_type,
             'description' => $data?->description,
             'confidence' => $confidence,
+            'reviewStatus' => $subDocument->review_status->value,
+            'reviewStatusLabel' => $subDocument->review_status->label(),
             'error' => $subDocument->error_message,
             'previewUrl' => route('api.v1.documents.preview', ['subDocument' => $subDocument->id]),
             'previewLines' => $previewLines,

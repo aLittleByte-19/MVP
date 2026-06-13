@@ -5,26 +5,39 @@
  * Versioned JSON contract consumed by the React SPA.
  * OpenAPI spec version: 1.0.0
  */
+import type { SubDocumentReviewStatus } from './subDocumentReviewStatus';
 
 export interface SubDocument {
   id: string;
   /** @nullable */
   title?: string | null;
   /** @nullable */
+  employeeFirstName?: string | null;
+  /** @nullable */
+  employeeLastName?: string | null;
+  /** @nullable */
   employee?: string | null;
+  /** @nullable */
+  companyName?: string | null;
   /** @nullable */
   company?: string | null;
   /** @nullable */
   file?: string | null;
   /** @nullable */
+  documentDate?: string | null;
+  /** @nullable */
   date?: string | null;
   pages?: number;
+  /** @nullable */
+  documentType?: string | null;
   /** @nullable */
   type?: string | null;
   /** @nullable */
   description?: string | null;
   /** @nullable */
   confidence?: number | null;
+  reviewStatus: SubDocumentReviewStatus;
+  reviewStatusLabel: string;
   /** @nullable */
   error?: string | null;
   previewUrl?: string;

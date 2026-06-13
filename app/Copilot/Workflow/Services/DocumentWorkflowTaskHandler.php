@@ -60,11 +60,22 @@ class DocumentWorkflowTaskHandler
             ];
         }
 
-        $task->update([
-            'status' => 'running',
-            'started_at' => now(),
-            'error_message' => null,
-        ]);
+        if (! $this->claim($task)) {
+            // Consegna duplicata mentre un altro worker sta gia' elaborando lo
+            // stesso token: nessun callback, il worker attivo completera' il task.
+            $this->metrics->recordDomainCounter('sqs_messages_duplicate_total', ['task_type' => $taskType]);
+
+            return [
+                'callback_required' => false,
+                'output' => array_merge($this->baseOutput($message), [
+                    'task_result' => [
+                        'task_type' => $taskType,
+                        'status' => 'running',
+                        'duplicate_in_flight' => true,
+                    ],
+                ]),
+            ];
+        }
         $this->metrics->recordDomainCounter('sqs_messages_received_total', ['task_type' => $taskType]);
 
         try {
@@ -116,6 +127,41 @@ class DocumentWorkflowTaskHandler
 
             throw $e;
         }
+    }
+
+    /**
+     * Claim atomico del task: con piu' worker solo uno puo' portare lo stato a
+     * running. Un task gia' running viene riconquistato solo se stale (worker
+     * morto oltre il visibility timeout SQS).
+     */
+    private function claim(DocumentWorkflowTask $task): bool
+    {
+        $staleBefore = now()->subSeconds(max(60, (int) config('poc.workflow.running_claim_ttl_seconds', 900)));
+
+        $claimed = DocumentWorkflowTask::query()
+            ->whereKey($task->id)
+            ->where(function ($query) use ($staleBefore) {
+                $query->whereIn('status', ['pending', 'failed'])
+                    ->orWhere(function ($running) use ($staleBefore) {
+                        $running->where('status', 'running')
+                            ->where(function ($stale) use ($staleBefore) {
+                                $stale->whereNull('started_at')->orWhere('started_at', '<', $staleBefore);
+                            });
+                    });
+            })
+            ->update([
+                'status' => 'running',
+                'started_at' => now(),
+                'error_message' => null,
+            ]);
+
+        if ($claimed === 1) {
+            $task->refresh();
+
+            return true;
+        }
+
+        return false;
     }
 
     /**

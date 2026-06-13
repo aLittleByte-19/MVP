@@ -273,6 +273,17 @@ jobs:
           curl --silent --fail --insecure https://localhost:8443/ready
           curl --silent --fail --insecure https://localhost:8443/api/v1/state
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure https://localhost:8443/internal/metrics)" = "404"
+          docker compose exec -T nginx wget -q -O - http://127.0.0.1:8081/internal/metrics | grep poc_app_info
+
+          # Security headers: CSP enforced ovunque, con frame-ancestors 'self'
+          # solo sulla preview PDF (incorporata in iframe dalla SPA)
+          spa_headers="$(curl --silent --insecure -I https://localhost:8443/)"
+          echo "$spa_headers" | grep -i '^content-security-policy:' | grep -F "frame-ancestors 'none'"
+          echo "$spa_headers" | grep -i '^x-content-type-options: nosniff'
+          echo "$spa_headers" | grep -i '^referrer-policy: strict-origin-when-cross-origin'
+          curl --silent --insecure -I https://localhost:8443/api/v1/documents/1/preview \
+            | grep -i '^content-security-policy:' | grep -F "frame-ancestors 'self'"
+
           obs_curl prometheus.localhost /-/ready
           obs_curl alertmanager.localhost /-/ready
           wait_for https://grafana.localhost:8443/api/health \
@@ -284,6 +295,9 @@ jobs:
       # disponibile qui e va rieseguito prima degli audit a11y
       - name: Install audit dependencies
         run: docker compose --profile tools run --rm node npm ci --ignore-scripts
+
+      - name: Smoke SPA with enforced CSP
+        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/csp-smoke.mjs https://traefik:8443
 
       - name: Run axe
         run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/axe-playwright.mjs https://traefik:8443

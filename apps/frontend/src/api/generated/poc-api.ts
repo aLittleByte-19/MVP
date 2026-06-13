@@ -13,6 +13,8 @@ import type {
   NotFoundResponse,
   PocState,
   UnauthorizedResponse,
+  UpdateExtractedDataRequest,
+  UpdateSubDocumentReviewResponse,
   UploadDocumentResponse,
   UploadPocDocumentBody,
   UpstreamUnavailableResponse,
@@ -277,6 +279,127 @@ export const deletePocSubDocument = async (subDocument: number, options?: Reques
 
   const data: deletePocSubDocumentResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as deletePocSubDocumentResponse
+}
+
+
+
+export type updatePocSubDocumentExtractedDataResponse200 = {
+  data: UpdateSubDocumentReviewResponse
+  status: 200
+}
+
+export type updatePocSubDocumentExtractedDataResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type updatePocSubDocumentExtractedDataResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type updatePocSubDocumentExtractedDataResponse422 = {
+  data: ValidationErrorResponse
+  status: 422
+}
+
+export type updatePocSubDocumentExtractedDataResponseSuccess = (updatePocSubDocumentExtractedDataResponse200) & {
+  headers: Headers;
+};
+export type updatePocSubDocumentExtractedDataResponseError = (updatePocSubDocumentExtractedDataResponse403 | updatePocSubDocumentExtractedDataResponse404 | updatePocSubDocumentExtractedDataResponse422) & {
+  headers: Headers;
+};
+
+export type updatePocSubDocumentExtractedDataResponse = (updatePocSubDocumentExtractedDataResponseSuccess | updatePocSubDocumentExtractedDataResponseError)
+
+export const getUpdatePocSubDocumentExtractedDataUrl = (subDocument: number,) => {
+
+
+
+
+  return `/api/v1/documents/${subDocument}/extracted-data`
+}
+
+/**
+ * @summary Correct extracted data for a sub-document
+ */
+export const updatePocSubDocumentExtractedData = async (subDocument: number,
+    updateExtractedDataRequest: UpdateExtractedDataRequest, options?: RequestInit): Promise<updatePocSubDocumentExtractedDataResponse> => {
+
+  const res = await fetch(getUpdatePocSubDocumentExtractedDataUrl(subDocument),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateExtractedDataRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updatePocSubDocumentExtractedDataResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as updatePocSubDocumentExtractedDataResponse
+}
+
+
+
+export type reviewPocSubDocumentResponse200 = {
+  data: UpdateSubDocumentReviewResponse
+  status: 200
+}
+
+export type reviewPocSubDocumentResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type reviewPocSubDocumentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type reviewPocSubDocumentResponse422 = {
+  data: ValidationErrorResponse
+  status: 422
+}
+
+export type reviewPocSubDocumentResponseSuccess = (reviewPocSubDocumentResponse200) & {
+  headers: Headers;
+};
+export type reviewPocSubDocumentResponseError = (reviewPocSubDocumentResponse403 | reviewPocSubDocumentResponse404 | reviewPocSubDocumentResponse422) & {
+  headers: Headers;
+};
+
+export type reviewPocSubDocumentResponse = (reviewPocSubDocumentResponseSuccess | reviewPocSubDocumentResponseError)
+
+export const getReviewPocSubDocumentUrl = (subDocument: number,) => {
+
+
+
+
+  return `/api/v1/documents/${subDocument}/review`
+}
+
+/**
+ * @summary Mark a sub-document as manually reviewed
+ */
+export const reviewPocSubDocument = async (subDocument: number, options?: RequestInit): Promise<reviewPocSubDocumentResponse> => {
+
+  const res = await fetch(getReviewPocSubDocumentUrl(subDocument),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reviewPocSubDocumentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as reviewPocSubDocumentResponse
 }
 
 

@@ -4,7 +4,7 @@ import { StatusBadge } from "../../../components/data-display/StatusBadge";
 import { EmptyState } from "../../../components/feedback/EmptyState";
 import { Button } from "../../../components/inputs/Button";
 import { formatFallback } from "../../../lib/formatters";
-import { getDocumentStatus } from "../../../lib/status";
+import { getReviewStatusTone } from "../../../lib/status";
 import styles from "./DocumentList.module.css";
 
 type DocumentListProps = {
@@ -49,11 +49,11 @@ export function DocumentList({ documents, onSelect, selectedDocumentId }: Docume
           key: "status",
           header: "Stato",
           render: (documentItem) => {
-            const status = getDocumentStatus(documentItem.error);
+            const status = getReviewStatusTone(documentItem.reviewStatus, documentItem.error);
 
             return (
               <StatusBadge tone={status}>
-                {status === "warning" ? "Da verificare" : "Confermato"}
+                {documentItem.reviewStatusLabel}
               </StatusBadge>
             );
           }

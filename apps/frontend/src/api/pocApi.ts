@@ -2,6 +2,8 @@ import {
   deletePocSubDocument as deletePocSubDocumentGenerated,
   generatePocCommunication as generatePocCommunicationGenerated,
   getPocState as getPocStateGenerated,
+  reviewPocSubDocument as reviewPocSubDocumentGenerated,
+  updatePocSubDocumentExtractedData as updatePocSubDocumentExtractedDataGenerated,
   uploadPocDocument as uploadPocDocumentGenerated
 } from "./generated/poc-api";
 import type {
@@ -9,6 +11,8 @@ import type {
   GenerateCommunicationRequest,
   GenerateCommunicationResponse,
   PocState,
+  UpdateExtractedDataRequest,
+  UpdateSubDocumentReviewResponse,
   UploadDocumentResponse,
   UploadPocDocumentBody
 } from "./generated/model";
@@ -30,4 +34,17 @@ export async function uploadPocDocument(payload: UploadPocDocumentBody): Promise
 
 export async function deletePocSubDocument(subDocument: number): Promise<DeleteDocumentResponse> {
   return assertApiSuccess<DeleteDocumentResponse>(await deletePocSubDocumentGenerated(subDocument));
+}
+
+export async function updatePocSubDocumentExtractedData(
+  subDocument: number,
+  payload: UpdateExtractedDataRequest
+): Promise<UpdateSubDocumentReviewResponse> {
+  return assertApiSuccess<UpdateSubDocumentReviewResponse>(
+    await updatePocSubDocumentExtractedDataGenerated(subDocument, payload)
+  );
+}
+
+export async function reviewPocSubDocument(subDocument: number): Promise<UpdateSubDocumentReviewResponse> {
+  return assertApiSuccess<UpdateSubDocumentReviewResponse>(await reviewPocSubDocumentGenerated(subDocument));
 }

@@ -16,6 +16,7 @@ import { SubDocumentList } from "../features/documents/components/SubDocumentLis
 import { useDeleteDocument } from "../features/documents/hooks/useDeleteDocument";
 import { useDocumentUpload } from "../features/documents/hooks/useDocumentUpload";
 import { useDocuments } from "../features/documents/hooks/useDocuments";
+import { useReviewSubDocument } from "../features/documents/hooks/useReviewSubDocument";
 import { MetricsPanel } from "../features/observability/components/MetricsPanel";
 import { SystemStatePanel } from "../features/state/components/SystemStatePanel";
 import { usePocState } from "../features/state/hooks/usePocState";
@@ -35,6 +36,7 @@ export function App() {
   const assistant = useGenerateCommunication(() => setActiveView("assistant"));
   const upload = useDocumentUpload({ onDocumentReceived: selectDocument });
   const deleteDocument = useDeleteDocument(() => selectDocument(null));
+  const reviewDocument = useReviewSubDocument(selectDocument);
 
   const activeChildIds = useMemo(
     () =>
@@ -122,7 +124,11 @@ export function App() {
           <SubDocumentList
             documentItem={selectedDocument}
             isDeleting={deleteDocument.isDeleting}
+            isSavingReview={reviewDocument.isSavingReview}
             onDelete={deleteDocument.deleteDocument}
+            onMarkReviewed={reviewDocument.markReviewed}
+            onSaveReview={reviewDocument.saveReview}
+            reviewError={reviewDocument.reviewError}
           />
           <Section id="copilot-metrics" title="Qualita e performance OCR">
             <MetricsPanel isLoading={stateQuery.isLoading} metrics={state?.copilot.metrics} />

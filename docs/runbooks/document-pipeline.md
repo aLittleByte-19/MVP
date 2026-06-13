@@ -44,6 +44,14 @@ docker compose exec app php artisan poc:dlq:list
 
 Worker logs are also available in Grafana (Loki): see the `document-pipeline` and `ai-ocr-quality` dashboards or query `{project="poc", service="queue"}` in the `Logs and Errors` dashboard.
 
+## Scaling Workers
+
+```bash
+make workers WORKERS=2   # docker compose up -d --scale queue=2
+```
+
+Multiple workers are safe: each Step Functions callback token is tracked in `document_workflow_tasks` (`task_token_hash` unique) and claimed atomically, so a duplicate SQS delivery is consumed without re-running the business logic (`poc_sqs_messages_duplicate_total` counts these). The SQS `visibility_timeout_seconds` (900s, Terraform) exceeds the longest ASL task timeout (720s), so an in-flight message never becomes visible to a second worker while still being processed. Workers send `SendTaskHeartbeat` while polling Textract and between Bedrock segments; a stale `running` task (dead worker) is re-claimable after `POC_WORKFLOW_CLAIM_TTL_SECONDS` (default 900s).
+
 Real AWS OCR smoke is intentionally separate:
 
 ```bash

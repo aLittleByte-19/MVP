@@ -17,6 +17,7 @@
       "Type": "Task",
       "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
       "TimeoutSeconds": 420,
+      "HeartbeatSeconds": 180,
       "Parameters": {
         "QueueUrl.$": "$.task_queue_url",
         "MessageBody": {
@@ -52,6 +53,7 @@
       "Type": "Task",
       "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
       "TimeoutSeconds": 720,
+      "HeartbeatSeconds": 240,
       "Parameters": {
         "QueueUrl.$": "$.taskQueueUrl",
         "MessageBody": {
@@ -98,6 +100,7 @@
       "Type": "Task",
       "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
       "TimeoutSeconds": 120,
+      "HeartbeatSeconds": 90,
       "Parameters": {
         "QueueUrl.$": "$.taskQueueUrl",
         "MessageBody": {
@@ -133,6 +136,7 @@
       "Type": "Task",
       "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
       "TimeoutSeconds": 120,
+      "HeartbeatSeconds": 90,
       "Parameters": {
         "QueueUrl.$": "$.taskQueueUrl",
         "MessageBody": {

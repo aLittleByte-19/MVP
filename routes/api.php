@@ -27,6 +27,14 @@ Route::prefix('v1')
             ->whereNumber('subDocument')
             ->name('documents.delete');
 
+        Route::put('/documents/{subDocument}/extracted-data', [DocumentController::class, 'updateExtractedData'])
+            ->whereNumber('subDocument')
+            ->name('documents.extracted-data.update');
+
+        Route::post('/documents/{subDocument}/review', [DocumentController::class, 'markReviewed'])
+            ->whereNumber('subDocument')
+            ->name('documents.review');
+
         Route::get('/documents/{subDocument}/preview', [DocumentController::class, 'preview'])
             ->whereNumber('subDocument')
             ->name('documents.preview');

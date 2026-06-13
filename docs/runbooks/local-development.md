@@ -8,7 +8,7 @@ make setup
 
 Il target esegue:
 
-- generazione TLS locale tramite container;
+- generazione TLS locale tramite container se cert/key non esistono gia';
 - build delle immagini applicative;
 - avvio di PostgreSQL, Redis e LocalStack;
 - `terraform init` e `terraform apply` dal container Compose `terraform`;
@@ -28,6 +28,25 @@ Endpoint:
 
 Le dashboard non espongono porte sull'host: si passa sempre da Traefik
 (`*.localhost` è risolto dai browser; da CLI usare `curl --resolve`).
+
+## TLS locale trusted
+
+`make local-tls` resta completamente containerizzato e genera un certificato
+self-signed per Traefik. E' sufficiente per smoke test e CLI, ma i browser
+mostrano l'avviso di identita' non riconosciuta.
+
+Per sopprimere l'avviso in modo pulito, usare una CA locale trusted con
+`mkcert` installato sull'host:
+
+```bash
+make trusted-local-tls
+docker compose restart traefik
+```
+
+Il target esegue `mkcert -install`, crea un certificato valido per
+`localhost`, `poc.localhost`, `*.localhost`, `127.0.0.1` e `::1`, e lo scrive
+negli stessi file montati da Traefik. Non viene eseguito dentro Docker perche'
+deve aggiornare il trust store della macchina locale.
 
 ## Terraform
 
@@ -63,7 +82,7 @@ make observability-up
 
 Il Collector scrapea:
 
-- metriche applicative interne da `nginx:8080/internal/metrics`;
+- metriche applicative interne da `nginx:8081/internal/metrics` (listener non instradato da Traefik);
 - metriche Traefik da `traefik:9100/metrics`;
 - metriche del Collector da `otel-collector:8888`.
 

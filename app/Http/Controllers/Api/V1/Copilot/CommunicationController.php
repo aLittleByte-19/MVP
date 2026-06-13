@@ -6,8 +6,10 @@ use App\Copilot\Ai\BedrockService;
 use App\Copilot\Audit\Services\AuditLogger;
 use App\Copilot\Communications\Enums\CommunicationStatus;
 use App\Copilot\Identity\PocUser;
+use App\Copilot\Observability\MetricsRecorder;
 use App\Copilot\Support\PocStateService;
 use App\Exceptions\Copilot\AiServiceException;
+use App\Exceptions\Copilot\InvalidAiOutputException;
 use App\Http\Requests\Copilot\GenerateCommunicationRequest;
 use App\Models\Copilot\Communication;
 use Illuminate\Http\JsonResponse;
@@ -24,6 +26,7 @@ class CommunicationController
         BedrockService $bedrock,
         AuditLogger $audit,
         PocStateService $state,
+        MetricsRecorder $metrics,
     ): JsonResponse {
         $validated = $request->validated();
         $actor = $this->actor($request);
@@ -34,6 +37,19 @@ class CommunicationController
                 $validated['tone'],
                 $validated['style'],
             );
+        } catch (InvalidAiOutputException $e) {
+            Log::warning('PoC communication generation returned invalid AI output', ['errors' => $e->errors()]);
+            $metrics->recordDomainCounter('ai_outputs_invalid_total', ['operation' => $e->operation()]);
+            $audit->record(
+                'poc-ai-output-invalid',
+                $actor,
+                'communication',
+                null,
+                ['operation' => $e->operation(), 'errors' => $e->errors()],
+                $request,
+            );
+
+            throw new AiServiceException('La risposta del servizio AI non è valida. Riprova la generazione.', 502, $e);
         } catch (\Throwable $e) {
             Log::warning('PoC communication generation failed', ['message' => $e->getMessage()]);
 

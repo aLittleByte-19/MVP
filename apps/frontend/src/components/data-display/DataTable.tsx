@@ -21,7 +21,7 @@ export function DataTable<TRow>({ columns, rows, getRowKey, getRowTone }: DataTa
         <thead>
           <tr>
             {columns.map((column) => (
-              <th key={column.key} scope="col">
+              <th key={column.key} scope="col" data-column={column.key}>
                 {column.header}
               </th>
             ))}
@@ -31,7 +31,9 @@ export function DataTable<TRow>({ columns, rows, getRowKey, getRowTone }: DataTa
           {rows.map((row) => (
             <tr key={getRowKey(row)} data-tone={getRowTone?.(row)}>
               {columns.map((column) => (
-                <td key={column.key}>{column.render(row)}</td>
+                <td key={column.key} data-column={column.key} data-label={column.header}>
+                  {column.render(row)}
+                </td>
               ))}
             </tr>
           ))}

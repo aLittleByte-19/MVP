@@ -105,8 +105,10 @@ resource "aws_sqs_queue" "documents_dlq" {
 }
 
 resource "aws_sqs_queue" "documents" {
-  name                       = "${var.name_prefix}-documents"
-  visibility_timeout_seconds = 330
+  name = "${var.name_prefix}-documents"
+  # Deve superare il TimeoutSeconds ASL piu' lungo (RunBedrockExtraction, 720s):
+  # con piu' worker un messaggio non deve tornare visibile mentre e' in lavorazione.
+  visibility_timeout_seconds = 900
   message_retention_seconds  = 345600
   sqs_managed_sse_enabled    = true
 

@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $document_type
  * @property string|null $description
  * @property int|null $confidence_score
+ * @property array<string, mixed>|null $ai_payload
  * @property SubDocument|null $subDocument
  */
 class ExtractedData extends Model
@@ -32,6 +33,7 @@ class ExtractedData extends Model
         'document_type',
         'description',
         'confidence_score',
+        'ai_payload',
     ];
 
     /**
@@ -42,6 +44,7 @@ class ExtractedData extends Model
         return [
             'document_date' => 'date',
             'confidence_score' => 'integer',
+            'ai_payload' => 'array',
         ];
     }
 

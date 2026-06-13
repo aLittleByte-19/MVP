@@ -113,6 +113,52 @@ paths:
                 $ref: "#/components/schemas/DeleteDocumentResponse"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/documents/{subDocument}/extracted-data:
+    put:
+      summary: Correct extracted data for a sub-document
+      operationId: updatePocSubDocumentExtractedData
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateExtractedDataRequest"
+      responses:
+        "200":
+          description: Extracted data updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateSubDocumentReviewResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/documents/{subDocument}/review:
+    post:
+      summary: Mark a sub-document as manually reviewed
+      operationId: reviewPocSubDocument
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      responses:
+        "200":
+          description: Sub-document manually validated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateSubDocumentReviewResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   /api/v1/documents/{subDocument}/preview:
     get:
       summary: Preview a processed sub-document PDF
@@ -266,6 +312,43 @@ components:
           type: string
         state:
           $ref: "#/components/schemas/PocState"
+    UpdateSubDocumentReviewResponse:
+      type: object
+      required: [message, document, state]
+      properties:
+        message:
+          type: string
+        document:
+          $ref: "#/components/schemas/SubDocument"
+        state:
+          $ref: "#/components/schemas/PocState"
+    UpdateExtractedDataRequest:
+      type: object
+      properties:
+        employeeFirstName:
+          type: [string, "null"]
+          maxLength: 200
+        employeeLastName:
+          type: [string, "null"]
+          maxLength: 200
+        companyName:
+          type: [string, "null"]
+          maxLength: 500
+        documentDate:
+          type: [string, "null"]
+          format: date
+        documentType:
+          type: [string, "null"]
+          maxLength: 200
+        description:
+          type: [string, "null"]
+          maxLength: 2000
+        confidenceScore:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 100
+        markAsValidated:
+          type: boolean
     Communication:
       type: object
       required: [id, prompt, tone, style, title, body, status]
@@ -288,28 +371,44 @@ components:
           type: [string, "null"]
     SubDocument:
       type: object
-      required: [id, previewLines]
+      required: [id, reviewStatus, reviewStatusLabel, previewLines]
       properties:
         id:
           type: string
         title:
           type: [string, "null"]
+        employeeFirstName:
+          type: [string, "null"]
+        employeeLastName:
+          type: [string, "null"]
         employee:
+          type: [string, "null"]
+        companyName:
           type: [string, "null"]
         company:
           type: [string, "null"]
         file:
           type: [string, "null"]
+        documentDate:
+          type: [string, "null"]
+          format: date
         date:
           type: [string, "null"]
         pages:
           type: integer
+        documentType:
+          type: [string, "null"]
         type:
           type: [string, "null"]
         description:
           type: [string, "null"]
         confidence:
           type: [integer, "null"]
+        reviewStatus:
+          type: string
+          enum: [needs_review, auto_validated, quarantined, manually_validated]
+        reviewStatusLabel:
+          type: string
         error:
           type: [string, "null"]
         previewUrl:

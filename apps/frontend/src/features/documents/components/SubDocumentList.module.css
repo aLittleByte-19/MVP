@@ -95,41 +95,6 @@
   overflow-wrap: anywhere;
 }
 
-.fieldGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--poc-space-3);
-  margin: 0;
-}
-
-.fieldGrid > div {
-  display: grid;
-  gap: var(--poc-space-1);
-  padding: var(--poc-space-3);
-  border: 1px solid var(--poc-border-soft);
-  border-radius: var(--poc-radius);
-  background: var(--poc-surface);
-}
-
-.fieldFull {
-  grid-column: 1 / -1;
-}
-
-.fieldGrid dt {
-  color: var(--poc-muted);
-  font-size: var(--poc-font-xs);
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.fieldGrid dd {
-  margin: 0;
-  color: var(--poc-text);
-  font-weight: 700;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-
 .errorNote {
   margin: 0;
   padding: 10px 12px;
@@ -140,9 +105,146 @@
   font-weight: 700;
 }
 
+.inspectorHeading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--poc-space-3);
+}
+
+.fieldLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--poc-space-2);
+  color: var(--poc-muted);
+  font-size: var(--poc-font-xs);
+  font-weight: 700;
+}
+
+.fieldLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editableDot,
+.lockedDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.editableDot {
+  background: var(--poc-success);
+  box-shadow: 0 0 0 3px var(--poc-success-soft);
+}
+
+.lockedDot {
+  background: var(--poc-border-strong);
+  box-shadow: 0 0 0 3px var(--poc-surface-soft);
+}
+
+.inspectorForm {
+  display: grid;
+  gap: var(--poc-space-3);
+}
+
+.inspectorGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--poc-space-3);
+}
+
+.field {
+  display: grid;
+  gap: var(--poc-space-1);
+  color: var(--poc-text);
+  font-weight: 700;
+}
+
+.field span {
+  color: var(--poc-muted);
+  font-size: var(--poc-font-xs);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--poc-border-soft);
+  border-radius: var(--poc-radius);
+  background: var(--poc-surface);
+  color: var(--poc-text);
+  -webkit-text-fill-color: var(--poc-text);
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.field textarea {
+  min-height: 94px;
+  resize: vertical;
+}
+
+.editableField input[readonly],
+.editableField textarea[readonly] {
+  border-color: #c9e5d3;
+  background: var(--poc-success-soft);
+}
+
+.confidenceLow .editableField input[readonly],
+.confidenceLow .editableField textarea[readonly] {
+  border-color: #f0bf98;
+  background: var(--poc-warning-soft);
+}
+
+.lockedField input,
+.lockedField textarea {
+  border-color: var(--poc-border-soft);
+  background: var(--poc-surface-soft);
+  color: var(--poc-muted);
+  -webkit-text-fill-color: var(--poc-muted);
+}
+
+.isEditing .editableField input,
+.isEditing .editableField textarea {
+  border-color: var(--poc-primary);
+  background: var(--poc-surface);
+  color: var(--poc-text);
+  -webkit-text-fill-color: var(--poc-text);
+}
+
+.isEditing .editableField input:focus,
+.isEditing .editableField textarea:focus {
+  border-color: var(--poc-primary);
+  outline: 3px solid rgba(111, 166, 207, 0.22);
+}
+
+.formFull {
+  grid-column: 1 / -1;
+}
+
+.reviewActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--poc-space-2);
+  justify-content: flex-end;
+}
+
 @media (max-width: 760px) {
   .detailGrid,
-  .fieldGrid {
+  .inspectorGrid {
     grid-template-columns: 1fr;
+  }
+
+  .inspectorHeading {
+    display: grid;
+  }
+
+  .reviewActions {
+    justify-content: stretch;
   }
 }

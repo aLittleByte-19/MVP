@@ -32,7 +32,7 @@ make observability-up
 
 ## Metrics and Traces Flow
 
-1. Laravel exposes `/internal/metrics` through Nginx only for internal scrapers.
+1. Laravel exposes `/internal/metrics` through a dedicated Nginx listener on `:8081`, not through the Traefik-facing listener on `:8080`.
 2. The `app` and `queue` containers share the `observability-metrics` volume, so domain metrics recorded by the worker (Textract, SQS, workflow completion) are exposed by the same `/internal/metrics` endpoint.
 3. OTel Collector scrapes Nginx, Traefik and itself.
 4. OTel Collector exports metrics on `:9464`.

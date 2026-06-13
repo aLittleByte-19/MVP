@@ -2,7 +2,10 @@
 
 namespace App\Console\Commands;
 
+use App\Copilot\Observability\MetricsRecorder;
 use App\Copilot\Workflow\Services\DocumentWorkflowTaskHandler;
+use App\Copilot\Workflow\Services\WorkflowTaskHeartbeat;
+use Aws\Exception\AwsException;
 use Aws\Sfn\SfnClient;
 use Aws\Sqs\SqsClient;
 use Illuminate\Console\Command;
@@ -13,7 +16,7 @@ class ConsumeWorkflowTasks extends Command
 
     protected $description = 'Consume Step Functions callback-token tasks from SQS and report completion back to Step Functions.';
 
-    public function handle(SqsClient $sqs, SfnClient $stepFunctions, DocumentWorkflowTaskHandler $handler): int
+    public function handle(SqsClient $sqs, SfnClient $stepFunctions, DocumentWorkflowTaskHandler $handler, WorkflowTaskHeartbeat $heartbeat, MetricsRecorder $metrics): int
     {
         $queueUrl = $this->queueUrl();
         $maxMessages = max(0, (int) $this->option('max'));
@@ -42,29 +45,35 @@ class ConsumeWorkflowTasks extends Command
                 $body = $this->decodeBody((string) ($message['Body'] ?? ''));
                 $taskToken = (string) ($body['taskToken'] ?? $body['task_token'] ?? '');
 
+                if ($taskToken !== '') {
+                    $heartbeat->activate($taskToken, (string) ($body['taskType'] ?? $body['task_type'] ?? 'unknown'));
+                }
+
                 try {
                     $taskResult = $handler->handle($body);
 
                     if ($taskResult['callback_required']) {
-                        $stepFunctions->sendTaskSuccess([
+                        $this->sendCallback($metrics, fn () => $stepFunctions->sendTaskSuccess([
                             'taskToken' => $taskToken,
                             'output' => json_encode($taskResult['output'], JSON_THROW_ON_ERROR),
-                        ]);
+                        ]), 'sendTaskSuccess');
                     }
 
                     $this->deleteMessage($sqs, $queueUrl, $receiptHandle);
                     $this->info('Workflow task handled: '.($body['taskType'] ?? $body['task_type'] ?? 'unknown'));
                 } catch (\Throwable $e) {
                     if ($taskToken !== '') {
-                        $stepFunctions->sendTaskFailure([
+                        $this->sendCallback($metrics, fn () => $stepFunctions->sendTaskFailure([
                             'taskToken' => $taskToken,
                             'error' => 'DocumentWorkflowTaskFailed',
                             'cause' => substr($e->getMessage(), 0, 32000),
-                        ]);
+                        ]), 'sendTaskFailure');
                         $this->deleteMessage($sqs, $queueUrl, $receiptHandle);
                     }
 
                     $this->error($e->getMessage());
+                } finally {
+                    $heartbeat->deactivate();
                 }
 
                 if ($maxMessages > 0 && $processed >= $maxMessages) {
@@ -78,6 +87,24 @@ class ConsumeWorkflowTasks extends Command
         } while (true);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Un callback rifiutato (token gia' consumato, esecuzione scaduta per
+     * heartbeat/timeout, emulatore non allineato ad AWS) non deve abbattere
+     * il loop di consumo: l'esito di business resta tracciato a database.
+     */
+    private function sendCallback(MetricsRecorder $metrics, callable $callback, string $operation): void
+    {
+        try {
+            $callback();
+        } catch (AwsException $e) {
+            $metrics->recordDomainCounter('stepfunctions_callbacks_failed_total', [
+                'operation' => $operation,
+                'error' => $e->getAwsErrorCode() ?: 'aws_error',
+            ]);
+            $this->warn("{$operation} rifiutato da Step Functions: ".($e->getAwsErrorMessage() ?: $e->getMessage()));
+        }
     }
 
     /**

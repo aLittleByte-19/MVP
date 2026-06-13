@@ -2,11 +2,13 @@
 
 namespace App\Providers;
 
+use App\Copilot\Ai\AiOutputValidator;
 use App\Copilot\Ai\BedrockService;
 use App\Copilot\Audit\Services\AuditLogger;
 use App\Copilot\Documents\Services\DocumentProcessingService;
 use App\Copilot\Observability\MetricsRecorder;
 use App\Copilot\Ocr\Services\TextractService;
+use App\Copilot\Workflow\Services\WorkflowTaskHeartbeat;
 use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\Sfn\SfnClient;
 use Aws\Sqs\SqsClient;
@@ -44,6 +46,7 @@ class AppServiceProvider extends ServiceProvider
             return new BedrockService(
                 $app->make(BedrockRuntimeClient::class),
                 config('services.bedrock.model_id'),
+                $app->make(AiOutputValidator::class),
             );
         });
 
@@ -92,10 +95,20 @@ class AppServiceProvider extends ServiceProvider
             return new TextractClient($config);
         });
 
+        // Singleton: il consumer la attiva per messaggio e i service di lunga
+        // durata (Textract, split Bedrock) devono condividere la stessa istanza.
+        $this->app->singleton(WorkflowTaskHeartbeat::class, function ($app) {
+            return new WorkflowTaskHeartbeat(
+                $app->make(SfnClient::class),
+                $app->make(MetricsRecorder::class),
+            );
+        });
+
         $this->app->singleton(TextractService::class, function ($app) {
             return new TextractService(
                 $app->make(TextractClient::class),
                 $app->make(MetricsRecorder::class),
+                $app->make(WorkflowTaskHeartbeat::class),
             );
         });
 
@@ -103,6 +116,8 @@ class AppServiceProvider extends ServiceProvider
             return new DocumentProcessingService(
                 $app->make(BedrockService::class),
                 $app->make(AuditLogger::class),
+                $app->make(WorkflowTaskHeartbeat::class),
+                $app->make(MetricsRecorder::class),
             );
         });
     }

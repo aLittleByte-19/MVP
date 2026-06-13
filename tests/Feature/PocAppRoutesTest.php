@@ -1,6 +1,7 @@
 <?php
 
 use App\Copilot\Ai\BedrockService;
+use App\Copilot\Documents\Enums\ReviewStatus;
 use App\Copilot\Workflow\Services\DocumentWorkflowService;
 use App\Copilot\Workflow\Services\DocumentWorkflowTaskHandler;
 use App\Models\Copilot\AuditEvent;
@@ -177,6 +178,52 @@ test('document upload rejects executable files before workflow start', function 
         ->assertUnprocessable()
         ->assertJsonPath('error.code', 'validation_failed');
 
+    expect(OriginalDocument::query()->count())->toBe(0)
+        ->and(AuditEvent::query()->where('event_type', 'poc-document-upload-rejected')->count())->toBe(1);
+});
+
+test('document upload rejects files without real pdf magic bytes', function () {
+    Storage::fake('s3');
+    pocMockWorkflowNotStarted();
+
+    $this->postJson('/api/v1/documents/ocr', [
+        'document' => UploadedFile::fake()->createWithContent('fake.pdf', 'not a pdf'),
+    ])
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+
+    expect(OriginalDocument::query()->count())->toBe(0);
+});
+
+test('document upload rejects encrypted pdf files', function () {
+    Storage::fake('s3');
+    pocMockWorkflowNotStarted();
+
+    $encryptedPdf = "%PDF-1.4\n1 0 obj\n<< /Encrypt << /Filter /Standard >> >>\nendobj\n%%EOF";
+
+    $this->postJson('/api/v1/documents/ocr', [
+        'document' => UploadedFile::fake()->createWithContent('protected.pdf', $encryptedPdf),
+    ])
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+
+    expect(OriginalDocument::query()->count())->toBe(0);
+});
+
+test('document upload rejects corrupted pdf files with valid magic bytes', function () {
+    Storage::fake('s3');
+    pocMockWorkflowNotStarted();
+
+    // Firma valida ma struttura inesistente: respinto da qpdf --check quando
+    // disponibile, altrimenti dal parse FPDI.
+    $corruptedPdf = '%PDF-1.7 '.str_repeat('garbage senza xref ne trailer ', 20);
+
+    $this->postJson('/api/v1/documents/ocr', [
+        'document' => UploadedFile::fake()->createWithContent('corrotto.pdf', $corruptedPdf),
+    ])
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+
     expect(OriginalDocument::query()->count())->toBe(0);
 });
 
@@ -309,4 +356,69 @@ test('assistant generated metric counts every stored communication', function ()
         ->assertOk()
         ->assertJsonPath('assistant.metrics.0.value', 2)
         ->assertJsonPath('assistant.metrics.1.value', 1);
+});
+
+test('operator can correct extracted data and mark a sub document as manually validated', function () {
+    $subDocument = SubDocument::factory()->create(['review_status' => ReviewStatus::NeedsReview]);
+    ExtractedData::factory()->create([
+        'sub_document_id' => $subDocument->id,
+        'employee_first_name' => 'Maro',
+        'employee_last_name' => 'Rossi',
+        'confidence_score' => 61,
+        'ai_payload' => ['employee_first_name' => 'Maro', 'confidence_score' => 61],
+    ]);
+
+    $this->putJson("/api/v1/documents/{$subDocument->id}/extracted-data", [
+        'employeeFirstName' => 'Mario',
+        'companyName' => 'Acme corretta',
+        'documentDate' => '2026-01-31',
+        'markAsValidated' => true,
+    ])
+        ->assertOk()
+        ->assertJsonPath('document.employee', 'Mario Rossi')
+        ->assertJsonPath('document.reviewStatus', 'manually_validated');
+
+    $subDocument->refresh();
+    $data = $subDocument->extractedData()->sole();
+
+    expect($subDocument->review_status)->toBe(ReviewStatus::ManuallyValidated)
+        ->and($data->employee_first_name)->toBe('Mario')
+        ->and($data->company_name)->toBe('Acme corretta')
+        ->and($data->ai_payload['employee_first_name'])->toBe('Maro')
+        ->and(AuditEvent::query()->where('event_type', 'poc-sub-document-extracted-data-corrected')->count())->toBe(1);
+});
+
+test('operator can mark existing extracted data as reviewed without changing fields', function () {
+    $subDocument = SubDocument::factory()->create(['review_status' => ReviewStatus::NeedsReview]);
+    ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
+
+    $this->postJson("/api/v1/documents/{$subDocument->id}/review")
+        ->assertOk()
+        ->assertJsonPath('document.reviewStatus', 'manually_validated');
+
+    expect($subDocument->fresh()->review_status)->toBe(ReviewStatus::ManuallyValidated);
+});
+
+test('manual review requires extracted data to exist first', function () {
+    $subDocument = SubDocument::factory()->create(['review_status' => ReviewStatus::Quarantined]);
+
+    $this->postJson("/api/v1/documents/{$subDocument->id}/review")
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+});
+
+test('manual correction endpoint rejects cross tenant access', function () {
+    config(['poc.identity.mode' => 'trusted_headers']);
+    $subDocument = SubDocument::factory()->create();
+
+    $this->putJson("/api/v1/documents/{$subDocument->id}/extracted-data", [
+        'employeeFirstName' => 'Mario',
+    ], [
+        'X-Poc-User-Id' => 'operator-b',
+        'X-Poc-User-Email' => 'operator-b@example.test',
+        'X-Poc-Tenant-Id' => 'another-tenant',
+        'X-Poc-Roles' => 'poc-operator',
+    ])
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
 });

@@ -81,3 +81,55 @@ test('workflow task handler processes textract task idempotently when textract i
         ->and(DocumentWorkflowTask::query()->count())->toBe(1)
         ->and(DocumentWorkflowTask::query()->first()->status)->toBe('skipped');
 });
+
+test('workflow task handler does not re-run a task already running on another worker', function () {
+    $document = OriginalDocument::factory()->create([
+        'processing_status' => ProcessingStatus::Processing,
+    ]);
+
+    DocumentWorkflowTask::query()->create([
+        'original_document_id' => $document->id,
+        'task_type' => 'textract.ocr',
+        'task_token_hash' => hash('sha256', 'in-flight-token'),
+        'status' => 'running',
+        'started_at' => now()->subSeconds(30),
+    ]);
+
+    $handler = app(DocumentWorkflowTaskHandler::class);
+    $result = $handler->handle([
+        'taskToken' => 'in-flight-token',
+        'taskType' => 'textract.ocr',
+        'documentId' => $document->id,
+    ]);
+
+    expect($result['callback_required'])->toBeFalse()
+        ->and($result['output']['task_result']['duplicate_in_flight'])->toBeTrue()
+        ->and(DocumentWorkflowTask::query()->sole()->status)->toBe('running');
+});
+
+test('workflow task handler re-claims a stale running task left by a dead worker', function () {
+    config(['services.textract.enabled' => false, 'poc.workflow.running_claim_ttl_seconds' => 900]);
+
+    $document = OriginalDocument::factory()->create([
+        'processing_status' => ProcessingStatus::Processing,
+    ]);
+
+    DocumentWorkflowTask::query()->create([
+        'original_document_id' => $document->id,
+        'task_type' => 'textract.ocr',
+        'task_token_hash' => hash('sha256', 'stale-token'),
+        'status' => 'running',
+        'started_at' => now()->subSeconds(2000),
+    ]);
+
+    $handler = app(DocumentWorkflowTaskHandler::class);
+    $result = $handler->handle([
+        'taskToken' => 'stale-token',
+        'taskType' => 'textract.ocr',
+        'documentId' => $document->id,
+    ]);
+
+    // Textract disabilitato: il task ri-conquistato termina come skipped.
+    expect($result['callback_required'])->toBeTrue()
+        ->and(DocumentWorkflowTask::query()->sole()->status)->toBe('skipped');
+});

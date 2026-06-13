@@ -1,4 +1,4 @@
-.PHONY: help test pint node-install frontend-build frontend-test frontend-typecheck frontend-audit frontend-a11y openapi-generate openapi-validate observability-config observability-up local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke reset-all
+.PHONY: help test pint node-install frontend-build frontend-test frontend-typecheck frontend-audit frontend-a11y openapi-generate openapi-validate observability-config observability-up local-tls trusted-local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke reset-all workers backup-local restore-local
 
 # Colori per l'output
 BLUE  := \033[34m
@@ -33,10 +33,14 @@ help:
 	@echo "  $(BLUE)make observability-config$(RESET) Valida la configurazione OTel Collector"
 	@echo "  $(BLUE)make observability-up$(RESET) Avvia OTel Collector e Prometheus"
 	@echo "  $(BLUE)make local-tls$(RESET) Genera il certificato TLS locale per Traefik"
+	@echo "  $(BLUE)make trusted-local-tls$(RESET) Genera un certificato locale trusted via mkcert"
 	@echo "  $(BLUE)make fresh$(RESET)     Resetta database, Redis (sessioni/cache/rate limit) e dati generati"
 	@echo "  $(BLUE)make logs$(RESET)      Segue i log dei container app e queue"
 	@echo "  $(BLUE)make sh$(RESET)        Apre una shell nel container applicativo"
 	@echo "  $(BLUE)make restart$(RESET)   Riavvia tutti i servizi Docker"
+	@echo "  $(BLUE)make workers$(RESET)   Scala i worker della pipeline (WORKERS=n, default 2)"
+	@echo "  $(BLUE)make backup-local$(RESET) Crea un dump PostgreSQL locale in backups/local"
+	@echo "  $(BLUE)make restore-local BACKUP=...$(RESET) Ripristina un dump PostgreSQL locale"
 	@echo "  $(BLUE)make setup$(RESET)     Build, LocalStack, Terraform, migrazioni e avvio processi"
 	@echo "  $(BLUE)make release$(RESET)   Esegue il job di migrazione applicativa"
 	@echo "  $(BLUE)make infra-up$(RESET)      Avvia LocalStack, PostgreSQL e Redis"
@@ -101,6 +105,7 @@ frontend-audit: node-install
 	$(NODE) npm audit --omit=dev --audit-level=high
 
 frontend-a11y: node-install
+	$(FRONTEND_AUDIT) node scripts/a11y/csp-smoke.mjs https://traefik:8443
 	$(FRONTEND_AUDIT) node scripts/a11y/axe-playwright.mjs https://traefik:8443
 	$(FRONTEND_AUDIT) node scripts/a11y/pa11y-runner.mjs https://traefik:8443
 
@@ -124,6 +129,9 @@ pint:
 local-tls:
 	$(TLS_TOOL) scripts/tls/generate-local-cert.sh docker/traefik/certs/poc-local.test.crt docker/traefik/certs/poc-local.test.key
 
+trusted-local-tls:
+	scripts/tls/generate-trusted-local-cert.sh docker/traefik/certs/poc-local.test.crt docker/traefik/certs/poc-local.test.key
+
 fresh:
 	docker compose --profile release run --rm migrate php artisan migrate:fresh --seed --force
 	docker compose run --rm app php artisan poc:reset-data --force
@@ -139,8 +147,27 @@ sh:
 restart:
 	docker compose restart
 
+# Scala i worker della pipeline documentale (default 2): il servizio queue non
+# ha container_name fisso e l'idempotenza dei task e' garantita da
+# task_token_hash + claim atomico, quindi piu' repliche sono sicure.
+WORKERS ?= 2
+workers:
+	docker compose up -d --no-recreate --scale queue=$(WORKERS) queue
+
+# --clean --if-exists: il dump droppa e ricrea gli oggetti, cosi' il restore
+# funziona anche su un database gia' migrato senza errori di oggetti duplicati.
+backup-local:
+	@mkdir -p backups/local
+	docker compose exec -T postgres sh -lc 'pg_dump --clean --if-exists -U "$$POSTGRES_USER" "$$POSTGRES_DB"' > backups/local/poc-$$(date +%Y%m%d-%H%M%S).sql
+	@echo "$(BLUE)Backup creato in backups/local.$(RESET)"
+
+restore-local:
+	@test -n "$(BACKUP)" || { echo "BACKUP=path/al/dump.sql obbligatorio"; exit 1; }
+	@test -f "$(BACKUP)" || { echo "Dump non trovato: $(BACKUP)"; exit 1; }
+	docker compose exec -T postgres sh -lc 'psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" "$$POSTGRES_DB"' < "$(BACKUP)"
+
 setup:
-	$(MAKE) local-tls
+	@if [ ! -f docker/traefik/certs/poc-local.test.crt ] || [ ! -f docker/traefik/certs/poc-local.test.key ]; then $(MAKE) local-tls; else echo "$(BLUE)Certificato TLS locale gia' presente.$(RESET)"; fi
 	docker compose build
 	docker compose up -d postgres redis localstack
 	$(MAKE) infra-apply

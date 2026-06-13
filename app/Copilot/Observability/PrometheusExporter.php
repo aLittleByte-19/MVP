@@ -4,6 +4,7 @@ namespace App\Copilot\Observability;
 
 use App\Copilot\Communications\Enums\CommunicationStatus;
 use App\Copilot\Documents\Enums\ProcessingStatus;
+use App\Copilot\Documents\Enums\ReviewStatus;
 use App\Models\Copilot\Communication;
 use App\Models\Copilot\OriginalDocument;
 use App\Models\Copilot\SubDocument;
@@ -120,6 +121,15 @@ class PrometheusExporter
         $lines[] = '# TYPE poc_sub_documents_total gauge';
         $lines[] = $this->line('poc_sub_documents_total', ['state' => 'total'], SubDocument::query()->count());
         $lines[] = $this->line('poc_sub_documents_total', ['state' => 'failed'], SubDocument::query()->whereNotNull('error_message')->count());
+
+        // Metrica dedicata: i review status sono una partizione completa dei
+        // sotto-documenti e non vanno mescolati alle label total/failed sopra.
+        $lines[] = '# HELP poc_sub_documents_review_total Sub documents by review status.';
+        $lines[] = '# TYPE poc_sub_documents_review_total gauge';
+
+        foreach (ReviewStatus::cases() as $status) {
+            $lines[] = $this->line('poc_sub_documents_review_total', ['review_status' => $status->value], SubDocument::query()->where('review_status', $status)->count());
+        }
 
         $lines[] = '# HELP poc_document_stuck_processing_total Documents processing beyond the configured timeout.';
         $lines[] = '# TYPE poc_document_stuck_processing_total gauge';

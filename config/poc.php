@@ -33,6 +33,8 @@ return [
     'document_limits' => [
         'max_upload_mb' => (int) env('POC_MAX_UPLOAD_MB', env('DOCUMENT_MAX_UPLOAD_MB', 20)),
         'max_pdf_pages' => (int) env('POC_MAX_PDF_PAGES', 50),
+        // Path esplicito del binario qpdf; vuoto = autodetect nei path standard.
+        'qpdf_binary' => env('POC_QPDF_BINARY', ''),
         'processing_timeout_seconds' => (int) env('POC_PROCESSING_TIMEOUT_SECONDS', 600),
         'textract_timeout_seconds' => (int) env('TEXTRACT_TIMEOUT_SECONDS', 300),
     ],
@@ -41,5 +43,10 @@ return [
         'driver' => env('WORKFLOW_DRIVER', 'localstack'),
         'poll_wait_seconds' => (int) env('POC_WORKFLOW_SQS_WAIT_SECONDS', 10),
         'max_messages' => (int) env('POC_WORKFLOW_SQS_MAX_MESSAGES', 5),
+        // Deve restare sotto il piu' basso HeartbeatSeconds dell'ASL (90s).
+        'heartbeat_interval_seconds' => (int) env('POC_WORKFLOW_HEARTBEAT_SECONDS', 30),
+        // Oltre questa eta' un task running viene considerato orfano e
+        // riconquistabile: allineato al visibility timeout SQS (900s).
+        'running_claim_ttl_seconds' => (int) env('POC_WORKFLOW_CLAIM_TTL_SECONDS', 900),
     ],
 ];
