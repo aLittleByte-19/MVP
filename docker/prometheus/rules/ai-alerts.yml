@@ -1,0 +1,24 @@
+groups:
+  - name: poc-ai-alerts
+    rules:
+      - alert: TextractFailureRateHigh
+        expr: increase(poc_textract_jobs_failed_total[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service_namespace: alittlebyte
+        annotations:
+          summary: "Textract failures observed"
+          description: "Textract OCR tasks are failing."
+          runbook: "https://github.com/aLittleByte-19/PoC/blob/main/docs/runbooks/document-pipeline.md"
+
+      - alert: BedrockFailureRateHigh
+        expr: increase(poc_sqs_messages_failed_total{task_type="bedrock.extract"}[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service_namespace: alittlebyte
+        annotations:
+          summary: "Bedrock extraction failures observed"
+          description: "Bedrock extraction task failures were reported by the worker."
+          runbook: "https://github.com/aLittleByte-19/PoC/blob/main/docs/runbooks/document-pipeline.md"

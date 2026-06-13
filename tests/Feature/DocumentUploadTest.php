@@ -1,12 +1,9 @@
 <?php
 
-use App\Poc\Enums\ProcessingStatus;
-use App\Poc\Models\OriginalDocument;
-use App\Poc\Models\SubDocument;
-use App\Poc\Services\BedrockService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-uses(RefreshDatabase::class);
+use App\Copilot\Ai\BedrockService;
+use App\Copilot\Documents\Enums\ProcessingStatus;
+use App\Models\Copilot\OriginalDocument;
+use App\Models\Copilot\SubDocument;
 
 test('uploading a pdf creates an original document with pending status', function () {
     $originalDocument = OriginalDocument::create([

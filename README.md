@@ -1,114 +1,211 @@
-# NEXUM / aLittleByte - Document Intelligence PoC
+# PoC - aLittleByte
 
-<p align="center">
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/pint.yml"><img alt="Pint" src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/pint.yml?branch=main&label=Pint&style=flat-square"></a>
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/pest.yml"><img alt="Pest" src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/pest.yml?branch=main&label=Pest&style=flat-square"></a>
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/accessibility.yml"><img alt="Accessibility" src="https://img.shields.io/github/actions/workflow/status/aLittleByte-19/PoC/accessibility.yml?branch=main&label=A11y&style=flat-square"></a>
-</p>
+Proof of Concept per workflow HR e documentali assistiti da AI, con generazione di comunicazioni, pipeline asincrona di elaborazione PDF, integrazione AWS-like locale e osservabilità end-to-end.
 
-Proof of Concept per validare l'uso di AI generativa e AI documentale nei flussi NEXUM.
+<table align="center">
+  <tr>
+    <td align="center" width="25%">
+      <strong>Application</strong><br><br>
+      <img src="https://img.shields.io/badge/Laravel-API-red?logo=laravel&logoColor=white" alt="Laravel">
+      <br>
+      <img src="https://img.shields.io/badge/PHP-8.4-777BB4?logo=php&logoColor=white" alt="PHP">
+      <br>
+      <img src="https://img.shields.io/badge/React-SPA-61DAFB?logo=react&logoColor=black" alt="React">
+      <br>
+      <img src="https://img.shields.io/badge/TypeScript-frontend-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+    </td>
+    <td align="center" width="25%">
+      <strong>Data & Storage</strong><br><br>
+      <img src="https://img.shields.io/badge/PostgreSQL-persistence-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL">
+      <br>
+      <img src="https://img.shields.io/badge/Redis-cache%20%26%20rate%20limit-DC382D?logo=redis&logoColor=white" alt="Redis">
+      <br>
+      <img src="https://img.shields.io/badge/S3--compatible-document%20storage-569A31?logo=amazons3&logoColor=white" alt="S3-compatible storage">
+    </td>
+    <td align="center" width="25%">
+      <strong>Workflow & AI</strong><br><br>
+      <img src="https://img.shields.io/badge/LocalStack-AWS%20emulation-FF9900?logo=amazonaws&logoColor=white" alt="LocalStack">
+      <br>
+      <img src="https://img.shields.io/badge/Step%20Functions-orchestration-FF9900?logo=amazonaws&logoColor=white" alt="Step Functions">
+      <br>
+      <img src="https://img.shields.io/badge/SQS-task%20queue-FF9900?logo=amazonaws&logoColor=white" alt="SQS">
+      <br>
+      <img src="https://img.shields.io/badge/Bedrock-LLM%20provider-FF9900?logo=amazonaws&logoColor=white" alt="Bedrock">
+    </td>
+    <td align="center" width="25%">
+      <strong>Observability</strong><br><br>
+      <img src="https://img.shields.io/badge/OpenTelemetry-collector-000000?logo=opentelemetry&logoColor=white" alt="OpenTelemetry">
+      <br>
+      <img src="https://img.shields.io/badge/Prometheus-metrics-E6522C?logo=prometheus&logoColor=white" alt="Prometheus">
+      <br>
+      <img src="https://img.shields.io/badge/Grafana-dashboards-F46800?logo=grafana&logoColor=white" alt="Grafana">
+      <br>
+      <img src="https://img.shields.io/badge/Loki%20%2B%20Tempo-logs%20%26%20traces-F46800?logo=grafana&logoColor=white" alt="Loki and Tempo">
+    </td>
+  </tr>
+</table>
 
-La PoC copre due casi d'uso:
+<table align="center">
+  <tr>
+    <td align="center">
+      <strong>CI / Quality Gate</strong><br><br>
+      <img src="https://img.shields.io/badge/Pest-backend%20tests-6E9F18" alt="Pest">
+      <img src="https://img.shields.io/badge/Vitest-frontend%20tests-6E9F18?logo=vitest&logoColor=white" alt="Vitest">
+      <img src="https://img.shields.io/badge/Trivy-image%20scan-1904DA?logo=trivy&logoColor=white" alt="Trivy">
+      <img src="https://img.shields.io/badge/axe%20%2B%20pa11y-accessibility-654FF0" alt="Accessibility">
+      <img src="https://img.shields.io/badge/Terraform-validated-844FBA?logo=terraform&logoColor=white" alt="Terraform"> <br><br>
+      <img src="https://github.com/alittlebyte-19/PoC/actions/workflows/ci.yml/badge.svg" alt="CI">
+    </td>
+  </tr>
+</table>
 
-* generazione assistita di comunicazioni HR;
-* analisi di PDF multi-destinatario, divisione in sotto-documenti ed estrazione di dati strutturati.
+## Contesto
 
-La demo funziona in locale anche senza servizi AI reali. Quando serve una prova più realistica, può essere collegata ad Amazon Bedrock.
+Questa Proof of Concept nasce nel contesto del progetto proposto da **Eggon**, orientato all’evoluzione di processi HR e documentali tramite funzionalità intelligenti, automazione operativa e integrazione con strumenti digitali già presenti nell’ecosistema aziendale.
 
-## Scope della PoC
+Il lavoro si concentra su due aree applicative principali: un assistente generativo per comunicazioni HR e un Co-Pilot documentale per supportare l’elaborazione di PDF multi-destinatario. La PoC esplora come un’interfaccia web, un backend API, una pipeline asincrona, uno storage documentale e servizi AI possano cooperare in un flusso tecnico end-to-end, riproducibile in locale e osservabile durante l’esecuzione.
 
-La PoC serve a verificare:
+Il valore principale del progetto è architetturale e dimostrativo: ogni fase del processo viene resa esplicita, tracciabile e verificabile, dalla richiesta utente alla persistenza, dall’avvio del workflow alla lavorazione asincrona, fino alla raccolta di metriche, log, trace e risultati applicativi.
 
-* se un PDF con più destinatari può essere diviso automaticamente in documenti separati;
-* se i dati principali dei documenti possono essere precompilati per ridurre il data-entry manuale;
-* se un assistente AI può generare bozze di comunicazioni HR controllabili dall'utente;
-* se l'esperienza locale è sufficientemente fluida per una demo end-to-end.
+## Cosa dimostra la PoC
 
-Il flusso è pensato per restare utilizzabile anche quando l'estrazione dei campi non riesce: il sotto-documento resta visibile e può essere verificato manualmente.
+La PoC dimostra un modello applicativo composto da più livelli cooperanti:
 
-## Stack
+* una **SPA React/Vite/TypeScript** per l’interazione operatore;
+* un backend **Laravel/PHP** per API, validazione, autorizzazione, orchestrazione applicativa e persistenza;
+* **PostgreSQL** per dati strutturati, stati applicativi, audit e risultati di elaborazione;
+* **Redis** per cache, sessioni e rate limiting;
+* storage documentale **S3-compatible** per PDF originali e sotto-documenti generati;
+* **LocalStack** per emulare localmente servizi AWS come SQS, Step Functions, SSM, Secrets Manager e S3;
+* integrazione AI tramite astrazione verso **Bedrock** e predisposizione OCR tramite **Textract**;
+* stack di osservabilità con **OpenTelemetry, Prometheus, Grafana, Tempo, Loki, Alloy e Alertmanager**;
+* CI con test backend/frontend, scansione immagini, validazione infrastrutturale e audit accessibilità.
 
-* **Laravel 12** per backend, validazione, persistenza e code.
-* **Blade + CSS/JS custom** per l'interfaccia della PoC.
-* **Docker, PostgreSQL, Redis e MinIO** per l'ambiente locale.
-* **Amazon Bedrock** opzionale per generazione contenuti, split documentale ed estrazione dati.
+La separazione tra richiesta HTTP e workflow asincrono è uno dei punti centrali: l’utente avvia l’elaborazione, il backend registra lo stato e il worker si occupa dei task più lunghi tramite una pipeline orchestrata.
 
-## Installazione Rapida
+## Architettura generale
 
-1. Crea il file ambiente:
+L’architettura locale è organizzata intorno a un entrypoint edge, un layer applicativo, servizi dati, workflow asincroni e osservabilità.
 
-   ```bash
-   cp .env.example .env
-   ```
+Traefik gestisce l’ingresso verso i servizi esposti e instrada il traffico verso Nginx. Nginx serve la SPA frontend e inoltra le richieste API al runtime Laravel/PHP-FPM. Laravel gestisce le API, valida le richieste, applica le regole applicative, registra eventi di audit e avvia i workflow documentali. PostgreSQL conserva lo stato persistente, Redis supporta componenti runtime a bassa latenza, mentre LocalStack fornisce servizi AWS-like in ambiente locale.
 
-2. Avvia lo stack:
+I worker Laravel consumano task asincroni da SQS e comunicano con Step Functions tramite callback task token. Questo permette di rappresentare una pipeline documentale composta da stati espliciti, retry, gestione errori, idempotenza e aggiornamento progressivo dello stato.
 
-   ```bash
-   docker compose up -d --build
-   ```
+## Flusso generativo: AI Assistant
 
-3. Apri i servizi:
+Il flusso AI Assistant supporta la generazione di comunicazioni HR a partire da un prompt, con tono e stile selezionati dall’operatore.
 
-   * Applicazione: `http://localhost:8080`
-   * Admin PoC: `http://localhost:8080/admin`
-   * MinIO Console: `http://localhost:9001`
+La richiesta parte dalla SPA e arriva alle API Laravel, dove viene validata e normalizzata. Il backend invoca il servizio AI configurato, interpreta la risposta, verifica la struttura dei dati ottenuti e registra il risultato come comunicazione applicativa. La generazione viene tracciata attraverso audit event e metriche, così da rendere osservabile l’intero processo.
 
-L'entrypoint Docker installa le dipendenze, prepara Laravel e applica le migrazioni al primo avvio.
+Il flusso evidenzia il ruolo del backend come livello di controllo tra interfaccia e modello AI: il provider genera il contenuto, mentre l’applicazione mantiene responsabilità su validazione, persistenza, stato e tracciabilità.
 
-## Configurazione
+## Flusso documentale: Co-Pilot CdL
 
-La configurazione predefinita è adatta alla demo locale: Bedrock è disabilitato, lo split è simulato e l'estrazione OCR usa dati dimostrativi.
+Il flusso Co-Pilot documentale gestisce PDF multi-destinatario caricati dall’operatore. Dopo l’upload, il backend valida il file, registra il documento originale, salva il contenuto nello storage S3-compatible e avvia una state machine in LocalStack Step Functions.
 
-```env
-BEDROCK_ENABLED=false
-BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
-DOCUMENT_CLASSIFIER_DRIVER=fake
-DOCUMENT_OCR_DRIVER=local
-POC_CONFIDENCE_THRESHOLD=80
+La state machine pubblica task su SQS usando il callback pattern con task token. I worker Laravel consumano i messaggi, eseguono le fasi previste e notificano a Step Functions il completamento o il fallimento del task. Le fasi principali comprendono OCR, split logico del documento, estrazione dei dati, generazione dei sotto-documenti, aggiornamento dello stato e registrazione degli eventi applicativi.
+
+Il risultato è una pipeline documentale composta da passaggi isolati, monitorabili e riavviabili, con persistenza dello stato e visibilità sui risultati prodotti.
+
+## Monitoring e osservabilità
+
+La PoC integra un layer di osservabilità locale per seguire il comportamento dell’applicazione e della pipeline documentale.
+
+Le metriche applicative e infrastrutturali vengono raccolte tramite OpenTelemetry Collector e Prometheus. Le trace vengono inviate a Tempo, i log sono centralizzati su Loki tramite Alloy, mentre Grafana fornisce dashboard per API, workflow documentale, qualità AI/OCR, code, DLQ, log ed errori. Alertmanager completa il flusso operativo con regole collegate a runbook dedicati.
+
+Questa impostazione rende visibili latency, traffico, errori, saturazione, stato dei worker, andamento della pipeline e qualità delle elaborazioni AI.
+
+## CI e quality gate
+
+La pipeline CI verifica la qualità della repository attraverso controlli backend, frontend, infrastrutturali e di sicurezza.
+
+Il backend viene controllato con formattazione, analisi statica e test automatici. Il frontend viene verificato tramite typecheck, test, build e generazione del client API. Lo stack locale viene validato attraverso Terraform, configurazioni di osservabilità, build delle immagini, scansione Trivy, smoke test e audit di accessibilità con axe e pa11y.
+
+La CI agisce come quality gate del progetto: ogni modifica significativa deve mantenere coerenti codice applicativo, contratto API, infrastruttura locale e comportamento osservabile dello stack.
+
+## Setup locale
+
+### Requisiti
+
+* Docker e Docker Compose
+* Make
+* Git
+* ambiente Unix-like consigliato per script e comandi di supporto
+
+### Avvio rapido
+
+```bash
+git clone https://github.com/alittlebyte-19/PoC.git
+cd PoC
+
+make setup
+make up
 ```
 
-Per usare Bedrock reale:
-
-```env
-BEDROCK_ENABLED=true
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-AWS_SESSION_TOKEN=...
-AWS_DEFAULT_REGION=eu-north-1
-DOCUMENT_CLASSIFIER_DRIVER=bedrock
-DOCUMENT_OCR_DRIVER=bedrock
-```
-
-Valori supportati:
-
-* `DOCUMENT_CLASSIFIER_DRIVER`: `fake` oppure `bedrock`
-* `DOCUMENT_OCR_DRIVER`: `local` oppure `bedrock`
-* `BEDROCK_ENABLED`: `false` per simulazione, `true` per chiamate reali
-
-Le stesse impostazioni possono essere gestite dalla dashboard admin:
-
-```text
-http://localhost:8080/admin
-```
-
-Da qui si possono cambiare modello Bedrock, driver documentali, soglia di confidenza, credenziali AWS e dati demo. Le impostazioni vengono salvate nel file `.env`.
-
-Le variabili Textract sono presenti in `.env.example`, ma sono disattivate per questa PoC.
-
-## Test
-
-Per eseguire la suite:
+### Verifica dello stack
 
 ```bash
 make test
-```
-
-Comandi utili:
-
-```bash
-make fresh
 make logs
-docker compose exec -T app ./vendor/bin/pint --test
 ```
 
-`make fresh` resetta database e dati generati dalla PoC. `make logs` mostra i log dei container principali.
+### Accesso ai servizi
+
+| Servizio     | URL                                   |
+| ------------ | ------------------------------------- |
+| Applicazione | `https://localhost:8443`              |
+| Grafana      | `https://grafana.localhost:8443`      |
+| Prometheus   | `https://prometheus.localhost:8443`   |
+| Alertmanager | `https://alertmanager.localhost:8443` |
+| Tempo        | `https://tempo.localhost:8443`        |
+| LocalStack   | `http://127.0.0.1:4566`               |
+
+I comandi disponibili sono raccolti nel `Makefile`, che funge da interfaccia operativa per setup, avvio, test, log, reset e controlli locali.
+
+## Collegamento ad AWS reale
+
+La PoC è progettata per lavorare in locale tramite LocalStack, mantenendo un modello di integrazione compatibile con servizi AWS reali. Il codice applicativo dialoga con servizi astratti tramite configurazione, endpoint e credenziali, rendendo possibile indirizzare gli stessi flussi verso ambienti cloud configurati.
+
+Le aree predisposte per integrazione AWS reale includono:
+
+* object storage S3 per documenti originali e sotto-documenti;
+* SQS per code applicative e task asincroni;
+* Step Functions per orchestrazione dei workflow;
+* SSM Parameter Store per configurazione runtime;
+* Secrets Manager per segreti applicativi;
+* Bedrock per generazione e analisi AI;
+* Textract per OCR su documenti archiviati in S3;
+* SES per successive evoluzioni del dispaccio documentale.
+
+Il passaggio a servizi reali richiede configurazione di account, regioni, IAM policy, bucket, code, state machine, segreti, parametri e permessi coerenti con l’ambiente di destinazione.
+
+## Evoluzioni future
+
+La struttura della PoC è predisposta per successive estensioni verso scenari più vicini a un ambiente production-like.
+
+Le principali aree di evoluzione riguardano:
+
+* integrazione con un identity provider centralizzato;
+* hardening avanzato della gestione documentale;
+* policy di retention e lifecycle sui file;
+* procedure di backup e restore;
+* dispatch documentale verso canali reali;
+* gestione completa di ruoli, permessi e tenant;
+* validazione operativa su servizi AWS reali;
+* tuning di scalabilità, resilienza e monitoraggio;
+* estensione dei flussi di revisione human-in-the-loop.
+
+## Documentazione tecnica
+
+| Documento                      | Contenuto                                    |
+| ------------------------------ | -------------------------------------------- |
+| `docs/architecture.md`         | Architettura applicativa e infrastrutturale  |
+| `docs/workflows.md`            | Flussi AI Assistant e Co-Pilot documentale   |
+| `docs/observability.md`        | Metriche, trace, log, dashboard e alert      |
+| `docs/security.md`             | Identità, autorizzazione, audit e hardening  |
+| `docs/aws-real-integration.md` | Note per collegamento a servizi AWS reali    |
+| `docs/runbooks/`               | Runbook operativi e troubleshooting          |
+| `openapi/v1/`                  | Contratto API OpenAPI                        |
+| `infra/localstack/`            | Terraform e risorse AWS-like locali          |
+| `docker/`                      | Configurazioni runtime, edge e osservabilità |
+| `.github/workflows/`           | Pipeline CI e quality gate                   |

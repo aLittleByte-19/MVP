@@ -1,0 +1,72 @@
+http:
+  # L'entrypoint web (8080) redirige globalmente su websecure (traefik.yml),
+  # quindi i router ascoltano solo su websecure.
+  routers:
+    poc-nginx:
+      rule: Host(`localhost`) || Host(`poc.localhost`) || Host(`traefik`)
+      entryPoints:
+        - websecure
+      service: poc-nginx
+      tls: {}
+
+    # Dashboard di osservabilità: nessuna porta host, si entra solo da qui.
+    # Grafana ha login proprio; prometheus/alertmanager/tempo non hanno auth
+    # nativa e stanno dietro basic auth (vedi docker/traefik/usersfile).
+    grafana:
+      rule: Host(`grafana.localhost`)
+      entryPoints:
+        - websecure
+      service: grafana
+      tls: {}
+    prometheus:
+      rule: Host(`prometheus.localhost`)
+      entryPoints:
+        - websecure
+      service: prometheus
+      middlewares:
+        - observability-auth
+      tls: {}
+    alertmanager:
+      rule: Host(`alertmanager.localhost`)
+      entryPoints:
+        - websecure
+      service: alertmanager
+      middlewares:
+        - observability-auth
+      tls: {}
+    tempo:
+      rule: Host(`tempo.localhost`)
+      entryPoints:
+        - websecure
+      service: tempo
+      middlewares:
+        - observability-auth
+      tls: {}
+
+  middlewares:
+    observability-auth:
+      basicAuth:
+        usersFile: /etc/traefik/usersfile
+
+  services:
+    poc-nginx:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: http://nginx:8080
+    grafana:
+      loadBalancer:
+        servers:
+          - url: http://grafana:3000
+    prometheus:
+      loadBalancer:
+        servers:
+          - url: http://prometheus:9090
+    alertmanager:
+      loadBalancer:
+        servers:
+          - url: http://alertmanager:9093
+    tempo:
+      loadBalancer:
+        servers:
+          - url: http://tempo:3200

@@ -1,0 +1,438 @@
+openapi: 3.1.1
+info:
+  title: Alittlebyte PoC API
+  version: 1.0.0
+  description: Versioned JSON contract consumed by the React SPA.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: /
+security:
+  - PocIdentity: []
+tags:
+  - name: State
+    description: Current assistant and document pipeline state for the SPA.
+  - name: Communications
+    description: AI-assisted communication generation.
+  - name: Documents
+    description: Document upload, processing stream, preview and deletion.
+paths:
+  /api/v1/state:
+    get:
+      summary: Get current PoC state
+      operationId: getPocState
+      tags: [State]
+      responses:
+        "200":
+          description: Current operational state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PocState"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/communications:
+    post:
+      summary: Generate a communication draft
+      operationId: generatePocCommunication
+      tags: [Communications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateCommunicationRequest"
+      responses:
+        "201":
+          description: Communication draft generated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateCommunicationResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "502":
+          $ref: "#/components/responses/UpstreamUnavailable"
+  /api/v1/documents/ocr:
+    post:
+      summary: Upload a document for OCR and AI extraction
+      operationId: uploadPocDocument
+      tags: [Documents]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [document]
+              properties:
+                document:
+                  type: string
+                  format: binary
+      responses:
+        "202":
+          description: Document accepted for asynchronous processing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadDocumentResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/documents/{originalDocument}/stream:
+    get:
+      summary: Stream document processing events
+      operationId: streamPocDocumentProcessing
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/OriginalDocumentId"
+      responses:
+        "200":
+          description: Server-sent events for document processing.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/documents/{subDocument}:
+    delete:
+      summary: Delete a processed sub-document
+      operationId: deletePocSubDocument
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      responses:
+        "200":
+          description: Document deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteDocumentResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/documents/{subDocument}/extracted-data:
+    put:
+      summary: Correct extracted data for a sub-document
+      operationId: updatePocSubDocumentExtractedData
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateExtractedDataRequest"
+      responses:
+        "200":
+          description: Extracted data updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateSubDocumentReviewResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/documents/{subDocument}/review:
+    post:
+      summary: Mark a sub-document as manually reviewed
+      operationId: reviewPocSubDocument
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      responses:
+        "200":
+          description: Sub-document manually validated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateSubDocumentReviewResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/documents/{subDocument}/preview:
+    get:
+      summary: Preview a processed sub-document PDF
+      operationId: previewPocSubDocument
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      responses:
+        "200":
+          description: PDF preview stream.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    PocIdentity:
+      type: apiKey
+      in: header
+      name: X-Poc-User-Id
+      description: Identity claims injected by the enterprise boundary or local PoC middleware.
+  parameters:
+    OriginalDocumentId:
+      name: originalDocument
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    SubDocumentId:
+      name: subDocument
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+  responses:
+    Unauthorized:
+      description: Missing or invalid identity.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Forbidden:
+      description: Identity lacks required role or attribute.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ValidationError:
+      description: Validation error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationErrorEnvelope"
+    UpstreamUnavailable:
+      description: Required upstream service failed explicitly.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    PocState:
+      type: object
+      required: [assistant, copilot]
+      properties:
+        assistant:
+          $ref: "#/components/schemas/AssistantState"
+        copilot:
+          $ref: "#/components/schemas/CopilotState"
+    AssistantState:
+      type: object
+      required: [metrics, history]
+      properties:
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/Metric"
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/Communication"
+    CopilotState:
+      type: object
+      required: [metrics, documents]
+      properties:
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/Metric"
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubDocument"
+    Metric:
+      type: object
+      required: [value, label]
+      properties:
+        value:
+          oneOf:
+            - type: integer
+            - type: string
+        label:
+          type: string
+    GenerateCommunicationRequest:
+      type: object
+      required: [prompt, tone, style]
+      properties:
+        prompt:
+          type: string
+          minLength: 12
+          maxLength: 5000
+        tone:
+          type: string
+          enum: [Chiaro e diretto, Più istituzionale, Più sintetico, Empatico, Tecnico]
+        style:
+          type: string
+          enum: [Testo informativo, Avviso operativo, Aggiornamento breve]
+    GenerateCommunicationResponse:
+      type: object
+      required: [message, communication, state]
+      properties:
+        message:
+          type: string
+        communication:
+          $ref: "#/components/schemas/Communication"
+        state:
+          $ref: "#/components/schemas/PocState"
+    UploadDocumentResponse:
+      type: object
+      required: [message, streamUrl]
+      properties:
+        message:
+          type: string
+        streamUrl:
+          type: string
+    DeleteDocumentResponse:
+      type: object
+      required: [message, state]
+      properties:
+        message:
+          type: string
+        state:
+          $ref: "#/components/schemas/PocState"
+    UpdateSubDocumentReviewResponse:
+      type: object
+      required: [message, document, state]
+      properties:
+        message:
+          type: string
+        document:
+          $ref: "#/components/schemas/SubDocument"
+        state:
+          $ref: "#/components/schemas/PocState"
+    UpdateExtractedDataRequest:
+      type: object
+      properties:
+        employeeFirstName:
+          type: [string, "null"]
+          maxLength: 200
+        employeeLastName:
+          type: [string, "null"]
+          maxLength: 200
+        companyName:
+          type: [string, "null"]
+          maxLength: 500
+        documentDate:
+          type: [string, "null"]
+          format: date
+        documentType:
+          type: [string, "null"]
+          maxLength: 200
+        description:
+          type: [string, "null"]
+          maxLength: 2000
+        confidenceScore:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 100
+        markAsValidated:
+          type: boolean
+    Communication:
+      type: object
+      required: [id, prompt, tone, style, title, body, status]
+      properties:
+        id:
+          type: integer
+        prompt:
+          type: string
+        tone:
+          type: string
+        style:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: [string, "null"]
+    SubDocument:
+      type: object
+      required: [id, reviewStatus, reviewStatusLabel, previewLines]
+      properties:
+        id:
+          type: string
+        title:
+          type: [string, "null"]
+        employeeFirstName:
+          type: [string, "null"]
+        employeeLastName:
+          type: [string, "null"]
+        employee:
+          type: [string, "null"]
+        companyName:
+          type: [string, "null"]
+        company:
+          type: [string, "null"]
+        file:
+          type: [string, "null"]
+        documentDate:
+          type: [string, "null"]
+          format: date
+        date:
+          type: [string, "null"]
+        pages:
+          type: integer
+        documentType:
+          type: [string, "null"]
+        type:
+          type: [string, "null"]
+        description:
+          type: [string, "null"]
+        confidence:
+          type: [integer, "null"]
+        reviewStatus:
+          type: string
+          enum: [needs_review, auto_validated, quarantined, manually_validated]
+        reviewStatusLabel:
+          type: string
+        error:
+          type: [string, "null"]
+        previewUrl:
+          type: string
+        previewLines:
+          type: array
+          items:
+            type: string
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId, correlationId]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            requestId:
+              type: [string, "null"]
+            correlationId:
+              type: [string, "null"]
+    ValidationErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"

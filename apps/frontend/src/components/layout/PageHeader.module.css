@@ -1,0 +1,31 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--poc-space-4);
+  margin-bottom: var(--poc-space-6);
+}
+
+.eyebrow,
+.header h1 {
+  margin: 0;
+}
+
+.eyebrow {
+  margin-bottom: var(--poc-space-1);
+  color: var(--poc-primary-deep);
+  font-size: var(--poc-font-xs);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.header h1 {
+  font-size: var(--poc-font-xl);
+}
+
+@media (max-width: 640px) {
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

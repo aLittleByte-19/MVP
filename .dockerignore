@@ -2,9 +2,17 @@
 .github
 .idea
 .vscode
+.trivy-cache
+
+# IaC: non deve finire nell'immagine runtime (superficie d'attacco + finding Trivy config)
+infra
+*.tfstate
+*.tfstate.backup
+.terraform
 
 vendor
 node_modules
+apps/frontend/dist
 
 .env
 .env.*
@@ -15,6 +23,8 @@ storage/framework/cache/*
 storage/framework/sessions/*
 storage/framework/views/*
 storage/logs/*
+docker/traefik/certs/*.crt
+docker/traefik/certs/*.key
 
 ai-worker/.venv
 ai-worker/__pycache__

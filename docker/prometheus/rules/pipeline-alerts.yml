@@ -1,0 +1,35 @@
+groups:
+  - name: poc-pipeline-alerts
+    rules:
+      - alert: WorkerDown
+        expr: absent(poc_app_info{service_name="poc-document-pipeline"} == 1)
+        for: 5m
+        labels:
+          severity: warning
+          service_namespace: alittlebyte
+        annotations:
+          summary: "Application scrape missing"
+          description: "The application metrics scrape is missing from the OTel exporter."
+          runbook: "https://github.com/aLittleByte-19/PoC/blob/main/docs/runbooks/observability.md"
+
+      - alert: DocumentStuckInProcessing
+        expr: poc_document_stuck_processing_total > 0
+        for: 10m
+        labels:
+          severity: warning
+          service_namespace: alittlebyte
+        annotations:
+          summary: "Document stuck in processing"
+          description: "At least one document has exceeded the processing timeout."
+          runbook: "https://github.com/aLittleByte-19/PoC/blob/main/docs/runbooks/document-pipeline.md"
+
+      - alert: StepFunctionExecutionFailed
+        expr: increase(poc_stepfunctions_executions_failed_total[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service_namespace: alittlebyte
+        annotations:
+          summary: "Step Functions execution failure observed"
+          description: "The document workflow reported a Step Functions failure."
+          runbook: "https://github.com/aLittleByte-19/PoC/blob/main/docs/runbooks/document-pipeline.md"

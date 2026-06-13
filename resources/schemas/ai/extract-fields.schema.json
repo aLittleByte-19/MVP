@@ -1,0 +1,38 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://poc.alittlebyte.local/schemas/ai/extract-fields.schema.json",
+    "title": "ExtractFieldsResult",
+    "description": "Structured payslip fields returned by the Bedrock extraction model. Tolerant by design: missing keys are normalized to null and extra keys are ignored (LLM drift must not quarantine a usable extraction); declared fields are strictly typed.",
+    "type": "object",
+    "properties": {
+        "employee_first_name": {
+            "type": ["string", "null"],
+            "maxLength": 200
+        },
+        "employee_last_name": {
+            "type": ["string", "null"],
+            "maxLength": 200
+        },
+        "company_name": {
+            "type": ["string", "null"],
+            "maxLength": 500
+        },
+        "document_date": {
+            "type": ["string", "null"],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "document_type": {
+            "type": ["string", "null"],
+            "maxLength": 200
+        },
+        "description": {
+            "type": ["string", "null"],
+            "maxLength": 2000
+        },
+        "confidence_score": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "maximum": 100
+        }
+    }
+}
