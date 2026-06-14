@@ -2,7 +2,6 @@
 
 > Documento aggiornato tramite analisi diretta della codebase.
 > Branch analizzato: `docs/finalizza_documentazione`.
-> Commit analizzato: `7ef7d7c`.
 > Ultimo aggiornamento: 2026-06-14.
 
 ---
@@ -488,12 +487,12 @@ Area più matura della PoC (dettagli §5):
 6. RLS PostgreSQL su `tenant_id`.
 
 **Medio termine (production-like reale)**
-8. Deploy su AWS reale: RDS+backup, SQS/SFN/S3 nativi, Secrets Manager con rotazione, ECS/EKS con più repliche; Terraform già pronto a essere ri-targettizzato.
-9. SLO + burn-rate alert, receiver di notifica reali, retention telemetria.
-10. Propagazione trace context attraverso SQS; contract test runtime sull'OpenAPI.
+7. Deploy su AWS reale: RDS+backup, SQS/SFN/S3 nativi, Secrets Manager con rotazione, ECS/EKS con più repliche; Terraform già pronto a essere ri-targettizzato.
+8. SLO + burn-rate alert, receiver di notifica reali, retention telemetria.
+9. Propagazione trace context attraverso SQS; contract test runtime sull'OpenAPI.
 
 **Eventuali/futuri**
-11. Invio comunicazioni (SES) se rientra nello scope; router SPA; coverage gate.
+10. Invio comunicazioni (SES) se rientra nello scope; router SPA; coverage gate.
 
 ---
 

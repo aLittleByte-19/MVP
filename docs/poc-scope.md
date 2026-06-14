@@ -52,7 +52,7 @@ Incluso:
 - dettaglio documento affiancato (anteprima a sinistra, dati estratti a destra);
 - correzione manuale dei campi estratti e validazione manuale (human-in-the-loop);
 - stati di revisione del sotto-documento (`needs_review`, `auto_validated`, `quarantined`, `manually_validated`);
-- preview PDF del sotto-documento con fallback applicativo leggibile quando lo storage non è raggiungibile o il file manca;
+- preview PDF del sotto-documento con gestione esplicita dell'errore (risposta applicativa leggibile) quando lo storage non è raggiungibile o il file manca;
 - stato `failed` esplicito quando split o estrazione non riescono;
 - metriche operative su documenti elaborati e soglie di confidenza.
 
