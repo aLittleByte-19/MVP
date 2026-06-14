@@ -26,7 +26,7 @@ export function CommunicationGeneratorPanel({ isGenerating, onGenerate, status }
   return (
     <Section className={styles.form} id="assistant-compose" title="Crea una bozza">
       <p className={styles.note}>
-        Inserisci cosa comunicare e pochi parametri editoriali. La bozza resta modificabile nella revisione.
+        Inserisci cosa comunicare e pochi parametri editoriali. Genera la bozza e rivedi titolo e testo nell'anteprima.
       </p>
       <form onSubmit={form.handleSubmit(onGenerate)}>
         <TextAreaField

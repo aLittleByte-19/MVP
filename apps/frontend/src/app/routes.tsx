@@ -38,7 +38,7 @@ export const pocNavGroups: SidebarNavGroup<PocView>[] = [
         label: "Co-Pilot",
         children: [
           { label: "Caricamento", targetId: "copilot-upload" },
-          { label: "Storico invii", targetId: "copilot-documents" },
+          { label: "Storico documenti", targetId: "copilot-documents" },
           { label: "Metriche", targetId: "copilot-metrics" }
         ]
       }

@@ -5,6 +5,7 @@ import { EmptyState } from "../../../components/feedback/EmptyState";
 import { Button } from "../../../components/inputs/Button";
 import { Section } from "../../../components/layout/Section";
 import { formatFallback } from "../../../lib/formatters";
+import { useDocumentPreview } from "../hooks/useDocumentPreview";
 import { DocumentStatusTimeline } from "./DocumentStatusTimeline";
 import styles from "./SubDocumentList.module.css";
 
@@ -114,6 +115,7 @@ export function SubDocumentList({
 }: SubDocumentListProps) {
   const [formState, setFormState] = useState<ReviewFormState>(() => toReviewForm(documentItem));
   const [isEditing, setIsEditing] = useState(false);
+  const previewStatus = useDocumentPreview(documentItem?.previewUrl);
 
   useEffect(() => {
     setFormState(toReviewForm(documentItem));
@@ -174,7 +176,7 @@ export function SubDocumentList({
           <p className={styles.eyebrow}>Anteprima documento</p>
           <div className={styles.previewFrame}>
             <strong>{formatFallback(documentItem.file, "Documento")}</strong>
-            {documentItem.previewUrl ? (
+            {previewStatus === "available" && documentItem.previewUrl ? (
               <>
                 <iframe
                   className={styles.previewDocument}
@@ -185,6 +187,12 @@ export function SubDocumentList({
                   Apri in una nuova scheda
                 </a>
               </>
+            ) : previewStatus === "loading" ? (
+              <span>Caricamento anteprima in corso.</span>
+            ) : previewStatus === "unreachable" ? (
+              <span>Storage documento non raggiungibile.</span>
+            ) : previewStatus === "unavailable" ? (
+              <span>Anteprima non disponibile.</span>
             ) : (
               <span>Anteprima non ancora disponibile per questo documento.</span>
             )}
