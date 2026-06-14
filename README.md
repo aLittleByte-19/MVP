@@ -197,15 +197,19 @@ Le principali aree di evoluzione riguardano:
 
 ## Documentazione tecnica
 
-| Documento                      | Contenuto                                    |
-| ------------------------------ | -------------------------------------------- |
-| `docs/architecture.md`         | Architettura applicativa e infrastrutturale  |
-| `docs/workflows.md`            | Flussi AI Assistant e Co-Pilot documentale   |
-| `docs/observability.md`        | Metriche, trace, log, dashboard e alert      |
-| `docs/security.md`             | Identità, autorizzazione, audit e hardening  |
-| `docs/aws-real-integration.md` | Note per collegamento a servizi AWS reali    |
-| `docs/runbooks/`               | Runbook operativi e troubleshooting          |
-| `openapi/v1/`                  | Contratto API OpenAPI                        |
-| `infra/localstack/`            | Terraform e risorse AWS-like locali          |
-| `docker/`                      | Configurazioni runtime, edge e osservabilità |
-| `.github/workflows/`           | Pipeline CI e quality gate                   |
+Il punto d'ingresso è **[`docs/README.md`](docs/README.md)**, che organizza tutta la
+documentazione con un percorso di lettura per chi apre il progetto la prima volta.
+
+| Documento                                                          | Contenuto                                       |
+| ----------------------------------------------------------------- | ----------------------------------------------- |
+| [`docs/README.md`](docs/README.md)                                | Indice e percorso di lettura della doc          |
+| [`docs/poc-scope.md`](docs/poc-scope.md)                          | Perimetro funzionale della PoC                  |
+| [`docs/IMPLEMENTATION_OVERVIEW.md`](docs/IMPLEMENTATION_OVERVIEW.md) | Panoramica implementativa dell'applicativo    |
+| [`docs/architecture/`](docs/architecture/)                        | Architettura, tracciabilità Capitolato, Well-Architected |
+| [`docs/architecture-decisions/`](docs/architecture-decisions/README.md) | Architecture Decision Records (ADR)       |
+| [`docs/runbooks/`](docs/runbooks/)                                | Runbook operativi e troubleshooting             |
+| [`docs/security/`](docs/security/)                                | Identità, autorizzazione, IAM, OWASP ASVS       |
+| [`openapi/v1/`](openapi/v1/)                                      | Contratto API OpenAPI                           |
+| [`infra/localstack/`](infra/localstack/)                          | Terraform e risorse AWS-like locali             |
+| [`docker/`](docker/)                                              | Configurazioni runtime, edge e osservabilità    |
+| [`.github/workflows/`](.github/workflows/)                        | Pipeline CI e quality gate                      |

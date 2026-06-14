@@ -2,34 +2,65 @@
 
 Il progetto copre i flussi principali di Document Intelligence per comunicazioni HR e analisi documentale. L'ambiente locale usa LocalStack e Terraform per modellare le dipendenze AWS-like in modo ripetibile.
 
+Ogni area distingue tre livelli:
+
+- **Incluso**: presente e funzionante nella PoC.
+- **Parziale**: presente in forma ridotta rispetto al prodotto finale.
+- **Fuori scope PoC**: previsto per il prodotto finale, ma non implementato qui.
+
 ## AI Assistant Generativo
 
-Sono inclusi:
+Incluso:
 
 - generazione di una bozza a partire da prompt, tono e stile;
 - validazione del prompt;
-- anteprima di titolo e testo;
-- modifica manuale di titolo e testo;
-- salvataggio, approvazione, scarto e storico delle generazioni;
-- rating e commento opzionale;
-- metriche operative sulle generazioni.
+- persistenza della bozza generata (stato `draft`);
+- anteprima di titolo e testo in sola lettura;
+- storico delle generazioni con riapertura dell'anteprima di una bozza selezionata;
+- metriche operative di base (contenuti generati, bozze).
+
+Parziale:
+
+- lo storico elenca le ultime generazioni ma non offre i filtri avanzati (parola chiave, tono, stile, data).
+
+Fuori scope PoC:
+
+- modifica manuale persistente di titolo e testo;
+- immagine di copertina e sua sostituzione;
+- rigenerazione, annullamento modifiche e scarto della bozza;
+- rating 1–5 con commento, preferiti e relativi feedback;
+- salvataggio e riuso di una configurazione di prompt etichettata;
+- dashboard analista (rating medio, statistiche di utilizzo, filtri).
 
 La generazione usa il servizio AI configurato. Errori di configurazione, credenziali o modello vengono esposti come errori applicativi, senza contenuti sostitutivi.
 
 ## AI Co-Pilot Documentale
 
-Sono inclusi:
+Incluso:
 
 - upload singolo di PDF;
 - controllo formato e duplicato tramite hash;
 - avvio asincrono via Laravel Queue su SQS;
 - split documentale tramite Bedrock;
-- estrazione dei campi principali tramite Bedrock;
+- estrazione dei campi principali tramite Bedrock (nome/cognome, azienda, data, tipologia, descrizione, confidenza);
 - persistenza di documento originale, sotto-documenti e dati estratti;
-- preview PDF del sotto-documento;
+- dettaglio documento affiancato (anteprima a sinistra, dati estratti a destra);
+- correzione manuale dei campi estratti e validazione manuale (human-in-the-loop);
+- stati di revisione del sotto-documento (`needs_review`, `auto_validated`, `quarantined`, `manually_validated`);
+- preview PDF del sotto-documento con fallback applicativo leggibile quando lo storage non è raggiungibile o il file manca;
 - stato `failed` esplicito quando split o estrazione non riescono;
-- storico e filtri principali;
 - metriche operative su documenti elaborati e soglie di confidenza.
+
+Parziale:
+
+- lo storico dei documenti analizzati è ordinato dal più recente ma non offre i filtri avanzati (ricerca per dipendente/azienda, soglia di confidenza, mese e anno).
+
+Fuori scope PoC:
+
+- invio dei documenti e relativo "stato invio" (`Inviato`/`Non inviato`): la colonna `sub_documents.send_status` e l'identità SES Terraform esistono ma non c'è codice di invio;
+- campi estratti email destinatario, codice fiscale e matricola dipendente;
+- classificazione manuale iniziale in upload;
+- metriche e dashboard sugli invii.
 
 ## Observability e Sicurezza Operativa
 
@@ -42,7 +73,7 @@ Sono inclusi:
 - Prometheus con regole SRE iniziali su error ratio, latenza e readiness;
 - blocco runtime delle superfici non appartenenti alla SPA/API.
 
-## Esclusioni
+## Esclusioni trasversali
 
 Non sono ancora inclusi:
 
