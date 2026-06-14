@@ -77,7 +77,7 @@ La PoC dimostra un modello applicativo composto da più livelli cooperanti:
 * **Redis** per cache, sessioni e rate limiting;
 * storage documentale **S3-compatible** per PDF originali e sotto-documenti generati;
 * **LocalStack** per emulare localmente servizi AWS come SQS, Step Functions, SSM, Secrets Manager e S3;
-* integrazione AI tramite astrazione verso **Bedrock** e predisposizione OCR tramite **Textract**;
+* integrazione AI tramite astrazione verso **Bedrock** e integrazione OCR tramite **Textract** (attivabile, disabilitata di default);
 * stack di osservabilità con **OpenTelemetry, Prometheus, Grafana, Tempo, Loki, Alloy e Alertmanager**;
 * CI con test backend/frontend, scansione immagini, validazione infrastrutturale e audit accessibilità.
 

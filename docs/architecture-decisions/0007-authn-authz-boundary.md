@@ -1,24 +1,55 @@
-# ADR 0007 - Authn Authz Boundary
+# ADR 0007 — Confine di autenticazione/autorizzazione
 
-Status: Accepted and implemented baseline
+Status: Accepted, implemented baseline
+Date: 2026-06-08
 
 ## Context
 
-The runtime must simulate that authentication has already happened through a corporate IdP while implementing authorization in Laravel.
+Il runtime deve simulare che l'autenticazione sia già avvenuta tramite un IdP aziendale,
+implementando però l'autorizzazione in Laravel. La PoC non deve dipendere da un IdP reale, ma il
+modello di identità deve essere equivalente a quello di un confine OIDC/SAML enterprise.
 
 ## Decision
 
-Do not implement a real IdP in this PoC. Add a local/test-only identity provider middleware that injects structured claims equivalent to enterprise OIDC/SAML claims: user ID, email, display name, tenant/company, groups/roles, and application attributes.
+Non implementare un IdP reale in questa PoC. Aggiungere un middleware di identità solo
+locale/di test (`poc.identity`) che inietta claim strutturati equivalenti a quelli OIDC/SAML
+enterprise: user ID, email, display name, tenant/azienda, gruppi/ruoli e attributi applicativi.
 
-Use Laravel policies/services to enforce RBAC plus ABAC server-side. The frontend may hide unavailable actions for UX, but it must never be the source of truth for authorization.
+Usare policy/servizi Laravel per applicare RBAC e ABAC lato server. Il frontend può nascondere
+le azioni non disponibili per UX, ma non deve mai essere la fonte di verità per l'autorizzazione.
 
 ## Consequences
 
-- Local identity simulation must be clearly isolated from production mode.
-- Authorization tests must cover allowed and denied access.
-- Relevant denied decisions and sensitive authorization events must be audited.
+- La simulazione di identità locale deve essere chiaramente isolata dalla modalità di produzione.
+- I test di autorizzazione devono coprire accessi consentiti e negati.
+- Le decisioni di accesso negate rilevanti e gli eventi di autorizzazione sensibili devono essere
+  registrati nell'audit.
+- In modalità `trusted_headers` gli header `X-Poc-*` sono falsificabili senza un gateway che li
+  firmi: è un limite dichiarato del confine simulato.
+
+## Alternatives considered
+
+- **Integrare un IdP reale (Cognito/Keycloak/Entra) nella PoC**: rinviato perché fuori dal
+  perimetro PoC e non necessario a dimostrare l'autorizzazione lato server.
+- **Autorizzazione lato frontend**: scartata perché la UI non può essere fonte di verità per
+  l'access control.
+
+## Implementation evidence
+
+- Middleware: `app/Http/Middleware/ResolvePocIdentity.php` (modalità `local`/`trusted_headers`),
+  `app/Copilot/Identity/PocUser.php`.
+- Autorizzazione: `app/Http/Middleware/AuthorizePocAccess.php` (ruoli `poc-operator`/`poc-admin`,
+  tenant check) e check nei controller.
+- Configurazione identità in `infra/localstack/main.tf` (`POC_IDENTITY_MODE`, `POC_LOCAL_*`).
 
 ## References
 
 - OWASP ASVS: https://owasp.org/www-project-application-security-verification-standard/
-- GitHub Actions AWS OIDC model for future CI credentials: https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
+- GitHub Actions — AWS OIDC per le credenziali CI future: https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
+
+## Related documents
+
+- [`0001-frontend-spa.md`](0001-frontend-spa.md)
+- [`0002-laravel-api-json.md`](0002-laravel-api-json.md)
+- [`../security/auth-boundary.md`](../security/auth-boundary.md)
+- [`../IMPLEMENTATION_OVERVIEW.md`](../IMPLEMENTATION_OVERVIEW.md) (§13)

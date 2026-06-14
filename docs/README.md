@@ -1,9 +1,28 @@
-# Documentazione NEXUM PoC
+# Documentazione PoC - aLittleByte
+
+Documentazione tecnica della Proof of Concept sviluppata nel contesto progettuale Eggon/NEXUM.
 
 Punto d'ingresso alla documentazione tecnica. Se è la prima volta che apri il progetto, segui
 il percorso di lettura qui sotto; le sezioni successive sono un riferimento tematico.
 
 Per setup e avvio rapido vedi il [README di progetto](../README.md).
+
+## Fonti di verità documentali
+
+Per evitare informazioni duplicate o divergenti, ogni tema ha **un** documento di riferimento:
+
+| Tema | Documento di riferimento |
+| --- | --- |
+| Perimetro funzionale della PoC | [`poc-scope.md`](poc-scope.md) |
+| Stato implementativo reale | [`IMPLEMENTATION_OVERVIEW.md`](IMPLEMENTATION_OVERVIEW.md) |
+| Decisioni architetturali | [`architecture-decisions/`](architecture-decisions/README.md) |
+| Tracciabilità rispetto al Capitolato | [`architecture/capitolato-traceability.md`](architecture/capitolato-traceability.md) |
+| Architettura runtime | [`architecture/final-architecture.md`](architecture/final-architecture.md) |
+| Struttura del repository | [`architecture/repository-structure.md`](architecture/repository-structure.md) |
+| Setup e avvio locale | [README di progetto](../README.md) e [`runbooks/local-development.md`](runbooks/local-development.md) |
+| Sicurezza applicativa | [`security/`](security/) |
+| Operatività e troubleshooting | [`runbooks/`](runbooks/) |
+| Gap production-like | [`IMPLEMENTATION_OVERVIEW.md`](IMPLEMENTATION_OVERVIEW.md) (§18–19) e i mapping [ASVS](security/owasp-asvs-mapping.md) / [Well-Architected](architecture/aws-well-architected-mapping.md) |
 
 ## Percorso di lettura consigliato
 

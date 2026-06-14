@@ -1,20 +1,23 @@
-# IAM Permissions Matrix
+# Matrice dei permessi IAM
 
-This matrix is a PoC-derived proposal. It is not a final production IAM policy.
+Questa matrice è una **proposta derivata dalla PoC** secondo il principio del privilegio minimo:
+**non è una policy IAM di produzione definitiva**. In LocalStack i permessi non sono applicati
+realmente; servono come riferimento per il passaggio ad AWS reale.
 
-| Component | IAM action | Resource | Reason | Environment | Notes |
+| Componente | Azione IAM | Risorsa | Motivo | Ambiente | Note |
 | --- | --- | --- | --- | --- | --- |
-| Laravel API | `s3:PutObject` | Real document bucket/prefix | Store uploaded document for OCR/AI | Real AWS smoke/future prod | Prefer bucket prefix scoped to tenant/environment. |
-| Laravel API | `s3:GetObject` | Real document bucket/prefix | Read original file for Bedrock document input | Real AWS smoke/future prod | Required when processing reads from S3-backed disk. |
-| Laravel API | `states:StartExecution` | Document pipeline state machine | Start document workflow | LocalStack/future prod | LocalStack uses Terraform-created role/resources. |
-| Worker queue | `sqs:ReceiveMessage` | Document task queue | Consume callback-token tasks | LocalStack/future prod | Source queue only. |
-| Worker queue | `sqs:DeleteMessage` | Document task queue | Acknowledge completed/failure-reported task | LocalStack/future prod | Delete only after callback decision. |
-| Worker queue | `sqs:GetQueueAttributes` | Document task queue/DLQ | Readiness and diagnostics | LocalStack/future prod | Used by health and DLQ checks. |
-| Worker callback | `states:SendTaskSuccess` | Step Functions callback token | Resume successful task | LocalStack/future prod | Scoped by state machine/execution where supported. |
-| Worker callback | `states:SendTaskFailure` | Step Functions callback token | Resume failure path | LocalStack/future prod | Required for explicit failure handling. |
-| Worker OCR | `textract:StartDocumentTextDetection` | `*` or supported scoped resource | Start async OCR | Real AWS only | Textract resource scoping is limited for some APIs. |
-| Worker OCR | `textract:GetDocumentTextDetection` | `*` or supported scoped resource | Poll OCR result | Real AWS only | Validate with target account policy simulator. |
-| Worker AI | `bedrock:InvokeModel` / `bedrock:Converse` | Selected model or inference profile | Split/extract/generate content | Real AWS only | Model access is account/region specific. |
-| Config loader | `ssm:GetParameter` / `ssm:GetParametersByPath` | PoC SSM path | Load runtime configuration | LocalStack/future prod | Read-only. |
-| Config loader | `secretsmanager:GetSecretValue` | Runtime secret | Load secrets | LocalStack/future prod | Read-only; no list permissions needed. |
-| CI AWS smoke | `sts:AssumeRoleWithWebIdentity` | Enterprise provided role | OIDC smoke | GitHub Actions manual | No static AWS credentials in CI. |
+| API Laravel | `s3:PutObject` | Bucket/prefix documenti reale | Salvare il documento caricato per OCR/AI | Smoke AWS reale / futura prod | Preferire prefix scoped per tenant/ambiente. |
+| API Laravel | `s3:GetObject` | Bucket/prefix documenti reale | Leggere il file originale come input Bedrock | Smoke AWS reale / futura prod | Necessario quando l'elaborazione legge dal disco S3. |
+| API Laravel | `states:StartExecution` | State machine della pipeline documentale | Avviare il workflow documentale | LocalStack / futura prod | In LocalStack usa ruolo/risorse create da Terraform. |
+| Worker queue | `sqs:ReceiveMessage` | Coda dei task documentali | Consumare i task con callback token | LocalStack / futura prod | Solo coda sorgente. |
+| Worker queue | `sqs:DeleteMessage` | Coda dei task documentali | Confermare il task completato/segnalato | LocalStack / futura prod | Eliminare solo dopo la decisione di callback. |
+| Worker queue | `sqs:GetQueueAttributes` | Coda dei task documentali/DLQ | Readiness e diagnostica | LocalStack / futura prod | Usato da health check e controlli DLQ. |
+| Worker callback | `states:SendTaskSuccess` | Callback token Step Functions | Riprendere il task riuscito | LocalStack / futura prod | Scoped per state machine/esecuzione dove supportato. |
+| Worker callback | `states:SendTaskFailure` | Callback token Step Functions | Riprendere il ramo di fallimento | LocalStack / futura prod | Necessario per la gestione esplicita degli errori. |
+| Worker callback | `states:SendTaskHeartbeat` | Callback token Step Functions | Mantenere vivo il task lungo (Textract/Bedrock) | LocalStack / futura prod | Evita il timeout di stato per i task lunghi. |
+| Worker OCR | `textract:StartDocumentTextDetection` | `*` o risorsa scoped supportata | Avviare l'OCR asincrono | Solo AWS reale | Lo scoping risorsa di Textract è limitato per alcune API. |
+| Worker OCR | `textract:GetDocumentTextDetection` | `*` o risorsa scoped supportata | Recuperare il risultato OCR | Solo AWS reale | Validare con il policy simulator dell'account target. |
+| Worker AI | `bedrock:InvokeModel` / `bedrock:Converse` | Modello o inference profile selezionato | Split/estrazione/generazione contenuti | Solo AWS reale | L'accesso al modello dipende da account/regione. |
+| Config loader | `ssm:GetParameter` / `ssm:GetParametersByPath` | Path SSM della PoC | Caricare la configurazione runtime | LocalStack / futura prod | Sola lettura. |
+| Config loader | `secretsmanager:GetSecretValue` | Secret runtime | Caricare i segreti | LocalStack / futura prod | Sola lettura; nessun permesso di list necessario. |
+| CI smoke AWS | `sts:AssumeRoleWithWebIdentity` | Ruolo fornito dall'azienda | Smoke OIDC | GitHub Actions (manuale) | Nessuna credenziale AWS statica in CI. |

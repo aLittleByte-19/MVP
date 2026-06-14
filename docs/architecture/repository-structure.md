@@ -1,20 +1,23 @@
-# Repository Structure
+# Struttura del repository
 
-The repository keeps Laravel conventions while separating runtime boundaries from domain logic.
+Il repository mantiene le convenzioni Laravel, separando i confini di runtime dalla logica di
+dominio.
 
-- `app/Copilot`: domain-specific application code for the AI co-pilot.
-- `app/Copilot/Ai`: Bedrock integration and AI-specific services.
-- `app/Copilot/Audit`: audit logging services.
-- `app/Copilot/Documents`: document enums and processing services.
-- `app/Copilot/Communications`: communication enums and future communication services.
-- `app/Copilot/Identity`: resolved runtime user identity.
-- `app/Copilot/Observability`: Prometheus exporter and metric recording.
-- `app/Copilot/Ocr`: Textract OCR integration.
-- `app/Copilot/Workflow`: Step Functions/SQS workflow orchestration services.
-- `app/Http`: HTTP controllers, middleware and request validation.
-- `app/Models/Copilot`: Eloquent models for the PoC domain.
-- `apps/frontend`: React/Vite SPA.
-- `openapi/v1`: versioned API contract.
-- `infra/localstack`: LocalStack Terraform model for local production-like runs.
-- `infra/aws`: placeholder for the future real AWS product baseline.
-- `docker`: local runtime images and service configuration.
+- `app/Copilot`: codice applicativo di dominio del co-pilot AI.
+- `app/Copilot/Ai`: integrazione Bedrock e servizi specifici dell'AI.
+- `app/Copilot/Audit`: servizi di audit logging.
+- `app/Copilot/Documents`: enum ed elaborazione dei documenti.
+- `app/Copilot/Communications`: enum delle comunicazioni e relativi servizi.
+- `app/Copilot/Identity`: identità utente risolta a runtime.
+- `app/Copilot/Observability`: exporter Prometheus e registrazione delle metriche.
+- `app/Copilot/Ocr`: integrazione OCR Textract.
+- `app/Copilot/Workflow`: servizi di orchestrazione del workflow Step Functions/SQS.
+- `app/Console/Commands`: comandi artisan, incluso il worker `poc:workflow:consume`.
+- `app/Http`: controller HTTP, middleware e validazione delle richieste.
+- `app/Models/Copilot`: model Eloquent del dominio PoC.
+- `apps/frontend`: SPA React/Vite.
+- `openapi/v1`: contratto API versionato.
+- `infra/localstack`: modello Terraform LocalStack per le esecuzioni locali production-like.
+- `infra/modules`: moduli Terraform riutilizzabili per la futura infrastruttura AWS.
+- `infra/aws`: placeholder per la futura baseline di prodotto su AWS reale.
+- `docker`: immagini di runtime locali e configurazione dei servizi.

@@ -2,11 +2,16 @@
 
 Il progetto copre i flussi principali di Document Intelligence per comunicazioni HR e analisi documentale. L'ambiente locale usa LocalStack e Terraform per modellare le dipendenze AWS-like in modo ripetibile.
 
-Ogni area distingue tre livelli:
+Ogni area distingue quattro livelli:
 
 - **Incluso**: presente e funzionante nella PoC.
 - **Parziale**: presente in forma ridotta rispetto al prodotto finale.
 - **Fuori scope PoC**: previsto per il prodotto finale, ma non implementato qui.
+- **Evoluzione futura**: direzione di sviluppo successiva, non richiesta dal perimetro PoC.
+
+Per lo stato implementativo di dettaglio (con evidenze nei path) il riferimento è
+[`IMPLEMENTATION_OVERVIEW.md`](IMPLEMENTATION_OVERVIEW.md); questo documento ne è il
+complemento funzionale e non deve contraddirlo.
 
 ## AI Assistant Generativo
 
@@ -40,7 +45,7 @@ Incluso:
 
 - upload singolo di PDF;
 - controllo formato e duplicato tramite hash;
-- avvio asincrono via Laravel Queue su SQS;
+- avvio asincrono tramite state machine Step Functions (emulata in LocalStack) con task pubblicati su SQS tramite callback task token, consumati dal worker `poc:workflow:consume`;
 - split documentale tramite Bedrock;
 - estrazione dei campi principali tramite Bedrock (nome/cognome, azienda, data, tipologia, descrizione, confidenza);
 - persistenza di documento originale, sotto-documenti e dati estratti;
@@ -64,21 +69,28 @@ Fuori scope PoC:
 
 ## Observability e Sicurezza Operativa
 
-Sono inclusi:
+Incluso:
 
 - request ID e correlation ID su risposte HTTP e log;
 - audit trail append-only per azioni rilevanti;
-- metriche HTTP e di dominio in formato Prometheus;
-- OpenTelemetry Collector come gateway locale;
-- Prometheus con regole SRE iniziali su error ratio, latenza e readiness;
+- metriche HTTP golden-signal e di dominio in formato Prometheus;
+- OpenTelemetry Collector come unico gateway locale (metriche verso Prometheus, trace verso Tempo);
+- raccolta log dei container via Grafana Alloy verso Loki;
+- 5 dashboard Grafana provisionate (`api-golden-signals`, `document-pipeline`, `ai-ocr-quality`, `queues-and-dlq`, `logs-and-errors`);
+- 10 alert rule Prometheus su error ratio, latenza, readiness, stato worker, coda/DLQ ed esecuzioni Step Functions, collegate a runbook dedicati;
+- contract OpenAPI 3.1 come fonte del client frontend, verificato in CI;
 - blocco runtime delle superfici non appartenenti alla SPA/API.
 
 ## Esclusioni trasversali
 
-Non sono ancora inclusi:
+### Fuori scope PoC
 
-- identity provider reale e policy RBAC/ABAC complete;
-- workflow Step Functions collegato end-to-end al worker Laravel;
-- integrazione SES per invio effettivo;
-- dashboard Grafana o backend osservabilità enterprise;
-- contract OpenAPI completo per ogni evento operativo interno.
+- identity provider reale e policy RBAC/ABAC complete (l'identità è simulata dal middleware `poc.identity`);
+- integrazione SES per invio effettivo (l'identità SES Terraform esiste, ma non c'è codice di invio);
+- contract OpenAPI completo per ogni evento operativo interno (il contratto copre le API applicative, non gli eventi di dominio interni della pipeline).
+
+### Evoluzione futura
+
+- SLO/error budget formalizzati e receiver di notifica reali per Alertmanager (oggi soglie statiche e routing demo);
+- backend di osservabilità enterprise e retention dichiarate per metriche/trace/log;
+- propagazione del trace context attraverso SQS/Step Functions.
