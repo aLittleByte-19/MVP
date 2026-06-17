@@ -168,7 +168,7 @@ restore-local:
 
 setup:
 	@if [ ! -f docker/traefik/certs/poc-local.test.crt ] || [ ! -f docker/traefik/certs/poc-local.test.key ]; then $(MAKE) local-tls; else echo "$(BLUE)Certificato TLS locale gia' presente.$(RESET)"; fi
-	docker compose build
+	docker compose --profile release build
 	docker compose up -d postgres redis localstack
 	$(MAKE) infra-apply
 	$(MAKE) release
