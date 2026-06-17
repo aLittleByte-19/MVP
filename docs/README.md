@@ -39,7 +39,13 @@ Per evitare informazioni duplicate o divergenti, ogni tema ha **un** documento d
 - [Tracciabilità dal Capitolato](architecture/capitolato-traceability.md) — mappatura requisiti → scelte tecniche.
 - [AWS Well-Architected Mapping](architecture/aws-well-architected-mapping.md) — aderenza ai pilastri AWS.
 - [Valutazione RLS PostgreSQL](architecture/postgres-rls-assessment.md) — analisi del Row-Level Security.
-- Diagrammi sorgente in [`architecture/diagrams/`](architecture/diagrams/) (Mermaid).
+- Diagrammi sorgente in [`architecture/diagrams/`](architecture/diagrams/): l'architettura
+  d'insieme è in draw.io ([`final-architecture.drawio`](architecture/diagrams/final-architecture.drawio),
+  export [SVG](architecture/diagrams/final-architecture.drawio.svg) con loghi incorporati), ed è inclusa
+  in [Architettura finale](architecture/final-architecture.md#diagramma-dellarchitettura). I diagrammi
+  di dettaglio sono Mermaid embeddato nei doc: pipeline documentale in
+  [IMPLEMENTATION_OVERVIEW](IMPLEMENTATION_OVERVIEW.md), DLQ/recovery in
+  [dlq-recovery](runbooks/dlq-recovery.md), telemetria in [observability](runbooks/observability.md).
 
 ## Operazioni (runbook)
 

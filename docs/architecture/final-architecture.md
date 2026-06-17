@@ -4,6 +4,22 @@ Questo documento descrive l'architettura runtime effettivamente implementata nel
 confini tra i componenti, cosa gira in locale tramite LocalStack e cosa può essere indirizzato
 verso AWS reale, e i principi di qualità che trovano riscontro nel codice.
 
+## Diagramma dell'architettura
+
+![Diagramma E2E dell'architettura runtime e CI](diagrams/final-architecture.drawio.png)
+
+Sorgente editabile: [`diagrams/final-architecture.drawio`](diagrams/final-architecture.drawio)
+(draw.io / diagrams.net, loghi ufficiali incorporati); versione vettoriale in
+[`final-architecture.drawio.svg`](diagrams/final-architecture.drawio.svg). Le aree colorate
+distinguono i piani logici — Frontend, Client/Edge, Applicazione, Config, Dati, Infra locale,
+Orchestrazione (LocalStack), AWS reale, Osservabilità e CI/Qualità — mentre lo stile delle
+frecce distingue i flussi (vedi legenda nel diagramma): sincrono, workflow asincrono,
+errore/DLQ, telemetria, provisioning/infra/CI, build frontend ed encryption. Il diagramma
+include anche il legame di control-plane **IAM → Step Functions** (execution role,
+least-privilege documentata — non applicata da LocalStack in locale) e il registry **GHCR**
+nella pipeline CI (mirror delle immagini base e pubblicazione delle immagini buildate). Gli
+export PNG/SVG vanno rigenerati da draw.io dopo ogni modifica (`drawio -x -f png -s 1.6 -b 24 ...`).
+
 ## Confine di runtime
 
 | Livello | Componente implementato | Ruolo |
@@ -27,6 +43,12 @@ LocalStack fornisce le primitive di orchestrazione production-like testabili in 
 Step Functions, SQS/DLQ, S3, EventBridge, SSM Parameter Store e Secrets Manager. L'applicazione
 parla con i servizi AWS, reali o emulati, **senza cambiare codice**: cambiano solo endpoint e
 credenziali.
+
+Alcune primitive sono provisionate ma **non esercitate** dall'applicativo: il bus EventBridge
+(con rule e target verso SQS) e l'identità SES esistono in Terraform, ma nessun codice pubblica
+eventi o invia email. Le policy IAM (es. execution role di Step Functions) sono definite come
+least-privilege *documentata* ma **non applicate da LocalStack** in locale: diventano effettive
+solo sul percorso AWS reale.
 
 AWS reale viene usato solo per il percorso critico di validazione AI/OCR, quando sono fornite
 credenziali e configurazione esplicite:

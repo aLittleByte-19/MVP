@@ -91,6 +91,10 @@ Traefik gestisce l’ingresso verso i servizi esposti e instrada il traffico ver
 
 I worker Laravel consumano task asincroni da SQS e comunicano con Step Functions tramite callback task token. Questo permette di rappresentare una pipeline documentale composta da stati espliciti, retry, gestione errori, idempotenza e aggiornamento progressivo dello stato.
 
+![Architettura E2E della PoC](docs/architecture/diagrams/final-architecture.drawio.png)
+
+<sub>Architettura e2e</sub>
+
 ## Flusso generativo: AI Assistant
 
 Il flusso AI Assistant supporta la generazione di comunicazioni HR a partire da un prompt, con tono e stile selezionati dall’operatore.
@@ -139,7 +143,6 @@ git clone https://github.com/alittlebyte-19/PoC.git
 cd PoC
 
 make setup
-make up
 ```
 
 ### Verifica dello stack

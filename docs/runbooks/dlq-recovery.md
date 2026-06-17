@@ -10,6 +10,32 @@ Step Functions sends callback-token work to SQS. The documents queue has:
 
 The worker records every task in `document_workflow_tasks` by `task_token_hash`. Successful or skipped tasks are idempotent and are not reprocessed when the same token is seen again.
 
+```mermaid
+flowchart TD
+  task["SQS callback-token task"]
+  worker["Laravel worker"]
+  success["SendTaskSuccess"]
+  failure["SendTaskFailure"]
+  retry["Step Functions Retry/Catch"]
+  dlq["SQS DLQ after receive limit"]
+  metrics["Prometheus metrics"]
+  alert["Alertmanager alert"]
+  operator["Operator runbook"]
+  replay["Manual redrive/replay after fix"]
+
+  task --> worker
+  worker --> success
+  worker --> failure
+  failure --> retry
+  task --> dlq
+  worker --> metrics
+  dlq --> metrics
+  metrics --> alert
+  alert --> operator
+  operator --> replay
+  replay --> task
+```
+
 ## Inspect DLQ
 
 ```bash

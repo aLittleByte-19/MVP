@@ -87,6 +87,7 @@ Incluso:
 
 - identity provider reale e policy RBAC/ABAC complete (l'identità è simulata dal middleware `poc.identity`);
 - integrazione SES per invio effettivo (l'identità SES Terraform esiste, ma non c'è codice di invio);
+- bus eventi EventBridge per gli eventi terminali della pipeline (bus, rule e target verso SQS esistono in Terraform, ma l'applicativo non pubblica né consuma eventi: nessun `PutEvents`);
 - contract OpenAPI completo per ogni evento operativo interno (il contratto copre le API applicative, non gli eventi di dominio interni della pipeline).
 
 ### Evoluzione futura

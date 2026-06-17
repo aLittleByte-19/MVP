@@ -178,9 +178,9 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; N
 ### LocalStack 4.5 + Terraform 1.10
 
 **Dove**: `docker-compose.yml` (servizio `localstack`, servizi emulati: `s3,sqs,stepfunctions,ssm,secretsmanager,events,ses,iam,sts,logs`), `infra/localstack/*.tf`.
-**Ruolo**: emula AWS in locale; Terraform provisiona S3 (con SSE-KMS e public access block), SQS+DLQ, SSM parameter, secret JSON, EventBridge bus+rule per eventi terminali della pipeline, IAM role per SFN, identità SES.
+**Ruolo**: emula AWS in locale; Terraform provisiona S3 (con SSE-KMS e public access block), SQS+DLQ, SSM parameter, secret JSON, EventBridge bus+rule (predisposti per gli eventi terminali della pipeline ma non esercitati: l'app non pubblica eventi), IAM role per SFN, identità SES.
 **Motivazione**: l'app parla con AWS vero o emulato **senza cambiare codice** — cambiano solo endpoint e credenziali. Il provisioning è codificato, ripetibile e validato in CI (`terraform fmt -check`, `init`, `validate`).
-**Valutazione**: buona fedeltà al deployment reale (KMS, public access block e IAM sono configurati anche se LocalStack non li applica davvero); lo stato Terraform è locale e committato (`terraform.tfstate` nel repo — accettabile solo perché contiene risorse fake).
+**Valutazione**: buona fedeltà al deployment reale (KMS, public access block, IAM, bus EventBridge e identità SES sono configurati ma non applicati/esercitati a runtime: LocalStack non valuta le policy IAM e l'app non pubblica eventi né invia email); lo stato Terraform è locale e committato (`terraform.tfstate` nel repo — accettabile solo perché contiene risorse fake).
 
 ### SSM Parameter Store + Secrets Manager (config runtime)
 
