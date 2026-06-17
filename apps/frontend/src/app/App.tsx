@@ -28,12 +28,27 @@ import styles from "./App.module.css";
 
 export function App() {
   const [activeView, setActiveView] = useState<PocView>("overview");
+  const [selectedDraftId, setSelectedDraftId] = useState<number | null>(null);
   const { theme, toggleTheme } = useTheme();
   const stateQuery = usePocState();
   const state = stateQuery.data;
   const documents = state?.copilot.documents ?? [];
+  const history = state?.assistant.history ?? [];
   const { selectDocument, selectedDocument, selectedDocumentId } = useDocuments(documents);
-  const assistant = useGenerateCommunication(() => setActiveView("assistant"));
+  const assistant = useGenerateCommunication(() => {
+    setSelectedDraftId(null);
+    setActiveView("assistant");
+  });
+
+  const previewDraft = useMemo(() => {
+    if (selectedDraftId == null) {
+      return assistant.draft;
+    }
+
+    const record = history.find((communication) => communication.id === selectedDraftId);
+
+    return record ? { title: record.title, body: record.body, status: record.status } : assistant.draft;
+  }, [assistant.draft, history, selectedDraftId]);
   const upload = useDocumentUpload({ onDocumentReceived: selectDocument });
   const deleteDocument = useDeleteDocument(() => selectDocument(null));
   const reviewDocument = useReviewSubDocument(selectDocument);
@@ -102,8 +117,15 @@ export function App() {
             onGenerate={assistant.generate}
             status={assistant.status}
           />
-          <GeneratedCommunicationPreview draft={assistant.draft} />
-          <CommunicationApprovalPanel history={state?.assistant.history ?? []} />
+          <GeneratedCommunicationPreview draft={previewDraft} />
+          <CommunicationApprovalPanel
+            history={history}
+            selectedId={selectedDraftId}
+            onSelect={(communicationId) => {
+              setSelectedDraftId(communicationId);
+              navigate("assistant", "assistant-review");
+            }}
+          />
         </section>
       ) : null}
 
@@ -114,7 +136,7 @@ export function App() {
             onUpload={upload.upload}
             status={upload.status}
           />
-          <Section id="copilot-documents" title="Storico invii" actions={<span>{documents.length} record</span>}>
+          <Section id="copilot-documents" title="Storico documenti analizzati" actions={<span>{documents.length} record</span>}>
             <DocumentList
               documents={documents}
               onSelect={selectDocument}

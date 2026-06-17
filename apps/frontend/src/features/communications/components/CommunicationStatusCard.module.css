@@ -5,11 +5,32 @@
   border: 1px solid var(--poc-border);
   border-radius: var(--poc-radius);
   background: var(--poc-surface-muted);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
 }
 
-.card h3,
+.card:hover,
+.card:focus-visible {
+  border-color: var(--poc-border-strong);
+  box-shadow: var(--poc-shadow);
+}
+
+.isSelected {
+  border-color: var(--poc-primary);
+  box-shadow: 0 0 0 1px var(--poc-primary);
+}
+
+.card .title,
 .card p {
   margin: 0;
+}
+
+.card .title {
+  font-size: 1.17em;
+  font-weight: bold;
 }
 
 .card p {

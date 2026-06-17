@@ -1,60 +1,88 @@
-# Final PoC Architecture
+# Architettura della PoC
 
-This document describes the implemented PoC architecture. It is a strong end-to-end PoC baseline, not a production-ready platform.
+Questo documento descrive l'architettura runtime effettivamente implementata nella PoC: i
+confini tra i componenti, cosa gira in locale tramite LocalStack e cosa può essere indirizzato
+verso AWS reale, e i principi di qualità che trovano riscontro nel codice.
 
-## Runtime Boundary
+## Diagramma dell'architettura
 
-| Layer | Implemented component | Scope |
+![Diagramma E2E dell'architettura runtime e CI](diagrams/final-architecture.drawio.png)
+
+Sorgente editabile: [`diagrams/final-architecture.drawio`](diagrams/final-architecture.drawio)
+(draw.io / diagrams.net, loghi ufficiali incorporati); versione vettoriale in
+[`final-architecture.drawio.svg`](diagrams/final-architecture.drawio.svg). Le aree colorate
+distinguono i piani logici — Frontend, Client/Edge, Applicazione, Config, Dati, Infra locale,
+Orchestrazione (LocalStack), AWS reale, Osservabilità e CI/Qualità — mentre lo stile delle
+frecce distingue i flussi (vedi legenda nel diagramma): sincrono, workflow asincrono,
+errore/DLQ, telemetria, provisioning/infra/CI, build frontend ed encryption. Il diagramma
+include anche il legame di control-plane **IAM → Step Functions** (execution role,
+least-privilege documentata — non applicata da LocalStack in locale) e il registry **GHCR**
+nella pipeline CI (mirror delle immagini base e pubblicazione delle immagini buildate). Gli
+export PNG/SVG vanno rigenerati da draw.io dopo ogni modifica (`drawio -x -f png -s 1.6 -b 24 ...`).
+
+## Confine di runtime
+
+| Livello | Componente implementato | Ruolo |
 | --- | --- | --- |
-| Frontend | React/Vite/TypeScript SPA in `apps/frontend` | Upload, processing status, review, delete/preview flows. |
-| Edge | Traefik TLS and Nginx | Local HTTPS, static SPA serving, API proxy, `/admin` hard-block. |
-| API | Laravel JSON API in `app/Http` | Validation, tenant checks, audit events, workflow start. |
-| Workflow | LocalStack Step Functions and SQS | Production-like callback-token orchestration. |
-| Worker | `php artisan poc:workflow:consume` | SQS receive, task execution, `SendTaskSuccess`/`SendTaskFailure`. |
-| OCR | `App\Copilot\Ocr\Services\TextractService` | Real Textract integration, disabled in standard local/CI runs. |
-| AI | `App\Copilot\Ai\BedrockService` | Real Bedrock integration for split/extraction/generation. |
-| Storage | `s3` or `real_s3` Laravel disks | LocalStack S3 for local demos, real S3 for Textract/Bedrock validation. |
-| Persistence | PostgreSQL | Documents, sub-documents, extraction data, audit and workflow task state. |
-| Cache/session | Redis | Runtime cache/session support, not source of record. |
-| Observability | OTel Collector, Prometheus, Tempo, Grafana, Alertmanager | Local metrics, traces, dashboards and alerts. |
-| Logs | Grafana Alloy, Loki | Container log collection and storage, queried in Grafana. |
+| Frontend | SPA React/Vite/TypeScript in `apps/frontend` | Upload, stato di elaborazione, revisione, flussi di anteprima/eliminazione. |
+| Edge | Traefik (TLS) e Nginx | HTTPS locale, serving statico della SPA, proxy API, blocco delle superfici `/admin`. |
+| API | API JSON Laravel in `app/Http` | Validazione, controlli di tenant, audit event, avvio del workflow. |
+| Workflow | Step Functions e SQS (LocalStack) | Orchestrazione production-like con callback task token, end-to-end. |
+| Worker | `php artisan poc:workflow:consume` | Ricezione SQS, esecuzione dei task, `SendTaskSuccess`/`SendTaskFailure`, `SendTaskHeartbeat`. |
+| OCR | `App\Copilot\Ocr\Services\TextractService` | Integrazione Textract reale, disabilitata di default nelle esecuzioni locali/CI standard. |
+| AI | `App\Copilot\Ai\BedrockService` | Integrazione Bedrock reale per split/estrazione/generazione. |
+| Storage | Dischi Laravel `s3` o `real_s3` | S3 LocalStack per le demo locali, S3 reale per la validazione Textract/Bedrock. |
+| Persistenza | PostgreSQL | Documenti, sotto-documenti, dati estratti, audit e stato dei task di workflow. |
+| Cache/sessione | Redis | Cache/sessione e rate limiting; non è la fonte di verità dei dati. |
+| Osservabilità | OTel Collector, Prometheus, Tempo, Grafana, Alertmanager | Metriche, trace, dashboard e alert locali. |
+| Log | Grafana Alloy, Loki | Raccolta e archiviazione dei log dei container, interrogabili in Grafana. |
 
-## LocalStack vs Real AWS
+## LocalStack e AWS reale
 
-LocalStack is used for production-like orchestration primitives that can be tested locally: Step Functions, SQS/DLQ, S3, EventBridge, SSM Parameter Store and Secrets Manager.
+LocalStack fornisce le primitive di orchestrazione production-like testabili in locale:
+Step Functions, SQS/DLQ, S3, EventBridge, SSM Parameter Store e Secrets Manager. L'applicazione
+parla con i servizi AWS, reali o emulati, **senza cambiare codice**: cambiano solo endpoint e
+credenziali.
 
-Real AWS is used only for the critical AI/OCR validation path when explicit credentials and configuration are provided:
+Alcune primitive sono provisionate ma **non esercitate** dall'applicativo: il bus EventBridge
+(con rule e target verso SQS) e l'identità SES esistono in Terraform, ma nessun codice pubblica
+eventi o invia email. Le policy IAM (es. execution role di Step Functions) sono definite come
+least-privilege *documentata* ma **non applicate da LocalStack** in locale: diventano effettive
+solo sul percorso AWS reale.
+
+AWS reale viene usato solo per il percorso critico di validazione AI/OCR, quando sono fornite
+credenziali e configurazione esplicite:
 
 - `POC_DOCUMENT_DISK=real_s3`
 - `AWS_REAL_REGION`
 - `AWS_REAL_ACCESS_KEY_ID`
 - `AWS_REAL_SECRET_ACCESS_KEY`
-- `AWS_REAL_SESSION_TOKEN`, when needed
+- `AWS_REAL_SESSION_TOKEN`, quando necessario
 - `AWS_REAL_S3_BUCKET`
 - `AWS_REAL_S3_PREFIX`
 - `TEXTRACT_ENABLED=true`
 - `BEDROCK_REGION`
 - `BEDROCK_MODEL_ID`
 
-Standard tests and CI do not call real S3, Textract or Bedrock.
+I test e la CI standard non chiamano S3, Textract o Bedrock reali.
 
-## Implemented Quality Principles
+## Principi di qualità implementati
 
-| Source principle | Concrete implementation |
+| Principio di riferimento | Implementazione concreta |
 | --- | --- |
-| AWS Well-Architected operational excellence | Repeatable Docker/Terraform startup, health/readiness endpoints, `make verify*` targets. |
-| AWS Well-Architected reliability | Explicit Step Functions retries/catches, SQS DLQ, idempotent workflow task table. |
-| AWS Well-Architected security | No runtime admin UI, no committed real secrets, least-required IAM matrix documented. |
-| OWASP ASVS/API baseline | Server-side upload validation, tenant ownership checks, rate limits, structured auth boundary. |
-| Google SRE monitoring | Golden-signal API metrics, document pipeline metrics, queue/DLQ alerts and runbooks. |
-| OpenTelemetry model | Collector receives OTLP, exports metrics to Prometheus and traces to Tempo. |
-| Centralised logging | Grafana Alloy ships every container's logs to Loki, correlated in Grafana with metrics and traces. |
+| AWS Well-Architected — operational excellence | Avvio ripetibile via Docker/Terraform, endpoint `/health` e `/ready`, target `make verify*`. |
+| AWS Well-Architected — reliability | Retry/catch espliciti in Step Functions, heartbeat per task, DLQ SQS, tabella di workflow idempotente. |
+| AWS Well-Architected — security | Nessuna UI di amministrazione runtime, nessun segreto reale committato, header di sicurezza e CSP in nginx, matrice IAM a privilegio minimo documentata. |
+| Baseline OWASP ASVS/API | Validazione upload server-side, controlli di ownership per tenant, rate limit, confine di autenticazione strutturato. |
+| Google SRE — monitoring | Metriche API golden-signal, metriche della pipeline documentale, alert coda/DLQ con runbook. |
+| Modello OpenTelemetry | Il Collector riceve OTLP ed esporta metriche verso Prometheus e trace verso Tempo. |
+| Logging centralizzato | Grafana Alloy invia i log di ogni container a Loki, correlati in Grafana con metriche e trace. |
 
-## Primary References
+## Riferimenti principali
 
 - AWS Well-Architected Framework: https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html
 - OWASP ASVS: https://owasp.org/www-project-application-security-verification-standard/
-- Google SRE Monitoring Distributed Systems: https://sre.google/sre-book/monitoring-distributed-systems/
+- Google SRE — Monitoring Distributed Systems: https://sre.google/sre-book/monitoring-distributed-systems/
 - OpenTelemetry Collector: https://opentelemetry.io/docs/collector/
 - Prometheus alerting: https://prometheus.io/docs/alerting/latest/overview/
 - Grafana provisioning: https://grafana.com/docs/grafana/latest/administration/provisioning/

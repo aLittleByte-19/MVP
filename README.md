@@ -77,7 +77,7 @@ La PoC dimostra un modello applicativo composto da più livelli cooperanti:
 * **Redis** per cache, sessioni e rate limiting;
 * storage documentale **S3-compatible** per PDF originali e sotto-documenti generati;
 * **LocalStack** per emulare localmente servizi AWS come SQS, Step Functions, SSM, Secrets Manager e S3;
-* integrazione AI tramite astrazione verso **Bedrock** e predisposizione OCR tramite **Textract**;
+* integrazione AI tramite astrazione verso **Bedrock** e integrazione OCR tramite **Textract** (attivabile, disabilitata di default);
 * stack di osservabilità con **OpenTelemetry, Prometheus, Grafana, Tempo, Loki, Alloy e Alertmanager**;
 * CI con test backend/frontend, scansione immagini, validazione infrastrutturale e audit accessibilità.
 
@@ -90,6 +90,10 @@ L’architettura locale è organizzata intorno a un entrypoint edge, un layer ap
 Traefik gestisce l’ingresso verso i servizi esposti e instrada il traffico verso Nginx. Nginx serve la SPA frontend e inoltra le richieste API al runtime Laravel/PHP-FPM. Laravel gestisce le API, valida le richieste, applica le regole applicative, registra eventi di audit e avvia i workflow documentali. PostgreSQL conserva lo stato persistente, Redis supporta componenti runtime a bassa latenza, mentre LocalStack fornisce servizi AWS-like in ambiente locale.
 
 I worker Laravel consumano task asincroni da SQS e comunicano con Step Functions tramite callback task token. Questo permette di rappresentare una pipeline documentale composta da stati espliciti, retry, gestione errori, idempotenza e aggiornamento progressivo dello stato.
+
+![Architettura E2E della PoC](docs/architecture/diagrams/final-architecture.drawio.png)
+
+<sub>Architettura e2e</sub>
 
 ## Flusso generativo: AI Assistant
 
@@ -139,7 +143,6 @@ git clone https://github.com/alittlebyte-19/PoC.git
 cd PoC
 
 make setup
-make up
 ```
 
 ### Verifica dello stack
@@ -197,15 +200,19 @@ Le principali aree di evoluzione riguardano:
 
 ## Documentazione tecnica
 
-| Documento                      | Contenuto                                    |
-| ------------------------------ | -------------------------------------------- |
-| `docs/architecture.md`         | Architettura applicativa e infrastrutturale  |
-| `docs/workflows.md`            | Flussi AI Assistant e Co-Pilot documentale   |
-| `docs/observability.md`        | Metriche, trace, log, dashboard e alert      |
-| `docs/security.md`             | Identità, autorizzazione, audit e hardening  |
-| `docs/aws-real-integration.md` | Note per collegamento a servizi AWS reali    |
-| `docs/runbooks/`               | Runbook operativi e troubleshooting          |
-| `openapi/v1/`                  | Contratto API OpenAPI                        |
-| `infra/localstack/`            | Terraform e risorse AWS-like locali          |
-| `docker/`                      | Configurazioni runtime, edge e osservabilità |
-| `.github/workflows/`           | Pipeline CI e quality gate                   |
+Il punto d'ingresso è **[`docs/README.md`](docs/README.md)**, che organizza tutta la
+documentazione con un percorso di lettura per chi apre il progetto la prima volta.
+
+| Documento                                                          | Contenuto                                       |
+| ----------------------------------------------------------------- | ----------------------------------------------- |
+| [`docs/README.md`](docs/README.md)                                | Indice e percorso di lettura della doc          |
+| [`docs/poc-scope.md`](docs/poc-scope.md)                          | Perimetro funzionale della PoC                  |
+| [`docs/IMPLEMENTATION_OVERVIEW.md`](docs/IMPLEMENTATION_OVERVIEW.md) | Panoramica implementativa dell'applicativo    |
+| [`docs/architecture/`](docs/architecture/)                        | Architettura, tracciabilità Capitolato, Well-Architected |
+| [`docs/architecture-decisions/`](docs/architecture-decisions/README.md) | Architecture Decision Records (ADR)       |
+| [`docs/runbooks/`](docs/runbooks/)                                | Runbook operativi e troubleshooting             |
+| [`docs/security/`](docs/security/)                                | Identità, autorizzazione, IAM, OWASP ASVS       |
+| [`openapi/v1/`](openapi/v1/)                                      | Contratto API OpenAPI                           |
+| [`infra/localstack/`](infra/localstack/)                          | Terraform e risorse AWS-like locali             |
+| [`docker/`](docker/)                                              | Configurazioni runtime, edge e osservabilità    |
+| [`.github/workflows/`](.github/workflows/)                        | Pipeline CI e quality gate                      |

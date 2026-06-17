@@ -28,7 +28,7 @@ export function GeneratedCommunicationPreview({ draft }: { draft: GeneratedDraft
           </label>
           <div className={styles.footer}>
             <StatusBadge>{draft.status}</StatusBadge>
-            <span>Creato da AI Assistant</span>
+            <span>Creato da AI Assistant · anteprima in sola lettura</span>
           </div>
         </article>
       ) : (

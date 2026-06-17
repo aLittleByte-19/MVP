@@ -1,7 +1,8 @@
 # Panoramica implementativa dell'applicativo
 
-> Documento generato da analisi diretta della codebase (branch `migration/new_techs`).
-> Ultimo aggiornamento: 2026-06-12.
+> Documento aggiornato tramite analisi diretta della codebase.
+> Branch analizzato: `docs/finalizza_documentazione`.
+> Ultimo aggiornamento: 2026-06-14.
 
 ---
 
@@ -171,15 +172,15 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; N
 **Dove**: `infra/localstack/state-machines/document-pipeline.asl.json`, `infra/localstack/main.tf` (state machine, coda + DLQ, IAM role/policy, EventBridge), `app/Copilot/Workflow/Services/DocumentWorkflowService.php`, `DocumentWorkflowTaskHandler.php`, `app/Console/Commands/ConsumeWorkflowTasks.php`.
 **Ruolo**: la state machine usa il **callback pattern** (`arn:aws:states:::sqs:sendMessage.waitForTaskToken`): ogni stato pubblica su SQS un messaggio con task token e tipo (`textract.ocr`, `bedrock.extract`, `persist.results`, `dispatch.domain_event`); il worker Laravel esegue e risponde con `sendTaskSuccess/Failure`. Retry dichiarativi nello ASL (2 tentativi, backoff 2x), timeout per stato (420s Textract, 720s Bedrock), `Catch` → stato `Failed`.
 **Motivazione**: separa lo stato del workflow dall'esecutore; i task pesanti (LLM, OCR) escono dal ciclo HTTP; la DLQ cattura i messaggi non processabili.
-**Valutazione**: **idempotenza reale** — `document_workflow_tasks.task_token_hash` (SHA-256, unique) deduplica i re-delivery SQS e un task già `succeeded/skipped` ritorna il risultato cached senza rieseguire. È il punto più sofisticato del backend.
-**Gap vs best practice AWS** ([Step Functions best practices](https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html)): manca `HeartbeatSeconds` + `SendTaskHeartbeat` per i task lunghi (oggi un worker morto a metà task viene scoperto solo al timeout di stato); worker singolo senza concorrenza; in LocalStack il comportamento di SFN non è identico ad AWS (Express vs Standard, quota, exactly-once non garantito).
+**Valutazione**: **idempotenza reale** — `document_workflow_tasks.task_token_hash` (SHA-256, unique) deduplica i re-delivery SQS e un task già `succeeded/skipped` ritorna il risultato cached senza rieseguire. **Heartbeat implementato**: l'ASL dichiara `HeartbeatSeconds` per ogni task (180s Textract, 240s Bedrock, 90s persist/dispatch) e il worker invia `SendTaskHeartbeat` tramite `WorkflowTaskHeartbeat` durante il polling Textract e tra i segmenti Bedrock (`TextractService`, `DocumentProcessingService`); un heartbeat rifiutato degrada a no-op senza abortire il task di business. È il punto più sofisticato del backend.
+**Gap vs best practice AWS** ([Step Functions best practices](https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html)): in compose gira una sola replica del worker (`restart: unless-stopped`), anche se il design è già concorrenza-safe (claim atomico via `task_token_hash` + `POC_WORKFLOW_CLAIM_TTL_SECONDS`, `visibility_timeout_seconds` SQS 900s > timeout ASL massimo 720s); in LocalStack il comportamento di SFN non è identico ad AWS (Express vs Standard, quota, exactly-once non garantito).
 
 ### LocalStack 4.5 + Terraform 1.10
 
 **Dove**: `docker-compose.yml` (servizio `localstack`, servizi emulati: `s3,sqs,stepfunctions,ssm,secretsmanager,events,ses,iam,sts,logs`), `infra/localstack/*.tf`.
-**Ruolo**: emula AWS in locale; Terraform provisiona S3 (con SSE-KMS e public access block), SQS+DLQ, SSM parameter, secret JSON, EventBridge bus+rule per eventi terminali della pipeline, IAM role per SFN, identità SES.
+**Ruolo**: emula AWS in locale; Terraform provisiona S3 (con SSE-KMS e public access block), SQS+DLQ, SSM parameter, secret JSON, EventBridge bus+rule (predisposti per gli eventi terminali della pipeline ma non esercitati: l'app non pubblica eventi), IAM role per SFN, identità SES.
 **Motivazione**: l'app parla con AWS vero o emulato **senza cambiare codice** — cambiano solo endpoint e credenziali. Il provisioning è codificato, ripetibile e validato in CI (`terraform fmt -check`, `init`, `validate`).
-**Valutazione**: buona fedeltà al deployment reale (KMS, public access block e IAM sono configurati anche se LocalStack non li applica davvero); lo stato Terraform è locale e committato (`terraform.tfstate` nel repo — accettabile solo perché contiene risorse fake).
+**Valutazione**: buona fedeltà al deployment reale (KMS, public access block, IAM, bus EventBridge e identità SES sono configurati ma non applicati/esercitati a runtime: LocalStack non valuta le policy IAM e l'app non pubblica eventi né invia email); lo stato Terraform è locale e committato (`terraform.tfstate` nel repo — accettabile solo perché contiene risorse fake).
 
 ### SSM Parameter Store + Secrets Manager (config runtime)
 
@@ -327,11 +328,12 @@ Già descritto in §5/§6.2; sintesi valutativa:
 | Idempotenza | ✅ reale | `task_token_hash` unique + risultato cached |
 | DLQ | ✅ | `aws_sqs_queue.documents_dlq` + alert `DLQNotEmpty` |
 | Long polling | ✅ | `WaitTimeSeconds` 10s nel consumer |
-| Heartbeat | ❌ | nessun `HeartbeatSeconds`/`SendTaskHeartbeat` |
-| Concorrenza | ❌ | worker singolo (`restart: unless-stopped`), nessun scaling |
+| Heartbeat | ✅ | `HeartbeatSeconds` nell'ASL + `SendTaskHeartbeat` via `WorkflowTaskHeartbeat` (Textract/Bedrock) |
+| Concorrenza-safe | ✅ design | claim atomico `task_token_hash` + `POC_WORKFLOW_CLAIM_TTL_SECONDS`; `visibility_timeout` 900s > timeout ASL |
+| Scaling worker | ⚠️ | in compose gira una sola replica (`restart: unless-stopped`), nessun autoscaling |
 | Osservabilità job | ✅ | counter sqs/stepfunctions + dashboard `queues-and-dlq`, `document-pipeline` |
 
-In produzione servirebbero: heartbeat per i task lunghi (raccomandazione esplicita [AWS](https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html), perché senza heartbeat un worker morto blocca lo stato fino al timeout), più worker con visibilità SQS calibrata, e una policy di redrive dalla DLQ.
+In produzione servirebbero: più repliche del worker con visibilità SQS calibrata (il design è già concorrenza-safe, manca solo lo scaling effettivo) e una policy di redrive dalla DLQ. L'heartbeat per i task lunghi — raccomandazione esplicita [AWS](https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html) — è già implementato.
 
 ---
 
@@ -381,12 +383,12 @@ Coperto in §5; valutazione sintetica:
 | Sessioni/cookie | ✅ | `security.ini`: httponly, secure, samesite Strict, strict_mode |
 | Container | ✅ | non-root, upgrade pacchetti a build, `disable_functions`, Trivy gate HIGH/CRITICAL in CI |
 | Segreti | ⚠️ | pattern SSM/Secrets Manager corretto, ma tutti i default locali sono password note committate come fallback compose (`poc-local-password`, `admin/admin` Grafana, htpasswd `poc-obs-local-password`). Accettabile solo in locale |
-| CSP | ❌ | nessuna Content-Security-Policy in nginx |
+| CSP | ✅ | Content-Security-Policy restrittiva in nginx via `map $request_uri` (`docker/nginx/default.conf`): `default-src 'self'`, `object-src 'none'`, `frame-ancestors 'none'` (eccetto la preview PDF same-origin, `'self'`), più X-Frame-Options, X-Content-Type-Options, Referrer-Policy |
 | CSRF | n/a | API stateless senza cookie di sessione per le route v1; mapping 419 comunque presente |
 | Upload | ⚠️ | buona validazione, manca AV/CDR (§8) |
 | Logging dati sensibili | ✅ parziale | payload dei task redatti (`input_payload` redacted in `document_workflow_tasks`); prompt utente però persistito in chiaro in `communications.prompt` (da valutare per privacy) |
 
-Rischi OWASP applicabili più rilevanti per il passaggio a produzione: A01 Broken Access Control (header spoofing senza IdP), A02 Cryptographic Failures (segreti default), A05 Security Misconfiguration (CSP assente), upload malevolo (§8).
+Rischi OWASP applicabili più rilevanti per il passaggio a produzione: A01 Broken Access Control (header spoofing senza IdP), A02 Cryptographic Failures (segreti default), upload malevolo senza AV/CDR (§8).
 
 ---
 
@@ -440,7 +442,7 @@ Area più matura della PoC (dettagli §5):
 | Frontend | **Adeguato ma migliorabile** | data layer e a11y curati; manca routing/deep-linking, copertura test limitata |
 | Persistenza | **Adeguato** | schema con FK/indici/CHECK coerenti; manca RLS, retention, strategia backup |
 | Storage/file | **Adeguato per PoC** | validazione upload sopra la media; assenti AV/CDR per produzione |
-| Asincronia/workflow | **Solido per PoC** | retry, timeout, DLQ, idempotenza; manca heartbeat e scaling worker |
+| Asincronia/workflow | **Solido per PoC** | retry, timeout, DLQ, idempotenza, heartbeat e design concorrenza-safe; manca solo lo scaling effettivo (replica singola) |
 | Integrazioni AI | **Adeguato** | astrazione pulita, parsing difensivo; output LLM senza schema rigido, prompt injection non mitigata |
 | Sicurezza | **Adeguato per PoC, non production-ready** | per design: identità simulata, segreti default; il resto (rete, container, input) è curato |
 | Osservabilità | **Sopra la media, quasi production-like** | golden signals, tracing, log, alert+runbook; mancano SLO e receiver reali |
@@ -457,10 +459,10 @@ Area più matura della PoC (dettagli §5):
 | Identità | Header trusted / config locale | Spoofing identità → accesso cross-tenant | OWASP ASVS V1/V3; OIDC | IdP reale (Cognito/Keycloak/Entra), token verificati dall'app o da forward-auth all'edge | **P0** |
 | Segreti | Default committati come fallback compose | Credenziali note in ambienti non-locali | [12factor/config](https://12factor.net/config), AWS Well-Architected SEC | Niente default per ambienti remoti; rotazione via Secrets Manager + invalidazione cache config | **P0** |
 | Upload | No AV/CDR sui PDF | Malware distribuito via preview ad altri utenti | [OWASP File Upload CS](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html) | Scansione AV (es. ClamAV/servizio gestito) + CDR prima della persistenza | **P0** |
-| Worker | Singolo, no heartbeat | Pipeline bloccata fino a timeout su crash worker | [SFN best practices](https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html) | `HeartbeatSeconds` + `SendTaskHeartbeat`; ≥2 worker; redrive DLQ | **P1** |
+| Worker | Replica singola (design concorrenza-safe, heartbeat presente) | Throughput limitato; nessuna ridondanza su crash dell'unica replica | [SFN best practices](https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html) | ≥2 repliche del worker con visibilità SQS calibrata; procedura di redrive DLQ documentata | **P1** |
 | Backup dati | Assente | Perdita dati non recuperabile | Well-Architected REL | RDS/PITR o backup schedulati + restore testato | **P0** (in prod) |
 | Dashboard interne | Basic auth statica | Credenziali condivise, no audit accessi | — | OIDC/forward-auth o accesso solo via VPN; già discusso nei runbook | **P1** |
-| CSP | Assente | XSS amplificato | OWASP A05 | CSP restrittiva su nginx per la SPA | **P1** |
+| CSP | Restrittiva ma statica (`map` nginx) | Nuovi asset/embedding richiedono aggiornamento manuale della policy | OWASP A05 | Gestione centralizzata della CSP e nonce/hash per script dinamici se introdotti | **P3** |
 | Multi-tenancy DB | Solo filtri applicativi | Bug applicativo = leak cross-tenant | PostgreSQL RLS | Row-Level Security con `tenant_id` come policy | **P1** |
 | Output LLM | Normalizzazione, no schema | Dati estratti malformati persistiti | — | Validazione JSON-Schema della risposta + quarantena sotto soglia confidence | **P2** |
 | SLO/alerting | Soglie statiche, receiver demo | Alert fatigue / nessuna notifica reale | [Google SRE](https://sre.google/sre-book/monitoring-distributed-systems/) | SLO + multi-window burn rate; receiver PagerDuty/Slack | **P2** |
@@ -477,21 +479,20 @@ Area più matura della PoC (dettagli §5):
 **Immediati (pre-demo estesa / qualunque esposizione oltre il laptop)**
 1. Rimuovere i fallback di credenziali per ambienti non-locali (fail-fast se mancano).
 2. Endpoint di transizione stato comunicazioni (completa il flusso revisione già predisposto).
-3. CSP su nginx.
 
 **Breve termine (verso un pilot)**
-4. IdP reale con OIDC (Grafana inclusa) e firma/verifica dell'identità lato API.
-5. AV/CDR sull'upload; quarantena per confidence sotto soglia.
-6. Heartbeat SFN + secondo worker; procedura redrive DLQ documentata.
-7. RLS PostgreSQL su `tenant_id`.
+3. IdP reale con OIDC (Grafana inclusa) e firma/verifica dell'identità lato API.
+4. AV/CDR sull'upload; quarantena per confidence sotto soglia.
+5. Seconda replica del worker con visibilità SQS calibrata; procedura redrive DLQ documentata (heartbeat e idempotenza già presenti).
+6. RLS PostgreSQL su `tenant_id`.
 
 **Medio termine (production-like reale)**
-8. Deploy su AWS reale: RDS+backup, SQS/SFN/S3 nativi, Secrets Manager con rotazione, ECS/EKS con più repliche; Terraform già pronto a essere ri-targettizzato.
-9. SLO + burn-rate alert, receiver di notifica reali, retention telemetria.
-10. Propagazione trace context attraverso SQS; contract test runtime sull'OpenAPI.
+7. Deploy su AWS reale: RDS+backup, SQS/SFN/S3 nativi, Secrets Manager con rotazione, ECS/EKS con più repliche; Terraform già pronto a essere ri-targettizzato.
+8. SLO + burn-rate alert, receiver di notifica reali, retention telemetria.
+9. Propagazione trace context attraverso SQS; contract test runtime sull'OpenAPI.
 
 **Eventuali/futuri**
-11. Invio comunicazioni (SES) se rientra nello scope; router SPA; coverage gate.
+10. Invio comunicazioni (SES) se rientra nello scope; router SPA; coverage gate.
 
 ---
 
@@ -501,7 +502,7 @@ L'applicativo dimostra bene tre cose: una **pipeline documentale AI asincrona** 
 
 Le scelte tecniche sono coerenti con l'obiettivo: LocalStack e l'identità simulata permettono di esercitare il codice di produzione senza dipendere da AWS o da un IdP, e i punti in cui la PoC "finge" sono confinati nell'infrastruttura, non sparsi nel codice applicativo — il che rende il riadattamento a un contesto reale un lavoro di configurazione e completamento, non di riscrittura.
 
-I limiti accettabili per una PoC sono dichiarati e localizzati: identità fittizia, segreti di comodo, worker singolo, approvazione comunicazioni incompleta, nessun invio email. Gli stessi limiti sarebbero inaccettabili in produzione, insieme ad AV sull'upload, backup, RLS e SLO: è la lista P0/P1 della tabella in §18.
+I limiti accettabili per una PoC sono dichiarati e localizzati: identità fittizia, segreti di comodo, worker a replica singola, approvazione comunicazioni incompleta, nessun invio email. Gli stessi limiti sarebbero inaccettabili in produzione, insieme ad AV sull'upload, backup, RLS e SLO: è la lista P0/P1 della tabella in §18.
 
 Il percorso più sensato è quello della roadmap in §19: prima chiudere identità e segreti (i due gap che invalidano ogni altra garanzia di sicurezza), poi robustezza operativa del workflow e dei dati, infine il ri-targeting dell'infrastruttura su AWS reale — che l'architettura attuale è già predisposta ad accogliere.
 

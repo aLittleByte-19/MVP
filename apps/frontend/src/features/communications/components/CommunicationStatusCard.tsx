@@ -3,12 +3,23 @@ import { formatFallback } from "../../../lib/formatters";
 import type { CommunicationRecord } from "../types";
 import styles from "./CommunicationStatusCard.module.css";
 
-export function CommunicationStatusCard({ communication }: { communication: CommunicationRecord }) {
+type CommunicationStatusCardProps = {
+  communication: CommunicationRecord;
+  isSelected?: boolean;
+  onSelect?: (communicationId: number) => void;
+};
+
+export function CommunicationStatusCard({ communication, isSelected, onSelect }: CommunicationStatusCardProps) {
   return (
-    <article className={styles.card}>
+    <button
+      type="button"
+      className={`${styles.card} ${isSelected ? styles.isSelected : ""}`.trim()}
+      aria-pressed={isSelected}
+      onClick={() => onSelect?.(communication.id)}
+    >
       <StatusBadge>{communication.status}</StatusBadge>
-      <h3>{communication.title}</h3>
+      <span className={styles.title}>{communication.title}</span>
       <p>{formatFallback(communication.createdAt)}</p>
-    </article>
+    </button>
   );
 }
