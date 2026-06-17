@@ -54,7 +54,7 @@ Proof of Concept per workflow HR e documentali assistiti da AI, con generazione 
       <img src="https://img.shields.io/badge/Trivy-image%20scan-1904DA?logo=trivy&logoColor=white" alt="Trivy">
       <img src="https://img.shields.io/badge/axe%20%2B%20pa11y-accessibility-654FF0" alt="Accessibility">
       <img src="https://img.shields.io/badge/Terraform-validated-844FBA?logo=terraform&logoColor=white" alt="Terraform"> <br><br>
-      <img src="https://github.com/alittlebyte-19/PoC/actions/workflows/ci.yml/badge.svg" alt="CI">
+      <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/aLittleByte-19/PoC/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI (main)"></a>
     </td>
   </tr>
 </table>
