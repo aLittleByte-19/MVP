@@ -27,6 +27,10 @@ vive nell'infrastruttura (LocalStack), non in branch condizionali del codice app
 - I test usano fake unitari separati e percorsi di integrazione/smoke distinti.
 - Gli errori esposti all'utente devono essere chiari senza trapelare credenziali, prompt,
   contenuto dei documenti o altri dati sensibili.
+- Il classificatore documentale restituisce sempre almeno un destinatario: quando non distingue
+  destinatari multipli, l'intero documento è trattato come un singolo destinatario. È un esito di
+  rilevamento valido (non un dato sintetico sostitutivo di un servizio fallito), quindi non
+  contraddice questa decisione; un fallimento reale di Bedrock/Textract resta uno stato `failed`.
 
 ## Alternatives considered
 

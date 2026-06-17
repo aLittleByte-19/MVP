@@ -39,7 +39,11 @@ export function DocumentList({ documents, onSelect, selectedDocumentId }: Docume
           render: (documentItem) => formatFallback(documentItem.title || documentItem.type, "Documento")
         },
         { key: "file", header: "File", render: (documentItem) => formatFallback(documentItem.file) },
-        { key: "date", header: "Data", render: (documentItem) => formatFallback(documentItem.date) },
+        {
+          key: "date",
+          header: "Data",
+          render: (documentItem) => <span className={styles.date}>{formatFallback(documentItem.date)}</span>
+        },
         {
           key: "confidence",
           header: "Conf.",

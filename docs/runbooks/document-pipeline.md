@@ -8,8 +8,8 @@
 4. `DocumentWorkflowService::start()` starts the Step Functions execution and stores execution metadata on `original_documents`.
 5. Step Functions sends callback-token tasks to SQS.
 6. `php artisan poc:workflow:consume` receives each message, executes the task through `DocumentWorkflowTaskHandler`, and calls `SendTaskSuccess` or `SendTaskFailure`.
-7. `textract.ocr` calls real Textract only when `TEXTRACT_ENABLED=true`.
-8. `bedrock.extract` splits/extracts fields through Bedrock and persists `sub_documents` and `extracted_data`.
+7. `textract.ocr` calls real Textract only when `TEXTRACT_ENABLED=true` and stores the page-aware OCR text (`ocr_text` + `ocr_pages`) consumed by the next step.
+8. `bedrock.extract` classifies the document and splits it by recipient, then extracts fields, both from the OCR text via Bedrock (text-only Converse, no PDF document block); it persists `sub_documents` and `extracted_data`. The confidence score is computed from OCR legibility × key-field completeness, not from the model's self-assessment.
 9. `persist.results` returns the current processing state.
 10. `dispatch.domain_event` marks workflow completion metadata and records metrics.
 

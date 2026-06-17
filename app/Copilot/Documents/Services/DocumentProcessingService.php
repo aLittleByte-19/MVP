@@ -59,15 +59,22 @@ class DocumentProcessingService
     public function extractAndSaveFields(SubDocument $subDocument): void
     {
         try {
-            $fields = $this->extractFields($subDocument->file_path);
-            $reviewStatus = $this->reviewStatusForConfidence($fields['confidence_score']);
+            $fields = $this->extractFields($subDocument);
+            // La confidenza effettiva non è l'auto-valutazione del modello (non
+            // calibrata), ma un valore oggettivo: leggibilità OCR × completezza
+            // dei campi chiave. L'output grezzo del modello resta in ai_payload.
+            $confidenceScore = $this->computeConfidenceScore($fields, $subDocument);
+            $reviewStatus = $this->reviewStatusForConfidence($confidenceScore);
             $subDocument->update([
                 'review_status' => $reviewStatus,
                 'error_message' => null,
             ]);
             ExtractedData::updateOrCreate(
                 ['sub_document_id' => $subDocument->id],
-                array_merge($fields, ['ai_payload' => $fields]),
+                array_merge($fields, [
+                    'confidence_score' => $confidenceScore,
+                    'ai_payload' => $fields,
+                ]),
             );
             $this->metrics->recordDomainCounter('ai_extractions_total', [
                 'review_status' => $reviewStatus->value,
@@ -79,7 +86,7 @@ class DocumentProcessingService
                 resourceType: 'sub_document',
                 resourceId: (string) $subDocument->id,
                 metadata: [
-                    'confidence_score' => $fields['confidence_score'],
+                    'confidence_score' => $confidenceScore,
                     'confidence_threshold' => $this->confidenceThreshold(),
                     'review_status' => $reviewStatus->value,
                 ],
@@ -158,7 +165,7 @@ class DocumentProcessingService
             $this->heartbeat->beat(force: true);
 
             $segments = $this->normalizeSegments(
-                $this->splitDocument($original->file_path),
+                $this->splitDocument($original, $pageCount),
                 $pageCount
             );
 
@@ -272,6 +279,71 @@ class DocumentProcessingService
         throw $e;
     }
 
+    /**
+     * Objective confidence for an extraction: how legible the source was
+     * (Textract OCR confidence for the recipient's pages) weighted by how many
+     * of the key fields were actually extracted. Replaces the model's own
+     * uncalibrated self-assessment.
+     *
+     * @param  array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}  $fields
+     */
+    private function computeConfidenceScore(array $fields, SubDocument $subDocument): int
+    {
+        $keyFields = ['employee_first_name', 'employee_last_name', 'company_name', 'document_date'];
+        $found = 0;
+
+        foreach ($keyFields as $key) {
+            if (isset($fields[$key]) && trim((string) $fields[$key]) !== '') {
+                $found++;
+            }
+        }
+
+        $completeness = $found / count($keyFields);
+
+        $ocrConfidence = $this->ocrConfidenceForRange(
+            $subDocument->originalDocument,
+            (int) $subDocument->start_page,
+            (int) $subDocument->end_page
+        );
+
+        return max(0, min(100, (int) round($ocrConfidence * $completeness)));
+    }
+
+    /**
+     * Average Textract OCR confidence (0-100) over the recipient's page range,
+     * falling back to the document-level average.
+     */
+    private function ocrConfidenceForRange(?OriginalDocument $original, int $startPage, int $endPage): float
+    {
+        if ($original === null) {
+            return 0.0;
+        }
+
+        $pages = $original->ocr_pages;
+
+        if (is_array($pages) && $pages !== []) {
+            $values = [];
+
+            foreach ($pages as $page) {
+                $number = (int) ($page['page'] ?? 0);
+
+                if ($number < $startPage || $number > $endPage) {
+                    continue;
+                }
+
+                if (isset($page['confidence_avg']) && $page['confidence_avg'] !== null) {
+                    $values[] = (float) $page['confidence_avg'];
+                }
+            }
+
+            if ($values !== []) {
+                return array_sum($values) / count($values);
+            }
+        }
+
+        return (float) ($original->ocr_confidence_avg ?? 0.0);
+    }
+
     private function reviewStatusForConfidence(?int $confidenceScore): ReviewStatus
     {
         if ($confidenceScore !== null && $confidenceScore >= $this->confidenceThreshold()) {
@@ -328,8 +400,15 @@ class DocumentProcessingService
      */
     private function normalizeSegments(array $segments, int $pageCount): array
     {
+        // Garanzia di scope: un documento reale ha sempre almeno un destinatario.
+        // Se il classificatore non ne individua, l'intero documento è un unico
+        // destinatario (rilevamento corretto, non un fallback automatico).
         if ($segments === []) {
-            throw new \RuntimeException('Il classificatore documentale non ha restituito segmenti elaborabili.');
+            return [[
+                'employee_name' => 'documento',
+                'start_page' => 1,
+                'end_page' => max(1, $pageCount),
+            ]];
         }
 
         return array_values(array_map(function (array $segment) use ($pageCount): array {
@@ -350,23 +429,88 @@ class DocumentProcessingService
     }
 
     /**
-     * Split the document using the configured Bedrock classifier.
+     * Split the document by feeding the Textract OCR text to the Bedrock classifier.
      *
      * @return array<int, array{employee_name: string, start_page: int, end_page: int}>
      */
-    private function splitDocument(string $pdfPath): array
+    private function splitDocument(OriginalDocument $original, int $pageCount): array
     {
-        return $this->bedrock->splitDocument($pdfPath);
+        // Boundary "canary" casuale per-run: una stringa che non può comparire
+        // nel testo del documento, così i marcatori di pagina non sono
+        // confondibili con contenuto reale (es. un documento che cita "Pagina 2").
+        $boundaryNonce = $this->pageBoundaryNonce();
+        $ocrText = $this->ocrTextForRange($original, 1, $pageCount, $boundaryNonce);
+
+        if ($ocrText === '') {
+            throw new \RuntimeException('Testo OCR non disponibile: Textract deve completare l\'estrazione prima dell\'analisi.');
+        }
+
+        return $this->bedrock->splitDocument($ocrText, $pageCount, $boundaryNonce);
     }
 
     /**
-     * Extract fields from the document using the configured Bedrock model.
+     * Extract fields for a recipient from the OCR text of its page range.
      *
      * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}
      */
-    private function extractFields(string $subPdfPath): array
+    private function extractFields(SubDocument $subDocument): array
     {
-        return $this->bedrock->extractFields($subPdfPath);
+        $original = $subDocument->originalDocument;
+
+        if ($original === null) {
+            throw new \RuntimeException('Documento originale non disponibile per il sotto-documento.');
+        }
+
+        $ocrText = $this->ocrTextForRange($original, (int) $subDocument->start_page, (int) $subDocument->end_page, $this->pageBoundaryNonce());
+
+        if ($ocrText === '') {
+            throw new \RuntimeException('Testo OCR non disponibile per l\'intervallo di pagine del destinatario.');
+        }
+
+        return $this->bedrock->extractFields($ocrText);
+    }
+
+    /**
+     * Random per-run boundary token used to delimit pages in the OCR text fed to
+     * the classifier. Unguessable so it cannot collide with document content.
+     */
+    private function pageBoundaryNonce(): string
+    {
+        return bin2hex(random_bytes(8));
+    }
+
+    /**
+     * Build page-delimited OCR text for a page range, using the per-page OCR when
+     * available and falling back to the flat ocr_text for the whole document.
+     * Each page is prefixed by a canary boundary marker keyed on $boundaryNonce.
+     */
+    private function ocrTextForRange(OriginalDocument $original, int $startPage, int $endPage, string $boundaryNonce): string
+    {
+        $pages = $original->ocr_pages;
+
+        if (is_array($pages) && $pages !== []) {
+            $parts = [];
+
+            foreach ($pages as $page) {
+                $number = (int) ($page['page'] ?? 0);
+
+                if ($number < $startPage || $number > $endPage) {
+                    continue;
+                }
+
+                $text = trim((string) ($page['text'] ?? ''));
+
+                if ($text !== '') {
+                    $parts[] = BedrockService::pageBoundaryMarker($number, $boundaryNonce)."\n".$text;
+                }
+            }
+
+            if ($parts !== []) {
+                return implode("\n\n", $parts);
+            }
+        }
+
+        return trim((string) $original->ocr_text);
     }
 
     /**

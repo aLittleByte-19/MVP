@@ -118,17 +118,19 @@ test('extracted data above confidence threshold is auto validated and preserves 
 
 test('low confidence extraction is stored but marked as needs review', function () {
     config(['services.bedrock.poc_confidence_threshold' => 80]);
+    // Solo 2 dei 4 campi chiave estratti: la confidenza calcolata
+    // (leggibilità OCR x completezza) scende sotto soglia anche con OCR alto.
     $this->mock(BedrockService::class, function ($mock) {
         $mock->shouldReceive('extractFields')
             ->once()
             ->andReturn([
                 'employee_first_name' => 'Mario',
                 'employee_last_name' => 'Rossi',
-                'company_name' => 'Acme Srl',
-                'document_date' => '2026-01-31',
+                'company_name' => null,
+                'document_date' => null,
                 'document_type' => 'Cedolino',
                 'description' => 'Cedolino gennaio 2026',
-                'confidence_score' => 79,
+                'confidence_score' => 95,
             ]);
     });
 

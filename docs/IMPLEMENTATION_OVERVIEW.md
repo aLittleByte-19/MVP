@@ -8,9 +8,9 @@
 
 ## 1. Executive summary tecnico
 
-L'applicativo è una PoC di **pipeline documentale HR assistita da AI** composta da due moduli funzionali: un **AI Assistant** che genera comunicazioni aziendali a partire da un prompt (tono e stile vincolati), e un **Co-Pilot CdL** che riceve PDF multi-dipendente, li separa in sotto-documenti per dipendente tramite LLM, ne estrae campi strutturati con confidence score e ne traccia lo stato di lavorazione.
+L'applicativo è una PoC di **pipeline documentale HR assistita da AI** composta da due moduli funzionali: un **AI Assistant** che genera comunicazioni aziendali a partire da un prompt (tono e stile vincolati), e un **Co-Pilot CdL** che riceve PDF di qualsiasi tipologia, ne riconosce tipo e destinatari (sempre almeno uno) dal testo OCR tramite LLM, li separa in sotto-documenti per destinatario, ne estrae campi strutturati e ne traccia lo stato di lavorazione con una confidenza calcolata su leggibilità OCR e completezza dei campi.
 
-Il backend è **Laravel 12 / PHP 8.4** con PostgreSQL e Redis; il frontend è una **SPA React 19 + TypeScript** costruita con Vite e servita da Nginx dietro **Traefik** (unico entrypoint TLS). L'elaborazione documentale è asincrona: una **state machine AWS Step Functions** (emulata in LocalStack) orchestra i task via **SQS con callback task token**, consumati da un worker Laravel dedicato. Le integrazioni AI usano **AWS Bedrock** (split ed estrazione campi, generazione comunicazioni) e opzionalmente **AWS Textract** (OCR, attivabile solo con S3 reale). La configurazione runtime arriva da **SSM Parameter Store + Secrets Manager**, caricata prima del boot di Laravel.
+Il backend è **Laravel 12 / PHP 8.4** con PostgreSQL e Redis; il frontend è una **SPA React 19 + TypeScript** costruita con Vite e servita da Nginx dietro **Traefik** (unico entrypoint TLS). L'elaborazione documentale è asincrona: una **state machine AWS Step Functions** (emulata in LocalStack) orchestra i task via **SQS con callback task token**, consumati da un worker Laravel dedicato. Le integrazioni AI usano **AWS Bedrock** (classificazione/split ed estrazione campi sul testo OCR, generazione comunicazioni — tutte chiamate solo-testo via Converse) e **AWS Textract** per l'OCR che alimenta la pipeline documentale (necessario per l'analisi, attivabile solo con S3 reale). La configurazione runtime arriva da **SSM Parameter Store + Secrets Manager**, caricata prima del boot di Laravel.
 
 L'osservabilità è il tratto più maturo della PoC: metriche golden-signal e di dominio esposte in formato Prometheus, trace OTLP verso Tempo, log dei container verso Loki via Alloy, 10 alert rule, 5 dashboard Grafana provisioned e runbook collegati. La CI (GitHub Actions) copre lint, analisi statica, test backend e frontend, scansione Trivy delle immagini, validazione Terraform e audit di accessibilità axe/pa11y contro lo stack reale.
 
@@ -156,14 +156,14 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; N
 ### AWS Bedrock (LLM)
 
 **Dove**: `app/Copilot/Ai/BedrockService.php` (client `BedrockRuntimeClient` costruito in `AppServiceProvider` con timeout 300s), config in `config/services.php` (`model_id`, `region`, `endpoint`, credenziali AWS reali opzionali; default modello `amazon.nova-lite-v1:0` da `docker-compose.yml`).
-**Ruolo**: tre operazioni — `generateCommunication()` (JSON `{title, body}` da prompt+tono+stile), `splitDocument()` (segmenti per dipendente da PDF inviato come bytes), `extractFields()` (campi strutturati + confidence 0-100).
+**Ruolo**: tre operazioni — `generateCommunication()` (JSON `{title, body}` da prompt+tono+stile), `splitDocument()` (segmenti per destinatario dal testo OCR), `extractFields()` (campi strutturati dal testo OCR; la confidenza effettiva è calcolata a valle su leggibilità OCR e completezza dei campi). Tutte le chiamate sono solo-testo via Converse.
 **Valutazione**: parsing difensivo dell'output LLM (estrazione JSON da fence markdown con fallback regex, normalizzazione campi in `normalizeSplitResponse()`), errori AWS mappati su `AiServiceException` → 502 con messaggio user-friendly, metriche di fallimento dedicate (`BedrockFailureRateHigh` alert).
 **Gap**: l'output del modello non è validato contro uno schema rigido (solo normalizzazione); nessuna mitigazione esplicita di prompt injection veicolata dal contenuto del PDF; nessun circuit breaker (solo retry SDK).
 
 ### AWS Textract (OCR, opzionale)
 
 **Dove**: `app/Copilot/Ocr/Services/TextractService.php`, flag `TEXTRACT_ENABLED` (`config/services.php`).
-**Ruolo**: OCR asincrono (`startDocumentTextDetection` + polling con timeout configurabile), confidence media, testo salvato su `original_documents.ocr_text`.
+**Ruolo**: OCR asincrono (`startDocumentTextDetection` + polling con timeout configurabile), confidence media, testo salvato su `original_documents.ocr_text` e per pagina su `original_documents.ocr_pages` (usato da split ed estrazione).
 **Dettaglio rilevante**: guard architetturale in `DocumentWorkflowService::start()` — se Textract è abilitato ma il disco documenti non è `real_s3`, il workflow rifiuta di partire con errore esplicito (Textract reale non può leggere il bucket LocalStack). È un esempio concreto di fail-fast su configurazioni incoerenti.
 **Stato**: implementato ma **disabilitato di default** (`TEXTRACT_ENABLED=false`); con flag off il task ritorna `enabled=false` e la pipeline prosegue.
 
@@ -252,9 +252,9 @@ sequenceDiagram
     W->>W: dedup su task_token_hash (idempotente)
     W-->>SFN: sendTaskSuccess
     SFN->>SQS: bedrock.extract + taskToken
-    W->>BR: splitDocument(pdf) → segmenti per dipendente
+    W->>BR: splitDocument(testo OCR) → segmenti per destinatario
     W->>W: Fpdi: estrae pagine → SubDocument per segmento
-    W->>BR: extractFields(sub-pdf) → ExtractedData + confidence
+    W->>BR: extractFields(testo OCR destinatario) → ExtractedData; confidenza calcolata
     W-->>SFN: sendTaskSuccess
     SFN->>SQS: persist.results, poi dispatch.domain_event
     W-->>SFN: sendTaskSuccess (status → Completed)
@@ -312,7 +312,7 @@ Gli stati applicativi sono enum PHP con cast Eloquent (`ProcessingStatus`, `Send
 
 **Fruizione**: preview via `Storage::readStream` con `Content-Disposition: inline` e autorizzazione tenant; nessun URL firmato (i file non sono mai raggiungibili direttamente).
 
-**Confronto con [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)**: presenti validazione contenuto+estensione, limite dimensione, nomi generati server-side, storage fuori dal webroot — il grosso delle raccomandazioni. Mancano per un contesto reale: scansione antivirus/sandbox, CDR per neutralizzare JavaScript/azioni embedded nei PDF (OWASP la raccomanda esplicitamente per i formati PDF), e rate limiting dedicato sull'upload oltre al throttle generico. Rischio residuo concreto: un PDF malevolo viene comunque inoltrato a Bedrock e ri-servito in preview ad altri operatori.
+**Confronto con [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)**: presenti validazione contenuto+estensione, limite dimensione, nomi generati server-side, storage fuori dal webroot — il grosso delle raccomandazioni. Mancano per un contesto reale: scansione antivirus/sandbox, CDR per neutralizzare JavaScript/azioni embedded nei PDF (OWASP la raccomanda esplicitamente per i formati PDF), e rate limiting dedicato sull'upload oltre al throttle generico. Rischio residuo concreto: un PDF malevolo viene comunque inoltrato a Textract, archiviato su S3 e ri-servito in preview ad altri operatori (a Bedrock arriva solo il testo OCR estratto, non il PDF).
 
 ---
 
@@ -343,7 +343,7 @@ Coperte in §5 (Bedrock, Textract) e §6. Punti trasversali:
 
 - **Astrazione**: i client AWS sono costruiti centralmente in `AppServiceProvider` con endpoint/credenziali da config → lo switch LocalStack/AWS reale è solo configurativo. Le credenziali "reali" (`AWS_REAL_*`, `TF_VAR_real_*`) sono separate da quelle fake di LocalStack.
 - **Niente mock nel codice di produzione**: la "simulazione" sta nell'infrastruttura (LocalStack), non in branch condizionali applicativi — scelta che mantiene il codice identico tra demo e produzione. L'unico flag comportamentale è `TEXTRACT_ENABLED`.
-- **Privacy**: i PDF (potenzialmente con dati personali di dipendenti) transitano verso Bedrock/Textract; non c'è anonimizzazione né data-retention policy. In PoC con dati finti va bene; in produzione richiede DPA/regione EU e una policy di retention su `ocr_text` ed `extracted_data`.
+- **Privacy**: i PDF (potenzialmente con dati personali di dipendenti) transitano verso Textract e l'object storage, e il relativo testo OCR verso Bedrock; non c'è anonimizzazione né data-retention policy. In PoC con dati finti va bene; in produzione richiede DPA/regione EU e una policy di retention su `ocr_text` ed `extracted_data`.
 - **Error handling**: eccezioni AWS → log strutturato + 502 con messaggio amichevole; mai stack trace al client.
 
 ---

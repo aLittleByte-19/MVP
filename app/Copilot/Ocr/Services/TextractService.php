@@ -18,7 +18,7 @@ class TextractService
     ) {}
 
     /**
-     * @return array{enabled: bool, job_id: ?string, text: ?string, confidence_avg: ?float}
+     * @return array{enabled: bool, job_id: ?string, text: ?string, pages: array<int, array{page: int, text: string, confidence_avg: float|null}>, confidence_avg: ?float}
      */
     public function detectText(string $bucket, string $key, OriginalDocument $document): array
     {
@@ -29,6 +29,7 @@ class TextractService
                 'enabled' => false,
                 'job_id' => null,
                 'text' => null,
+                'pages' => [],
                 'confidence_avg' => null,
             ];
         }
@@ -40,6 +41,12 @@ class TextractService
         $startedAt = microtime(true);
 
         try {
+            // Il token di idempotenza deve dipendere anche dall'oggetto S3, non
+            // solo dall'id documento: dopo un reset/re-upload lo stesso id può
+            // puntare a un file diverso, e un token fisso farebbe scattare
+            // IdempotentParameterMismatchException contro il job precedente.
+            $requestToken = 'poc-document-'.$document->id.'-'.substr(hash('sha256', $bucket.'/'.$key), 0, 24);
+
             $result = $this->client->startDocumentTextDetection([
                 'DocumentLocation' => [
                     'S3Object' => [
@@ -47,7 +54,7 @@ class TextractService
                         'Name' => $key,
                     ],
                 ],
-                'ClientRequestToken' => 'poc-document-'.$document->id,
+                'ClientRequestToken' => $requestToken,
                 'JobTag' => 'poc-document-'.$document->id,
             ]);
 
@@ -58,6 +65,7 @@ class TextractService
             $output = $this->pollTextDetection($jobId, $startedAt);
             $document->update([
                 'ocr_text' => $output['text'],
+                'ocr_pages' => $output['pages'],
                 'ocr_confidence_avg' => $output['confidence_avg'],
             ]);
             $this->metrics->recordDomainCounter('textract_jobs_completed_total');
@@ -70,6 +78,7 @@ class TextractService
                 'enabled' => true,
                 'job_id' => $jobId,
                 'text' => $output['text'],
+                'pages' => $output['pages'],
                 'confidence_avg' => $output['confidence_avg'],
             ];
         } catch (AwsException $e) {
@@ -89,7 +98,7 @@ class TextractService
     }
 
     /**
-     * @return array{text: string, confidence_avg: ?float}
+     * @return array{text: string, pages: array<int, array{page: int, text: string, confidence_avg: float|null}>, confidence_avg: ?float}
      */
     private function pollTextDetection(string $jobId, float $startedAt): array
     {
@@ -98,6 +107,9 @@ class TextractService
         $nextToken = null;
         $lines = [];
         $confidences = [];
+
+        /** @var array<int, array{lines: array<int, string>, confidences: array<int, float>}> $pageBuckets */
+        $pageBuckets = [];
 
         while (true) {
             $this->heartbeat->beat();
@@ -130,10 +142,16 @@ class TextractService
                     continue;
                 }
 
-                $lines[] = (string) ($block['Text'] ?? '');
+                $text = (string) ($block['Text'] ?? '');
+                $page = max(1, (int) ($block['Page'] ?? 1));
+
+                $lines[] = $text;
+                $pageBuckets[$page]['lines'][] = $text;
 
                 if (isset($block['Confidence'])) {
-                    $confidences[] = (float) $block['Confidence'];
+                    $confidence = (float) $block['Confidence'];
+                    $confidences[] = $confidence;
+                    $pageBuckets[$page]['confidences'][] = $confidence;
                 }
             }
 
@@ -144,8 +162,21 @@ class TextractService
             }
         }
 
+        ksort($pageBuckets);
+        $pages = [];
+
+        foreach ($pageBuckets as $page => $bucket) {
+            $pageConfidences = $bucket['confidences'] ?? [];
+            $pages[] = [
+                'page' => $page,
+                'text' => trim(implode("\n", array_filter($bucket['lines'] ?? []))),
+                'confidence_avg' => $pageConfidences === [] ? null : array_sum($pageConfidences) / count($pageConfidences),
+            ];
+        }
+
         return [
             'text' => trim(implode("\n", array_filter($lines))),
+            'pages' => $pages,
             'confidence_avg' => $confidences === [] ? null : array_sum($confidences) / count($confidences),
         ];
     }

@@ -29,7 +29,7 @@ test('successful split creates sub documents linked to original', function () {
     $original = OriginalDocument::factory()->create();
 
     $service = app(BedrockService::class);
-    $segments = $service->splitDocument($original->file_path);
+    $segments = $service->splitDocument($original->ocr_text, 4, 'test-nonce');
 
     foreach ($segments as $segment) {
         SubDocument::create([
@@ -54,7 +54,7 @@ test('original document status is set to failed when bedrock split fails', funct
 
     try {
         $service = app(BedrockService::class);
-        $service->splitDocument($original->file_path);
+        $service->splitDocument($original->ocr_text, 4, 'test-nonce');
     } catch (RuntimeException) {
         $original->update(['processing_status' => ProcessingStatus::Failed]);
     }
@@ -72,7 +72,7 @@ test('split returns empty array when no employees detected', function () {
     $original = OriginalDocument::factory()->create();
 
     $service = app(BedrockService::class);
-    $segments = $service->splitDocument($original->file_path);
+    $segments = $service->splitDocument($original->ocr_text, 4, 'test-nonce');
 
     expect($segments)->toBeArray()->toBeEmpty();
     expect(SubDocument::where('original_document_id', $original->id)->count())->toBe(0);

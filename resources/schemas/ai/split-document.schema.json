@@ -2,7 +2,7 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://poc.alittlebyte.local/schemas/ai/split-document.schema.json",
     "title": "SplitDocumentResult",
-    "description": "Per-employee page boundaries returned by the Bedrock document classifier. An empty array is a valid model answer (no distinct employees) handled as business rule downstream; extra keys per segment are ignored.",
+    "description": "Per-recipient page boundaries returned by the Bedrock document classifier for any document type. An empty array is a valid model answer (treated downstream as a single whole-document recipient); extra keys per segment are ignored. The employee_name key carries the recipient name regardless of document type.",
     "type": "array",
     "maxItems": 50,
     "items": {

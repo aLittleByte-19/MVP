@@ -25,6 +25,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $workflow_failure_reason
  * @property string|null $textract_job_id
  * @property string|null $ocr_text
+ * @property array<int, array{page: int, text: string, confidence_avg: float|null}>|null $ocr_pages
  * @property float|null $ocr_confidence_avg
  */
 class OriginalDocument extends Model
@@ -47,6 +48,7 @@ class OriginalDocument extends Model
         'workflow_failure_reason',
         'textract_job_id',
         'ocr_text',
+        'ocr_pages',
         'ocr_confidence_avg',
     ];
 
@@ -61,6 +63,7 @@ class OriginalDocument extends Model
             'workflow_completed_at' => 'datetime',
             'workflow_failed_at' => 'datetime',
             'ocr_confidence_avg' => 'float',
+            'ocr_pages' => 'array',
         ];
     }
 

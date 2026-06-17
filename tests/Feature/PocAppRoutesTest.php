@@ -147,6 +147,9 @@ test('document upload performs initial split and field extraction', function () 
     Storage::disk('s3')->assertExists($document->file_path);
     Queue::assertNothingPushed();
 
+    // L'OCR di Textract alimenta il classificatore: nei test lo seminiamo a mano.
+    $document->update(['ocr_text' => "[Pagina 1]\nMario Rossi - Azienda Demo Srl", 'ocr_confidence_avg' => 97.5]);
+
     // Run the workflow task manually: this mirrors the SQS callback-token worker path.
     pocRunWorkflowTask($document);
 
@@ -227,7 +230,7 @@ test('document upload rejects corrupted pdf files with valid magic bytes', funct
     expect(OriginalDocument::query()->count())->toBe(0);
 });
 
-test('document processing fails when classifier returns no usable segments', function () {
+test('classifier returning no segments yields a single whole-document recipient', function () {
     config([
         'filesystems.default' => 's3',
     ]);
@@ -236,12 +239,24 @@ test('document processing fails when classifier returns no usable segments', fun
     Storage::fake('s3');
     pocMockWorkflowStart($this);
 
+    // Quando il classificatore non distingue destinatari, l'intero documento
+    // diventa un unico destinatario (>=1 garantito), quindi l'estrazione parte.
     $this->mock(BedrockService::class, function ($mock) {
         $mock->shouldReceive('splitDocument')
             ->once()
             ->andReturn([]);
 
-        $mock->shouldNotReceive('extractFields');
+        $mock->shouldReceive('extractFields')
+            ->once()
+            ->andReturn([
+                'employee_first_name' => 'Mario',
+                'employee_last_name' => 'Rossi',
+                'company_name' => 'Azienda Demo Srl',
+                'document_date' => now()->toDateString(),
+                'document_type' => 'Autocertificazione',
+                'description' => 'Documento a destinatario singolo.',
+                'confidence_score' => 88,
+            ]);
     });
 
     $uploadResponse = $this->postJson('/api/v1/documents/ocr', ['document' => pocPdfUpload()])
@@ -249,13 +264,17 @@ test('document processing fails when classifier returns no usable segments', fun
         ->assertJsonStructure(['streamUrl']);
 
     $document = OriginalDocument::query()->first();
+    $document->update(['ocr_text' => "[Pagina 1]\nMario Rossi - Azienda Demo Srl", 'ocr_confidence_avg' => 97.5]);
 
-    expect(fn () => pocRunWorkflowTask($document))
-        ->toThrow(RuntimeException::class, 'segmenti elaborabili');
+    pocRunWorkflowTask($document);
 
-    expect(SubDocument::query()->count())->toBe(0)
-        ->and($document->refresh()->processing_status->value)->toBe('failed')
-        ->and($document->error_message)->toBe('Analisi documento non disponibile. Verifica configurazione e permessi Bedrock.');
+    $subDocument = SubDocument::query()->first();
+
+    expect(SubDocument::query()->count())->toBe(1)
+        ->and($subDocument->start_page)->toBe(1)
+        ->and($subDocument->end_page)->toBe(1)
+        ->and($document->refresh()->processing_status->value)->toBe('completed')
+        ->and($document->error_message)->toBeNull();
 
     $this->get($uploadResponse->json('streamUrl'))->assertOk();
 });
@@ -293,6 +312,7 @@ test('document processing clamps model page ranges to the uploaded pdf page coun
         ->assertStatus(202);
 
     $document = OriginalDocument::query()->first();
+    $document->update(['ocr_text' => "[Pagina 1]\nMario Rossi - Azienda Demo Srl", 'ocr_confidence_avg' => 97.5]);
     pocRunWorkflowTask($document);
 
     $subDocument = SubDocument::query()->first();
@@ -330,6 +350,7 @@ test('document processing keeps split visible when field extraction fails', func
         ->assertStatus(202);
 
     $document = OriginalDocument::query()->first();
+    $document->update(['ocr_text' => "[Pagina 1]\nMario Rossi - Azienda Demo Srl", 'ocr_confidence_avg' => 97.5]);
     expect(fn () => pocRunWorkflowTask($document))
         ->toThrow(RuntimeException::class);
 

@@ -46,8 +46,9 @@ Incluso:
 - upload singolo di PDF;
 - controllo formato e duplicato tramite hash;
 - avvio asincrono tramite state machine Step Functions (emulata in LocalStack) con task pubblicati su SQS tramite callback task token, consumati dal worker `poc:workflow:consume`;
-- split documentale tramite Bedrock;
-- estrazione dei campi principali tramite Bedrock (nome/cognome, azienda, data, tipologia, descrizione, confidenza);
+- classificazione e split per destinatario tramite Bedrock sul testo OCR (qualsiasi tipologia di documento, sempre almeno un destinatario);
+- estrazione dei campi principali tramite Bedrock sul testo OCR (nome/cognome, azienda, data, tipologia, descrizione);
+- confidenza calcolata oggettivamente come leggibilità OCR (Textract) ponderata sulla completezza dei campi chiave, non come auto-valutazione del modello;
 - persistenza di documento originale, sotto-documenti e dati estratti;
 - dettaglio documento affiancato (anteprima a sinistra, dati estratti a destra);
 - correzione manuale dei campi estratti e validazione manuale (human-in-the-loop);
@@ -58,7 +59,7 @@ Incluso:
 
 Parziale:
 
-- lo storico dei documenti analizzati è ordinato dal più recente ma non offre i filtri avanzati (ricerca per dipendente/azienda, soglia di confidenza, mese e anno).
+- lo storico dei documenti analizzati è ordinato dal più recente ma non offre i filtri avanzati (ricerca per destinatario/azienda, soglia di confidenza, mese e anno).
 
 Fuori scope PoC:
 
