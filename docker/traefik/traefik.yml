@@ -1,0 +1,42 @@
+global:
+  sendAnonymousUsage: false
+
+entryPoints:
+  web:
+    address: ":8080"
+    # Nessun traffico in chiaro: tutto redirige sull'entrypoint TLS (la basic
+    # auth delle dashboard non deve mai viaggiare su HTTP)
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":8443"
+  metrics:
+    address: ":9100"
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+api:
+  dashboard: false
+
+ping:
+  entryPoint: metrics
+
+log:
+  level: INFO
+  format: json
+
+accessLog:
+  format: json
+
+metrics:
+  prometheus:
+    entryPoint: metrics
+    addEntryPointsLabels: true
+    addRoutersLabels: true
+    addServicesLabels: true

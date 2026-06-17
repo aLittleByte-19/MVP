@@ -1,0 +1,142 @@
+.tableWrapper {
+  overflow: hidden;
+  border: 1px solid var(--poc-border-soft);
+  border-radius: var(--poc-radius);
+  background: var(--poc-surface);
+}
+
+.table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: var(--poc-space-3);
+  border-bottom: 1px solid var(--poc-border-soft);
+  text-align: left;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.table th {
+  background: var(--poc-surface-soft);
+  color: var(--poc-muted);
+  font-size: var(--poc-font-xs);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table th[data-column="recipient"],
+.table td[data-column="recipient"] {
+  width: 18%;
+}
+
+.table th[data-column="document"],
+.table td[data-column="document"] {
+  width: 13%;
+}
+
+.table th[data-column="file"],
+.table td[data-column="file"] {
+  width: 26%;
+}
+
+.table th[data-column="date"],
+.table td[data-column="date"] {
+  width: 10%;
+}
+
+.table th[data-column="confidence"],
+.table td[data-column="confidence"] {
+  width: 7%;
+}
+
+.table th[data-column="status"],
+.table td[data-column="status"] {
+  width: 15%;
+}
+
+.table th[data-column="actions"],
+.table td[data-column="actions"] {
+  width: 11%;
+}
+
+.table td[data-column="actions"] {
+  text-align: center;
+}
+
+/* Optional left status strip (mirrors mockup .document-row::before). */
+.table tbody tr[data-tone="needs-review"] td:first-child {
+  box-shadow: inset 4px 0 0 #d99a3f;
+}
+
+.table tbody tr[data-tone="confirmed"] td:first-child {
+  box-shadow: inset 4px 0 0 #6bb58a;
+}
+
+.table tbody tr[data-tone="sent"] td:first-child {
+  box-shadow: inset 4px 0 0 var(--poc-border-strong);
+}
+
+@media (max-width: 860px) {
+  .table,
+  .table thead,
+  .table tbody,
+  .table tr,
+  .table th,
+  .table td {
+    display: block;
+  }
+
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .table tbody {
+    display: grid;
+  }
+
+  .table tbody tr {
+    display: grid;
+    gap: var(--poc-space-2);
+    padding: var(--poc-space-3);
+    border-bottom: 1px solid var(--poc-border-soft);
+  }
+
+  .table tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .table td {
+    display: grid;
+    grid-template-columns: minmax(84px, 0.38fr) minmax(0, 1fr);
+    gap: var(--poc-space-2);
+    width: 100% !important;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .table td::before {
+    content: attr(data-label);
+    color: var(--poc-muted);
+    font-size: var(--poc-font-xs);
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .table td[data-column="actions"] {
+    text-align: left;
+  }
+}

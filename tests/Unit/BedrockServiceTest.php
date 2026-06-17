@@ -1,6 +1,7 @@
 <?php
 
-use App\Poc\Services\BedrockService;
+use App\Copilot\Ai\AiOutputValidator;
+use App\Copilot\Ai\BedrockService;
 use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\Command;
 use Aws\Exception\AwsException;
@@ -20,7 +21,7 @@ test('generateCommunication returns title and body on success', function () {
             ],
         ]));
 
-    $service = new BedrockService($mockClient, 'test-model-id');
+    $service = new BedrockService($mockClient, 'test-model-id', new AiOutputValidator);
     $result = $service->generateCommunication('Scrivi una comunicazione', 'formal', 'newsletter');
 
     expect($result)->toBeArray()
@@ -35,7 +36,7 @@ test('generateCommunication throws RuntimeException on Bedrock failure', functio
         ->once()
         ->andThrow(new AwsException('Service error', new Command('converse')));
 
-    $service = new BedrockService($mockClient, 'test-model-id');
+    $service = new BedrockService($mockClient, 'test-model-id', new AiOutputValidator);
 
     expect(fn () => $service->generateCommunication('prompt', 'formal', 'newsletter'))
         ->toThrow(RuntimeException::class);

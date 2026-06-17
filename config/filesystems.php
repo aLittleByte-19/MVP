@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'default' => env('FILESYSTEM_DISK', 'local'),
+    'default' => env('FILESYSTEM_DISK', 's3'),
 
     /*
     |--------------------------------------------------------------------------
@@ -59,6 +59,18 @@ return [
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => false,
             'report' => false,
+        ],
+
+        'real_s3' => [
+            'driver' => 's3',
+            'key' => env('AWS_REAL_ACCESS_KEY_ID'),
+            'secret' => env('AWS_REAL_SECRET_ACCESS_KEY'),
+            'token' => env('AWS_REAL_SESSION_TOKEN'),
+            'region' => env('AWS_REAL_REGION', env('AWS_DEFAULT_REGION')),
+            'bucket' => env('AWS_REAL_S3_BUCKET'),
+            'root' => trim((string) env('AWS_REAL_S3_PREFIX', 'documents/'), '/'),
+            'throw' => true,
+            'report' => true,
         ],
 
     ],

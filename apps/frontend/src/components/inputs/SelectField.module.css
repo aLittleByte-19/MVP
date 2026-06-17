@@ -1,0 +1,20 @@
+.field {
+  display: grid;
+  gap: var(--poc-space-2);
+  color: var(--poc-text);
+  font-weight: 700;
+}
+
+.field span {
+  font-size: var(--poc-font-sm);
+}
+
+.field select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 var(--poc-space-3);
+  border: 1px solid var(--poc-border-strong);
+  border-radius: var(--poc-radius);
+  background: var(--poc-surface-muted);
+  color: var(--poc-text);
+}

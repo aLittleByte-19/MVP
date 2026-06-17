@@ -1,0 +1,20 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://poc.alittlebyte.local/schemas/ai/generate-communication.schema.json",
+    "title": "GenerateCommunicationResult",
+    "description": "HR communication draft returned by the Bedrock conversational model. Extra keys are ignored: only title and body are persisted.",
+    "type": "object",
+    "required": ["title", "body"],
+    "properties": {
+        "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+        },
+        "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+        }
+    }
+}

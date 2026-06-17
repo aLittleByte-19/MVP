@@ -1,0 +1,39 @@
+.badge {
+  --tag-accent: var(--poc-primary);
+  --tag-bg: var(--poc-surface-soft);
+  --tag-color: var(--poc-primary-deep);
+
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 3px 9px;
+  border: 1px solid var(--poc-border);
+  border-left: 3px solid var(--tag-accent);
+  border-radius: 4px;
+  background: var(--tag-bg);
+  color: var(--tag-color);
+  font-size: var(--poc-font-xs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.success {
+  --tag-accent: var(--poc-success);
+  --tag-bg: var(--poc-success-soft);
+  --tag-color: var(--poc-success);
+}
+
+.warning {
+  --tag-accent: var(--poc-warning);
+  --tag-bg: var(--poc-warning-soft);
+  --tag-color: var(--poc-warning);
+}
+
+.danger {
+  --tag-accent: var(--poc-danger);
+  --tag-bg: var(--poc-accent-soft);
+  --tag-color: var(--poc-danger);
+}

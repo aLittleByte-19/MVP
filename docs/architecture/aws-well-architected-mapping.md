@@ -1,0 +1,25 @@
+# Mapping AWS Well-Architected
+
+Questo documento mette in relazione lo stato attuale della PoC con i sei pilastri dell'AWS
+Well-Architected Framework. **Non costituisce una review formale AWS** e non dichiara alcuna
+certificazione di produzione: è un'autovalutazione con evidenze nella codebase, formulata come
+**baseline PoC** con **allineamento parziale** e **lavoro production-like restante**.
+
+Per lo stato implementativo di dettaglio vedi [`../IMPLEMENTATION_OVERVIEW.md`](../IMPLEMENTATION_OVERVIEW.md);
+per il perimetro funzionale [`../poc-scope.md`](../poc-scope.md).
+
+| Pilastro | Implementazione corrente | Evidenza nella codebase | Gap residuo | Evoluzione consigliata |
+| --- | --- | --- | --- | --- |
+| Operational excellence | Ciclo di vita Docker-first, target Make per setup/verifica, provisioning AWS-like via Terraform, job di migrazione al release, endpoint `/health` e `/ready`, OTel Collector, regole Prometheus con runbook, CI a quattro job. | `Makefile`, `docker-compose.yml`, `infra/localstack/*.tf`, `routes/web.php` (`/health`, `/ready`), `docker/prometheus/rules/`, `docs/runbooks/`, `.github/workflows/ci.yml` | Nessun SLO/error budget formalizzato, nessun processo di on-call o di incident management, nessuna policy di approvazione del rilascio. | Definire SLO posseduti, dashboard di capacity, processo di incident e approvazioni di rilascio. |
+| Security | Nessuna UI di amministrazione runtime, configurazione separata tra SSM Parameter Store e Secrets Manager, middleware di identità strutturato, controlli RBAC/ABAC con tenant scoping, audit append-only, route legacy bloccate, header di sicurezza e CSP in nginx, nessuna credenziale IAM statica nella CI ordinaria, gate Trivy HIGH/CRITICAL. | `app/Copilot/Support/RuntimeConfigurationLoader.php`, `app/Http/Middleware/`, `app/Copilot/Audit/`, `docker/nginx/default.conf`, `.github/workflows/ci.yml` (Trivy) | Identità simulata via header trusted/config locale (nessun IdP), segreti di default committati come fallback compose, niente AV/CDR sull'upload. | Sostituire l'identità locale con un confine IdP aziendale, collegare un ruolo IAM con privilegio minimo, aggiungere scansione AV/CDR e SBOM gate. |
+| Reliability | Orchestrazione Step Functions **end-to-end** (LocalStack) con retry/catch dichiarativi, timeout e heartbeat per task, coda SQS con DLQ (redrive `maxReceiveCount` 3), stati `failed` espliciti, **nessun fallback automatico** dei servizi AI (ADR 0005), tabella di workflow idempotente, readiness check reale. | `infra/localstack/state-machines/document-pipeline.asl.json`, `infra/localstack/main.tf` (DLQ, redrive), `app/Console/Commands/ConsumeWorkflowTasks.php`, `app/Copilot/Workflow/Services/`, migrazione `document_workflow_tasks` (`task_token_hash` unique) | Una sola replica del worker in compose (design già concorrenza-safe), nessun backup/PITR dei dati, procedura di redrive dalla DLQ non automatizzata. | ≥2 repliche del worker, RDS/PITR o backup schedulati con restore testato, runbook di redrive DLQ e retry budget espliciti. |
+| Performance efficiency | SPA servita staticamente da Nginx, PHP-FPM con OPcache, pipeline documentale asincrona fuori dal ciclo HTTP, istogramma di latenza HTTP, dimensione massima del body limitata. | `docker/nginx/`, `docker/php/`, `app/Copilot/Observability/MetricsRecorder.php`, `routes/api.php` (throttle) | Upload gestito in-process anziché con finalizzazione presigned S3; nessun target di capacity derivato dal traffico osservato. | Spostare gli upload pesanti su finalizzazione presigned S3 e fissare target di capacity dai dati osservati. |
+| Cost optimization | Lo smoke su AWS reale è opzionale/manuale, le risorse AWS-like girano in LocalStack, Prometheus è locale. | `.github/workflows/aws-smoke.yml`, `docker-compose.yml` (LocalStack), `infra/localstack/` | Nessun tag di allocazione costi, nessun budget, nessuna lifecycle policy sugli oggetti S3. | Aggiungere tag di cost allocation, budget, lifecycle policy sugli oggetti e schedulazioni limitate dello smoke reale. |
+| Sustainability | Tooling dockerizzato che evita drift dell'host, build frontend multi-stage, teardown locale via Compose/Terraform, esecuzione su cloud reale minimizzata. | `docker/nginx/Dockerfile` (multi-stage), `docker-compose.yml`, `infra/localstack/` | Nessun budget sulla dimensione delle immagini, nessuna retention esplicita per log, metriche e documenti. | Definire budget di dimensione immagini e policy di retention per log, metriche e documenti. |
+
+## Riferimenti
+
+- AWS Well-Architected Framework: https://docs.aws.amazon.com/wellarchitected/latest/framework/the-pillars-of-the-framework.html
+- AWS Step Functions — Best practices: https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html
+- OpenTelemetry Collector: https://opentelemetry.io/docs/collector/
+- Google SRE — Monitoring Distributed Systems: https://sre.google/sre-book/monitoring-distributed-systems/

@@ -16,7 +16,10 @@ let violationsCount = 0;
 
 try {
   for (const url of urls) {
-    const page = await browser.newPage();
+    // bypassCSP serve solo a permettere l'iniezione dello script axe (inline):
+    // l'enforcement reale della CSP e' coperto da scripts/a11y/csp-smoke.mjs.
+    const context = await browser.newContext({ ignoreHTTPSErrors: true, bypassCSP: true });
+    const page = await context.newPage();
     await page.goto(url, { waitUntil: 'networkidle' });
     await page.addScriptTag({ content: axe.source });
 
@@ -39,7 +42,7 @@ try {
       violationsCount += result.violations.length;
     }
 
-    await page.close();
+    await context.close();
   }
 } finally {
   await browser.close();

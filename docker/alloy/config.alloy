@@ -1,0 +1,55 @@
+// Grafana Alloy — collects logs from this compose project's containers and ships
+// them to Loki. Alloy is the supported successor of Promtail (EOL 2026-03).
+
+logging {
+  level  = "warn"
+  format = "logfmt"
+}
+
+// Discover only containers belonging to the "poc" compose project.
+discovery.docker "poc" {
+  host = "unix:///var/run/docker.sock"
+
+  filter {
+    name   = "label"
+    values = ["com.docker.compose.project=poc"]
+  }
+}
+
+// Map Docker metadata to useful Loki labels (service, container, project).
+discovery.relabel "poc" {
+  targets = discovery.docker.poc.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "project"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "poc" {
+  host             = "unix:///var/run/docker.sock"
+  targets          = discovery.relabel.poc.output
+  forward_to       = [loki.write.default.receiver]
+  refresh_interval = "10s"
+}
+
+// Log level is detected by Loki itself (detected_level structured metadata),
+// so dashboards filter errors with `| detected_level=~"error|critical"` without
+// promoting noisy high-cardinality labels here.
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

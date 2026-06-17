@@ -1,11 +1,11 @@
 <?php
 
-use App\Poc\Models\ExtractedData;
-use App\Poc\Models\SubDocument;
-use App\Poc\Services\BedrockService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-uses(RefreshDatabase::class);
+use App\Copilot\Ai\BedrockService;
+use App\Copilot\Documents\Enums\ReviewStatus;
+use App\Copilot\Documents\Services\DocumentProcessingService;
+use App\Exceptions\Copilot\InvalidAiOutputException;
+use App\Models\Copilot\ExtractedData;
+use App\Models\Copilot\SubDocument;
 
 test('extractFields returns all expected keys on success', function () {
     $this->mock(BedrockService::class, function ($mock) {
@@ -90,4 +90,70 @@ test('extracted data is linked to its sub document', function () {
 
     expect($subDocument->extractedData->id)->toBe($extracted->id);
     expect($extracted->subDocument->id)->toBe($subDocument->id);
+});
+
+test('extracted data above confidence threshold is auto validated and preserves ai payload', function () {
+    config(['services.bedrock.poc_confidence_threshold' => 80]);
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('extractFields')
+            ->once()
+            ->andReturn([
+                'employee_first_name' => 'Mario',
+                'employee_last_name' => 'Rossi',
+                'company_name' => 'Acme Srl',
+                'document_date' => '2026-01-31',
+                'document_type' => 'Cedolino',
+                'description' => 'Cedolino gennaio 2026',
+                'confidence_score' => 90,
+            ]);
+    });
+
+    $subDocument = SubDocument::factory()->create();
+
+    app(DocumentProcessingService::class)->extractAndSaveFields($subDocument);
+
+    expect($subDocument->fresh()->review_status)->toBe(ReviewStatus::AutoValidated)
+        ->and($subDocument->fresh()->extractedData->ai_payload['confidence_score'])->toBe(90);
+});
+
+test('low confidence extraction is stored but marked as needs review', function () {
+    config(['services.bedrock.poc_confidence_threshold' => 80]);
+    // Solo 2 dei 4 campi chiave estratti: la confidenza calcolata
+    // (leggibilità OCR x completezza) scende sotto soglia anche con OCR alto.
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('extractFields')
+            ->once()
+            ->andReturn([
+                'employee_first_name' => 'Mario',
+                'employee_last_name' => 'Rossi',
+                'company_name' => null,
+                'document_date' => null,
+                'document_type' => 'Cedolino',
+                'description' => 'Cedolino gennaio 2026',
+                'confidence_score' => 95,
+            ]);
+    });
+
+    $subDocument = SubDocument::factory()->create();
+
+    app(DocumentProcessingService::class)->extractAndSaveFields($subDocument);
+
+    expect($subDocument->fresh()->review_status)->toBe(ReviewStatus::NeedsReview)
+        ->and($subDocument->fresh()->extractedData)->not->toBeNull();
+});
+
+test('invalid ai extraction output quarantines the sub document without persisted extracted data', function () {
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('extractFields')
+            ->once()
+            ->andThrow(new InvalidAiOutputException('extractFields', ['confidence_score: fuori range']));
+    });
+
+    $subDocument = SubDocument::factory()->create();
+
+    app(DocumentProcessingService::class)->extractAndSaveFields($subDocument);
+
+    expect($subDocument->fresh()->review_status)->toBe(ReviewStatus::Quarantined)
+        ->and($subDocument->fresh()->error_message)->toContain('quarantena')
+        ->and(ExtractedData::query()->where('sub_document_id', $subDocument->id)->exists())->toBeFalse();
 });

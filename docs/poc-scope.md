@@ -1,54 +1,98 @@
-# Perimetro funzionale della PoC
+# Perimetro funzionale
 
-Questa PoC dimostra solo i flussi principali descritti nell'Analisi dei Requisiti.
-La rifinitura di dettaglio, le regole complete e le scelte definitive di UI/UX sono rimandate al PB.
+Il progetto copre i flussi principali di Document Intelligence per comunicazioni HR e analisi documentale. L'ambiente locale usa LocalStack e Terraform per modellare le dipendenze AWS-like in modo ripetibile.
+
+Ogni area distingue quattro livelli:
+
+- **Incluso**: presente e funzionante nella PoC.
+- **Parziale**: presente in forma ridotta rispetto al prodotto finale.
+- **Fuori scope PoC**: previsto per il prodotto finale, ma non implementato qui.
+- **Evoluzione futura**: direzione di sviluppo successiva, non richiesta dal perimetro PoC.
+
+Per lo stato implementativo di dettaglio (con evidenze nei path) il riferimento è
+[`IMPLEMENTATION_OVERVIEW.md`](IMPLEMENTATION_OVERVIEW.md); questo documento ne è il
+complemento funzionale e non deve contraddirlo.
 
 ## AI Assistant Generativo
 
-La PoC include:
+Incluso:
 
 - generazione di una bozza a partire da prompt, tono e stile;
-- validazione minima del prompt mancante o insufficiente;
-- anteprima di titolo, testo e immagine di copertina placeholder;
-- modifica manuale di titolo e testo;
-- rigenerazione della bozza tramite provider fake o Bedrock se configurato;
-- eliminazione della bozza corrente;
-- salvataggio in bozza;
-- invio email simulato tramite Mailpit;
-- storico delle generazioni con ricerca e filtro base;
-- rating da 1 a 5 e commento opzionale;
-- dashboard minima con numero generazioni, prompt salvati, rating medio e feedback recenti.
+- validazione del prompt;
+- persistenza della bozza generata (stato `draft`);
+- anteprima di titolo e testo in sola lettura;
+- storico delle generazioni con riapertura dell'anteprima di una bozza selezionata;
+- metriche operative di base (contenuti generati, bozze).
 
-## AI Co-Pilot documentale
+Parziale:
 
-La PoC include:
+- lo storico elenca le ultime generazioni ma non offre i filtri avanzati (parola chiave, tono, stile, data).
 
-- upload singolo di documenti PDF;
-- controllo minimo di formato e duplicato tramite hash del file;
-- inserimento opzionale di classificazione e metadati iniziali in upload;
-- avvio asincrono dell'analisi documentale tramite Laravel Queue;
-- OCR/parsing placeholder tramite AI worker locale;
-- classificazione documento placeholder;
-- estrazione metadati principali: dipendente, azienda, nome file, data, pagine, tipologia, descrizione;
-- calcolo o simulazione del confidence score;
-- split documentale placeholder, con collegamento tra documento originale e porzione destinata al dipendente;
-- storico documenti ordinato dal piu recente;
-- filtri principali: ricerca libera, stato invio, soglia di confidenza, mese e anno;
-- vista dettaglio documento con dati estratti;
-- modifica manuale dei campi editabili;
-- generazione bozza di invio con destinatario, oggetto e testo;
-- invio simulato tramite Mailpit;
-- dashboard minima AI Co-Pilot con documenti analizzati, classificazioni corrette simulate, documenti sotto soglia, destinatari riconosciuti e tempo medio di analisi.
+Fuori scope PoC:
 
-## Esclusioni consapevoli dalla PoC
+- modifica manuale persistente di titolo e testo;
+- immagine di copertina e sua sostituzione;
+- rigenerazione, annullamento modifiche e scarto della bozza;
+- rating 1–5 con commento, preferiti e relativi feedback;
+- salvataggio e riuso di una configurazione di prompt etichettata;
+- dashboard analista (rating medio, statistiche di utilizzo, filtri).
 
-Non sono inclusi nella PoC iniziale:
+La generazione usa il servizio AI configurato. Errori di configurazione, credenziali o modello vengono esposti come errori applicativi, senza contenuti sostitutivi.
 
-- gestione avanzata di ruoli, permessi e policy;
-- audit trail completo e policy di conservazione;
-- retry avanzato, prove di consegna e tracciamento letture;
-- entity resolution completa su anagrafiche reali;
-- split PDF realmente affidabile per documenti complessi;
-- OCR/Textract e Bedrock in modalita production;
-- dashboard analitiche avanzate o esportazioni complesse;
-- Kubernetes, Terraform, monitoring enterprise e integrazioni NEXUM reali.
+## AI Co-Pilot Documentale
+
+Incluso:
+
+- upload singolo di PDF;
+- controllo formato e duplicato tramite hash;
+- avvio asincrono tramite state machine Step Functions (emulata in LocalStack) con task pubblicati su SQS tramite callback task token, consumati dal worker `poc:workflow:consume`;
+- classificazione e split per destinatario tramite Bedrock sul testo OCR (qualsiasi tipologia di documento, sempre almeno un destinatario);
+- estrazione dei campi principali tramite Bedrock sul testo OCR (nome/cognome, azienda, data, tipologia, descrizione);
+- confidenza calcolata oggettivamente come leggibilità OCR (Textract) ponderata sulla completezza dei campi chiave, non come auto-valutazione del modello;
+- persistenza di documento originale, sotto-documenti e dati estratti;
+- dettaglio documento affiancato (anteprima a sinistra, dati estratti a destra);
+- correzione manuale dei campi estratti e validazione manuale (human-in-the-loop);
+- stati di revisione del sotto-documento (`needs_review`, `auto_validated`, `quarantined`, `manually_validated`);
+- preview PDF del sotto-documento con gestione esplicita dell'errore (risposta applicativa leggibile) quando lo storage non è raggiungibile o il file manca;
+- stato `failed` esplicito quando split o estrazione non riescono;
+- metriche operative su documenti elaborati e soglie di confidenza.
+
+Parziale:
+
+- lo storico dei documenti analizzati è ordinato dal più recente ma non offre i filtri avanzati (ricerca per destinatario/azienda, soglia di confidenza, mese e anno).
+
+Fuori scope PoC:
+
+- invio dei documenti e relativo "stato invio" (`Inviato`/`Non inviato`): la colonna `sub_documents.send_status` e l'identità SES Terraform esistono ma non c'è codice di invio;
+- campi estratti email destinatario, codice fiscale e matricola dipendente;
+- classificazione manuale iniziale in upload;
+- metriche e dashboard sugli invii.
+
+## Observability e Sicurezza Operativa
+
+Incluso:
+
+- request ID e correlation ID su risposte HTTP e log;
+- audit trail append-only per azioni rilevanti;
+- metriche HTTP golden-signal e di dominio in formato Prometheus;
+- OpenTelemetry Collector come unico gateway locale (metriche verso Prometheus, trace verso Tempo);
+- raccolta log dei container via Grafana Alloy verso Loki;
+- 5 dashboard Grafana provisionate (`api-golden-signals`, `document-pipeline`, `ai-ocr-quality`, `queues-and-dlq`, `logs-and-errors`);
+- 10 alert rule Prometheus su error ratio, latenza, readiness, stato worker, coda/DLQ ed esecuzioni Step Functions, collegate a runbook dedicati;
+- contract OpenAPI 3.1 come fonte del client frontend, verificato in CI;
+- blocco runtime delle superfici non appartenenti alla SPA/API.
+
+## Esclusioni trasversali
+
+### Fuori scope PoC
+
+- identity provider reale e policy RBAC/ABAC complete (l'identità è simulata dal middleware `poc.identity`);
+- integrazione SES per invio effettivo (l'identità SES Terraform esiste, ma non c'è codice di invio);
+- bus eventi EventBridge per gli eventi terminali della pipeline (bus, rule e target verso SQS esistono in Terraform, ma l'applicativo non pubblica né consuma eventi: nessun `PutEvents`);
+- contract OpenAPI completo per ogni evento operativo interno (il contratto copre le API applicative, non gli eventi di dominio interni della pipeline).
+
+### Evoluzione futura
+
+- SLO/error budget formalizzati e receiver di notifica reali per Alertmanager (oggi soglie statiche e routing demo);
+- backend di osservabilità enterprise e retention dichiarate per metriche/trace/log;
+- propagazione del trace context attraverso SQS/Step Functions.

@@ -1,0 +1,22 @@
+.field {
+  display: grid;
+  gap: var(--poc-space-2);
+  color: var(--poc-text);
+  font-weight: 700;
+}
+
+.field span {
+  font-size: var(--poc-font-sm);
+}
+
+.field textarea {
+  width: 100%;
+  min-height: 190px;
+  padding: var(--poc-space-3);
+  resize: vertical;
+  border: 1px solid var(--poc-border-strong);
+  border-radius: var(--poc-radius);
+  background: var(--poc-surface-muted);
+  color: var(--poc-text);
+  line-height: 1.45;
+}

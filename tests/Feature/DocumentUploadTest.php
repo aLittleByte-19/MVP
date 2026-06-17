@@ -1,12 +1,9 @@
 <?php
 
-use App\Poc\Enums\ProcessingStatus;
-use App\Poc\Models\OriginalDocument;
-use App\Poc\Models\SubDocument;
-use App\Poc\Services\BedrockService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-uses(RefreshDatabase::class);
+use App\Copilot\Ai\BedrockService;
+use App\Copilot\Documents\Enums\ProcessingStatus;
+use App\Models\Copilot\OriginalDocument;
+use App\Models\Copilot\SubDocument;
 
 test('uploading a pdf creates an original document with pending status', function () {
     $originalDocument = OriginalDocument::create([
@@ -32,7 +29,7 @@ test('successful split creates sub documents linked to original', function () {
     $original = OriginalDocument::factory()->create();
 
     $service = app(BedrockService::class);
-    $segments = $service->splitDocument($original->file_path);
+    $segments = $service->splitDocument($original->ocr_text, 4, 'test-nonce');
 
     foreach ($segments as $segment) {
         SubDocument::create([
@@ -57,7 +54,7 @@ test('original document status is set to failed when bedrock split fails', funct
 
     try {
         $service = app(BedrockService::class);
-        $service->splitDocument($original->file_path);
+        $service->splitDocument($original->ocr_text, 4, 'test-nonce');
     } catch (RuntimeException) {
         $original->update(['processing_status' => ProcessingStatus::Failed]);
     }
@@ -75,7 +72,7 @@ test('split returns empty array when no employees detected', function () {
     $original = OriginalDocument::factory()->create();
 
     $service = app(BedrockService::class);
-    $segments = $service->splitDocument($original->file_path);
+    $segments = $service->splitDocument($original->ocr_text, 4, 'test-nonce');
 
     expect($segments)->toBeArray()->toBeEmpty();
     expect(SubDocument::where('original_document_id', $original->id)->count())->toBe(0);
