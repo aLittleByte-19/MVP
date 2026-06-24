@@ -10,7 +10,7 @@ Proof of Concept per workflow HR e documentali assistiti da AI, con generazione 
       <br>
       <img src="https://img.shields.io/badge/PHP-8.4-777BB4?logo=php&logoColor=white" alt="PHP">
       <br>
-      <img src="https://img.shields.io/badge/React-SPA-61DAFB?logo=react&logoColor=black" alt="React">
+      <img src="https://img.shields.io/badge/Angular-SPA-DD0031?logo=angular&logoColor=white" alt="Angular">
       <br>
       <img src="https://img.shields.io/badge/TypeScript-frontend-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
     </td>
@@ -50,7 +50,7 @@ Proof of Concept per workflow HR e documentali assistiti da AI, con generazione 
     <td align="center">
       <strong>CI / Quality Gate</strong><br><br>
       <img src="https://img.shields.io/badge/Pest-backend%20tests-6E9F18" alt="Pest">
-      <img src="https://img.shields.io/badge/Vitest-frontend%20tests-6E9F18?logo=vitest&logoColor=white" alt="Vitest">
+      <img src="https://img.shields.io/badge/Jest-frontend%20tests-C21325?logo=jest&logoColor=white" alt="Jest">
       <img src="https://img.shields.io/badge/Trivy-image%20scan-1904DA?logo=trivy&logoColor=white" alt="Trivy">
       <img src="https://img.shields.io/badge/axe%20%2B%20pa11y-accessibility-654FF0" alt="Accessibility">
       <img src="https://img.shields.io/badge/Terraform-validated-844FBA?logo=terraform&logoColor=white" alt="Terraform"> <br><br>
@@ -71,12 +71,13 @@ Il valore principale del progetto è architetturale e dimostrativo: ogni fase de
 
 La PoC dimostra un modello applicativo composto da più livelli cooperanti:
 
-* una **SPA React/Vite/TypeScript** per l’interazione operatore;
+* una **SPA Angular/TypeScript** per l’interazione operatore;
 * un backend **Laravel/PHP** per API, validazione, autorizzazione, orchestrazione applicativa e persistenza;
 * **PostgreSQL** per dati strutturati, stati applicativi, audit e risultati di elaborazione;
 * **Redis** per cache, sessioni e rate limiting;
 * storage documentale **S3-compatible** per PDF originali e sotto-documenti generati;
 * **LocalStack** per emulare localmente servizi AWS come SQS, Step Functions, SSM, Secrets Manager e S3;
+* **CloudFront locale** davanti al bucket S3 LocalStack per il serving della SPA Angular;
 * integrazione AI tramite astrazione verso **Bedrock** e integrazione OCR tramite **Textract** (attivabile, disabilitata di default);
 * stack di osservabilità con **OpenTelemetry, Prometheus, Grafana, Tempo, Loki, Alloy e Alertmanager**;
 * CI con test backend/frontend, scansione immagini, validazione infrastrutturale e audit accessibilità.
@@ -87,7 +88,7 @@ La separazione tra richiesta HTTP e workflow asincrono è uno dei punti centrali
 
 L’architettura locale è organizzata intorno a un entrypoint edge, un layer applicativo, servizi dati, workflow asincroni e osservabilità.
 
-Traefik gestisce l’ingresso verso i servizi esposti e instrada il traffico verso Nginx. Nginx serve la SPA frontend e inoltra le richieste API al runtime Laravel/PHP-FPM. Laravel gestisce le API, valida le richieste, applica le regole applicative, registra eventi di audit e avvia i workflow documentali. PostgreSQL conserva lo stato persistente, Redis supporta componenti runtime a bassa latenza, mentre LocalStack fornisce servizi AWS-like in ambiente locale.
+Traefik gestisce l’ingresso verso i servizi esposti e instrada il traffico applicativo verso il CloudFront locale. Il CloudFront locale serve la SPA Angular dagli oggetti caricati nel bucket S3 LocalStack e inoltra `/api/`, `/health` e `/ready` a Nginx/Laravel. Nginx resta il proxy applicativo verso PHP-FPM e il percorso interno di compatibilità. PostgreSQL conserva lo stato persistente, Redis supporta componenti runtime a bassa latenza, mentre LocalStack fornisce servizi AWS-like in ambiente locale.
 
 I worker Laravel consumano task asincroni da SQS e comunicano con Step Functions tramite callback task token. Questo permette di rappresentare una pipeline documentale composta da stati espliciti, retry, gestione errori, idempotenza e aggiornamento progressivo dello stato.
 
@@ -151,6 +152,18 @@ make setup
 make test
 make logs
 ```
+
+### Serving statico LocalStack
+
+```bash
+make frontend-s3-local-deploy
+make frontend-cloudfront-local-url
+make frontend-serving-local-test
+```
+
+Il flusso builda Angular, provisiona il bucket S3 LocalStack via Terraform, carica `apps/frontend/dist` con cache-control differenziato (`index.html` no-cache, bundle hashati immutable) e verifica il serving attraverso il CloudFront locale su `https://localhost:8443`. La simulazione valida il pattern build → bucket → distribuzione CDN-like locale, ma non sostituisce una validazione CloudFront reale con TLS/OAC/edge propagation/invalidation AWS.
+
+Il bucket `FRONTEND_STATIC_BUCKET` è dedicato solo alla SPA. I documenti continuano a usare `POC_DOCUMENT_DISK=s3` per S3 LocalStack o `POC_DOCUMENT_DISK=real_s3` con `AWS_REAL_*` per S3/Textract reali.
 
 ### Accesso ai servizi
 

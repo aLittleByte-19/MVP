@@ -1,6 +1,6 @@
 # OpenAPI v1
 
-This directory contains the versioned JSON API contract consumed by the React SPA.
+This directory contains the versioned JSON API contract consumed by the Angular SPA.
 
 The canonical file is `alittlebyte-poc-api.yaml`.
 

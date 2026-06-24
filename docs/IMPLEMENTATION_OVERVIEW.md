@@ -1,8 +1,8 @@
 # Panoramica implementativa dell'applicativo
 
 > Documento aggiornato tramite analisi diretta della codebase.
-> Branch analizzato: `docs/finalizza_documentazione`.
-> Ultimo aggiornamento: 2026-06-14.
+> Branch analizzato: frontend Angular.
+> Ultimo aggiornamento: 2026-06-24.
 
 ---
 
@@ -10,7 +10,7 @@
 
 L'applicativo è una PoC di **pipeline documentale HR assistita da AI** composta da due moduli funzionali: un **AI Assistant** che genera comunicazioni aziendali a partire da un prompt (tono e stile vincolati), e un **Co-Pilot CdL** che riceve PDF di qualsiasi tipologia, ne riconosce tipo e destinatari (sempre almeno uno) dal testo OCR tramite LLM, li separa in sotto-documenti per destinatario, ne estrae campi strutturati e ne traccia lo stato di lavorazione con una confidenza calcolata su leggibilità OCR e completezza dei campi.
 
-Il backend è **Laravel 12 / PHP 8.4** con PostgreSQL e Redis; il frontend è una **SPA React 19 + TypeScript** costruita con Vite e servita da Nginx dietro **Traefik** (unico entrypoint TLS). L'elaborazione documentale è asincrona: una **state machine AWS Step Functions** (emulata in LocalStack) orchestra i task via **SQS con callback task token**, consumati da un worker Laravel dedicato. Le integrazioni AI usano **AWS Bedrock** (classificazione/split ed estrazione campi sul testo OCR, generazione comunicazioni — tutte chiamate solo-testo via Converse) e **AWS Textract** per l'OCR che alimenta la pipeline documentale (necessario per l'analisi, attivabile solo con S3 reale). La configurazione runtime arriva da **SSM Parameter Store + Secrets Manager**, caricata prima del boot di Laravel.
+Il backend è **Laravel 12 / PHP 8.4** con PostgreSQL e Redis; il frontend è una **SPA Angular + TypeScript** servita di default tramite **Traefik → CloudFront locale → S3 LocalStack**, con Nginx come proxy applicativo per `/api/`, `/health` e `/ready`. L'elaborazione documentale è asincrona: una **state machine AWS Step Functions** (emulata in LocalStack) orchestra i task via **SQS con callback task token**, consumati da un worker Laravel dedicato. Le integrazioni AI usano **AWS Bedrock** (classificazione/split ed estrazione campi sul testo OCR, generazione comunicazioni — tutte chiamate solo-testo via Converse) e **AWS Textract** per l'OCR che alimenta la pipeline documentale (necessario per l'analisi, attivabile solo con S3 reale). La configurazione runtime arriva da **SSM Parameter Store + Secrets Manager**, caricata prima del boot di Laravel.
 
 L'osservabilità è il tratto più maturo della PoC: metriche golden-signal e di dominio esposte in formato Prometheus, trace OTLP verso Tempo, log dei container verso Loki via Alloy, 10 alert rule, 5 dashboard Grafana provisioned e runbook collegati. La CI (GitHub Actions) copre lint, analisi statica, test backend e frontend, scansione Trivy delle immagini, validazione Terraform e audit di accessibilità axe/pa11y contro lo stack reale.
 
@@ -32,14 +32,14 @@ L'analisi si basa sullo **stato attuale del codice**: route, controller, service
 | Domini PoC | `app/Copilot/` | Service layer per dominio: `Ai/` (Bedrock), `Ocr/` (Textract), `Documents/`, `Workflow/`, `Identity/`, `Audit/`, `Observability/`, `Support/` |
 | Route | `routes/api.php`, `routes/web.php` | API v1 + endpoint di sistema |
 | Schema dati | `database/migrations/` | 6 tabelle di dominio + indici/FK |
-| Frontend SPA | `apps/frontend/` | React 19 + TS + Vite, client API generato |
+| Frontend SPA | `apps/frontend/` | Angular + TypeScript, client API Angular generato |
 | Contratto API | `openapi/v1/alittlebyte-poc-api.yaml` | OpenAPI 3.1, fonte del client frontend |
-| Infrastruttura locale | `docker-compose.yml`, `docker/` | 19 servizi: app, worker, nginx, traefik, datastore, stack osservabilità, tool |
-| Infrastruttura AWS (emulata) | `infra/localstack/` | Terraform: SQS+DLQ, S3+KMS, SSM, Secrets Manager, EventBridge, IAM, Step Functions, SES identity |
+| Infrastruttura locale | `docker-compose.yml`, `docker/` | 21 servizi: app, worker, nginx, frontend-cloudfront, traefik, datastore, stack osservabilità, tool |
+| Infrastruttura AWS (emulata) | `infra/localstack/` | Terraform: SQS+DLQ, S3 documenti, S3 frontend, SSM, Secrets Manager, EventBridge, IAM, Step Functions, SES identity |
 | State machine | `infra/localstack/state-machines/document-pipeline.asl.json` | Definizione ASL della pipeline documentale |
 | Osservabilità | `docker/otel-collector/`, `docker/prometheus/`, `docker/grafana/`, `docker/loki/`, `docker/alloy/`, `docker/tempo/`, `docker/alertmanager/` | Collector, scrape, alert rule, dashboard, log shipping |
-| CI | `.github/workflows/ci.yml`, `mirror-images.yml`, `scripts/ci/` | Pipeline unica a 4 job + mirroring immagini su GHCR |
-| Test | `tests/` (10 file, 34 casi Pest), `apps/frontend/src/**/*.test.tsx` (5 file Vitest) | Feature + Unit backend, component test frontend |
+| CI | `.github/workflows/ci.yml`, `mirror-images.yml`, `scripts/ci/` | Pipeline unica a 3 job (backend, frontend, stack) + mirroring immagini su GHCR |
+| Test | `tests/` (backend Pest), `apps/frontend/src/**/*.spec.ts` (Jest) | Feature + Unit backend, unit/component test frontend |
 | Audit a11y | `scripts/a11y/axe-playwright.mjs`, `pa11y-runner.mjs` | Audit automatici contro lo stack reale |
 | Operatività | `Makefile`, `docs/runbooks/` | Setup riproducibile, comandi verifica, runbook per alert |
 | TLS locale | `scripts/tls/generate-local-cert.sh` | Cert self-signed con SAN `*.localhost` (artefatto runtime, gitignored) |
@@ -64,7 +64,8 @@ flowchart LR
     end
     subgraph edge[rete edge]
         T[Traefik :8443<br/>TLS + routing per hostname]
-        N[Nginx<br/>SPA + fastcgi]
+        FC[frontend-cloudfront<br/>CloudFront locale: SPA da S3 + proxy /api]
+        N[Nginx<br/>proxy /api + fastcgi]
     end
     subgraph backend[rete backend]
         A[app PHP-FPM<br/>Laravel 12]
@@ -82,7 +83,9 @@ flowchart LR
         AM[Alertmanager]
         G[Grafana]
     end
-    B -->|https://localhost:8443| T --> N -->|fastcgi| A
+    B -->|https://localhost:8443| T --> FC
+    FC -->|SPA da bucket S3| LS
+    FC -->|/api /health /ready| N -->|fastcgi| A
     B -->|https://grafana.localhost:8443| T --> G
     B -->|*.localhost + basic auth| T --> P & AM & TE
     TF -->|127.0.0.1:4566| LS
@@ -97,7 +100,7 @@ flowchart LR
     AL -->|docker logs| LK
 ```
 
-Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; Nginx serve la SPA e inoltra `/api/` a PHP-FPM; Laravel gestisce validazione, identità, persistenza e orchestrazione; Step Functions (LocalStack) detiene lo stato del workflow; il worker esegue i task e risponde con i task token; il collector è l'unico punto di raccolta telemetria.
+Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; il CloudFront locale (`frontend-cloudfront`) serve la SPA da S3 LocalStack e inoltra `/api/`, `/health` e `/ready` a Nginx, che resta il proxy applicativo verso PHP-FPM (oltre a poter servire la SPA in modalità standard dall'immagine); Laravel gestisce validazione, identità, persistenza e orchestrazione; Step Functions (LocalStack) detiene lo stato del workflow; il worker esegue i task e risponde con i task token; il collector è l'unico punto di raccolta telemetria.
 
 ---
 
@@ -125,19 +128,19 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; N
 **Motivazione**: i throttle per-route (`routes/api.php`) richiedono uno store condiviso tra i processi PHP-FPM.
 **Valutazione**: hardening sopra la media per una PoC — `requirepass`, `maxmemory 256mb` con policy `volatile-lru` scelta consapevolmente (il commento nel compose spiega che `allkeys-lru` azzererebbe i rate limit evictando chiavi senza TTL), healthcheck autenticato via `REDISCLI_AUTH` senza password in argv, nessuna porta host.
 
-### React 19 + TypeScript 5.7 + Vite 6 (frontend)
+### Angular + TypeScript (frontend)
 
-**Dove**: `apps/frontend/package.json`, `apps/frontend/src/`.
-**Ruolo**: SPA a vista singola con switcher (`PocView`: `overview | assistant | copilot`, `src/app/routes.tsx`), pannelli per generazione comunicazioni, upload documenti, storici e metriche.
-**Motivazione**: SPA leggera senza routing complesso; Vite per build veloce e proxy dev verso l'entrypoint TLS (`apps/frontend/vite.config.ts`).
-**Valutazione**: data fetching uniforme con TanStack React Query 5 (unico QueryClient, `src/app/AppProviders.tsx`), stati loading/error/empty espliciti (`components/feedback/`, con `aria-live`), dark mode via token CSS (`src/styles/tokens.css`, `data-poc-theme` + `prefers-color-scheme`). Limite: la vista attiva non è nell'URL → niente deep linking né history.
+**Dove**: `apps/frontend/package.json`, `apps/frontend/angular.json`, `apps/frontend/src/app/`.
+**Ruolo**: SPA a tre viste (`overview`, `assistant`, `copilot`) con Angular Router, shell operativa, pannelli per generazione comunicazioni, upload documenti, storici, revisione e metriche.
+**Motivazione**: allineamento al Capitolato, build statica production-like, deep link top-level e client API generato per HttpClient.
+**Valutazione**: stato condiviso via store Angular a signal (`PocStateStore`), servizi feature per mutazioni e SSE, stati loading/error/empty espliciti, dark mode via token CSS (`src/styles/tokens.css`, `data-poc-theme` + `prefers-color-scheme`), request/correlation id propagati con interceptor. La build di produzione disabilita l'inline critical CSS per restare compatibile con CSP severa.
 
 ### OpenAPI 3.1 + Orval (contratto API)
 
 **Dove**: `openapi/v1/alittlebyte-poc-api.yaml`, `apps/frontend/orval.config.ts`, output in `src/api/generated/`.
-**Ruolo**: contract-first — il client TypeScript del frontend è generato dal contratto; la CI lo lint-a con Redocly e **fallisce se il client generato non è committato** (`ci.yml`, step "Check generated client is committed").
+**Ruolo**: contract-first — il servizio Angular/HttpClient e i model TypeScript del frontend sono generati dal contratto; la CI lo lint-a con Redocly e **fallisce se il client generato non è committato** (`ci.yml`, step "Check generated client is committed").
 **Motivazione**: elimina la deriva tra backend e frontend sui tipi delle risposte.
-**Valutazione**: ottima scelta per manutenibilità; il wrapper `src/api/pocApi.ts` centralizza il controllo di successo (`assertApiSuccess`). Gap: il contratto non è validato a runtime contro le risposte reali del backend (nessun contract test automatico lato Laravel oltre a `HealthAndApiContractTest`).
+**Valutazione**: ottima scelta per manutenibilità; l'accesso API passa da servizi Angular (`AssistantService`, `DocumentWorkflowService`, `PocStateStore`) che usano il servizio Orval generato. Gap: il contratto non è validato a runtime contro le risposte reali del backend (nessun contract test automatico lato Laravel oltre a `HealthAndApiContractTest`).
 
 ### Traefik v3.4 (edge router)
 
@@ -149,7 +152,7 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; N
 ### Nginx 1.27 (static + fastcgi)
 
 **Dove**: `docker/nginx/Dockerfile` (multi-stage: build SPA con node:22 → runtime `nginx:1.27-alpine`, `USER nginx`), `docker/nginx/default.conf`.
-**Ruolo**: serve la SPA con fallback `try_files ... /index.html`, inoltra `/api/` e gli endpoint di sistema a PHP-FPM, applica security header (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Content-Security-Policy).
+**Ruolo**: nel flusso default è il proxy applicativo — inoltra `/api/` e gli endpoint di sistema a PHP-FPM e applica i security header (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Content-Security-Policy). L'immagine include anche la SPA Angular buildata e può servirla in modalità standard con fallback `try_files ... /index.html`, percorso alternativo al CloudFront locale (`frontend-cloudfront`), che invece è l'origine default della SPA da S3 LocalStack.
 **Dettaglio rilevante**: `/internal/metrics` non è servito dal listener edge `:8080` usato da Traefik; ritorna 404 dall'esterno. Lo scrape passa dal listener interno `nginx:8081/internal/metrics`, raggiungibile solo sulle reti Docker interne. La CI verifica sia il 404 esterno sia la raggiungibilità interna.
 **Gap**: la CSP è locale e mirata alla SPA attuale; eventuali nuovi asset remoti o embedding esterni richiedono aggiornamento esplicito della policy.
 
@@ -210,8 +213,8 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; N
 
 ### CI — GitHub Actions
 
-**Dove**: `.github/workflows/ci.yml` (4 job), `mirror-images.yml`, `scripts/ci/`.
-**Pipeline**: `backend` (Pint, Larastan, Pest), `frontend` (lint OpenAPI, generazione client + check committed, typecheck, Vitest, build, `npm audit --audit-level=high`), `stack` (mirroring/caching immagini, `terraform fmt/validate`, validazione config osservabilità, build immagini dev+prod, **Trivy** `--exit-code 1 --severity HIGH,CRITICAL` su app e nginx, avvio stack completo con LocalStack+Terraform apply, smoke HTTPS via Traefik inclusi i check 401 sulle dashboard, audit axe e pa11y contro lo stack reale), `publish` (push GHCR, solo non-PR). Concurrency con cancel-in-progress.
+**Dove**: `.github/workflows/ci.yml` (3 job), `mirror-images.yml`, `scripts/ci/`.
+**Pipeline**: `backend` (Composer validate, Pint, Larastan, Pest), `frontend` (lint OpenAPI, generazione client + check committed, ESLint, typecheck, Jest, build Angular, `npm audit --audit-level=high`), `stack` (mirroring/caching immagini, `terraform fmt/validate`, validazione config osservabilità, build immagini dev+prod, **Trivy** `--exit-code 1 --severity HIGH,CRITICAL` su app e nginx, avvio stack completo con LocalStack+Terraform apply, build e upload della SPA Angular su S3 LocalStack, smoke HTTPS via Traefik — SPA servita dal CloudFront locale con fallback deep-link, check 401 sulle dashboard — audit axe e pa11y contro lo stack reale, push condizionale delle immagini su GHCR solo per i non-PR). Concurrency con cancel-in-progress.
 **Valutazione**: copertura larga e realistica (lo smoke testa il sistema integrato, non i mock); il quality gate include sicurezza (Trivy, npm audit) e accessibilità. Gap: niente coverage report; i job non pubblicano artefatti di debug in caso di fallimento smoke.
 
 ---
@@ -225,7 +228,7 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; N
 3. `CommunicationController::store()` → `BedrockService::generateCommunication()` → parsing/normalizzazione JSON.
 4. Persistenza `Communication` con stato `Draft`; audit event `poc-communication-generated` (con request/correlation ID).
 5. Risposta 201 con la comunicazione e lo stato attore aggiornato; su errore AWS → 502 `upstream_unavailable`.
-6. Frontend: `useGenerateCommunication` (mutation React Query) invalida lo stato e mostra la bozza.
+6. Frontend: `AssistantService` aggiorna lo store Angular con lo stato autorevole e mostra la bozza.
 
 **Test**: `CommunicationStorageTest`, `BedrockServiceTest` (parsing), `HealthAndApiContractTest`.
 
@@ -352,8 +355,8 @@ Coperte in §5 (Bedrock, Textract) e §6. Punti trasversali:
 
 Coperto in §5; valutazione sintetica:
 
-- **Solido**: data layer uniforme (React Query + client generato), feedback espliciti (loading con `aria-live`, error, empty), SSE per progress reale dell'elaborazione (`useDocumentUpload` con EventSource), design token centralizzati con dark mode, test component (5 file Vitest) e audit a11y automatizzati in CI con **zero violazioni** axe/pa11y correnti.
-- **Limiti**: niente router → stato di navigazione non condivisibile/bookmarkabile; copertura test frontend limitata ai componenti principali; nessun error boundary globale documentato; bundle unico senza code splitting (accettabile per 3 viste).
+- **Solido**: data layer uniforme (servizi Angular + client generato), feedback espliciti (loading con `aria-live`, error, empty), SSE per progress reale dell'elaborazione (`DocumentWorkflowService` con EventSource), design token centralizzati con dark mode, test Jest mirati e audit a11y automatizzati in CI.
+- **Limiti**: il CloudFront locale valida il flusso build → S3 locale → distribuzione CDN-like, ma non copre OAC/invalidation/propagazione edge reali; la copertura test frontend resta minima e va ampliata sui componenti visuali e sui flussi SSE end-to-end.
 
 ---
 
@@ -403,9 +406,9 @@ Area più matura della PoC (dettagli §5):
 
 ## 15. CI, test e quality gate
 
-- **Workflow** (`ci.yml`): 4 job descritti in §5. Mirroring immagini su GHCR (`mirror-images.yml` + `scripts/ci/`) per ridurre dipendenza dai registry upstream, con cache archivio immagini tra run.
-- **Test backend**: 34 casi Pest in 10 file — contratto API, route, upload, workflow (incluso handler idempotente), estrazione, storage comunicazioni, parsing Bedrock. I servizi AWS sono fake-ati nei test.
-- **Test frontend**: 5 file Vitest (App, Alert, StatusBadge, pannelli generazione/upload) con API mockate.
+- **Workflow** (`ci.yml`): 3 job descritti in §5. Mirroring immagini su GHCR (`mirror-images.yml` + `scripts/ci/`) per ridurre dipendenza dai registry upstream, con cache archivio immagini tra run.
+- **Test backend**: 72 casi Pest in 11 file — contratto API, route, upload, workflow (incluso handler idempotente), estrazione, storage comunicazioni, parsing Bedrock. I servizi AWS sono fake-ati nei test.
+- **Test frontend**: Jest su utility di formattazione/stato e correlazione frontend; da ampliare con component test Angular sui flussi principali.
 - **Quality gate**: Pint (stile), Larastan (statico), Redocly (OpenAPI), check client generato committato, `npm audit` HIGH, Trivy HIGH/CRITICAL bloccante, terraform fmt/validate, promtool/otelcol validate, axe+pa11y bloccanti.
 - **Flussi critici coperti**: generazione comunicazioni e pipeline documentale sì (unit+feature+smoke integrato). **Scoperti**: SSE streaming end-to-end (testato solo indirettamente), comportamento del consumer SQS in errore/reinvio (test sul handler ma non sul loop del command), assenza di coverage report per quantificare.
 - Lo smoke CI verifica anche i vincoli di sicurezza introdotti (404 su `/internal/metrics` esterno, 401 sulle dashboard senza credenziali): i controlli di hardening sono regression-tested.
@@ -470,7 +473,7 @@ Area più matura della PoC (dettagli §5):
 | Tracing E2E | Si ferma al task token | Debug cross-componente parziale | OTel context propagation | Propagare traceparent nei messaggi SQS e riprendere lo span nel worker | **P2** |
 | Retention dati/telemetria | Non definita | Crescita storage, esposizione PII prolungata | GDPR / Well-Architected COST | Policy retention per `ocr_text`, prompt, metriche/trace/log | **P2** |
 | Coverage test | Non misurata | Regressioni invisibili nei punti scoperti | — | Coverage report in CI con soglia indicativa | **P3** |
-| Deep linking SPA | View-state non in URL | UX/demo limitata | — | React Router o sync stato↔URL | **P3** |
+| Deep linking SPA | Rotte top-level presenti, anchor interni scroll-only | Deep link granulari alle sottosezioni non persistiti nell'URL | — | Sincronizzare anchor/fragment quando utile alla demo | **P3** |
 
 ---
 

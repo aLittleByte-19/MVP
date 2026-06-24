@@ -31,13 +31,14 @@ ADR che referenzia il precedente. La numerazione è progressiva e a quattro cifr
 
 | ID | Decisione | Status |
 |----|-----------|--------|
-| [0001](0001-frontend-spa.md) | Frontend come SPA React/TypeScript/Vite servita da Nginx | Accepted, implemented |
+| [0001](0001-frontend-spa.md) | Frontend come SPA servita da Nginx, decisione iniziale | Superseded by 0008 |
 | [0002](0002-laravel-api-json.md) | Backend Laravel come API JSON versionata (`/api/v1`) | Accepted, implemented |
 | [0003](0003-sqs-instead-of-redis-queue.md) | Code asincrone su SQS; Redis solo per cache/sessioni | Accepted, implemented |
 | [0004](0004-localstack-terraform.md) | Emulazione AWS locale con LocalStack + Terraform | Accepted, implemented |
 | [0005](0005-no-automatic-fallbacks.md) | Nessun fallback automatico dei servizi AI: stato `failed` esplicito | Accepted, implemented |
 | [0006](0006-observability-and-audit.md) | Osservabilità (OTel/Prometheus) e audit trail append-only | Accepted, implemented baseline |
 | [0007](0007-authn-authz-boundary.md) | Confine authn/authz: IdP simulato, RBAC/ABAC server-side | Accepted, implemented baseline |
+| [0008](0008-angular-frontend-static-serving.md) | Frontend Angular e serving statico S3 locale/CloudFront locale | Accepted, implemented |
 
 ## Aggiungere un ADR
 

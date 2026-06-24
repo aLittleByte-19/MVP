@@ -101,8 +101,6 @@ class PocStateService
         $pages = max(1, ((int) $subDocument->end_page - (int) $subDocument->start_page) + 1);
         $previewLines = [
             'Split iniziale: pagine '.$subDocument->start_page.'-'.$subDocument->end_page.'.',
-            'File originale: '.($original?->original_filename ?: 'Non disponibile').'.',
-            'Campi rilevati dal servizio AI configurato.',
         ];
 
         if ($subDocument->error_message) {
@@ -128,7 +126,10 @@ class PocStateService
             'reviewStatus' => $subDocument->review_status->value,
             'reviewStatusLabel' => $subDocument->review_status->label(),
             'error' => $subDocument->error_message,
-            'previewUrl' => route('api.v1.documents.preview', ['subDocument' => $subDocument->id]),
+            // URL relativo: vedi nota in DocumentController::store. Un URL assoluto
+            // sarebbe generato con schema "http://" dietro Traefik e bloccato dal
+            // browser (mixed-content sull'iframe e sul fetch dell'anteprima).
+            'previewUrl' => route('api.v1.documents.preview', ['subDocument' => $subDocument->id], false),
             'previewLines' => $previewLines,
         ];
     }

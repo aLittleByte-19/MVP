@@ -33,7 +33,7 @@ services:
       timeout: 5s
       retries: 3
     depends_on:
-      nginx:
+      frontend-cloudfront:
         condition: service_healthy
     networks:
       - edge
@@ -169,6 +169,25 @@ services:
       - edge
       - backend
 
+  frontend-cloudfront:
+    image: nginx:1.29-alpine
+    environment:
+      FRONTEND_STATIC_BUCKET: ${FRONTEND_STATIC_BUCKET:-poc-frontend-static-local}
+    volumes:
+      - ./docker/cloudfront/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    depends_on:
+      localstack:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/__health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    # edge: riceve da Traefik e inoltra /api a Nginx; backend: legge S3 LocalStack.
+    networks:
+      - edge
+      - backend
+
   app:
     build:
       context: .
@@ -257,6 +276,8 @@ services:
       TF_VAR_ssm_parameter_path: ${CONFIG_SSM_PATH:-/poc/app}
       TF_VAR_runtime_secret_name: ${CONFIG_SECRET_IDS:-/poc/app/runtime}
       TF_VAR_app_url: ${POC_APP_URL:-https://localhost:8443}
+      TF_VAR_frontend_static_bucket: ${FRONTEND_STATIC_BUCKET:-poc-frontend-static-local}
+      TF_VAR_frontend_cloudfront_local_url: ${FRONTEND_CLOUDFRONT_LOCAL_URL:-https://localhost:8443}
       TF_VAR_db_database: ${POC_DB_DATABASE:-poc}
       TF_VAR_db_username: ${POC_DB_USERNAME:-poc}
       TF_VAR_db_password: ${POC_DB_PASSWORD:-poc-local-password}
@@ -319,6 +340,27 @@ services:
     # edge: gli audit a11y passano da https://traefik:8443
     networks:
       - edge
+
+  aws-cli:
+    image: amazon/aws-cli:2.35.11
+    working_dir: /workspace
+    entrypoint: ["/bin/sh"]
+    profiles:
+      - tools
+    environment:
+      AWS_ACCESS_KEY_ID: ${LOCALSTACK_AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${LOCALSTACK_AWS_SECRET_ACCESS_KEY:-test}
+      AWS_DEFAULT_REGION: ${POC_AWS_DEFAULT_REGION:-eu-north-1}
+      AWS_ENDPOINT_URL: ${LOCALSTACK_ENDPOINT_INTERNAL:-http://localstack:4566}
+      FRONTEND_STATIC_BUCKET: ${FRONTEND_STATIC_BUCKET:-poc-frontend-static-local}
+      FRONTEND_DIST: ${FRONTEND_DIST:-apps/frontend/dist}
+    volumes:
+      - .:/workspace
+    depends_on:
+      localstack:
+        condition: service_healthy
+    networks:
+      - backend
 
   tls-tool:
     image: alpine/openssl:3.5.4

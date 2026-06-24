@@ -10,6 +10,18 @@ output "documents_bucket" {
   value = aws_s3_bucket.documents.bucket
 }
 
+output "frontend_static_bucket" {
+  value = aws_s3_bucket.frontend_static.bucket
+}
+
+output "frontend_s3_website_endpoint" {
+  value = "http://${aws_s3_bucket.frontend_static.bucket}.s3-website.localhost.localstack.cloud:4566"
+}
+
+output "frontend_cloudfront_local_url" {
+  value = var.frontend_cloudfront_local_url
+}
+
 output "event_bus_name" {
   value = aws_cloudwatch_event_bus.poc.name
 }

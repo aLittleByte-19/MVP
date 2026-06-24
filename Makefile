@@ -1,12 +1,22 @@
-.PHONY: help test pint node-install frontend-build frontend-test frontend-typecheck frontend-audit frontend-a11y openapi-generate openapi-validate observability-config observability-up local-tls trusted-local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke reset-all workers backup-local restore-local
+.PHONY: help test pint node-install frontend-build frontend-lint frontend-test frontend-typecheck frontend-audit frontend-a11y frontend-s3-local-provision frontend-s3-local-upload frontend-s3-local-deploy frontend-cloudfront-local-url frontend-serving-local-test openapi-generate openapi-validate observability-config observability-up local-tls trusted-local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke reset-all workers backup-local restore-local
 
 # Colori per l'output
 BLUE  := \033[34m
 RESET := \033[0m
-TERRAFORM := docker compose --profile tools run --rm terraform
-NODE := docker compose --profile tools run --rm node
-FRONTEND_AUDIT := docker compose --profile tools run --rm frontend-audit
-TLS_TOOL := docker compose --profile tools run --rm tls-tool
+LOCALSTACK_ENDPOINT_INTERNAL ?= http://localstack:4566
+FRONTEND_DIST ?= apps/frontend/dist
+FRONTEND_STATIC_BUCKET ?= poc-frontend-static-local
+FRONTEND_CLOUDFRONT_LOCAL_URL ?= https://localhost:8443
+# -T: niente pseudo-TTY per i tool non interattivi. Senza, "docker compose run"
+# mette il terminale in raw mode e, se il run si blocca (es. glitch del daemon),
+# Ctrl+C viene inghiottito e l'unico modo è chiudere il terminale — che però NON
+# uccide il processo "compose run", lasciando container *-run-* orfani in stato
+# "created". Con -T il SIGINT arriva e --rm ripulisce il container.
+TERRAFORM := docker compose --profile tools run --rm -T terraform
+NODE := docker compose --profile tools run --rm -T node
+AWS_CLI := docker compose --profile tools run --rm -T --entrypoint aws aws-cli --endpoint-url=$(LOCALSTACK_ENDPOINT_INTERNAL)
+FRONTEND_AUDIT := docker compose --profile tools run --rm -T frontend-audit
+TLS_TOOL := docker compose --profile tools run --rm -T tls-tool
 TEST_ENV := -e CONFIG_SOURCE=env \
 	-e APP_ENV=testing \
 	-e CACHE_STORE=array \
@@ -23,11 +33,16 @@ help:
 	@echo "$(BLUE)Comandi disponibili:$(RESET)"
 	@echo "  $(BLUE)make test$(RESET)      Esegue la suite di test (Pest)"
 	@echo "  $(BLUE)make pint$(RESET)      Esegue Laravel Pint in modalita' check"
-	@echo "  $(BLUE)make frontend-build$(RESET) Compila la SPA React/Vite"
+	@echo "  $(BLUE)make frontend-build$(RESET) Compila la SPA Angular"
+	@echo "  $(BLUE)make frontend-lint$(RESET)  Esegue ESLint sul frontend Angular"
 	@echo "  $(BLUE)make frontend-test$(RESET)  Esegue i test frontend"
 	@echo "  $(BLUE)make frontend-typecheck$(RESET) Esegue typecheck TypeScript"
 	@echo "  $(BLUE)make frontend-audit$(RESET) Audit npm production dependencies"
 	@echo "  $(BLUE)make frontend-a11y$(RESET)  Esegue axe e Pa11y sullo stack HTTPS locale"
+	@echo "  $(BLUE)make frontend-s3-local-provision$(RESET) Provisiona il bucket S3 locale della SPA"
+	@echo "  $(BLUE)make frontend-s3-local-deploy$(RESET) Builda e carica la SPA Angular su S3 LocalStack"
+	@echo "  $(BLUE)make frontend-cloudfront-local-url$(RESET) Stampa URL del CloudFront locale"
+	@echo "  $(BLUE)make frontend-serving-local-test$(RESET) Smoke test del serving S3 locale + CloudFront locale"
 	@echo "  $(BLUE)make openapi-generate$(RESET) Rigenera il client TypeScript"
 	@echo "  $(BLUE)make openapi-validate$(RESET) Valida il contratto OpenAPI"
 	@echo "  $(BLUE)make observability-config$(RESET) Valida la configurazione OTel Collector"
@@ -70,6 +85,7 @@ verify-backend:
 
 verify-frontend: node-install
 	$(NODE) npm run openapi:generate
+	$(NODE) npm run frontend:lint
 	$(NODE) npm run frontend:typecheck
 	$(NODE) npm run frontend:test
 	$(NODE) npm run frontend:build
@@ -95,16 +111,44 @@ frontend-build: node-install
 	$(NODE) npm run openapi:generate
 	$(NODE) npm run frontend:build
 
+frontend-lint: node-install
+	$(NODE) npm run frontend:lint
+
 frontend-test: openapi-generate
 	$(NODE) npm run frontend:test
 
 frontend-typecheck: openapi-generate
 	$(NODE) npm run frontend:typecheck
 
+frontend-s3-local-provision: infra-apply
+
+frontend-s3-local-upload:
+	test -f "$(FRONTEND_DIST)/index.html"
+	$(AWS_CLI) s3api head-bucket --bucket "$(FRONTEND_STATIC_BUCKET)"
+	$(AWS_CLI) s3 sync "$(FRONTEND_DIST)/" "s3://$(FRONTEND_STATIC_BUCKET)/" --delete --exclude "index.html" --cache-control "public, max-age=3600"
+	$(AWS_CLI) s3 cp "$(FRONTEND_DIST)/" "s3://$(FRONTEND_STATIC_BUCKET)/" --recursive --exclude "*" --include "*.js" --include "*.css" --cache-control "public, max-age=31536000, immutable"
+	$(AWS_CLI) s3 cp "$(FRONTEND_DIST)/index.html" "s3://$(FRONTEND_STATIC_BUCKET)/index.html" --cache-control "no-cache, max-age=0, must-revalidate" --content-type "text/html; charset=utf-8"
+
+frontend-s3-local-deploy: frontend-build frontend-s3-local-provision
+	$(MAKE) frontend-s3-local-upload
+
+frontend-cloudfront-local-url:
+	@printf "%s\n" "$(FRONTEND_CLOUDFRONT_LOCAL_URL)"
+	@printf "\n"
+
+frontend-serving-local-test: frontend-s3-local-deploy
+	@if [ ! -f docker/traefik/certs/poc-local.test.crt ] || [ ! -f docker/traefik/certs/poc-local.test.key ]; then $(MAKE) local-tls; fi
+	docker compose up -d --wait --force-recreate frontend-cloudfront traefik
+	@url="$(FRONTEND_CLOUDFRONT_LOCAL_URL)"; \
+	echo "$(BLUE)Testing $$url$(RESET)"; \
+	curl -kfsS "$$url" | grep -q "<poc-root"
+
 frontend-audit: node-install
 	$(NODE) npm audit --omit=dev --audit-level=high
 
-frontend-a11y: node-install
+frontend-a11y: frontend-s3-local-deploy
+	@if [ ! -f docker/traefik/certs/poc-local.test.crt ] || [ ! -f docker/traefik/certs/poc-local.test.key ]; then $(MAKE) local-tls; fi
+	docker compose up -d --wait --force-recreate app nginx frontend-cloudfront traefik
 	$(FRONTEND_AUDIT) node scripts/a11y/csp-smoke.mjs https://traefik:8443
 	$(FRONTEND_AUDIT) node scripts/a11y/axe-playwright.mjs https://traefik:8443
 	$(FRONTEND_AUDIT) node scripts/a11y/pa11y-runner.mjs https://traefik:8443
@@ -139,7 +183,7 @@ fresh:
 	docker compose exec -T redis redis-cli FLUSHALL
 
 logs:
-	docker compose logs -f app queue nginx localstack
+	docker compose logs -f app queue nginx frontend-cloudfront localstack
 
 sh:
 	docker compose run --rm app sh
@@ -171,6 +215,8 @@ setup:
 	docker compose --profile release build
 	docker compose up -d postgres redis localstack
 	$(MAKE) infra-apply
+	$(MAKE) frontend-build
+	$(MAKE) frontend-s3-local-upload
 	$(MAKE) release
 	docker compose up -d app nginx queue traefik otel-collector prometheus tempo alertmanager grafana loki alloy
 	@echo "$(BLUE)L'ambiente è stato configurato ed è in fase di avvio.$(RESET)"

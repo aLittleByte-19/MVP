@@ -1,0 +1,4 @@
+# Mantiene la cartella di provisioning alerting (montata in /etc/grafana/provisioning/alerting).
+# Senza questa cartella Grafana logga a ogni avvio:
+#   "can't read alerting provisioning files from directory ... no such file or directory".
+# Il PoC non versiona regole di alerting provisioning: la cartella resta vuota.

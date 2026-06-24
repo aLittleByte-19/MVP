@@ -23,9 +23,9 @@ enum ReviewStatus: string
     {
         return match ($this) {
             self::NeedsReview => 'warning',
-            self::AutoValidated => 'success',
+            self::AutoValidated => 'info',
             self::Quarantined => 'danger',
-            self::ManuallyValidated => 'info',
+            self::ManuallyValidated => 'success',
         };
     }
 }

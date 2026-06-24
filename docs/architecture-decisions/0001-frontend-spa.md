@@ -1,20 +1,23 @@
 # ADR 0001 — Frontend come SPA
 
-Status: Accepted, implemented
+Status: Superseded by [0008 — Frontend Angular e serving statico LocalStack](0008-angular-frontend-static-serving.md)
 Date: 2026-06-08
+
+> Historical ADR. This records the original frontend decision; the active frontend decision is ADR 0008.
 
 ## Context
 
-Il runtime serve una SPA React + TypeScript + Vite dall'immagine Nginx. Laravel è il provider
-dell'API di backend e non renderizza viste di prodotto. Serve un frontend disaccoppiato dal
-backend ma allineato al contratto API, con autorizzazione che resti lato server.
+La decisione iniziale prevedeva una SPA React + TypeScript + Vite servita dall'immagine Nginx.
+Laravel era gia' il provider dell'API di backend e non renderizzava viste di prodotto. Serviva un
+frontend disaccoppiato dal backend ma allineato al contratto API, con autorizzazione che restasse
+lato server.
 
 ## Decision
 
-Mantenere il frontend in `apps/frontend`. Generare il client TypeScript da
+Mantenere il frontend iniziale in `apps/frontend`. Generare il client TypeScript da
 `openapi/v1/alittlebyte-poc-api.yaml` tramite Orval, usare TanStack Query per lo stato server,
 React Hook Form per la gestione dei form, Vitest per i component test e controlli axe/Pa11y in
-container per una validazione di accessibilità rappresentativa.
+container per una validazione di accessibilita' rappresentativa.
 
 Le decisioni di autorizzazione restano lato server. La SPA può nascondere azioni per ergonomia,
 ma non deve mai essere la fonte di verità per il controllo degli accessi.

@@ -34,7 +34,7 @@ class DocumentProcessingService
      */
     public function storeUpload(UploadedFile $file, PocUser $actor): OriginalDocument
     {
-        $path = $file->store('documents/originals', $this->documentDisk());
+        $path = $file->store('originals', $this->documentDisk());
 
         if (! is_string($path) || $path === '') {
             throw new \RuntimeException('Impossibile salvare il documento nello storage configurato.');
@@ -535,7 +535,7 @@ class DocumentProcessingService
             }
 
             $slug = preg_replace('/[^a-z0-9_]/i', '_', $employeeName) ?: 'documento';
-            $relativePath = "documents/sub/{$originalId}_{$slug}_{$startPage}-{$endPage}_".Str::uuid().'.pdf';
+            $relativePath = "sub/{$originalId}_{$slug}_{$startPage}-{$endPage}_".Str::uuid().'.pdf';
 
             $pdf->Output($absoluteDest, 'F');
 

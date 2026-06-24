@@ -96,6 +96,11 @@ class ResetPocData extends Command
     {
         $documentDisk = config('filesystems.default', 'local');
 
+        // I documenti sono salvati in "originals/" e "sub/" relativi al root del
+        // disk (vedi DocumentProcessingService); "documents/" resta per pulire
+        // eventuali dati pregressi del vecchio layout.
+        Storage::disk($documentDisk)->deleteDirectory('originals');
+        Storage::disk($documentDisk)->deleteDirectory('sub');
         Storage::disk($documentDisk)->deleteDirectory('documents');
         Storage::disk($documentDisk)->deleteDirectory('livewire-tmp');
 

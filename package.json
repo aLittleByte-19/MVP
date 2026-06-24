@@ -8,16 +8,22 @@
     "scripts": {
         "frontend:dev": "npm run dev --workspace apps/frontend",
         "frontend:build": "npm run build --workspace apps/frontend",
+        "frontend:lint": "npm run lint --workspace apps/frontend",
         "frontend:test": "npm run test --workspace apps/frontend",
         "frontend:typecheck": "npm run typecheck --workspace apps/frontend",
         "openapi:generate": "npm run openapi:generate --workspace apps/frontend",
         "openapi:check": "npm run openapi:check --workspace apps/frontend",
         "a11y:axe": "node scripts/a11y/axe-playwright.mjs"
     },
+    "overrides": {
+        "glob": "^13.0.6",
+        "jsdom": "^29.1.1",
+        "test-exclude": "^8.0.0"
+    },
     "devDependencies": {
         "axe-core": "^4.11.4",
         "concurrently": "^9.0.1",
         "pa11y": "^9.1.1",
-        "playwright": "^1.60.0"
+        "playwright": "1.60.0"
     }
 }
