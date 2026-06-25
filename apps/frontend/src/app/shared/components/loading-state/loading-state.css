@@ -1,0 +1,8 @@
+.loading {
+  margin: 0;
+  color: var(--poc-muted);
+}
+
+:host {
+  display: contents;
+}

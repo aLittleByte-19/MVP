@@ -37,13 +37,12 @@ La voce di stack ipotizzata resta indicativa e non vincolante:
 
 ---
 
-## 2. Frontend SPA (React + TypeScript + Vite)
+## 2. Frontend SPA (Angular + TypeScript)
 
-**Scelta nella PoC:** SPA React 19 + TypeScript + Vite in [`apps/frontend/`](../../apps/frontend/)
-([`package.json`](../../apps/frontend/package.json): `react ^19.0.0`, `vite ^6.0.0`,
-`typescript ^5.7.0`). Un singolo frontend tipizzato con tooling rapido (Vite) e client API
-generato da OpenAPI mantiene la dashboard semplice, testabile e allineata al contratto; evita
-la complessità di gestire due framework distinti per dashboard e PWA in fase di prototipo.
+**Scelta nella PoC:** SPA Angular + TypeScript in [`apps/frontend/`](../../apps/frontend/).
+Un singolo frontend tipizzato con client API Angular/HttpClient generato da OpenAPI mantiene
+la dashboard semplice, testabile e allineata al contratto; evita la complessità di gestire due
+superfici applicative distinte in fase di prototipo.
 
 **Riscontro nel Capitolato:**
 > «Utilizzo esclusivo di tecnologie open source o academic-friendly (o approvate dal team Eggon).»
@@ -57,7 +56,7 @@ Le voci di stack ipotizzate restano indicative:
 > «Dashboard amministrativa (Angular): build statico su S3; distribuzione via CloudFront (cache, HTTPS, geodistribuzione).»
 > — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
-**ADR correlato:** [0001 - Frontend SPA](../architecture-decisions/0001-frontend-spa.md)
+**ADR correlato:** [0008 - Frontend Angular e serving statico LocalStack](../architecture-decisions/0008-angular-frontend-static-serving.md)
 
 ---
 
@@ -344,9 +343,10 @@ ne fornisce l'emulazione locale ripetibile (LocalStack), nello spirito di:
 
 ## 16. Hardening di rete e perimetro (Traefik/Nginx, IAM a minimo privilegio)
 
-**Scelta nella PoC:** TLS edge via Traefik, Nginx come runtime statico SPA con superfici non
+**Scelta nella PoC:** TLS edge via Traefik, CloudFront locale (`frontend-cloudfront`) che serve
+la SPA statica da S3 LocalStack e Nginx come proxy applicativo con superfici non
 API bloccate, IAM role granulari sulle risorse LocalStack
-([`docker-compose.yml`](../../docker-compose.yml): `traefik`, `nginx`;
+([`docker-compose.yml`](../../docker-compose.yml): `traefik`, `frontend-cloudfront`, `nginx`;
 [`infra/localstack/main.tf`](../../infra/localstack/main.tf): `aws_iam_role`). Cifrare il
 traffico all'edge, ridurre la superficie esposta e applicare il minimo privilegio sono misure
 di igiene di base che riducono il rischio a prescindere dall'ambiente.
@@ -404,7 +404,7 @@ nella libertà tecnologica della sezione «Vincoli».
 - **Stack di osservabilità open source (OpenTelemetry Collector, Prometheus, Tempo, Grafana,
   Loki, Alertmanager):** adottato come equivalente locale, vendor-neutral, di CloudWatch/X-Ray,
   che il Capitolato indica come telemetria target.
-- **Edge/runtime locale (Traefik, Nginx):** equivalenti locali di CloudFront/ALB, che il
+- **Edge/runtime locale (Traefik, CloudFront locale, Nginx):** equivalenti locali di CloudFront/ALB, che il
   Capitolato nomina nella loro forma AWS gestita.
 - **Librerie di manipolazione PDF (`setasign/fpdf`, `setasign/fpdi`) per lo split documentale:**
   dettaglio implementativo non coperto dal Capitolato.

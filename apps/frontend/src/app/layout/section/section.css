@@ -1,0 +1,29 @@
+:host {
+  display: grid;
+  gap: var(--poc-space-4);
+  padding: var(--poc-space-5);
+  border: 1px solid var(--poc-border);
+  border-radius: var(--poc-radius);
+  background: var(--poc-surface);
+  box-shadow: var(--poc-shadow);
+  scroll-margin-top: var(--poc-space-6);
+}
+
+:host h2,
+:host h3 {
+  margin: 0;
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--poc-space-3);
+}
+
+@media (max-width: 640px) {
+  .heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

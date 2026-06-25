@@ -366,7 +366,7 @@ test('document processing keeps split visible when field extraction fails', func
     $this->getJson('/api/v1/state')
         ->assertOk()
         ->assertJsonPath('copilot.documents.0.error', $expectedMessage)
-        ->assertJsonPath('copilot.documents.0.previewLines.3', 'Errore estrazione: '.$expectedMessage);
+        ->assertJsonPath('copilot.documents.0.previewLines.1', 'Errore estrazione: '.$expectedMessage);
 });
 
 test('assistant generated metric counts every stored communication', function () {

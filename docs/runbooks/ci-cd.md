@@ -2,32 +2,30 @@
 
 ## Current CI
 
-Ordinary CI is designed to run without enterprise IAM credentials.
+Ordinary CI runs without enterprise IAM credentials. It is a single pipeline,
+`.github/workflows/ci.yml`, with three parallel jobs through Docker Compose:
 
-- `.github/workflows/pest.yml` builds the app image and runs Pest through Docker Compose.
-- `.github/workflows/pint.yml` runs Pint through Docker Compose.
-- `.github/workflows/frontend.yml` installs Node dependencies, checks generated OpenAPI client drift, typechecks, tests, and builds the SPA through Docker Compose.
-- `.github/workflows/accessibility.yml` starts the production-like stack and runs axe/Pa11y against the HTTPS SPA.
-- `.github/workflows/containers.yml` builds application images, scans them with Trivy (`vuln,secret,config` at HIGH/CRITICAL), and can publish to GHCR with `GITHUB_TOKEN`. Only the two custom images (`poc-app`, `poc-nginx`) are published; stock images are pulled from upstream.
-- `.github/workflows/quality.yml` runs Composer validation, Larastan/PHPStan, OpenAPI lint/client drift, Terraform validate and observability config validation.
-- `.github/workflows/localstack-smoke.yml` provisions LocalStack with Terraform and smoke-tests the local stack, including the observability services.
+- **backend** — builds the app image and runs the PHP checks: Composer manifest validation, Pint (format), Larastan/PHPStan (static analysis) and Pest (tests).
+- **frontend** — runs the Angular SPA suite on the Node tool image: OpenAPI contract lint, generated client drift check, ESLint, typecheck, Jest tests, production build, and a production-only `npm audit` at HIGH.
+- **stack** — static infrastructure/observability checks (Terraform `fmt`/`init`/`validate`, OTel Collector and Prometheus config), production image build, Trivy scan (`vuln,secret,config` at HIGH/CRITICAL), LocalStack Terraform apply, Angular SPA build and upload to the LocalStack S3 bucket, HTTPS smoke of the served stack (SPA served via the CloudFront emulator with deep-link fallback, `/api`/`/health`/`/ready`, blocked surfaces, observability dashboards behind basic auth), accessibility (axe/Pa11y plus an enforced-CSP smoke), and conditional publish of the two custom images (`poc-app`, `poc-nginx`) to GHCR.
+
+Supporting workflows:
+
 - `.github/workflows/aws-smoke.yml` is manual-only (`workflow_dispatch`, never blocking) and smoke-tests real S3, Textract and Bedrock. See "AWS Smoke" below.
+- `.github/workflows/mirror-images.yml` mirrors the external base images used by CI onto GHCR (scheduled weekly and on image-list change), so the jobs pull from an authenticated mirror instead of anonymous, rate-limited registries.
 
-All workflows use a `concurrency` group per workflow/ref with `cancel-in-progress`, so superseded pushes do not waste runner minutes. Workflows that pull the Compose stack pre-pull images with retry/backoff and log in to Docker Hub when the `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets exist, to absorb registry rate limits on shared runners.
+All jobs use a `concurrency` group per workflow/ref with `cancel-in-progress`, so superseded pushes do not waste runner minutes. Jobs that pull the Compose stack pre-pull images with retry/backoff and log in to GHCR (and to Docker Hub when the `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets exist) to absorb registry rate limits on shared runners.
 
 ## Required Gates Before Deployment
 
-- Backend tests and formatting.
-- Frontend typecheck, tests, OpenAPI client drift check, and production build.
-- Accessibility smoke against the served SPA.
-- Docker Compose config validation.
+- Backend: Composer validation, Pint formatting, Larastan/PHPStan static analysis, Pest tests.
+- Frontend: OpenAPI contract lint, generated client drift check, ESLint, typecheck, Jest tests, production build, production `npm audit`.
 - OTel Collector and Prometheus config validation.
-- OpenAPI contract lint and generated client drift check.
-- PHPStan/Larastan static analysis.
 - Terraform fmt and validate for LocalStack infrastructure.
-- Trivy image scan for runtime images.
-- LocalStack Terraform apply and HTTPS smoke.
-- Container image build.
+- Trivy image scan for runtime images (HIGH/CRITICAL).
+- LocalStack Terraform apply, Angular SPA build and upload to S3, and HTTPS smoke (SPA serving with deep-link fallback, API, blocked surfaces).
+- Accessibility smoke (axe/Pa11y) and enforced-CSP smoke against the served SPA.
+- Container image build (and conditional GHCR publish).
 
 ## AWS Smoke
 

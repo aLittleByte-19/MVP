@@ -43,7 +43,10 @@ class DocumentController
 
         return response()->json([
             'message' => 'Documento caricato. Workflow documentale avviato.',
-            'streamUrl' => route('api.v1.documents.stream', $original),
+            // URL relativo: la SPA e' servita in HTTPS dietro Traefik, che termina il
+            // TLS e inoltra in HTTP. Un URL assoluto verrebbe generato con schema
+            // "http://" e bloccato dal browser come mixed-content / CSP connect-src.
+            'streamUrl' => route('api.v1.documents.stream', $original, false),
         ], 202);
     }
 
@@ -67,9 +70,20 @@ class DocumentController
                 flush();
             };
 
+            // Commento SSE: ignorato dal browser ma mantiene viva la connessione
+            // quando non ci sono novita' (evita chiusure da idle-timeout dei proxy).
+            $heartbeat = function (): void {
+                echo ": keepalive\n\n";
+                if (ob_get_level()) {
+                    ob_flush();
+                }
+                flush();
+            };
+
             $sentDocumentIds = [];
             $startedAt = time();
             $timeoutSeconds = 300;
+            $lastSignature = null;
 
             while (! connection_aborted()) {
                 $freshDocument = OriginalDocument::query()
@@ -91,6 +105,22 @@ class DocumentController
 
                     $sentDocumentIds[] = $subDocument->id;
                     $send('document', $state->document($subDocument));
+                }
+
+                // Avanzamento a step per la barra di progressione della SPA: stato
+                // del workflow + numero di sotto-documenti gia' estratti. Si emette
+                // solo quando qualcosa cambia; altrimenti un heartbeat tiene viva la
+                // connessione senza generare rumore.
+                $signature = $freshDocument->processing_status->value.':'.count($sentDocumentIds);
+
+                if ($signature !== $lastSignature) {
+                    $send('progress', [
+                        'status' => $freshDocument->processing_status->value,
+                        'subDocuments' => count($sentDocumentIds),
+                    ]);
+                    $lastSignature = $signature;
+                } else {
+                    $heartbeat();
                 }
 
                 if ($freshDocument->processing_status === ProcessingStatus::Completed) {

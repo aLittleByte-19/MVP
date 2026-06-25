@@ -5,13 +5,10 @@ export default defineConfig({
     input: "../../openapi/v1/alittlebyte-poc-api.yaml",
     output: {
       mode: "single",
-      client: "fetch",
+      client: "angular",
       target: "src/api/generated/poc-api.ts",
       schemas: "src/api/generated/model",
-      clean: true,
-      override: {
-        requestOptions: true
-      }
+      clean: true
     }
   }
 });

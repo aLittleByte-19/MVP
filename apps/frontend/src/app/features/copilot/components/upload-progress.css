@@ -1,0 +1,68 @@
+:host {
+  display: contents;
+}
+
+.progress {
+  display: block;
+}
+
+.track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--poc-surface-soft);
+  border: 1px solid var(--poc-border-soft);
+  overflow: hidden;
+}
+
+.fill {
+  position: relative;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  background: linear-gradient(90deg, var(--poc-primary), var(--poc-primary-deep));
+  /* Riempimento fluido al cambio di fase (no animazione continua). */
+  transition: width 0.45s ease;
+}
+
+/* Bagliore che scorre da sinistra a destra sulla parte riempita mentre
+   l'elaborazione e' attiva: richiamo alla classica barra di caricamento. */
+.progress.isActive .fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  animation: pocUploadSweep 1.4s ease-in-out infinite;
+}
+
+.progress.isDone .fill {
+  background: linear-gradient(90deg, var(--poc-success), var(--poc-success));
+}
+
+.progress.isError .fill {
+  background: var(--poc-danger);
+}
+
+@keyframes pocUploadSweep {
+  from {
+    left: -40%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+/* Rispetta le preferenze di movimento ridotto (WCAG 2.3.3): niente bagliore. */
+@media (prefers-reduced-motion: reduce) {
+  .progress.isActive .fill::after {
+    animation: none;
+  }
+
+  .fill {
+    transition: none;
+  }
+}

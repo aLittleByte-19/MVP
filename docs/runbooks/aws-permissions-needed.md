@@ -16,6 +16,7 @@ The eventual AWS role needs scoped permissions for:
 
 - S3 bucket/object access for document upload, metadata, read, and lifecycle-managed storage.
 - S3 presigned URL generation through application runtime permissions.
+- S3 static-asset hosting for the Angular SPA bucket — deploy access (`PutObject`/`DeleteObject`/`ListBucket`) plus a **private** bucket fronted by CloudFront with Origin Access Control (`s3:GetObject` granted to the CloudFront service principal, never public) and `cloudfront:CreateInvalidation`, when a real frontend deployment target is defined. The local PoC serves the SPA from LocalStack S3 only, so this is not exercised by the AWS smoke.
 - Textract async document text detection and result retrieval.
 - Bedrock Runtime model invocation for approved model IDs.
 - SQS queue and DLQ send/receive/delete/change visibility/get attributes.
