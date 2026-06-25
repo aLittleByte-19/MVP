@@ -45,6 +45,10 @@ server {
         add_header X-Local-CloudFront "s3-localstack-api" always;
     }
 
+    location = /internal/metrics {
+        return 404;
+    }
+
     location = / {
         proxy_set_header Host localstack:4566;
         proxy_pass http://localstack:4566/${FRONTEND_STATIC_BUCKET}/index.html;
