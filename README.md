@@ -1,63 +1,20 @@
 # PoC - aLittleByte
+<p align="center">
+  <img src="https://img.shields.io/badge/Laravel-API-red?logo=laravel&logoColor=white" alt="Laravel API">
+  <img src="https://img.shields.io/badge/Angular-SPA-DD0031?logo=angular&logoColor=white" alt="Angular SPA">
+  <img src="https://img.shields.io/badge/PostgreSQL-persistence-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL">
+  <img src="https://img.shields.io/badge/LocalStack-AWS%20emulation-FF9900?logo=amazonaws&logoColor=white" alt="LocalStack">
+  <img src="https://img.shields.io/badge/Bedrock-AI%20provider-FF9900?logo=amazonaws&logoColor=white" alt="Bedrock">
+  <img src="https://img.shields.io/badge/OpenTelemetry-observability-000000?logo=opentelemetry&logoColor=white" alt="OpenTelemetry">
+</p>
+
+<p align="center">
+  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/aLittleByte-19/PoC/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI (main)"></a>
+</p>
+
 
 Proof of Concept per workflow HR e documentali assistiti da AI, con generazione di comunicazioni, pipeline asincrona di elaborazione PDF, integrazione AWS-like locale e osservabilità end-to-end.
 
-<table align="center">
-  <tr>
-    <td align="center" width="25%">
-      <strong>Application</strong><br><br>
-      <img src="https://img.shields.io/badge/Laravel-API-red?logo=laravel&logoColor=white" alt="Laravel">
-      <br>
-      <img src="https://img.shields.io/badge/PHP-8.4-777BB4?logo=php&logoColor=white" alt="PHP">
-      <br>
-      <img src="https://img.shields.io/badge/Angular-SPA-DD0031?logo=angular&logoColor=white" alt="Angular">
-      <br>
-      <img src="https://img.shields.io/badge/TypeScript-frontend-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
-    </td>
-    <td align="center" width="25%">
-      <strong>Data & Storage</strong><br><br>
-      <img src="https://img.shields.io/badge/PostgreSQL-persistence-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL">
-      <br>
-      <img src="https://img.shields.io/badge/Redis-cache%20%26%20rate%20limit-DC382D?logo=redis&logoColor=white" alt="Redis">
-      <br>
-      <img src="https://img.shields.io/badge/S3--compatible-document%20storage-569A31?logo=amazons3&logoColor=white" alt="S3-compatible storage">
-    </td>
-    <td align="center" width="25%">
-      <strong>Workflow & AI</strong><br><br>
-      <img src="https://img.shields.io/badge/LocalStack-AWS%20emulation-FF9900?logo=amazonaws&logoColor=white" alt="LocalStack">
-      <br>
-      <img src="https://img.shields.io/badge/Step%20Functions-orchestration-FF9900?logo=amazonaws&logoColor=white" alt="Step Functions">
-      <br>
-      <img src="https://img.shields.io/badge/SQS-task%20queue-FF9900?logo=amazonaws&logoColor=white" alt="SQS">
-      <br>
-      <img src="https://img.shields.io/badge/Bedrock-LLM%20provider-FF9900?logo=amazonaws&logoColor=white" alt="Bedrock">
-    </td>
-    <td align="center" width="25%">
-      <strong>Observability</strong><br><br>
-      <img src="https://img.shields.io/badge/OpenTelemetry-collector-000000?logo=opentelemetry&logoColor=white" alt="OpenTelemetry">
-      <br>
-      <img src="https://img.shields.io/badge/Prometheus-metrics-E6522C?logo=prometheus&logoColor=white" alt="Prometheus">
-      <br>
-      <img src="https://img.shields.io/badge/Grafana-dashboards-F46800?logo=grafana&logoColor=white" alt="Grafana">
-      <br>
-      <img src="https://img.shields.io/badge/Loki%20%2B%20Tempo-logs%20%26%20traces-F46800?logo=grafana&logoColor=white" alt="Loki and Tempo">
-    </td>
-  </tr>
-</table>
-
-<table align="center">
-  <tr>
-    <td align="center">
-      <strong>CI / Quality Gate</strong><br><br>
-      <img src="https://img.shields.io/badge/Pest-backend%20tests-6E9F18" alt="Pest">
-      <img src="https://img.shields.io/badge/Jest-frontend%20tests-C21325?logo=jest&logoColor=white" alt="Jest">
-      <img src="https://img.shields.io/badge/Trivy-image%20scan-1904DA?logo=trivy&logoColor=white" alt="Trivy">
-      <img src="https://img.shields.io/badge/axe%20%2B%20pa11y-accessibility-654FF0" alt="Accessibility">
-      <img src="https://img.shields.io/badge/Terraform-validated-844FBA?logo=terraform&logoColor=white" alt="Terraform"> <br><br>
-      <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/aLittleByte-19/PoC/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI (main)"></a>
-    </td>
-  </tr>
-</table>
 
 ## Contesto
 

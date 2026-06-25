@@ -2,6 +2,10 @@
 
 ## Normal Flow
 
+![Workflow asincrono AI/OCR](../architecture/diagrams/06_workflow_async_ai_ocr.drawio.png)
+
+<sub>Sorgente editabile: [`06_workflow_async_ai_ocr.drawio`](../architecture/diagrams/06_workflow_async_ai_ocr.drawio), export [`SVG`](../architecture/diagrams/06_workflow_async_ai_ocr.drawio.svg).</sub>
+
 1. SPA posts a PDF to `POST /api/v1/documents/ocr`.
 2. `UploadDocumentRequest` validates MIME type, size, filename, PDF readability, page count and optional Textract limits.
 3. `DocumentProcessingService::storeUpload()` stores the original file on the configured document disk.

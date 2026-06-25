@@ -28,6 +28,10 @@ CloudFront davanti al bucket S3 LocalStack e inoltra `/api/`, `/health` e `/read
 Nginx/Laravel. Il deploy locale carica `apps/frontend/dist` nel bucket con cache-control
 differenziato: `index.html` no-cache, bundle hashati immutable, altri asset con cache breve.
 
+![Frontend SPA e contratto API](../architecture/diagrams/03_frontend_spa_contratto_api.drawio.png)
+
+<sub>Sorgente editabile: [`03_frontend_spa_contratto_api.drawio`](../architecture/diagrams/03_frontend_spa_contratto_api.drawio), export [`SVG`](../architecture/diagrams/03_frontend_spa_contratto_api.drawio.svg).</sub>
+
 ## Consequences
 
 - Il frontend applicativo resta su Angular, Angular Router, HttpClient, RxJS e signal store.

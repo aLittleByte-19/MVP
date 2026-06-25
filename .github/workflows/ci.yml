@@ -15,7 +15,7 @@ on:
     branches:
       - develop
       - main
-      - migration/new_techs
+      - migrate/react_angular
     tags:
       - "v*"
   pull_request:
@@ -193,7 +193,9 @@ jobs:
       # L'archivio viene caricato in cache dal post-step di actions/cache
       - name: Save image archive for cache
         if: steps.image-cache.outputs.cache-hit != 'true'
-        run: docker save $(cat /tmp/ci-images.txt) | zstd -T0 -o /tmp/ci-images.tar.zst
+        run: |
+          mapfile -t images < /tmp/ci-images.txt
+          docker save "${images[@]}" | zstd -T0 -o /tmp/ci-images.tar.zst
 
       # --- Check statici senza build (fail fast) ---
 

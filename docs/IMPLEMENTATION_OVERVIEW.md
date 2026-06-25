@@ -1,7 +1,7 @@
 # Panoramica implementativa dell'applicativo
 
 > Documento aggiornato tramite analisi diretta della codebase.
-> Branch analizzato: frontend Angular.
+> Branch analizzato: migrate/react_angular.
 > Ultimo aggiornamento: 2026-06-24.
 
 ---
@@ -156,6 +156,14 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; i
 **Dettaglio rilevante**: `/internal/metrics` non è servito dal listener edge `:8080` usato da Traefik; ritorna 404 dall'esterno. Lo scrape passa dal listener interno `nginx:8081/internal/metrics`, raggiungibile solo sulle reti Docker interne. La CI verifica sia il 404 esterno sia la raggiungibilità interna.
 **Gap**: la CSP è locale e mirata alla SPA attuale; eventuali nuovi asset remoti o embedding esterni richiedono aggiornamento esplicito della policy.
 
+### CloudFront locale (frontend-cloudfront)
+
+**Dove**: `docker/cloudfront/default.conf.template` (config Nginx parametrizzata via `envsubst`), servizio `frontend-cloudfront` in `docker-compose.yml` (immagine `nginx:1.29-alpine`), target `make frontend-s3-local-deploy`/`frontend-s3-local-upload`.
+**Ruolo**: emula in locale il layer CDN/edge che in produzione sarebbe Amazon CloudFront. È l'**origine di default della SPA**: serve gli asset statici Angular leggendoli da S3 LocalStack (`/` → bucket `index.html`; le altre richieste sono proxate al bucket con fallback deep-link `@spa_index` su `index.html`, intercettando 403/404), e fa da **reverse proxy** verso Nginx per `/api/`, `/health`, `/ready`. È il primo hop dopo Traefik (`Traefik → frontend-cloudfront → {S3 LocalStack | Nginx}`).
+**Security header**: applica a livello server gli header edge (CSP `frame-ancestors 'none'`, X-Frame-Options `SAMEORIGIN`, X-Content-Type-Options, Referrer-Policy) sugli asset statici. Sulle risposte `/api/` non sovrascrive gli header dell'origine: un `add_header` dedicato nella `location /api/` interrompe l'ereditarietà nginx, così resta valida la CSP differenziata dell'app (in particolare `frame-ancestors 'self'` per l'anteprima PDF in iframe, che altrimenti verrebbe bloccata dalla doppia CSP).
+**Motivazione**: validare il percorso reale build → upload su object storage → distribuzione edge senza dipendere da CloudFront vero; tiene il serving statico della SPA disaccoppiato dall'immagine applicativa.
+**Valutazione**: riproduce in modo fedele il flusso S3-origin + edge proxy e la separazione asset/API. Gap: non copre OAC, invalidation della cache, signed URL né la propagazione edge reali (limiti dichiarati, §11); convive con la versione 1.27 dell'Nginx applicativo (due immagini Nginx distinte con ruoli diversi).
+
 ### AWS Bedrock (LLM)
 
 **Dove**: `app/Copilot/Ai/BedrockService.php` (client `BedrockRuntimeClient` costruito in `AppServiceProvider` con timeout 300s), config in `config/services.php` (`model_id`, `region`, `endpoint`, credenziali AWS reali opzionali; default modello `amazon.nova-lite-v1:0` da `docker-compose.yml`).
@@ -257,7 +265,7 @@ sequenceDiagram
     SFN->>SQS: bedrock.extract + taskToken
     W->>BR: splitDocument(testo OCR) → segmenti per destinatario
     W->>W: Fpdi: estrae pagine → SubDocument per segmento
-    W->>BR: extractFields(testo OCR destinatario) → ExtractedData; confidenza calcolata
+    W->>BR: extractFields(testo OCR destinatario) → ExtractedData, confidenza calcolata
     W-->>SFN: sendTaskSuccess
     SFN->>SQS: persist.results, poi dispatch.domain_event
     W-->>SFN: sendTaskSuccess (status → Completed)
@@ -304,6 +312,10 @@ Sei tabelle di dominio (`database/migrations/`):
 Gli stati applicativi sono enum PHP con cast Eloquent (`ProcessingStatus`, `SendStatus`, `CommunicationStatus`) duplicati come CHECK a livello DB: doppia difesa coerente. Le relazioni Eloquent rispecchiano le FK.
 
 **Punti da rafforzare in ottica production**: multi-tenancy garantita solo da `where tenant_id` applicativi (nessun Postgres Row-Level Security); nessuna strategia di migrazione dati/rollback documentata; niente backup/PITR (accettabile in PoC, bloccante in produzione); `ocr_text` longText cresce senza retention.
+
+![Dati, storage e protezione](architecture/diagrams/05_dati_storage_protezione.drawio.png)
+
+<sub>Sorgente editabile: [`05_dati_storage_protezione.drawio`](architecture/diagrams/05_dati_storage_protezione.drawio), export [`SVG`](architecture/diagrams/05_dati_storage_protezione.drawio.svg).</sub>
 
 ---
 

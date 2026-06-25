@@ -16,7 +16,7 @@ on:
     branches:
       - develop
       - main
-      - migration/new_techs
+      - migrate/react_angular
     paths:
       - docker-compose.yml
       - docker/php/Dockerfile

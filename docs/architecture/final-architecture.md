@@ -51,6 +51,12 @@ CloudFront locale inoltra `/api/`, `/health` e `/ready` a Nginx/Laravel. Nginx r
 applicativo e il percorso interno di compatibilità, ma non è più l'origine primaria della SPA
 nel flusso default. La simulazione non sostituisce una validazione CloudFront reale su AWS.
 
+### Dettaglio edge/runtime/API
+
+![Dettaglio edge, runtime e backend API](diagrams/04_edge_runtime_backend_api.drawio.png)
+
+<sub>Sorgente editabile: [`04_edge_runtime_backend_api.drawio`](diagrams/04_edge_runtime_backend_api.drawio), export [`SVG`](diagrams/04_edge_runtime_backend_api.drawio.svg).</sub>
+
 Alcune primitive sono provisionate ma **non esercitate** dall'applicativo: il bus EventBridge
 (con rule e target verso SQS) e l'identità SES esistono in Terraform, ma nessun codice pubblica
 eventi o invia email. Le policy IAM (es. execution role di Step Functions) sono definite come
@@ -67,12 +73,12 @@ credenziali e configurazione esplicite:
 - `AWS_REAL_SESSION_TOKEN`, quando necessario
 - `AWS_REAL_S3_BUCKET`
 - `AWS_REAL_S3_PREFIX`
+- `BEDROCK_REGION`
+- `BEDROCK_MODEL_ID`
 - `TEXTRACT_ENABLED=true`
 
 Le variabili `FRONTEND_STATIC_BUCKET` e `FRONTEND_CLOUDFRONT_LOCAL_URL` sono locali e dedicate
 alla SPA: non devono puntare a bucket reali e non governano il caricamento documenti.
-- `BEDROCK_REGION`
-- `BEDROCK_MODEL_ID`
 
 I test e la CI standard non chiamano S3, Textract o Bedrock reali.
 

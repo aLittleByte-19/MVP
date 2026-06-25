@@ -18,33 +18,9 @@ No host ports: the UIs are reachable only through Traefik on the internal
 Browsers resolve `*.localhost` natively; for `curl` add
 `--resolve prometheus.localhost:8443:127.0.0.1` (or `/etc/hosts` entries).
 
-```mermaid
-flowchart LR
-  app["Laravel API and Worker"]
-  nginx["Nginx /internal/metrics"]
-  traefik["Traefik /metrics"]
-  otel["OTel Collector"]
-  prom["Prometheus"]
-  tempo["Tempo"]
-  grafana["Grafana"]
-  alerts["Alertmanager"]
-  logs["Container logs"]
-  alloy["Grafana Alloy"]
-  loki["Loki"]
+![Flusso di osservabilità](../architecture/diagrams/07_osservabilita.drawio.png)
 
-  app --> nginx
-  nginx --> otel
-  traefik --> otel
-  app -- OTLP traces --> otel
-  otel -- metrics exporter --> prom
-  otel -- traces --> tempo
-  prom -- rules --> alerts
-  prom --> grafana
-  tempo --> grafana
-  logs --> alloy
-  alloy --> loki
-  loki --> grafana
-```
+<sub>Sorgente editabile: [`07_osservabilita.drawio`](../architecture/diagrams/07_osservabilita.drawio), export [`SVG`](../architecture/diagrams/07_osservabilita.drawio.svg).</sub>
 
 ## Start and Validate
 
