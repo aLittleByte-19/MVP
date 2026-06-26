@@ -24,14 +24,14 @@ export PNG/SVG vanno rigenerati da draw.io dopo ogni modifica (`drawio -x -f png
 
 | Livello | Componente implementato | Ruolo |
 | --- | --- | --- |
-| Frontend | SPA React/Vite/TypeScript in `apps/frontend` | Upload, stato di elaborazione, revisione, flussi di anteprima/eliminazione. |
-| Edge | Traefik (TLS) e Nginx | HTTPS locale, serving statico della SPA, proxy API, blocco delle superfici `/admin`. |
+| Frontend | SPA Angular/TypeScript in `apps/frontend` | Upload, stato di elaborazione, revisione, flussi di anteprima/eliminazione. |
+| Edge | Traefik (TLS), emulatore CDN locale (Nginx) e Nginx applicativo | HTTPS locale, serving della SPA da S3 LocalStack, proxy API, blocco delle superfici `/admin`. |
 | API | API JSON Laravel in `app/Http` | Validazione, controlli di tenant, audit event, avvio del workflow. |
 | Workflow | Step Functions e SQS (LocalStack) | Orchestrazione production-like con callback task token, end-to-end. |
 | Worker | `php artisan poc:workflow:consume` | Ricezione SQS, esecuzione dei task, `SendTaskSuccess`/`SendTaskFailure`, `SendTaskHeartbeat`. |
 | OCR | `App\Copilot\Ocr\Services\TextractService` | Integrazione Textract reale, disabilitata di default nelle esecuzioni locali/CI standard. |
 | AI | `App\Copilot\Ai\BedrockService` | Integrazione Bedrock reale per split/estrazione/generazione. |
-| Storage | Dischi Laravel `s3` o `real_s3` | S3 LocalStack per le demo locali, S3 reale per la validazione Textract/Bedrock. |
+| Storage | Dischi Laravel `s3` o `real_s3`, bucket `frontend_static` | S3 LocalStack per documenti locali e asset Angular, S3 reale opzionale solo per documenti/Textract. |
 | Persistenza | PostgreSQL | Documenti, sotto-documenti, dati estratti, audit e stato dei task di workflow. |
 | Cache/sessione | Redis | Cache/sessione e rate limiting; non è la fonte di verità dei dati. |
 | Osservabilità | OTel Collector, Prometheus, Tempo, Grafana, Alertmanager | Metriche, trace, dashboard e alert locali. |
@@ -43,6 +43,26 @@ LocalStack fornisce le primitive di orchestrazione production-like testabili in 
 Step Functions, SQS/DLQ, S3, EventBridge, SSM Parameter Store e Secrets Manager. L'applicazione
 parla con i servizi AWS, reali o emulati, **senza cambiare codice**: cambiano solo endpoint e
 credenziali.
+
+La SPA Angular usa come default locale il percorso `Traefik -> edge-cdn -> S3
+LocalStack`: `make frontend-s3-local-deploy` carica `apps/frontend/dist` nel bucket
+`FRONTEND_STATIC_BUCKET`, poi `https://localhost:8443` serve gli asset da quel bucket. Il
+servizio `edge-cdn` è un **secondo Nginx** che emula in locale il **ruolo di una
+CDN/edge** (non Amazon CloudFront): serve gli asset statici e inoltra `/api/`, `/health` e
+`/ready` all'Nginx applicativo/Laravel. È un container separato dall'Nginx applicativo di
+proposito — quest'ultimo è un'immagine di produzione (buildata, scansionata, pubblicata) e non
+deve conoscere LocalStack, mentre il serving da S3 emulato resta confinato in uno scaffolding
+solo-locale; la separazione riflette anche la topologia reale CDN → origin. L'Nginx applicativo
+resta il proxy verso PHP-FPM e il percorso interno di compatibilità (include la build SPA), ma
+non è l'origine primaria della SPA nel flusso default. L'emulazione non sostituisce una CDN
+reale: in produzione il ruolo sarebbe ricoperto da AWS CloudFront (bucket privato + OAC,
+invalidation, edge propagation).
+
+### Dettaglio edge/runtime/API
+
+![Dettaglio edge, runtime e backend API](diagrams/04_edge_runtime_backend_api.drawio.png)
+
+<sub>Sorgente editabile: [`04_edge_runtime_backend_api.drawio`](diagrams/04_edge_runtime_backend_api.drawio), export [`SVG`](diagrams/04_edge_runtime_backend_api.drawio.svg).</sub>
 
 Alcune primitive sono provisionate ma **non esercitate** dall'applicativo: il bus EventBridge
 (con rule e target verso SQS) e l'identità SES esistono in Terraform, ma nessun codice pubblica
@@ -60,9 +80,12 @@ credenziali e configurazione esplicite:
 - `AWS_REAL_SESSION_TOKEN`, quando necessario
 - `AWS_REAL_S3_BUCKET`
 - `AWS_REAL_S3_PREFIX`
-- `TEXTRACT_ENABLED=true`
 - `BEDROCK_REGION`
 - `BEDROCK_MODEL_ID`
+- `TEXTRACT_ENABLED=true`
+
+Le variabili `FRONTEND_STATIC_BUCKET` e `EDGE_CDN_LOCAL_URL` sono locali e dedicate
+alla SPA: non devono puntare a bucket reali e non governano il caricamento documenti.
 
 I test e la CI standard non chiamano S3, Textract o Bedrock reali.
 

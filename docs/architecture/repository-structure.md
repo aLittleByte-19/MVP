@@ -15,7 +15,7 @@ dominio.
 - `app/Console/Commands`: comandi artisan, incluso il worker `poc:workflow:consume`.
 - `app/Http`: controller HTTP, middleware e validazione delle richieste.
 - `app/Models/Copilot`: model Eloquent del dominio PoC.
-- `apps/frontend`: SPA React/Vite.
+- `apps/frontend`: SPA Angular/TypeScript.
 - `openapi/v1`: contratto API versionato.
 - `infra/localstack`: modello Terraform LocalStack per le esecuzioni locali production-like.
 - `infra/modules`: moduli Terraform riutilizzabili per la futura infrastruttura AWS.

@@ -178,10 +178,10 @@ class DocumentWorkflowService
         $disk = (string) config('poc.documents.storage_disk', config('filesystems.default'));
         $root = trim((string) config("filesystems.disks.{$disk}.root", ''), '/');
 
-        // file_path is always disk-relative (no root prefix), while Textract needs
-        // the raw S3 key, which includes the disk root. Always prepend it; the
-        // previous str_starts_with shortcut was fooled when the upload folder
-        // happened to start with the root (e.g. root "documents" + "documents/originals").
+        // file_path is always disk-relative (no root prefix, e.g. "originals/..",
+        // "sub/.."), while Textract needs the raw S3 key, which includes the disk
+        // root. Always prepend it: root "documents" + "originals/x" -> the actual
+        // key "documents/originals/x".
         return $root === '' ? $document->file_path : $root.'/'.$document->file_path;
     }
 

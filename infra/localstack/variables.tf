@@ -34,6 +34,18 @@ variable "app_url" {
   default     = "https://localhost:8443"
 }
 
+variable "frontend_static_bucket" {
+  description = "LocalStack S3 bucket dedicated to Angular static assets."
+  type        = string
+  default     = "poc-frontend-static-local"
+}
+
+variable "edge_cdn_local_url" {
+  description = "Local URL of the Docker CDN/edge emulator (Nginx) that fronts the LocalStack S3 frontend bucket."
+  type        = string
+  default     = "https://localhost:8443"
+}
+
 variable "db_database" {
   description = "PostgreSQL database name used by the application."
   type        = string

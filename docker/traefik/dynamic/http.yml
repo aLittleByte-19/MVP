@@ -6,7 +6,7 @@ http:
       rule: Host(`localhost`) || Host(`poc.localhost`) || Host(`traefik`)
       entryPoints:
         - websecure
-      service: poc-nginx
+      service: poc-edge-cdn
       tls: {}
 
     # Dashboard di osservabilità: nessuna porta host, si entra solo da qui.
@@ -49,11 +49,11 @@ http:
         usersFile: /etc/traefik/usersfile
 
   services:
-    poc-nginx:
+    poc-edge-cdn:
       loadBalancer:
         passHostHeader: true
         servers:
-          - url: http://nginx:8080
+          - url: http://edge-cdn:8080
     grafana:
       loadBalancer:
         servers:

@@ -1,63 +1,20 @@
 # PoC - aLittleByte
+<p align="center">
+  <img src="https://img.shields.io/badge/Laravel-API-red?logo=laravel&logoColor=white" alt="Laravel API">
+  <img src="https://img.shields.io/badge/Angular-SPA-DD0031?logo=angular&logoColor=white" alt="Angular SPA">
+  <img src="https://img.shields.io/badge/PostgreSQL-persistence-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL">
+  <img src="https://img.shields.io/badge/LocalStack-AWS%20emulation-FF9900?logo=amazonaws&logoColor=white" alt="LocalStack">
+  <img src="https://img.shields.io/badge/Bedrock-AI%20provider-FF9900?logo=amazonaws&logoColor=white" alt="Bedrock">
+  <img src="https://img.shields.io/badge/OpenTelemetry-observability-000000?logo=opentelemetry&logoColor=white" alt="OpenTelemetry">
+</p>
+
+<p align="center">
+  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/aLittleByte-19/PoC/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI (main)"></a>
+</p>
+
 
 Proof of Concept per workflow HR e documentali assistiti da AI, con generazione di comunicazioni, pipeline asincrona di elaborazione PDF, integrazione AWS-like locale e osservabilità end-to-end.
 
-<table align="center">
-  <tr>
-    <td align="center" width="25%">
-      <strong>Application</strong><br><br>
-      <img src="https://img.shields.io/badge/Laravel-API-red?logo=laravel&logoColor=white" alt="Laravel">
-      <br>
-      <img src="https://img.shields.io/badge/PHP-8.4-777BB4?logo=php&logoColor=white" alt="PHP">
-      <br>
-      <img src="https://img.shields.io/badge/React-SPA-61DAFB?logo=react&logoColor=black" alt="React">
-      <br>
-      <img src="https://img.shields.io/badge/TypeScript-frontend-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
-    </td>
-    <td align="center" width="25%">
-      <strong>Data & Storage</strong><br><br>
-      <img src="https://img.shields.io/badge/PostgreSQL-persistence-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL">
-      <br>
-      <img src="https://img.shields.io/badge/Redis-cache%20%26%20rate%20limit-DC382D?logo=redis&logoColor=white" alt="Redis">
-      <br>
-      <img src="https://img.shields.io/badge/S3--compatible-document%20storage-569A31?logo=amazons3&logoColor=white" alt="S3-compatible storage">
-    </td>
-    <td align="center" width="25%">
-      <strong>Workflow & AI</strong><br><br>
-      <img src="https://img.shields.io/badge/LocalStack-AWS%20emulation-FF9900?logo=amazonaws&logoColor=white" alt="LocalStack">
-      <br>
-      <img src="https://img.shields.io/badge/Step%20Functions-orchestration-FF9900?logo=amazonaws&logoColor=white" alt="Step Functions">
-      <br>
-      <img src="https://img.shields.io/badge/SQS-task%20queue-FF9900?logo=amazonaws&logoColor=white" alt="SQS">
-      <br>
-      <img src="https://img.shields.io/badge/Bedrock-LLM%20provider-FF9900?logo=amazonaws&logoColor=white" alt="Bedrock">
-    </td>
-    <td align="center" width="25%">
-      <strong>Observability</strong><br><br>
-      <img src="https://img.shields.io/badge/OpenTelemetry-collector-000000?logo=opentelemetry&logoColor=white" alt="OpenTelemetry">
-      <br>
-      <img src="https://img.shields.io/badge/Prometheus-metrics-E6522C?logo=prometheus&logoColor=white" alt="Prometheus">
-      <br>
-      <img src="https://img.shields.io/badge/Grafana-dashboards-F46800?logo=grafana&logoColor=white" alt="Grafana">
-      <br>
-      <img src="https://img.shields.io/badge/Loki%20%2B%20Tempo-logs%20%26%20traces-F46800?logo=grafana&logoColor=white" alt="Loki and Tempo">
-    </td>
-  </tr>
-</table>
-
-<table align="center">
-  <tr>
-    <td align="center">
-      <strong>CI / Quality Gate</strong><br><br>
-      <img src="https://img.shields.io/badge/Pest-backend%20tests-6E9F18" alt="Pest">
-      <img src="https://img.shields.io/badge/Vitest-frontend%20tests-6E9F18?logo=vitest&logoColor=white" alt="Vitest">
-      <img src="https://img.shields.io/badge/Trivy-image%20scan-1904DA?logo=trivy&logoColor=white" alt="Trivy">
-      <img src="https://img.shields.io/badge/axe%20%2B%20pa11y-accessibility-654FF0" alt="Accessibility">
-      <img src="https://img.shields.io/badge/Terraform-validated-844FBA?logo=terraform&logoColor=white" alt="Terraform"> <br><br>
-      <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/aLittleByte-19/PoC/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI (main)"></a>
-    </td>
-  </tr>
-</table>
 
 ## Contesto
 
@@ -71,12 +28,13 @@ Il valore principale del progetto è architetturale e dimostrativo: ogni fase de
 
 La PoC dimostra un modello applicativo composto da più livelli cooperanti:
 
-* una **SPA React/Vite/TypeScript** per l’interazione operatore;
+* una **SPA Angular/TypeScript** per l’interazione operatore;
 * un backend **Laravel/PHP** per API, validazione, autorizzazione, orchestrazione applicativa e persistenza;
 * **PostgreSQL** per dati strutturati, stati applicativi, audit e risultati di elaborazione;
 * **Redis** per cache, sessioni e rate limiting;
 * storage documentale **S3-compatible** per PDF originali e sotto-documenti generati;
 * **LocalStack** per emulare localmente servizi AWS come SQS, Step Functions, SSM, Secrets Manager e S3;
+* **emulatore CDN locale** (Nginx) davanti al bucket S3 LocalStack per il serving della SPA Angular (in produzione: AWS CloudFront);
 * integrazione AI tramite astrazione verso **Bedrock** e integrazione OCR tramite **Textract** (attivabile, disabilitata di default);
 * stack di osservabilità con **OpenTelemetry, Prometheus, Grafana, Tempo, Loki, Alloy e Alertmanager**;
 * CI con test backend/frontend, scansione immagini, validazione infrastrutturale e audit accessibilità.
@@ -87,7 +45,7 @@ La separazione tra richiesta HTTP e workflow asincrono è uno dei punti centrali
 
 L’architettura locale è organizzata intorno a un entrypoint edge, un layer applicativo, servizi dati, workflow asincroni e osservabilità.
 
-Traefik gestisce l’ingresso verso i servizi esposti e instrada il traffico verso Nginx. Nginx serve la SPA frontend e inoltra le richieste API al runtime Laravel/PHP-FPM. Laravel gestisce le API, valida le richieste, applica le regole applicative, registra eventi di audit e avvia i workflow documentali. PostgreSQL conserva lo stato persistente, Redis supporta componenti runtime a bassa latenza, mentre LocalStack fornisce servizi AWS-like in ambiente locale.
+Traefik gestisce l’ingresso verso i servizi esposti e instrada il traffico applicativo verso l’emulatore CDN locale. Quest’ultimo (`edge-cdn`) è un secondo Nginx che emula il ruolo di una CDN/edge — non Amazon CloudFront — servendo la SPA Angular dagli oggetti caricati nel bucket S3 LocalStack e inoltrando `/api/`, `/health` e `/ready` all’Nginx applicativo/Laravel. È un container separato dall’Nginx applicativo, che è un’immagine di produzione e non deve conoscere LocalStack; quest’ultimo resta il proxy verso PHP-FPM e il percorso interno di compatibilità. PostgreSQL conserva lo stato persistente, Redis supporta componenti runtime a bassa latenza, mentre LocalStack fornisce servizi AWS-like in ambiente locale.
 
 I worker Laravel consumano task asincroni da SQS e comunicano con Step Functions tramite callback task token. Questo permette di rappresentare una pipeline documentale composta da stati espliciti, retry, gestione errori, idempotenza e aggiornamento progressivo dello stato.
 
@@ -151,6 +109,18 @@ make setup
 make test
 make logs
 ```
+
+### Serving statico LocalStack
+
+```bash
+make frontend-s3-local-deploy
+make edge-cdn-local-url
+make frontend-serving-local-test
+```
+
+Il flusso builda Angular, provisiona il bucket S3 LocalStack via Terraform, carica `apps/frontend/dist` con cache-control differenziato (`index.html` no-cache, bundle hashati immutable) e verifica il serving attraverso l’emulatore CDN locale su `https://localhost:8443`. L’emulazione valida il pattern build → bucket → distribuzione edge in locale, ma non sostituisce una CDN reale (in produzione AWS CloudFront, con TLS/OAC/edge propagation/invalidation).
+
+Il bucket `FRONTEND_STATIC_BUCKET` è dedicato solo alla SPA. I documenti continuano a usare `POC_DOCUMENT_DISK=s3` per S3 LocalStack o `POC_DOCUMENT_DISK=real_s3` con `AWS_REAL_*` per S3/Textract reali.
 
 ### Accesso ai servizi
 

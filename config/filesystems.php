@@ -68,6 +68,11 @@ return [
             'token' => env('AWS_REAL_SESSION_TOKEN'),
             'region' => env('AWS_REAL_REGION', env('AWS_DEFAULT_REGION')),
             'bucket' => env('AWS_REAL_S3_BUCKET'),
+            // Prefisso (namespace) del bucket: i path applicativi sono relativi
+            // a questo root (vedi DocumentProcessingService: "originals/", "sub/").
+            // Default "documents/" -> chiavi "documents/originals/...". Non
+            // ripetere "documents" nei path app, altrimenti torna il doppio
+            // "documents/documents/".
             'root' => trim((string) env('AWS_REAL_S3_PREFIX', 'documents/'), '/'),
             'throw' => true,
             'report' => true,

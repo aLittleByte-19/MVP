@@ -43,9 +43,15 @@ Per evitare informazioni duplicate o divergenti, ogni tema ha **un** documento d
   d'insieme è in draw.io ([`final-architecture.drawio`](architecture/diagrams/final-architecture.drawio),
   export [SVG](architecture/diagrams/final-architecture.drawio.svg) con loghi incorporati), ed è inclusa
   in [Architettura finale](architecture/final-architecture.md#diagramma-dellarchitettura). I diagrammi
-  di dettaglio sono Mermaid embeddato nei doc: pipeline documentale in
-  [IMPLEMENTATION_OVERVIEW](IMPLEMENTATION_OVERVIEW.md), DLQ/recovery in
-  [dlq-recovery](runbooks/dlq-recovery.md), telemetria in [observability](runbooks/observability.md).
+  Draw.io di dettaglio coprono [ambiente locale/provisioning](architecture/diagrams/02_ambiente_locale_provisioning.drawio),
+  [frontend/contratto API](architecture/diagrams/03_frontend_spa_contratto_api.drawio),
+  [edge/runtime/API](architecture/diagrams/04_edge_runtime_backend_api.drawio),
+  [dati/storage/protezione](architecture/diagrams/05_dati_storage_protezione.drawio),
+  [workflow AI/OCR](architecture/diagrams/06_workflow_async_ai_ocr.drawio) e
+  [osservabilità](architecture/diagrams/07_osservabilita.drawio), con export PNG/SVG accanto al sorgente.
+  I Mermaid residui restano nei punti in cui servono come overview o sequenze operative,
+  inclusi [IMPLEMENTATION_OVERVIEW](IMPLEMENTATION_OVERVIEW.md) e
+  [dlq-recovery](runbooks/dlq-recovery.md).
 
 ## Operazioni (runbook)
 

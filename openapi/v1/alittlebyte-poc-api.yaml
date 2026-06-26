@@ -2,7 +2,7 @@ openapi: 3.1.1
 info:
   title: Alittlebyte PoC API
   version: 1.0.0
-  description: Versioned JSON contract consumed by the React SPA.
+  description: Versioned JSON contract consumed by the Angular SPA.
   license:
     name: MIT
     identifier: MIT
