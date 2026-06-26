@@ -38,7 +38,7 @@ ADR che referenzia il precedente. La numerazione è progressiva e a quattro cifr
 | [0005](0005-no-automatic-fallbacks.md) | Nessun fallback automatico dei servizi AI: stato `failed` esplicito | Accepted, implemented |
 | [0006](0006-observability-and-audit.md) | Osservabilità (OTel/Prometheus) e audit trail append-only | Accepted, implemented baseline |
 | [0007](0007-authn-authz-boundary.md) | Confine authn/authz: IdP simulato, RBAC/ABAC server-side | Accepted, implemented baseline |
-| [0008](0008-angular-frontend-static-serving.md) | Frontend Angular e serving statico S3 locale/CloudFront locale | Accepted, implemented |
+| [0008](0008-angular-frontend-static-serving.md) | Frontend Angular e serving statico S3 locale + emulatore CDN locale (Nginx) | Accepted, implemented |
 
 ## Aggiungere un ADR
 

@@ -23,10 +23,20 @@ vive in uno store Angular a signal; SSE, upload multipart, preview PDF, dark mod
 loading states restano espliciti.
 
 Terraform LocalStack provisiona anche un bucket S3 dedicato agli asset Angular. Il percorso
-default locale passa da Traefik al servizio Docker `frontend-cloudfront`, che emula il ruolo di
-CloudFront davanti al bucket S3 LocalStack e inoltra `/api/`, `/health` e `/ready` a
-Nginx/Laravel. Il deploy locale carica `apps/frontend/dist` nel bucket con cache-control
-differenziato: `index.html` no-cache, bundle hashati immutable, altri asset con cache breve.
+default locale passa da Traefik al servizio Docker `frontend-cloudfront`: un **secondo Nginx**
+che **emula in locale il ruolo di una CDN/edge** davanti al bucket S3 LocalStack — serve gli
+asset statici e inoltra `/api/`, `/health` e `/ready` all'Nginx applicativo/Laravel. Non emula
+Amazon CloudFront né la sua semantica; ne riproduce solo il *ruolo* di distribuzione edge. In
+produzione quel ruolo sarebbe ricoperto da AWS CloudFront (vedi *Evoluzione*). Il deploy locale
+carica `apps/frontend/dist` nel bucket con cache-control differenziato: `index.html` no-cache,
+bundle hashati immutable, altri asset con cache breve.
+
+Il serving CDN locale è un container Nginx **separato** dall'Nginx applicativo, per due motivi:
+(1) **sostanziale** — l'Nginx applicativo è un'immagine di produzione (buildata, scansionata da
+Trivy, pubblicata su GHCR) e non deve contenere riferimenti a LocalStack; isolare il serving da
+S3 emulato in un container scaffolding solo-locale mantiene pulito l'artefatto di produzione;
+(2) **di forma** — riflette la topologia reale CDN → origin, dove l'edge è distinto dall'origin
+applicativo.
 
 ![Frontend SPA e contratto API](../architecture/diagrams/03_frontend_spa_contratto_api.drawio.png)
 
@@ -36,18 +46,29 @@ differenziato: `index.html` no-cache, bundle hashati immutable, altri asset con 
 
 - Il frontend applicativo resta su Angular, Angular Router, HttpClient, RxJS e signal store.
 - La build statica Angular non dipende dal dev server.
-- Traefik e `frontend-cloudfront` sono il percorso integrato default per demo end-to-end.
-- S3 LocalStack + CloudFront locale valida il pattern build → bucket → CDN-like distribution,
-  non la semantica completa di CloudFront reale.
+- Traefik e `frontend-cloudfront` (emulatore CDN locale, Nginx) sono il percorso integrato
+  default per demo end-to-end.
+- S3 LocalStack + emulatore CDN locale (Nginx) valida il pattern build → bucket → distribuzione
+  edge, **non** la semantica di Amazon CloudFront (OAC, invalidation, signed URL, edge propagation).
 - I documenti possono usare `POC_DOCUMENT_DISK=real_s3` e `AWS_REAL_*` per Textract reale senza
   toccare `FRONTEND_STATIC_BUCKET`, che resta dedicato alla SPA locale.
 
+## Evoluzione
+
+Il target di produzione è sostituire l'emulatore CDN locale con **Amazon CloudFront** davanti a
+un bucket S3 **privato** con Origin Access Control (OAC), invalidation di `index.html` al deploy
+e response headers policy gestite. L'Nginx `frontend-cloudfront` resta solo lo stand-in locale
+per le demo offline, dato che l'immagine LocalStack Community non espone l'API CloudFront.
+
 ## Alternatives considered
 
-- **Mantenere solo Nginx**: semplice, ma non valida il pattern static-hosting richiesto.
-- **Usare l'API CloudFront LocalStack Terraform**: scartato perché l'immagine LocalStack locale
-  risponde `501` per CloudFront; il default resta comunque S3 locale + CloudFront locale tramite
-  servizio Docker.
+- **Servire la SPA da S3 con il solo Nginx applicativo** (un container): scartato perché
+  imporrebbe un `proxy_pass` verso LocalStack dentro l'immagine di produzione, accoppiandola
+  all'ambiente locale; il container CDN separato evita questo.
+- **Servire la SPA dal filesystem dell'Nginx applicativo**: possibile (l'immagine include già la
+  build), ma non eserciterebbe il percorso via object storage S3.
+- **Usare l'API CloudFront di LocalStack via Terraform**: scartato perché l'immagine LocalStack
+  Community risponde `501` per CloudFront; il ruolo edge resta emulato dal servizio Docker Nginx.
 - **Client API scritto a mano**: scartato per evitare deriva dal contratto OpenAPI.
 
 ## Implementation evidence

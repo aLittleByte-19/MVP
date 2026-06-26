@@ -10,7 +10,7 @@
 
 L'applicativo è una PoC di **pipeline documentale HR assistita da AI** composta da due moduli funzionali: un **AI Assistant** che genera comunicazioni aziendali a partire da un prompt (tono e stile vincolati), e un **Co-Pilot CdL** che riceve PDF di qualsiasi tipologia, ne riconosce tipo e destinatari (sempre almeno uno) dal testo OCR tramite LLM, li separa in sotto-documenti per destinatario, ne estrae campi strutturati e ne traccia lo stato di lavorazione con una confidenza calcolata su leggibilità OCR e completezza dei campi.
 
-Il backend è **Laravel 12 / PHP 8.4** con PostgreSQL e Redis; il frontend è una **SPA Angular + TypeScript** servita di default tramite **Traefik → CloudFront locale → S3 LocalStack**, con Nginx come proxy applicativo per `/api/`, `/health` e `/ready`. L'elaborazione documentale è asincrona: una **state machine AWS Step Functions** (emulata in LocalStack) orchestra i task via **SQS con callback task token**, consumati da un worker Laravel dedicato. Le integrazioni AI usano **AWS Bedrock** (classificazione/split ed estrazione campi sul testo OCR, generazione comunicazioni — tutte chiamate solo-testo via Converse) e **AWS Textract** per l'OCR che alimenta la pipeline documentale (necessario per l'analisi, attivabile solo con S3 reale). La configurazione runtime arriva da **SSM Parameter Store + Secrets Manager**, caricata prima del boot di Laravel.
+Il backend è **Laravel 12 / PHP 8.4** con PostgreSQL e Redis; il frontend è una **SPA Angular + TypeScript** servita di default tramite **Traefik → emulatore CDN locale (Nginx) → S3 LocalStack**, con Nginx applicativo come proxy per `/api/`, `/health` e `/ready`. L'elaborazione documentale è asincrona: una **state machine AWS Step Functions** (emulata in LocalStack) orchestra i task via **SQS con callback task token**, consumati da un worker Laravel dedicato. Le integrazioni AI usano **AWS Bedrock** (classificazione/split ed estrazione campi sul testo OCR, generazione comunicazioni — tutte chiamate solo-testo via Converse) e **AWS Textract** per l'OCR che alimenta la pipeline documentale (necessario per l'analisi, attivabile solo con S3 reale). La configurazione runtime arriva da **SSM Parameter Store + Secrets Manager**, caricata prima del boot di Laravel.
 
 L'osservabilità è il tratto più maturo della PoC: metriche golden-signal e di dominio esposte in formato Prometheus, trace OTLP verso Tempo, log dei container verso Loki via Alloy, 10 alert rule, 5 dashboard Grafana provisioned e runbook collegati. La CI (GitHub Actions) copre lint, analisi statica, test backend e frontend, scansione Trivy delle immagini, validazione Terraform e audit di accessibilità axe/pa11y contro lo stack reale.
 
@@ -64,7 +64,7 @@ flowchart LR
     end
     subgraph edge[rete edge]
         T[Traefik :8443<br/>TLS + routing per hostname]
-        FC[frontend-cloudfront<br/>CloudFront locale: SPA da S3 + proxy /api]
+        FC[frontend-cloudfront<br/>emulatore CDN locale: SPA da S3 + proxy /api]
         N[Nginx<br/>proxy /api + fastcgi]
     end
     subgraph backend[rete backend]
@@ -100,7 +100,7 @@ flowchart LR
     AL -->|docker logs| LK
 ```
 
-Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; il CloudFront locale (`frontend-cloudfront`) serve la SPA da S3 LocalStack e inoltra `/api/`, `/health` e `/ready` a Nginx, che resta il proxy applicativo verso PHP-FPM (oltre a poter servire la SPA in modalità standard dall'immagine); Laravel gestisce validazione, identità, persistenza e orchestrazione; Step Functions (LocalStack) detiene lo stato del workflow; il worker esegue i task e risponde con i task token; il collector è l'unico punto di raccolta telemetria.
+Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l'emulatore CDN locale (`frontend-cloudfront`, un secondo Nginx) serve la SPA da S3 LocalStack e inoltra `/api/`, `/health` e `/ready` all'Nginx applicativo, che resta il proxy verso PHP-FPM (oltre a poter servire la SPA in modalità standard dall'immagine); Laravel gestisce validazione, identità, persistenza e orchestrazione; Step Functions (LocalStack) detiene lo stato del workflow; il worker esegue i task e risponde con i task token; il collector è l'unico punto di raccolta telemetria.
 
 ---
 
@@ -152,16 +152,16 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; i
 ### Nginx 1.27 (static + fastcgi)
 
 **Dove**: `docker/nginx/Dockerfile` (multi-stage: build SPA con node:22 → runtime `nginx:1.27-alpine`, `USER nginx`), `docker/nginx/default.conf`.
-**Ruolo**: nel flusso default è il proxy applicativo — inoltra `/api/` e gli endpoint di sistema a PHP-FPM e applica i security header (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Content-Security-Policy). L'immagine include anche la SPA Angular buildata e può servirla in modalità standard con fallback `try_files ... /index.html`, percorso alternativo al CloudFront locale (`frontend-cloudfront`), che invece è l'origine default della SPA da S3 LocalStack.
+**Ruolo**: nel flusso default è il proxy applicativo — inoltra `/api/` e gli endpoint di sistema a PHP-FPM e applica i security header (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Content-Security-Policy). L'immagine include anche la SPA Angular buildata e può servirla in modalità standard con fallback `try_files ... /index.html`, percorso alternativo all'emulatore CDN locale (`frontend-cloudfront`), che invece è l'origine default della SPA da S3 LocalStack.
 **Dettaglio rilevante**: `/internal/metrics` non è servito dal listener edge `:8080` usato da Traefik; ritorna 404 dall'esterno. Lo scrape passa dal listener interno `nginx:8081/internal/metrics`, raggiungibile solo sulle reti Docker interne. La CI verifica sia il 404 esterno sia la raggiungibilità interna.
 **Gap**: la CSP è locale e mirata alla SPA attuale; eventuali nuovi asset remoti o embedding esterni richiedono aggiornamento esplicito della policy.
 
-### CloudFront locale (frontend-cloudfront)
+### Emulatore CDN locale (frontend-cloudfront)
 
 **Dove**: `docker/cloudfront/default.conf.template` (config Nginx parametrizzata via `envsubst`), servizio `frontend-cloudfront` in `docker-compose.yml` (immagine `nginx:1.29-alpine`), target `make frontend-s3-local-deploy`/`frontend-s3-local-upload`.
 **Ruolo**: emula in locale il layer CDN/edge che in produzione sarebbe Amazon CloudFront. È l'**origine di default della SPA**: serve gli asset statici Angular leggendoli da S3 LocalStack (`/` → bucket `index.html`; le altre richieste sono proxate al bucket con fallback deep-link `@spa_index` su `index.html`, intercettando 403/404), e fa da **reverse proxy** verso Nginx per `/api/`, `/health`, `/ready`. È il primo hop dopo Traefik (`Traefik → frontend-cloudfront → {S3 LocalStack | Nginx}`).
 **Security header**: applica a livello server gli header edge (CSP `frame-ancestors 'none'`, X-Frame-Options `SAMEORIGIN`, X-Content-Type-Options, Referrer-Policy) sugli asset statici. Sulle risposte `/api/` non sovrascrive gli header dell'origine: un `add_header` dedicato nella `location /api/` interrompe l'ereditarietà nginx, così resta valida la CSP differenziata dell'app (in particolare `frame-ancestors 'self'` per l'anteprima PDF in iframe, che altrimenti verrebbe bloccata dalla doppia CSP).
-**Motivazione**: validare il percorso reale build → upload su object storage → distribuzione edge senza dipendere da CloudFront vero; tiene il serving statico della SPA disaccoppiato dall'immagine applicativa.
+**Motivazione**: validare il percorso reale build → upload su object storage → distribuzione edge senza dipendere da CloudFront vero; tiene il serving statico della SPA (e ogni riferimento a LocalStack) fuori dall'immagine Nginx applicativa, che è un artefatto di produzione. In produzione il ruolo sarebbe ricoperto da AWS CloudFront.
 **Valutazione**: riproduce in modo fedele il flusso S3-origin + edge proxy e la separazione asset/API. Gap: non copre OAC, invalidation della cache, signed URL né la propagazione edge reali (limiti dichiarati, §11); convive con la versione 1.27 dell'Nginx applicativo (due immagini Nginx distinte con ruoli diversi).
 
 ### AWS Bedrock (LLM)
@@ -222,7 +222,7 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; i
 ### CI — GitHub Actions
 
 **Dove**: `.github/workflows/ci.yml` (3 job), `mirror-images.yml`, `scripts/ci/`.
-**Pipeline**: `backend` (Composer validate, Pint, Larastan, Pest), `frontend` (lint OpenAPI, generazione client + check committed, ESLint, typecheck, Jest, build Angular, `npm audit --audit-level=high`), `stack` (mirroring/caching immagini, `terraform fmt/validate`, validazione config osservabilità, build immagini dev+prod, **Trivy** `--exit-code 1 --severity HIGH,CRITICAL` su app e nginx, avvio stack completo con LocalStack+Terraform apply, build e upload della SPA Angular su S3 LocalStack, smoke HTTPS via Traefik — SPA servita dal CloudFront locale con fallback deep-link, check 401 sulle dashboard — audit axe e pa11y contro lo stack reale, push condizionale delle immagini su GHCR solo per i non-PR). Concurrency con cancel-in-progress.
+**Pipeline**: `backend` (Composer validate, Pint, Larastan, Pest), `frontend` (lint OpenAPI, generazione client + check committed, ESLint, typecheck, Jest, build Angular, `npm audit --audit-level=high`), `stack` (mirroring/caching immagini, `terraform fmt/validate`, validazione config osservabilità, build immagini dev+prod, **Trivy** `--exit-code 1 --severity HIGH,CRITICAL` su app e nginx, avvio stack completo con LocalStack+Terraform apply, build e upload della SPA Angular su S3 LocalStack, smoke HTTPS via Traefik — SPA servita dall'emulatore CDN locale con fallback deep-link, check 401 sulle dashboard — audit axe e pa11y contro lo stack reale, push condizionale delle immagini su GHCR solo per i non-PR). Concurrency con cancel-in-progress.
 **Valutazione**: copertura larga e realistica (lo smoke testa il sistema integrato, non i mock); il quality gate include sicurezza (Trivy, npm audit) e accessibilità. Gap: niente coverage report; i job non pubblicano artefatti di debug in caso di fallimento smoke.
 
 ---
@@ -368,7 +368,7 @@ Coperte in §5 (Bedrock, Textract) e §6. Punti trasversali:
 Coperto in §5; valutazione sintetica:
 
 - **Solido**: data layer uniforme (servizi Angular + client generato), feedback espliciti (loading con `aria-live`, error, empty), SSE per progress reale dell'elaborazione (`DocumentWorkflowService` con EventSource), design token centralizzati con dark mode, test Jest mirati e audit a11y automatizzati in CI.
-- **Limiti**: il CloudFront locale valida il flusso build → S3 locale → distribuzione CDN-like, ma non copre OAC/invalidation/propagazione edge reali; la copertura test frontend resta minima e va ampliata sui componenti visuali e sui flussi SSE end-to-end.
+- **Limiti**: l'emulatore CDN locale (Nginx) valida il flusso build → S3 locale → distribuzione edge, ma non copre OAC/invalidation/propagazione edge reali (in produzione: AWS CloudFront); la copertura test frontend resta minima e va ampliata sui componenti visuali e sui flussi SSE end-to-end.
 
 ---
 

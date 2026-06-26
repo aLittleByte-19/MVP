@@ -26,4 +26,4 @@ make frontend-s3-local-deploy
 
 The root package uses npm workspaces. Frontend commands run through the Docker Compose `node` tool container (`node:22-bookworm-slim`), not through the host Node runtime.
 
-The app calls Laravel with relative `/api/v1` URLs by default. `proxy.conf.json` keeps `ng serve` aligned with the local Traefik/Nginx entrypoint, while production builds are static and can be served by Nginx or by the LocalStack S3/CloudFront simulation.
+The app calls Laravel with relative `/api/v1` URLs by default. `proxy.conf.json` keeps `ng serve` aligned with the local Traefik/Nginx entrypoint, while production builds are static and can be served by Nginx or, in the default local flow, by the local CDN emulator (a separate Nginx) in front of the LocalStack S3 bucket — the role a real CDN such as AWS CloudFront would play in production.
