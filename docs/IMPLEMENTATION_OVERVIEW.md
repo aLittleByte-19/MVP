@@ -34,7 +34,7 @@ L'analisi si basa sullo **stato attuale del codice**: route, controller, service
 | Schema dati | `database/migrations/` | 6 tabelle di dominio + indici/FK |
 | Frontend SPA | `apps/frontend/` | Angular + TypeScript, client API Angular generato |
 | Contratto API | `openapi/v1/alittlebyte-poc-api.yaml` | OpenAPI 3.1, fonte del client frontend |
-| Infrastruttura locale | `docker-compose.yml`, `docker/` | 21 servizi: app, worker, nginx, frontend-cloudfront, traefik, datastore, stack osservabilità, tool |
+| Infrastruttura locale | `docker-compose.yml`, `docker/` | 21 servizi: app, worker, nginx, edge-cdn, traefik, datastore, stack osservabilità, tool |
 | Infrastruttura AWS (emulata) | `infra/localstack/` | Terraform: SQS+DLQ, S3 documenti, S3 frontend, SSM, Secrets Manager, EventBridge, IAM, Step Functions, SES identity |
 | State machine | `infra/localstack/state-machines/document-pipeline.asl.json` | Definizione ASL della pipeline documentale |
 | Osservabilità | `docker/otel-collector/`, `docker/prometheus/`, `docker/grafana/`, `docker/loki/`, `docker/alloy/`, `docker/tempo/`, `docker/alertmanager/` | Collector, scrape, alert rule, dashboard, log shipping |
@@ -64,7 +64,7 @@ flowchart LR
     end
     subgraph edge[rete edge]
         T[Traefik :8443<br/>TLS + routing per hostname]
-        FC[frontend-cloudfront<br/>emulatore CDN locale: SPA da S3 + proxy /api]
+        FC[edge-cdn<br/>emulatore CDN locale: SPA da S3 + proxy /api]
         N[Nginx<br/>proxy /api + fastcgi]
     end
     subgraph backend[rete backend]
@@ -100,7 +100,7 @@ flowchart LR
     AL -->|docker logs| LK
 ```
 
-Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l'emulatore CDN locale (`frontend-cloudfront`, un secondo Nginx) serve la SPA da S3 LocalStack e inoltra `/api/`, `/health` e `/ready` all'Nginx applicativo, che resta il proxy verso PHP-FPM (oltre a poter servire la SPA in modalità standard dall'immagine); Laravel gestisce validazione, identità, persistenza e orchestrazione; Step Functions (LocalStack) detiene lo stato del workflow; il worker esegue i task e risponde con i task token; il collector è l'unico punto di raccolta telemetria.
+Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l'emulatore CDN locale (`edge-cdn`, un secondo Nginx) serve la SPA da S3 LocalStack e inoltra `/api/`, `/health` e `/ready` all'Nginx applicativo, che resta il proxy verso PHP-FPM (oltre a poter servire la SPA in modalità standard dall'immagine); Laravel gestisce validazione, identità, persistenza e orchestrazione; Step Functions (LocalStack) detiene lo stato del workflow; il worker esegue i task e risponde con i task token; il collector è l'unico punto di raccolta telemetria.
 
 ---
 
@@ -152,14 +152,14 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 ### Nginx 1.27 (static + fastcgi)
 
 **Dove**: `docker/nginx/Dockerfile` (multi-stage: build SPA con node:22 → runtime `nginx:1.27-alpine`, `USER nginx`), `docker/nginx/default.conf`.
-**Ruolo**: nel flusso default è il proxy applicativo — inoltra `/api/` e gli endpoint di sistema a PHP-FPM e applica i security header (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Content-Security-Policy). L'immagine include anche la SPA Angular buildata e può servirla in modalità standard con fallback `try_files ... /index.html`, percorso alternativo all'emulatore CDN locale (`frontend-cloudfront`), che invece è l'origine default della SPA da S3 LocalStack.
+**Ruolo**: nel flusso default è il proxy applicativo — inoltra `/api/` e gli endpoint di sistema a PHP-FPM e applica i security header (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Content-Security-Policy). L'immagine include anche la SPA Angular buildata e può servirla in modalità standard con fallback `try_files ... /index.html`, percorso alternativo all'emulatore CDN locale (`edge-cdn`), che invece è l'origine default della SPA da S3 LocalStack.
 **Dettaglio rilevante**: `/internal/metrics` non è servito dal listener edge `:8080` usato da Traefik; ritorna 404 dall'esterno. Lo scrape passa dal listener interno `nginx:8081/internal/metrics`, raggiungibile solo sulle reti Docker interne. La CI verifica sia il 404 esterno sia la raggiungibilità interna.
 **Gap**: la CSP è locale e mirata alla SPA attuale; eventuali nuovi asset remoti o embedding esterni richiedono aggiornamento esplicito della policy.
 
-### Emulatore CDN locale (frontend-cloudfront)
+### Emulatore CDN locale (edge-cdn)
 
-**Dove**: `docker/cloudfront/default.conf.template` (config Nginx parametrizzata via `envsubst`), servizio `frontend-cloudfront` in `docker-compose.yml` (immagine `nginx:1.29-alpine`), target `make frontend-s3-local-deploy`/`frontend-s3-local-upload`.
-**Ruolo**: emula in locale il layer CDN/edge che in produzione sarebbe Amazon CloudFront. È l'**origine di default della SPA**: serve gli asset statici Angular leggendoli da S3 LocalStack (`/` → bucket `index.html`; le altre richieste sono proxate al bucket con fallback deep-link `@spa_index` su `index.html`, intercettando 403/404), e fa da **reverse proxy** verso Nginx per `/api/`, `/health`, `/ready`. È il primo hop dopo Traefik (`Traefik → frontend-cloudfront → {S3 LocalStack | Nginx}`).
+**Dove**: `docker/edge-cdn/default.conf.template` (config Nginx parametrizzata via `envsubst`), servizio `edge-cdn` in `docker-compose.yml` (immagine `nginx:1.29-alpine`), target `make frontend-s3-local-deploy`/`frontend-s3-local-upload`.
+**Ruolo**: emula in locale il layer CDN/edge che in produzione sarebbe Amazon CloudFront. È l'**origine di default della SPA**: serve gli asset statici Angular leggendoli da S3 LocalStack (`/` → bucket `index.html`; le altre richieste sono proxate al bucket con fallback deep-link `@spa_index` su `index.html`, intercettando 403/404), e fa da **reverse proxy** verso Nginx per `/api/`, `/health`, `/ready`. È il primo hop dopo Traefik (`Traefik → edge-cdn → {S3 LocalStack | Nginx}`).
 **Security header**: applica a livello server gli header edge (CSP `frame-ancestors 'none'`, X-Frame-Options `SAMEORIGIN`, X-Content-Type-Options, Referrer-Policy) sugli asset statici. Sulle risposte `/api/` non sovrascrive gli header dell'origine: un `add_header` dedicato nella `location /api/` interrompe l'ereditarietà nginx, così resta valida la CSP differenziata dell'app (in particolare `frame-ancestors 'self'` per l'anteprima PDF in iframe, che altrimenti verrebbe bloccata dalla doppia CSP).
 **Motivazione**: validare il percorso reale build → upload su object storage → distribuzione edge senza dipendere da CloudFront vero; tiene il serving statico della SPA (e ogni riferimento a LocalStack) fuori dall'immagine Nginx applicativa, che è un artefatto di produzione. In produzione il ruolo sarebbe ricoperto da AWS CloudFront.
 **Valutazione**: riproduce in modo fedele il flusso S3-origin + edge proxy e la separazione asset/API. Gap: non copre OAC, invalidation della cache, signed URL né la propagazione edge reali (limiti dichiarati, §11); convive con la versione 1.27 dell'Nginx applicativo (due immagini Nginx distinte con ruoli diversi).

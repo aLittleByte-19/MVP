@@ -44,10 +44,10 @@ Step Functions, SQS/DLQ, S3, EventBridge, SSM Parameter Store e Secrets Manager.
 parla con i servizi AWS, reali o emulati, **senza cambiare codice**: cambiano solo endpoint e
 credenziali.
 
-La SPA Angular usa come default locale il percorso `Traefik -> frontend-cloudfront -> S3
+La SPA Angular usa come default locale il percorso `Traefik -> edge-cdn -> S3
 LocalStack`: `make frontend-s3-local-deploy` carica `apps/frontend/dist` nel bucket
 `FRONTEND_STATIC_BUCKET`, poi `https://localhost:8443` serve gli asset da quel bucket. Il
-servizio `frontend-cloudfront` è un **secondo Nginx** che emula in locale il **ruolo di una
+servizio `edge-cdn` è un **secondo Nginx** che emula in locale il **ruolo di una
 CDN/edge** (non Amazon CloudFront): serve gli asset statici e inoltra `/api/`, `/health` e
 `/ready` all'Nginx applicativo/Laravel. È un container separato dall'Nginx applicativo di
 proposito — quest'ultimo è un'immagine di produzione (buildata, scansionata, pubblicata) e non
@@ -84,7 +84,7 @@ credenziali e configurazione esplicite:
 - `BEDROCK_MODEL_ID`
 - `TEXTRACT_ENABLED=true`
 
-Le variabili `FRONTEND_STATIC_BUCKET` e `FRONTEND_CLOUDFRONT_LOCAL_URL` sono locali e dedicate
+Le variabili `FRONTEND_STATIC_BUCKET` e `EDGE_CDN_LOCAL_URL` sono locali e dedicate
 alla SPA: non devono puntare a bucket reali e non governano il caricamento documenti.
 
 I test e la CI standard non chiamano S3, Textract o Bedrock reali.

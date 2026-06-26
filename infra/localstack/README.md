@@ -30,7 +30,7 @@ Resources modelled here:
 
 Compose starts LocalStack and application processes. Terraform creates AWS-like resources. The
 default frontend path is S3 local + a local CDN emulator: Terraform owns the LocalStack S3
-bucket, while the `frontend-cloudfront` Docker service — a second Nginx that emulates the role of
+bucket, while the `edge-cdn` Docker service — a second Nginx that emulates the role of
 a CDN/edge (not Amazon CloudFront) — fronts that bucket and proxies API calls to the application
 Nginx. It is a separate container on purpose: the application Nginx is a production image and must
 not reference LocalStack, so the emulated S3 serving stays confined to a local-only scaffold. This
@@ -41,7 +41,7 @@ Frontend static serving flow:
 
 ```bash
 make frontend-s3-local-deploy
-make frontend-cloudfront-local-url
+make edge-cdn-local-url
 make frontend-serving-local-test
 ```
 

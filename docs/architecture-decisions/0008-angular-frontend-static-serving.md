@@ -23,7 +23,7 @@ vive in uno store Angular a signal; SSE, upload multipart, preview PDF, dark mod
 loading states restano espliciti.
 
 Terraform LocalStack provisiona anche un bucket S3 dedicato agli asset Angular. Il percorso
-default locale passa da Traefik al servizio Docker `frontend-cloudfront`: un **secondo Nginx**
+default locale passa da Traefik al servizio Docker `edge-cdn`: un **secondo Nginx**
 che **emula in locale il ruolo di una CDN/edge** davanti al bucket S3 LocalStack — serve gli
 asset statici e inoltra `/api/`, `/health` e `/ready` all'Nginx applicativo/Laravel. Non emula
 Amazon CloudFront né la sua semantica; ne riproduce solo il *ruolo* di distribuzione edge. In
@@ -46,7 +46,7 @@ applicativo.
 
 - Il frontend applicativo resta su Angular, Angular Router, HttpClient, RxJS e signal store.
 - La build statica Angular non dipende dal dev server.
-- Traefik e `frontend-cloudfront` (emulatore CDN locale, Nginx) sono il percorso integrato
+- Traefik e `edge-cdn` (emulatore CDN locale, Nginx) sono il percorso integrato
   default per demo end-to-end.
 - S3 LocalStack + emulatore CDN locale (Nginx) valida il pattern build → bucket → distribuzione
   edge, **non** la semantica di Amazon CloudFront (OAC, invalidation, signed URL, edge propagation).
@@ -57,7 +57,7 @@ applicativo.
 
 Il target di produzione è sostituire l'emulatore CDN locale con **Amazon CloudFront** davanti a
 un bucket S3 **privato** con Origin Access Control (OAC), invalidation di `index.html` al deploy
-e response headers policy gestite. L'Nginx `frontend-cloudfront` resta solo lo stand-in locale
+e response headers policy gestite. L'Nginx `edge-cdn` resta solo lo stand-in locale
 per le demo offline, dato che l'immagine LocalStack Community non espone l'API CloudFront.
 
 ## Alternatives considered
@@ -77,8 +77,8 @@ per le demo offline, dato che l'immagine LocalStack Community non espone l'API C
 - `apps/frontend/orval.config.ts` con `client: "angular"`.
 - `docker/nginx/Dockerfile` builda Angular con `node:22-bookworm-slim`.
 - `infra/localstack/main.tf` risorsa `aws_s3_bucket.frontend_static`.
-- `docker/cloudfront/default.conf.template` e servizio Compose `frontend-cloudfront`.
-- `Makefile` target `frontend-s3-local-*`, `frontend-cloudfront-local-url` e
+- `docker/edge-cdn/default.conf.template` e servizio Compose `edge-cdn`.
+- `Makefile` target `frontend-s3-local-*`, `edge-cdn-local-url` e
   `frontend-serving-local-test`.
 
 ## Related documents

@@ -343,10 +343,10 @@ ne fornisce l'emulazione locale ripetibile (LocalStack), nello spirito di:
 
 ## 16. Hardening di rete e perimetro (Traefik/Nginx, IAM a minimo privilegio)
 
-**Scelta nella PoC:** TLS edge via Traefik, emulatore CDN locale (`frontend-cloudfront`, Nginx) che serve
+**Scelta nella PoC:** TLS edge via Traefik, emulatore CDN locale (`edge-cdn`, Nginx) che serve
 la SPA statica da S3 LocalStack e Nginx applicativo come proxy con superfici non
 API bloccate, IAM role granulari sulle risorse LocalStack
-([`docker-compose.yml`](../../docker-compose.yml): `traefik`, `frontend-cloudfront`, `nginx`;
+([`docker-compose.yml`](../../docker-compose.yml): `traefik`, `edge-cdn`, `nginx`;
 [`infra/localstack/main.tf`](../../infra/localstack/main.tf): `aws_iam_role`). Cifrare il
 traffico all'edge, ridurre la superficie esposta e applicare il minimo privilegio sono misure
 di igiene di base che riducono il rischio a prescindere dall'ambiente.
