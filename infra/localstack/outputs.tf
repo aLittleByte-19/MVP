@@ -18,8 +18,8 @@ output "frontend_s3_website_endpoint" {
   value = "http://${aws_s3_bucket.frontend_static.bucket}.s3-website.localhost.localstack.cloud:4566"
 }
 
-output "frontend_cloudfront_local_url" {
-  value = var.frontend_cloudfront_local_url
+output "edge_cdn_local_url" {
+  value = var.edge_cdn_local_url
 }
 
 output "event_bus_name" {

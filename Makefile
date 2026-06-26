@@ -1,4 +1,4 @@
-.PHONY: help test pint node-install frontend-build frontend-lint frontend-test frontend-typecheck frontend-audit frontend-a11y frontend-s3-local-provision frontend-s3-local-upload frontend-s3-local-deploy frontend-cloudfront-local-url frontend-serving-local-test openapi-generate openapi-validate observability-config observability-up local-tls trusted-local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke reset-all workers backup-local restore-local
+.PHONY: help test pint node-install frontend-build frontend-lint frontend-test frontend-typecheck frontend-audit frontend-a11y frontend-s3-local-provision frontend-s3-local-upload frontend-s3-local-deploy edge-cdn-local-url frontend-serving-local-test openapi-generate openapi-validate observability-config observability-up local-tls trusted-local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke reset-all workers backup-local restore-local
 
 # Colori per l'output
 BLUE  := \033[34m
@@ -6,7 +6,7 @@ RESET := \033[0m
 LOCALSTACK_ENDPOINT_INTERNAL ?= http://localstack:4566
 FRONTEND_DIST ?= apps/frontend/dist
 FRONTEND_STATIC_BUCKET ?= poc-frontend-static-local
-FRONTEND_CLOUDFRONT_LOCAL_URL ?= https://localhost:8443
+EDGE_CDN_LOCAL_URL ?= https://localhost:8443
 # -T: niente pseudo-TTY per i tool non interattivi. Senza, "docker compose run"
 # mette il terminale in raw mode e, se il run si blocca (es. glitch del daemon),
 # Ctrl+C viene inghiottito e l'unico modo è chiudere il terminale — che però NON
@@ -41,8 +41,8 @@ help:
 	@echo "  $(BLUE)make frontend-a11y$(RESET)  Esegue axe e Pa11y sullo stack HTTPS locale"
 	@echo "  $(BLUE)make frontend-s3-local-provision$(RESET) Provisiona il bucket S3 locale della SPA"
 	@echo "  $(BLUE)make frontend-s3-local-deploy$(RESET) Builda e carica la SPA Angular su S3 LocalStack"
-	@echo "  $(BLUE)make frontend-cloudfront-local-url$(RESET) Stampa URL del CloudFront locale"
-	@echo "  $(BLUE)make frontend-serving-local-test$(RESET) Smoke test del serving S3 locale + CloudFront locale"
+	@echo "  $(BLUE)make edge-cdn-local-url$(RESET) Stampa URL della CDN/edge locale"
+	@echo "  $(BLUE)make frontend-serving-local-test$(RESET) Smoke test del serving S3 locale + CDN/edge locale"
 	@echo "  $(BLUE)make openapi-generate$(RESET) Rigenera il client TypeScript"
 	@echo "  $(BLUE)make openapi-validate$(RESET) Valida il contratto OpenAPI"
 	@echo "  $(BLUE)make observability-config$(RESET) Valida la configurazione OTel Collector"
@@ -132,14 +132,14 @@ frontend-s3-local-upload:
 frontend-s3-local-deploy: frontend-build frontend-s3-local-provision
 	$(MAKE) frontend-s3-local-upload
 
-frontend-cloudfront-local-url:
-	@printf "%s\n" "$(FRONTEND_CLOUDFRONT_LOCAL_URL)"
+edge-cdn-local-url:
+	@printf "%s\n" "$(EDGE_CDN_LOCAL_URL)"
 	@printf "\n"
 
 frontend-serving-local-test: frontend-s3-local-deploy
 	@if [ ! -f docker/traefik/certs/poc-local.test.crt ] || [ ! -f docker/traefik/certs/poc-local.test.key ]; then $(MAKE) local-tls; fi
-	docker compose up -d --wait --force-recreate frontend-cloudfront traefik
-	@url="$(FRONTEND_CLOUDFRONT_LOCAL_URL)"; \
+	docker compose up -d --wait --force-recreate edge-cdn traefik
+	@url="$(EDGE_CDN_LOCAL_URL)"; \
 	echo "$(BLUE)Testing $$url$(RESET)"; \
 	curl -kfsS "$$url" | grep -q "<poc-root"
 
@@ -148,7 +148,7 @@ frontend-audit: node-install
 
 frontend-a11y: frontend-s3-local-deploy
 	@if [ ! -f docker/traefik/certs/poc-local.test.crt ] || [ ! -f docker/traefik/certs/poc-local.test.key ]; then $(MAKE) local-tls; fi
-	docker compose up -d --wait --force-recreate app nginx frontend-cloudfront traefik
+	docker compose up -d --wait --force-recreate app nginx edge-cdn traefik
 	$(FRONTEND_AUDIT) node scripts/a11y/csp-smoke.mjs https://traefik:8443
 	$(FRONTEND_AUDIT) node scripts/a11y/axe-playwright.mjs https://traefik:8443
 	$(FRONTEND_AUDIT) node scripts/a11y/pa11y-runner.mjs https://traefik:8443
@@ -183,7 +183,7 @@ fresh:
 	docker compose exec -T redis redis-cli FLUSHALL
 
 logs:
-	docker compose logs -f app queue nginx frontend-cloudfront localstack
+	docker compose logs -f app queue nginx edge-cdn localstack
 
 sh:
 	docker compose run --rm app sh

@@ -25,7 +25,7 @@ export PNG/SVG vanno rigenerati da draw.io dopo ogni modifica (`drawio -x -f png
 | Livello | Componente implementato | Ruolo |
 | --- | --- | --- |
 | Frontend | SPA Angular/TypeScript in `apps/frontend` | Upload, stato di elaborazione, revisione, flussi di anteprima/eliminazione. |
-| Edge | Traefik (TLS), CloudFront locale e Nginx | HTTPS locale, serving della SPA da S3 LocalStack, proxy API, blocco delle superfici `/admin`. |
+| Edge | Traefik (TLS), emulatore CDN locale (Nginx) e Nginx applicativo | HTTPS locale, serving della SPA da S3 LocalStack, proxy API, blocco delle superfici `/admin`. |
 | API | API JSON Laravel in `app/Http` | Validazione, controlli di tenant, audit event, avvio del workflow. |
 | Workflow | Step Functions e SQS (LocalStack) | Orchestrazione production-like con callback task token, end-to-end. |
 | Worker | `php artisan poc:workflow:consume` | Ricezione SQS, esecuzione dei task, `SendTaskSuccess`/`SendTaskFailure`, `SendTaskHeartbeat`. |
@@ -44,12 +44,19 @@ Step Functions, SQS/DLQ, S3, EventBridge, SSM Parameter Store e Secrets Manager.
 parla con i servizi AWS, reali o emulati, **senza cambiare codice**: cambiano solo endpoint e
 credenziali.
 
-La SPA Angular usa come default locale il percorso `Traefik -> frontend-cloudfront -> S3
+La SPA Angular usa come default locale il percorso `Traefik -> edge-cdn -> S3
 LocalStack`: `make frontend-s3-local-deploy` carica `apps/frontend/dist` nel bucket
 `FRONTEND_STATIC_BUCKET`, poi `https://localhost:8443` serve gli asset da quel bucket. Il
-CloudFront locale inoltra `/api/`, `/health` e `/ready` a Nginx/Laravel. Nginx resta il proxy
-applicativo e il percorso interno di compatibilità, ma non è più l'origine primaria della SPA
-nel flusso default. La simulazione non sostituisce una validazione CloudFront reale su AWS.
+servizio `edge-cdn` è un **secondo Nginx** che emula in locale il **ruolo di una
+CDN/edge** (non Amazon CloudFront): serve gli asset statici e inoltra `/api/`, `/health` e
+`/ready` all'Nginx applicativo/Laravel. È un container separato dall'Nginx applicativo di
+proposito — quest'ultimo è un'immagine di produzione (buildata, scansionata, pubblicata) e non
+deve conoscere LocalStack, mentre il serving da S3 emulato resta confinato in uno scaffolding
+solo-locale; la separazione riflette anche la topologia reale CDN → origin. L'Nginx applicativo
+resta il proxy verso PHP-FPM e il percorso interno di compatibilità (include la build SPA), ma
+non è l'origine primaria della SPA nel flusso default. L'emulazione non sostituisce una CDN
+reale: in produzione il ruolo sarebbe ricoperto da AWS CloudFront (bucket privato + OAC,
+invalidation, edge propagation).
 
 ### Dettaglio edge/runtime/API
 
@@ -77,7 +84,7 @@ credenziali e configurazione esplicite:
 - `BEDROCK_MODEL_ID`
 - `TEXTRACT_ENABLED=true`
 
-Le variabili `FRONTEND_STATIC_BUCKET` e `FRONTEND_CLOUDFRONT_LOCAL_URL` sono locali e dedicate
+Le variabili `FRONTEND_STATIC_BUCKET` e `EDGE_CDN_LOCAL_URL` sono locali e dedicate
 alla SPA: non devono puntare a bucket reali e non governano il caricamento documenti.
 
 I test e la CI standard non chiamano S3, Textract o Bedrock reali.

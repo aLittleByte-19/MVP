@@ -33,7 +33,7 @@ services:
       timeout: 5s
       retries: 3
     depends_on:
-      frontend-cloudfront:
+      edge-cdn:
         condition: service_healthy
     networks:
       - edge
@@ -169,12 +169,12 @@ services:
       - edge
       - backend
 
-  frontend-cloudfront:
+  edge-cdn:
     image: nginx:1.29-alpine
     environment:
       FRONTEND_STATIC_BUCKET: ${FRONTEND_STATIC_BUCKET:-poc-frontend-static-local}
     volumes:
-      - ./docker/cloudfront/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./docker/edge-cdn/default.conf.template:/etc/nginx/templates/default.conf.template:ro
     depends_on:
       localstack:
         condition: service_healthy
@@ -277,7 +277,7 @@ services:
       TF_VAR_runtime_secret_name: ${CONFIG_SECRET_IDS:-/poc/app/runtime}
       TF_VAR_app_url: ${POC_APP_URL:-https://localhost:8443}
       TF_VAR_frontend_static_bucket: ${FRONTEND_STATIC_BUCKET:-poc-frontend-static-local}
-      TF_VAR_frontend_cloudfront_local_url: ${FRONTEND_CLOUDFRONT_LOCAL_URL:-https://localhost:8443}
+      TF_VAR_edge_cdn_local_url: ${EDGE_CDN_LOCAL_URL:-https://localhost:8443}
       TF_VAR_db_database: ${POC_DB_DATABASE:-poc}
       TF_VAR_db_username: ${POC_DB_USERNAME:-poc}
       TF_VAR_db_password: ${POC_DB_PASSWORD:-poc-local-password}

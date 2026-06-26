@@ -40,8 +40,8 @@ variable "frontend_static_bucket" {
   default     = "poc-frontend-static-local"
 }
 
-variable "frontend_cloudfront_local_url" {
-  description = "Local URL of the Docker CloudFront emulator that fronts the LocalStack S3 frontend bucket."
+variable "edge_cdn_local_url" {
+  description = "Local URL of the Docker CDN/edge emulator (Nginx) that fronts the LocalStack S3 frontend bucket."
   type        = string
   default     = "https://localhost:8443"
 }

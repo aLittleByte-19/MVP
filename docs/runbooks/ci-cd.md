@@ -7,7 +7,7 @@ Ordinary CI runs without enterprise IAM credentials. It is a single pipeline,
 
 - **backend** — builds the app image and runs the PHP checks: Composer manifest validation, Pint (format), Larastan/PHPStan (static analysis) and Pest (tests).
 - **frontend** — runs the Angular SPA suite on the Node tool image: OpenAPI contract lint, generated client drift check, ESLint, typecheck, Jest tests, production build, and a production-only `npm audit` at HIGH.
-- **stack** — static infrastructure/observability checks (Terraform `fmt`/`init`/`validate`, OTel Collector and Prometheus config), production image build, Trivy scan (`vuln,secret,config` at HIGH/CRITICAL), LocalStack Terraform apply, Angular SPA build and upload to the LocalStack S3 bucket, HTTPS smoke of the served stack (SPA served via the CloudFront emulator with deep-link fallback, `/api`/`/health`/`/ready`, blocked surfaces, observability dashboards behind basic auth), accessibility (axe/Pa11y plus an enforced-CSP smoke), and conditional publish of the two custom images (`poc-app`, `poc-nginx`) to GHCR.
+- **stack** — static infrastructure/observability checks (Terraform `fmt`/`init`/`validate`, OTel Collector and Prometheus config), production image build, Trivy scan (`vuln,secret,config` at HIGH/CRITICAL), LocalStack Terraform apply, Angular SPA build and upload to the LocalStack S3 bucket, HTTPS smoke of the served stack (SPA served via the local CDN emulator — a separate Nginx — with deep-link fallback, `/api`/`/health`/`/ready`, blocked surfaces, observability dashboards behind basic auth), accessibility (axe/Pa11y plus an enforced-CSP smoke), and conditional publish of the two custom images (`poc-app`, `poc-nginx`) to GHCR.
 
 Supporting workflows:
 

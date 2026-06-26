@@ -256,7 +256,7 @@ jobs:
       - name: Apply LocalStack infrastructure
         run: docker compose --profile tools run --rm terraform init && docker compose --profile tools run --rm terraform apply -auto-approve
 
-      # Il percorso di serving default e' Traefik -> frontend-cloudfront -> S3
+      # Il percorso di serving default e' Traefik -> edge-cdn -> S3
       # LocalStack: lo smoke e gli audit a11y devono colpire la SPA realmente
       # caricata nel bucket, non un bucket vuoto. Si riusa la stessa logica di
       # make setup (build + sync con cache-control differenziato).
@@ -310,7 +310,7 @@ jobs:
           echo "$spa_headers" | grep -i '^x-content-type-options: nosniff'
           echo "$spa_headers" | grep -i '^referrer-policy: strict-origin-when-cross-origin'
 
-          # La SPA Angular deve essere servita da S3 LocalStack via frontend-cloudfront,
+          # La SPA Angular deve essere servita da S3 LocalStack via edge-cdn,
           # sia sulla root sia su un deep link (fallback SPA verso index.html)
           curl --silent --fail --insecure https://localhost:8443/ | grep -q '<poc-root'
           curl --silent --fail --insecure https://localhost:8443/copilot | grep -q '<poc-root'
