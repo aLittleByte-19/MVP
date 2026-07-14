@@ -358,7 +358,7 @@ jobs:
         id: meta-app
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/poc-app
+          images: ghcr.io/${{ github.repository_owner }}/mvp-app
           tags: |
             type=sha
             type=ref,event=branch
@@ -369,7 +369,7 @@ jobs:
         id: meta-nginx
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/poc-nginx
+          images: ghcr.io/${{ github.repository_owner }}/mvp-nginx
           tags: |
             type=sha
             type=ref,event=branch
