@@ -1,19 +1,19 @@
 .badge {
-  --tag-accent: var(--poc-primary);
-  --tag-bg: var(--poc-surface-soft);
-  --tag-color: var(--poc-primary-deep);
+  --tag-accent: var(--mvp-primary);
+  --tag-bg: var(--mvp-surface-soft);
+  --tag-color: var(--mvp-primary-deep);
 
   display: inline-flex;
   align-items: center;
   max-width: 100%;
   min-height: 24px;
   padding: 3px 9px;
-  border: 1px solid var(--poc-border);
+  border: 1px solid var(--mvp-border);
   border-left: 3px solid var(--tag-accent);
   border-radius: 4px;
   background: var(--tag-bg);
   color: var(--tag-color);
-  font-size: var(--poc-font-xs);
+  font-size: var(--mvp-font-xs);
   font-weight: 600;
   letter-spacing: 0.01em;
   line-height: 1.25;
@@ -22,27 +22,27 @@
 
 /* Validato automaticamente (alta confidenza): azzurro della palette primary. */
 .info {
-  --tag-accent: var(--poc-primary);
+  --tag-accent: var(--mvp-primary);
   --tag-bg: rgba(121, 173, 211, 0.16);
-  --tag-color: var(--poc-primary-deep);
+  --tag-color: var(--mvp-primary-deep);
 }
 
 .success {
-  --tag-accent: var(--poc-success);
-  --tag-bg: var(--poc-success-soft);
-  --tag-color: var(--poc-success);
+  --tag-accent: var(--mvp-success);
+  --tag-bg: var(--mvp-success-soft);
+  --tag-color: var(--mvp-success);
 }
 
 .warning {
-  --tag-accent: var(--poc-warning);
-  --tag-bg: var(--poc-warning-soft);
-  --tag-color: var(--poc-warning);
+  --tag-accent: var(--mvp-warning);
+  --tag-bg: var(--mvp-warning-soft);
+  --tag-color: var(--mvp-warning);
 }
 
 .danger {
-  --tag-accent: var(--poc-danger);
-  --tag-bg: var(--poc-accent-soft);
-  --tag-color: var(--poc-danger);
+  --tag-accent: var(--mvp-danger);
+  --tag-bg: var(--mvp-accent-soft);
+  --tag-color: var(--mvp-danger);
 }
 
 :host {

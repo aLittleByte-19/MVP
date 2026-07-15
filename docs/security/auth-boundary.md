@@ -1,18 +1,18 @@
 # Confine di autenticazione/autorizzazione
 
-L'autenticazione è intenzionalmente simulata in questa PoC (vedi
+L'autenticazione è intenzionalmente simulata in questa MVP (vedi
 [ADR 0007](../architecture-decisions/0007-authn-authz-boundary.md)).
 
 ## Implementato
 
-- Il middleware `poc.identity` risolve un `PocUser` strutturato.
+- Il middleware `mvp.identity` risolve un `MvpUser` strutturato.
 - La modalità locale inietta utente/tenant/ruolo deterministici da configurazione.
 - La modalità trusted-header richiede header di identità completi.
-- Il middleware `poc.authorize` richiede i ruoli configurati (`poc-operator`/`poc-admin`).
+- Il middleware `mvp.authorize` richiede i ruoli configurati (`mvp-operator`/`mvp-admin`).
 - Le API documentali verificano l'ownership per tenant prima di stream, preview o delete.
 - `/admin` e i path legacy di amministrazione runtime restituiscono 404 tramite Nginx.
 
-## Non implementato (fuori scope PoC)
+## Non implementato (fuori scope MVP)
 
 - Login OIDC enterprise.
 - Validazione JWT/JWKS.
@@ -22,10 +22,10 @@ L'autenticazione è intenzionalmente simulata in questa PoC (vedi
 
 ## Motivazione
 
-L'obiettivo della PoC è validare la pipeline AI documentale, l'orchestrazione del workflow, il
+L'obiettivo della MVP è validare la pipeline AI documentale, l'orchestrazione del workflow, il
 confine di storage e l'osservabilità. L'autenticazione reale appartiene al confine di
 deployment/piattaforma e richiede dettagli dell'IdP aziendale non disponibili in questo
-repository. In modalità `trusted_headers`, senza un gateway che firmi gli header `X-Poc-*`,
+repository. In modalità `trusted_headers`, senza un gateway che firmi gli header `X-Mvp-*`,
 questi sono falsificabili: è un limite dichiarato del confine simulato.
 
 ## Direzione verso la produzione

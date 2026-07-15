@@ -1,5 +1,5 @@
 {
-  "uid": "poc-document-pipeline",
+  "uid": "mvp-document-pipeline",
   "title": "Document Pipeline",
   "tags": [
     "alittlebyte",
@@ -52,7 +52,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(poc_original_documents_total{status=\"completed\"})",
+          "expr": "sum(mvp_original_documents_total{status=\"completed\"})",
           "instant": true,
           "legendFormat": "completati",
           "datasource": {
@@ -95,7 +95,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(poc_original_documents_total{status=\"processing\"})",
+          "expr": "sum(mvp_original_documents_total{status=\"processing\"})",
           "instant": true,
           "legendFormat": "in corso",
           "datasource": {
@@ -150,7 +150,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(poc_original_documents_total{status=\"failed\"})",
+          "expr": "sum(mvp_original_documents_total{status=\"failed\"})",
           "instant": true,
           "legendFormat": "falliti",
           "datasource": {
@@ -205,7 +205,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(poc_document_stuck_processing_total)",
+          "expr": "sum(mvp_document_stuck_processing_total)",
           "instant": true,
           "legendFormat": "bloccati",
           "datasource": {
@@ -235,7 +235,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status) (poc_original_documents_total)",
+          "expr": "sum by (status) (mvp_original_documents_total)",
           "instant": true,
           "format": "table",
           "datasource": {
@@ -326,7 +326,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (task_type) (poc_sqs_messages_received_total)",
+          "expr": "sum by (task_type) (mvp_sqs_messages_received_total)",
           "instant": true,
           "format": "table",
           "datasource": {
@@ -336,7 +336,7 @@
         },
         {
           "refId": "B",
-          "expr": "sum by (task_type) (poc_sqs_messages_failed_total)",
+          "expr": "sum by (task_type) (mvp_sqs_messages_failed_total)",
           "instant": true,
           "format": "table",
           "datasource": {
@@ -385,7 +385,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (reason) (poc_stepfunctions_executions_failed_total)",
+          "expr": "sum by (reason) (mvp_stepfunctions_executions_failed_total)",
           "instant": true,
           "format": "table",
           "datasource": {
@@ -446,7 +446,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(poc_stepfunctions_executions_started_total[5m]))",
+          "expr": "sum(rate(mvp_stepfunctions_executions_started_total[5m]))",
           "legendFormat": "avviate",
           "datasource": {
             "type": "prometheus",
@@ -455,7 +455,7 @@
         },
         {
           "refId": "B",
-          "expr": "sum(rate(poc_stepfunctions_executions_failed_total[5m]))",
+          "expr": "sum(rate(mvp_stepfunctions_executions_failed_total[5m]))",
           "legendFormat": "fallite",
           "datasource": {
             "type": "prometheus",
@@ -489,7 +489,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (task_type) (rate(poc_sqs_messages_received_total[5m]))",
+          "expr": "sum by (task_type) (rate(mvp_sqs_messages_received_total[5m]))",
           "legendFormat": "ricevuti {{task_type}}",
           "datasource": {
             "type": "prometheus",
@@ -498,7 +498,7 @@
         },
         {
           "refId": "B",
-          "expr": "sum by (task_type) (rate(poc_sqs_messages_failed_total[5m]))",
+          "expr": "sum by (task_type) (rate(mvp_sqs_messages_failed_total[5m]))",
           "legendFormat": "falliti {{task_type}}",
           "datasource": {
             "type": "prometheus",
@@ -549,7 +549,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{project=\"poc\", service=~\"queue|app\"} |~ \"(?i)level_name.{0,6}(error|critical|emergency)\"",
+          "expr": "{project=\"mvp\", service=~\"queue|app\"} |~ \"(?i)level_name.{0,6}(error|critical|emergency)\"",
           "maxLines": 200
         }
       ]

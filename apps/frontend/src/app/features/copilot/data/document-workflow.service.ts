@@ -1,14 +1,14 @@
 import { Injectable, inject } from "@angular/core";
 import { Observable, tap } from "rxjs";
-import { AlittlebytePoCAPIService } from "../../../../api/generated/poc-api";
+import { AlittlebyteMVPAPIService } from "../../../../api/generated/mvp-api";
 import type {
   DeleteDocumentResponse,
-  PocState,
+  MvpState,
   SubDocument,
   UpdateExtractedDataRequest,
   UpdateSubDocumentReviewResponse
 } from "../../../../api/generated/model";
-import { PocStateStore } from "../../../core/state/poc-state.store";
+import { MvpStateStore } from "../../../core/state/mvp-state.store";
 import { getSubDocumentNumericId } from "../../../shared/util/formatters";
 
 /** Stato dell'anteprima PDF di un sotto-documento. */
@@ -51,8 +51,8 @@ interface ProcessingProgressEvent {
  */
 @Injectable({ providedIn: "root" })
 export class DocumentWorkflowService {
-  private readonly api = inject(AlittlebytePoCAPIService);
-  private readonly store = inject(PocStateStore);
+  private readonly api = inject(AlittlebyteMVPAPIService);
+  private readonly store = inject(MvpStateStore);
 
   /**
    * Carica il documento e segue lo stream di elaborazione (Server-Sent Events).
@@ -66,7 +66,7 @@ export class DocumentWorkflowService {
     return new Observable<DocumentUploadProgress>((observer) => {
       let eventSource: EventSource | null = null;
 
-      const subscription = this.api.uploadPocDocument({ document: file }).subscribe({
+      const subscription = this.api.uploadMvpDocument({ document: file }).subscribe({
         next: (response) => {
           observer.next({ status: response.message, phase: "queued" });
 
@@ -91,7 +91,7 @@ export class DocumentWorkflowService {
           });
 
           eventSource.addEventListener("done", (event) => {
-            const payload = JSON.parse((event as MessageEvent).data) as { state?: PocState };
+            const payload = JSON.parse((event as MessageEvent).data) as { state?: MvpState };
 
             if (payload.state) {
               this.store.setState(payload.state);
@@ -124,7 +124,7 @@ export class DocumentWorkflowService {
 
   deleteSubDocument(documentId: string): Observable<DeleteDocumentResponse> {
     return this.api
-      .deletePocSubDocument(getSubDocumentNumericId(documentId))
+      .deleteMvpSubDocument(getSubDocumentNumericId(documentId))
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 
@@ -133,13 +133,13 @@ export class DocumentWorkflowService {
     payload: UpdateExtractedDataRequest
   ): Observable<UpdateSubDocumentReviewResponse> {
     return this.api
-      .updatePocSubDocumentExtractedData(getSubDocumentNumericId(documentId), payload)
+      .updateMvpSubDocumentExtractedData(getSubDocumentNumericId(documentId), payload)
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 
   markReviewed(documentId: string): Observable<UpdateSubDocumentReviewResponse> {
     return this.api
-      .reviewPocSubDocument(getSubDocumentNumericId(documentId))
+      .reviewMvpSubDocument(getSubDocumentNumericId(documentId))
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 

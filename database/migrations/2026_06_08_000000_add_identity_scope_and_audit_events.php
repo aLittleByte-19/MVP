@@ -9,13 +9,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('communications', function (Blueprint $table) {
-            $table->string('tenant_id', 120)->default('poc-local-tenant')->after('id');
+            $table->string('tenant_id', 120)->default('mvp-local-tenant')->after('id');
             $table->string('created_by', 120)->nullable()->after('tenant_id');
             $table->index(['tenant_id', 'status']);
         });
 
         Schema::table('original_documents', function (Blueprint $table) {
-            $table->string('tenant_id', 120)->default('poc-local-tenant')->after('id');
+            $table->string('tenant_id', 120)->default('mvp-local-tenant')->after('id');
             $table->string('created_by', 120)->nullable()->after('tenant_id');
             $table->index(['tenant_id', 'processing_status']);
         });

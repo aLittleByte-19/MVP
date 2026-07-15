@@ -20,4 +20,4 @@ make trusted-local-tls
 ```
 
 The trusted target installs/uses the local mkcert CA on the host and writes the
-same `poc-local.test.crt` / `poc-local.test.key` files consumed by Traefik.
+same `mvp-local.test.crt` / `mvp-local.test.key` files consumed by Traefik.

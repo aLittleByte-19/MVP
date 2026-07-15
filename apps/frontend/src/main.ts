@@ -5,5 +5,5 @@ import { appConfig } from "./app/app.config";
 bootstrapApplication(AppComponent, appConfig).catch((error: unknown) => {
   // Ultimo livello di difesa: un fallimento di bootstrap non ha ancora un
   // ErrorHandler Angular disponibile, quindi si registra direttamente.
-  console.error("[poc] bootstrap failed", error);
+  console.error("[mvp] bootstrap failed", error);
 });

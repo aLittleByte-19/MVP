@@ -9,7 +9,7 @@ use PHPUnit\Framework\Assert;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * Valida le risposte reali dell'API contro openapi/v1/alittlebyte-poc-api.yaml.
+ * Valida le risposte reali dell'API contro openapi/v1/alittlebyte-mvp-api.yaml.
  *
  * OpenAPI 3.1 usa il dialetto JSON Schema 2020-12: i nodi schema del contratto
  * sono validabili direttamente con opis/json-schema registrando il documento
@@ -19,7 +19,7 @@ use Symfony\Component\Yaml\Yaml;
  */
 class OpenApiSpec
 {
-    private const SPEC_ID = 'https://poc.alittlebyte.local/openapi/alittlebyte-poc-api.json';
+    private const SPEC_ID = 'https://mvp.alittlebyte.local/openapi/alittlebyte-mvp-api.json';
 
     private static ?object $document = null;
 
@@ -106,11 +106,11 @@ class OpenApiSpec
     private static function document(): object
     {
         if (self::$document === null) {
-            $parsed = Yaml::parseFile(base_path('openapi/v1/alittlebyte-poc-api.yaml'));
+            $parsed = Yaml::parseFile(base_path('openapi/v1/alittlebyte-mvp-api.yaml'));
             $document = Helper::toJSON($parsed);
 
             if (! is_object($document)) {
-                Assert::fail('Contratto OpenAPI non leggibile: openapi/v1/alittlebyte-poc-api.yaml');
+                Assert::fail('Contratto OpenAPI non leggibile: openapi/v1/alittlebyte-mvp-api.yaml');
             }
 
             self::$document = $document;

@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Api\V1\Copilot;
 use App\Copilot\Ai\BedrockService;
 use App\Copilot\Audit\Services\AuditLogger;
 use App\Copilot\Communications\Enums\CommunicationStatus;
-use App\Copilot\Identity\PocUser;
+use App\Copilot\Identity\MvpUser;
 use App\Copilot\Observability\MetricsRecorder;
-use App\Copilot\Support\PocStateService;
+use App\Copilot\Support\MvpStateService;
 use App\Exceptions\Copilot\AiServiceException;
 use App\Exceptions\Copilot\InvalidAiOutputException;
 use App\Http\Requests\Copilot\GenerateCommunicationRequest;
@@ -25,7 +25,7 @@ class CommunicationController
         GenerateCommunicationRequest $request,
         BedrockService $bedrock,
         AuditLogger $audit,
-        PocStateService $state,
+        MvpStateService $state,
         MetricsRecorder $metrics,
     ): JsonResponse {
         $validated = $request->validated();
@@ -38,10 +38,10 @@ class CommunicationController
                 $validated['style'],
             );
         } catch (InvalidAiOutputException $e) {
-            Log::warning('PoC communication generation returned invalid AI output', ['errors' => $e->errors()]);
+            Log::warning('MVP communication generation returned invalid AI output', ['errors' => $e->errors()]);
             $metrics->recordDomainCounter('ai_outputs_invalid_total', ['operation' => $e->operation()]);
             $audit->record(
-                'poc-ai-output-invalid',
+                'mvp-ai-output-invalid',
                 $actor,
                 'communication',
                 null,
@@ -51,7 +51,7 @@ class CommunicationController
 
             throw new AiServiceException('La risposta del servizio AI non è valida. Riprova la generazione.', 502, $e);
         } catch (\Throwable $e) {
-            Log::warning('PoC communication generation failed', ['message' => $e->getMessage()]);
+            Log::warning('MVP communication generation failed', ['message' => $e->getMessage()]);
 
             throw new AiServiceException(
                 BedrockService::formatUserError($e, 'Generazione non disponibile. Verifica la configurazione AI.'),
@@ -71,7 +71,7 @@ class CommunicationController
             'status' => CommunicationStatus::Draft,
         ]);
         $audit->record(
-            'poc-communication-generated',
+            'mvp-communication-generated',
             $actor,
             'communication',
             (string) $communication->id,
@@ -86,12 +86,12 @@ class CommunicationController
         ], 201);
     }
 
-    private function actor(Request $request): PocUser
+    private function actor(Request $request): MvpUser
     {
         $actor = $request->user();
 
-        if (! $actor instanceof PocUser) {
-            throw new \RuntimeException('PoC identity middleware did not provide a structured user.');
+        if (! $actor instanceof MvpUser) {
+            throw new \RuntimeException('MVP identity middleware did not provide a structured user.');
         }
 
         return $actor;

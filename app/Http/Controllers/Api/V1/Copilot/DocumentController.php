@@ -6,8 +6,8 @@ use App\Copilot\Audit\Services\AuditLogger;
 use App\Copilot\Documents\Enums\ProcessingStatus;
 use App\Copilot\Documents\Enums\ReviewStatus;
 use App\Copilot\Documents\Services\DocumentProcessingService;
-use App\Copilot\Identity\PocUser;
-use App\Copilot\Support\PocStateService;
+use App\Copilot\Identity\MvpUser;
+use App\Copilot\Support\MvpStateService;
 use App\Copilot\Workflow\Services\DocumentWorkflowService;
 use App\Http\Requests\Copilot\UpdateExtractedDataRequest;
 use App\Http\Requests\Copilot\UploadDocumentRequest;
@@ -31,7 +31,7 @@ class DocumentController
 
         $original = $documents->storeUpload($validated['document'], $actor);
         $audit->record(
-            'poc-document-upload-accepted',
+            'mvp-document-upload-accepted',
             $actor,
             'original_document',
             (string) $original->id,
@@ -50,7 +50,7 @@ class DocumentController
         ], 202);
     }
 
-    public function stream(Request $request, OriginalDocument $originalDocument, PocStateService $state): StreamedResponse
+    public function stream(Request $request, OriginalDocument $originalDocument, MvpStateService $state): StreamedResponse
     {
         $actor = $this->actor($request);
         $this->authorizeOriginalDocument($originalDocument, $actor);
@@ -154,7 +154,7 @@ class DocumentController
         ]);
     }
 
-    public function destroy(Request $request, SubDocument $subDocument, AuditLogger $audit, PocStateService $state): JsonResponse
+    public function destroy(Request $request, SubDocument $subDocument, AuditLogger $audit, MvpStateService $state): JsonResponse
     {
         $original = $subDocument->originalDocument;
         $actor = $this->actor($request);
@@ -163,13 +163,13 @@ class DocumentController
             $this->authorizeOriginalDocument($original, $actor);
         }
 
-        $disk = config('poc.documents.storage_disk', config('filesystems.default', 'local'));
+        $disk = config('mvp.documents.storage_disk', config('filesystems.default', 'local'));
         $subFilePath = $subDocument->file_path;
 
         $subDocument->delete();
         Storage::disk($disk)->delete($subFilePath);
         $audit->record(
-            'poc-sub-document-deleted',
+            'mvp-sub-document-deleted',
             $actor,
             'sub_document',
             (string) $subDocument->id,
@@ -193,7 +193,7 @@ class DocumentController
         UpdateExtractedDataRequest $request,
         SubDocument $subDocument,
         AuditLogger $audit,
-        PocStateService $state,
+        MvpStateService $state,
     ): JsonResponse {
         $actor = $this->actor($request);
         $this->authorizeSubDocument($subDocument, $actor);
@@ -217,7 +217,7 @@ class DocumentController
             'error_message' => null,
         ]);
         $audit->record(
-            'poc-sub-document-extracted-data-corrected',
+            'mvp-sub-document-extracted-data-corrected',
             $actor,
             'sub_document',
             (string) $subDocument->id,
@@ -237,7 +237,7 @@ class DocumentController
         ]);
     }
 
-    public function markReviewed(Request $request, SubDocument $subDocument, AuditLogger $audit, PocStateService $state): JsonResponse
+    public function markReviewed(Request $request, SubDocument $subDocument, AuditLogger $audit, MvpStateService $state): JsonResponse
     {
         $actor = $this->actor($request);
         $this->authorizeSubDocument($subDocument, $actor);
@@ -253,7 +253,7 @@ class DocumentController
             'error_message' => null,
         ]);
         $audit->record(
-            'poc-sub-document-manually-validated',
+            'mvp-sub-document-manually-validated',
             $actor,
             'sub_document',
             (string) $subDocument->id,
@@ -274,7 +274,7 @@ class DocumentController
             $this->authorizeOriginalDocument($subDocument->originalDocument, $this->actor($request));
         }
 
-        $disk = Storage::disk(config('poc.documents.storage_disk', config('filesystems.default', 'local')));
+        $disk = Storage::disk(config('mvp.documents.storage_disk', config('filesystems.default', 'local')));
 
         try {
             abort_unless($disk->exists($subDocument->file_path), 404);
@@ -304,12 +304,12 @@ class DocumentController
         ]);
     }
 
-    private function actor(Request $request): PocUser
+    private function actor(Request $request): MvpUser
     {
         $actor = $request->user();
 
-        if (! $actor instanceof PocUser) {
-            throw new \RuntimeException('PoC identity middleware did not provide a structured user.');
+        if (! $actor instanceof MvpUser) {
+            throw new \RuntimeException('MVP identity middleware did not provide a structured user.');
         }
 
         return $actor;
@@ -318,7 +318,7 @@ class DocumentController
     /**
      * @throws AuthorizationException
      */
-    private function authorizeOriginalDocument(OriginalDocument $document, PocUser $actor): void
+    private function authorizeOriginalDocument(OriginalDocument $document, MvpUser $actor): void
     {
         if ($document->tenant_id !== $actor->tenantId) {
             throw new AuthorizationException('Documento non autorizzato per il tenant corrente.');
@@ -328,7 +328,7 @@ class DocumentController
     /**
      * @throws AuthorizationException
      */
-    private function authorizeSubDocument(SubDocument $subDocument, PocUser $actor): void
+    private function authorizeSubDocument(SubDocument $subDocument, MvpUser $actor): void
     {
         if (! $subDocument->originalDocument || $subDocument->originalDocument->tenant_id !== $actor->tenantId) {
             throw new AuthorizationException('Documento non autorizzato per il tenant corrente.');

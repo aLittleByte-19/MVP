@@ -1,4 +1,4 @@
 # Mantiene la cartella di provisioning plugins (montata in /etc/grafana/provisioning/plugins).
 # Senza questa cartella Grafana logga a ogni avvio:
 #   "Failed to read plugin provisioning files from directory ... no such file or directory".
-# Il PoC non versiona plugin provisioning: la cartella resta vuota.
+# Il MVP non versiona plugin provisioning: la cartella resta vuota.

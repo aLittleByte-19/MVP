@@ -59,7 +59,7 @@ RUN composer dump-autoload --no-interaction --optimize \
         storage/app/public \
         storage/app/private \
         storage/app/private/observability \
-        storage/app/tmp/poc-processing \
+        storage/app/tmp/mvp-processing \
         storage/framework/cache/data \
         storage/framework/sessions \
         storage/framework/testing \

@@ -2,14 +2,14 @@
 
 namespace App\Http\Middleware;
 
-use App\Copilot\Identity\PocUser;
+use App\Copilot\Identity\MvpUser;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class AuthorizePocAccess
+class AuthorizeMvpAccess
 {
     /**
      * @throws AuthenticationException
@@ -20,18 +20,18 @@ class AuthorizePocAccess
         /** @var mixed $user */
         $user = $request->user();
 
-        if (! $user instanceof PocUser) {
-            throw new AuthenticationException('PoC identity is missing.');
+        if (! $user instanceof MvpUser) {
+            throw new AuthenticationException('MVP identity is missing.');
         }
 
         if ($user->tenantId === '') {
-            throw new AuthorizationException('PoC tenant claim is required.');
+            throw new AuthorizationException('MVP tenant claim is required.');
         }
 
-        $allowedRoles = config('poc.authorization.roles', ['poc-operator', 'poc-admin']);
+        $allowedRoles = config('mvp.authorization.roles', ['mvp-operator', 'mvp-admin']);
 
         if (! $user->hasAnyRole($allowedRoles)) {
-            throw new AuthorizationException('PoC role is not authorized.');
+            throw new AuthorizationException('MVP role is not authorized.');
         }
 
         return $next($request);

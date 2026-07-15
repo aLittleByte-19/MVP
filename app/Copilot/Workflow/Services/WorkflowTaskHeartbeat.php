@@ -65,7 +65,7 @@ class WorkflowTaskHeartbeat
             return;
         }
 
-        $interval = max(1, (int) config('poc.workflow.heartbeat_interval_seconds', 30));
+        $interval = max(1, (int) config('mvp.workflow.heartbeat_interval_seconds', 30));
         $now = microtime(true);
 
         if (! $force && ($now - $this->lastBeatAt) < $interval) {

@@ -1,6 +1,6 @@
-# Documentazione PoC - aLittleByte
+# Documentazione MVP - aLittleByte
 
-Documentazione tecnica della Proof of Concept sviluppata nel contesto progettuale Eggon/NEXUM.
+Documentazione tecnica della MVP sviluppata nel contesto progettuale Eggon/NEXUM.
 
 Punto d'ingresso alla documentazione tecnica. Se è la prima volta che apri il progetto, segui
 il percorso di lettura qui sotto; le sezioni successive sono un riferimento tematico.
@@ -13,7 +13,7 @@ Per evitare informazioni duplicate o divergenti, ogni tema ha **un** documento d
 
 | Tema | Documento di riferimento |
 | --- | --- |
-| Perimetro funzionale della PoC | [`poc-scope.md`](poc-scope.md) |
+| Perimetro funzionale della MVP | [`mvp-scope.md`](mvp-scope.md) |
 | Stato implementativo reale | [`IMPLEMENTATION_OVERVIEW.md`](IMPLEMENTATION_OVERVIEW.md) |
 | Decisioni architetturali | [`architecture-decisions/`](architecture-decisions/README.md) |
 | Tracciabilità rispetto al Capitolato | [`architecture/capitolato-traceability.md`](architecture/capitolato-traceability.md) |
@@ -26,7 +26,7 @@ Per evitare informazioni duplicate o divergenti, ogni tema ha **un** documento d
 
 ## Percorso di lettura consigliato
 
-1. **[Perimetro funzionale](poc-scope.md)** — cosa fa (e cosa non fa) la PoC, area per area.
+1. **[Perimetro funzionale](mvp-scope.md)** — cosa fa (e cosa non fa) la MVP, area per area.
 2. **[Panoramica implementativa](IMPLEMENTATION_OVERVIEW.md)** — come è costruito l'applicativo.
 3. **[Struttura del repository](architecture/repository-structure.md)** — dove sta cosa.
 4. **[Architettura finale](architecture/final-architecture.md)** — vista d'insieme di runtime e infrastruttura.
@@ -86,7 +86,7 @@ Per evitare ambiguità ricorrenti, in tutta la documentazione i termini hanno qu
 - **ADR** — *Architecture Decision Record*: una decisione architetturale registrata in
   [`architecture-decisions/`](architecture-decisions/README.md). **Non** indica «Analisi dei
   Requisiti»; i requisiti stanno nel Capitolato.
-- **PoC** — questa Proof of Concept: ambiente locale e riproducibile che emula i servizi AWS
+- **MVP** — questa MVP: ambiente locale e riproducibile che emula i servizi AWS
   tramite LocalStack, non un deploy di produzione.
 - **AWS-like / emulato** — servizio AWS riprodotto in locale via LocalStack (es. SQS, S3, KMS,
   Step Functions); stesso modello di interazione, infrastruttura non gestita.

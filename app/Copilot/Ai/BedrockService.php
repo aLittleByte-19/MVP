@@ -149,7 +149,7 @@ class BedrockService
             ."Per confidence_score usa questa scala:\n"
             ."- 90-100: tutti i campi principali (nome, cognome, azienda, data) sono chiaramente leggibili\n"
             ."- 70-89: la maggior parte dei campi è leggibile ma uno o due sono ambigui o parziali\n"
-            ."- 40-69: diversi campi mancanti o incerti, testo poco chiaro o layout non standard\n"
+            ."- 40-69: diversi campi mancanti o incerti, testo mvpo chiaro o layout non standard\n"
             ."- 0-39: documento illeggibile o quasi tutti i campi sono assenti\n\n"
             ."Testo OCR:\n".$ocrText;
 

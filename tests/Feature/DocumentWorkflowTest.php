@@ -13,10 +13,10 @@ use Aws\Sfn\SfnClient;
 
 test('document workflow service starts a Step Functions execution and stores metadata', function () {
     config([
-        'services.workflow.state_machine_arn' => 'arn:aws:states:eu-north-1:000000000000:stateMachine:poc-document-pipeline',
-        'services.workflow.task_queue_url' => 'http://localstack:4566/000000000000/poc-documents',
+        'services.workflow.state_machine_arn' => 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-document-pipeline',
+        'services.workflow.task_queue_url' => 'http://localstack:4566/000000000000/mvp-documents',
         'filesystems.default' => 's3',
-        'filesystems.disks.s3.bucket' => 'poc-documents-local',
+        'filesystems.disks.s3.bucket' => 'mvp-documents-local',
         'filesystems.disks.s3.root' => null,
     ]);
 
@@ -26,14 +26,14 @@ test('document workflow service starts a Step Functions execution and stores met
         ->with(Mockery::on(function (array $payload): bool {
             $input = json_decode($payload['input'], true);
 
-            return $payload['stateMachineArn'] === 'arn:aws:states:eu-north-1:000000000000:stateMachine:poc-document-pipeline'
-                && str_starts_with($payload['name'], 'poc-doc-')
+            return $payload['stateMachineArn'] === 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-document-pipeline'
+                && str_starts_with($payload['name'], 'mvp-doc-')
                 && $input['document_id'] > 0
-                && $input['task_queue_url'] === 'http://localstack:4566/000000000000/poc-documents'
-                && $input['s3_bucket'] === 'poc-documents-local';
+                && $input['task_queue_url'] === 'http://localstack:4566/000000000000/mvp-documents'
+                && $input['s3_bucket'] === 'mvp-documents-local';
         }))
         ->andReturn(new Result([
-            'executionArn' => 'arn:aws:states:eu-north-1:000000000000:execution:poc-document-pipeline:test',
+            'executionArn' => 'arn:aws:states:eu-north-1:000000000000:execution:mvp-document-pipeline:test',
         ]));
 
     $document = OriginalDocument::factory()->create([
@@ -45,10 +45,10 @@ test('document workflow service starts a Step Functions execution and stores met
     $started = $service->start($document);
 
     expect($started->processing_status)->toBe(ProcessingStatus::Processing)
-        ->and($started->workflow_execution_arn)->toBe('arn:aws:states:eu-north-1:000000000000:execution:poc-document-pipeline:test')
-        ->and($started->s3_bucket)->toBe('poc-documents-local')
+        ->and($started->workflow_execution_arn)->toBe('arn:aws:states:eu-north-1:000000000000:execution:mvp-document-pipeline:test')
+        ->and($started->s3_bucket)->toBe('mvp-documents-local')
         ->and($started->s3_key)->toBe('documents/originals/test.pdf')
-        ->and(AuditEvent::query()->where('event_type', 'poc-document-workflow-started')->count())->toBe(1);
+        ->and(AuditEvent::query()->where('event_type', 'mvp-document-workflow-started')->count())->toBe(1);
 });
 
 test('workflow task handler processes textract task idempotently when textract is disabled', function () {
@@ -108,7 +108,7 @@ test('workflow task handler does not re-run a task already running on another wo
 });
 
 test('workflow task handler re-claims a stale running task left by a dead worker', function () {
-    config(['services.textract.enabled' => false, 'poc.workflow.running_claim_ttl_seconds' => 900]);
+    config(['services.textract.enabled' => false, 'mvp.workflow.running_claim_ttl_seconds' => 900]);
 
     $document = OriginalDocument::factory()->create([
         'processing_status' => ProcessingStatus::Processing,

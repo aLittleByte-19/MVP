@@ -26,13 +26,13 @@ Per le tabelle figlie servirebbero policy con `EXISTS` sulle relazioni padre.
 
 ## Dove Laravel Dovrebbe Impostare il Tenant
 
-Il tenant viene risolto in `ResolvePocIdentity`. Per RLS, Laravel dovrebbe impostare il valore sulla connessione database prima di ogni query tenant-scoped, ad esempio con:
+Il tenant viene risolto in `ResolveMvpIdentity`. Per RLS, Laravel dovrebbe impostare il valore sulla connessione database prima di ogni query tenant-scoped, ad esempio con:
 
 ```sql
 SET LOCAL app.tenant_id = '<tenant>';
 ```
 
-Il punto naturale sarebbe un middleware dopo `poc.identity`, oppure un wrapper transaction-scoped per ogni request/API job.
+Il punto naturale sarebbe un middleware dopo `mvp.identity`, oppure un wrapper transaction-scoped per ogni request/API job.
 
 ## Rischi
 
@@ -44,6 +44,6 @@ Il punto naturale sarebbe un middleware dopo `poc.identity`, oppure un wrapper t
 
 ## Decisione
 
-Non implementare RLS in questo hardening locale. La PoC ha gia' enforcement applicativo su tenant/ruolo nei controller principali; aggiungere RLS ora senza transazioni request-wide e copertura estesa rischierebbe di rompere workflow e test in modo non reversibile.
+Non implementare RLS in questo hardening locale. La MVP ha gia' enforcement applicativo su tenant/ruolo nei controller principali; aggiungere RLS ora senza transazioni request-wide e copertura estesa rischierebbe di rompere workflow e test in modo non reversibile.
 
 Effort stimato per una implementazione sicura: 2-4 giorni, includendo middleware DB session state, policy SQL reversibili, test cross-tenant su API e worker, e verifica con PostgreSQL reale nello stack locale.

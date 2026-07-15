@@ -9,7 +9,7 @@ receivers:
   prometheus:
     config:
       scrape_configs:
-        - job_name: poc-app
+        - job_name: mvp-app
           scrape_interval: 15s
           metrics_path: /internal/metrics
           static_configs:
@@ -17,9 +17,9 @@ receivers:
                 - nginx:8081
               labels:
                 service_namespace: alittlebyte
-                service_name: poc-document-pipeline
+                service_name: mvp-document-pipeline
 
-        - job_name: poc-traefik
+        - job_name: mvp-traefik
           scrape_interval: 15s
           metrics_path: /metrics
           static_configs:
@@ -27,16 +27,16 @@ receivers:
                 - traefik:9100
               labels:
                 service_namespace: alittlebyte
-                service_name: poc-edge
+                service_name: mvp-edge
 
-        - job_name: poc-otel-collector
+        - job_name: mvp-otel-collector
           scrape_interval: 30s
           static_configs:
             - targets:
                 - otel-collector:8888
               labels:
                 service_namespace: alittlebyte
-                service_name: poc-otel-collector
+                service_name: mvp-otel-collector
 
 processors:
   memory_limiter:

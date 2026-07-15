@@ -24,7 +24,7 @@ req_extensions = v3_req
 prompt = no
 
 [ req_distinguished_name ]
-CN = poc.localhost
+CN = mvp.localhost
 
 [ v3_req ]
 basicConstraints = CA:FALSE
@@ -34,7 +34,7 @@ subjectAltName = @alt_names
 
 [ alt_names ]
 DNS.1 = localhost
-DNS.2 = poc.localhost
+DNS.2 = mvp.localhost
 DNS.3 = traefik
 DNS.4 = *.localhost
 IP.1 = 127.0.0.1

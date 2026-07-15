@@ -45,7 +45,7 @@ class TextractService
             // solo dall'id documento: dopo un reset/re-upload lo stesso id può
             // puntare a un file diverso, e un token fisso farebbe scattare
             // IdempotentParameterMismatchException contro il job precedente.
-            $requestToken = 'poc-document-'.$document->id.'-'.substr(hash('sha256', $bucket.'/'.$key), 0, 24);
+            $requestToken = 'mvp-document-'.$document->id.'-'.substr(hash('sha256', $bucket.'/'.$key), 0, 24);
 
             $result = $this->client->startDocumentTextDetection([
                 'DocumentLocation' => [
@@ -55,7 +55,7 @@ class TextractService
                     ],
                 ],
                 'ClientRequestToken' => $requestToken,
-                'JobTag' => 'poc-document-'.$document->id,
+                'JobTag' => 'mvp-document-'.$document->id,
             ]);
 
             $jobId = (string) $result->get('JobId');

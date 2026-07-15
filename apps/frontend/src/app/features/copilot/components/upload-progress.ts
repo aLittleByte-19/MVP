@@ -9,7 +9,7 @@ import type { DocumentUploadPhase } from "../data/document-workflow.service";
  * Il messaggio testuale della fase resta sotto la barra, nel pannello di upload.
  */
 @Component({
-  selector: "poc-upload-progress",
+  selector: "mvp-upload-progress",
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div

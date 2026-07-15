@@ -3,7 +3,7 @@
 namespace App\Http\Requests\Copilot;
 
 use App\Copilot\Audit\Services\AuditLogger;
-use App\Copilot\Identity\PocUser;
+use App\Copilot\Identity\MvpUser;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
@@ -23,7 +23,7 @@ class UploadDocumentRequest extends FormRequest
      */
     public function rules(): array
     {
-        $maxKilobytes = max(1, (int) config('poc.document_limits.max_upload_mb', 20)) * 1024;
+        $maxKilobytes = max(1, (int) config('mvp.document_limits.max_upload_mb', 20)) * 1024;
 
         return [
             'document' => ['required', 'file', 'mimetypes:application/pdf', 'max:'.$maxKilobytes],
@@ -89,7 +89,7 @@ class UploadDocumentRequest extends FormRequest
                     return;
                 }
 
-                $maxPages = max(1, (int) config('poc.document_limits.max_pdf_pages', 50));
+                $maxPages = max(1, (int) config('mvp.document_limits.max_pdf_pages', 50));
 
                 if ($pages > $maxPages) {
                     $validator->errors()->add('document', "Il PDF supera il limite di {$maxPages} pagine.");
@@ -112,8 +112,8 @@ class UploadDocumentRequest extends FormRequest
     {
         $actor = $this->user();
         app(AuditLogger::class)->record(
-            'poc-document-upload-rejected',
-            $actor instanceof PocUser ? $actor : null,
+            'mvp-document-upload-rejected',
+            $actor instanceof MvpUser ? $actor : null,
             'original_document',
             null,
             [
@@ -195,7 +195,7 @@ class UploadDocumentRequest extends FormRequest
 
     private function qpdfBinary(): ?string
     {
-        $configured = (string) config('poc.document_limits.qpdf_binary', '');
+        $configured = (string) config('mvp.document_limits.qpdf_binary', '');
         $candidates = $configured !== ''
             ? [$configured]
             : ['/usr/bin/qpdf', '/usr/local/bin/qpdf', '/opt/homebrew/bin/qpdf'];

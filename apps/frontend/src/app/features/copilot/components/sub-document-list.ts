@@ -31,7 +31,7 @@ const emptyReviewForm: ReviewFormState = {
 };
 
 @Component({
-  selector: "poc-sub-document-list",
+  selector: "mvp-sub-document-list",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ButtonComponent,
@@ -47,10 +47,10 @@ const emptyReviewForm: ReviewFormState = {
   ],
   template: `
     @if (documentItem(); as document) {
-      <poc-section [title]="document.title || 'Verifica documento'">
+      <mvp-section [title]="document.title || 'Verifica documento'">
         <button
           actions
-          pocButton
+          mvpButton
           variant="icon"
           type="button"
           aria-label="Elimina documento"
@@ -60,7 +60,7 @@ const emptyReviewForm: ReviewFormState = {
           <svg lucideTrash2 aria-hidden="true"></svg>
         </button>
 
-        <poc-document-status-timeline [documentItem]="document" />
+        <mvp-document-status-timeline [documentItem]="document" />
 
         <div class="detailGrid">
           <article class="preview">
@@ -170,7 +170,7 @@ const emptyReviewForm: ReviewFormState = {
               <div class="reviewActions">
                 @if (isEditing()) {
                   <button
-                    pocButton
+                    mvpButton
                     variant="secondary"
                     type="button"
                     [disabled]="isSavingReview()"
@@ -179,17 +179,17 @@ const emptyReviewForm: ReviewFormState = {
                     <svg lucideX aria-hidden="true"></svg>
                     Annulla
                   </button>
-                  <button pocButton variant="secondary" type="submit" [disabled]="isSavingReview()">
+                  <button mvpButton variant="secondary" type="submit" [disabled]="isSavingReview()">
                     <svg lucideSave aria-hidden="true"></svg>
                     Salva correzioni
                   </button>
-                  <button pocButton type="button" [disabled]="isSavingReview()" (click)="saveReview(true)">
+                  <button mvpButton type="button" [disabled]="isSavingReview()" (click)="saveReview(true)">
                     <svg lucideCheckCircle2 aria-hidden="true"></svg>
                     Salva e valida
                   </button>
                 } @else {
                   <button
-                    pocButton
+                    mvpButton
                     variant="secondary"
                     type="button"
                     [disabled]="isSavingReview()"
@@ -199,7 +199,7 @@ const emptyReviewForm: ReviewFormState = {
                     Modifica
                   </button>
                   <button
-                    pocButton
+                    mvpButton
                     type="button"
                     [disabled]="isSavingReview()"
                     (click)="markReviewed.emit(document.id)"
@@ -212,11 +212,11 @@ const emptyReviewForm: ReviewFormState = {
             </form>
           </article>
         </div>
-      </poc-section>
+      </mvp-section>
     } @else {
-      <poc-section title="Verifica documento">
-        <poc-empty-state>Seleziona un documento dallo storico per visualizzare il dettaglio.</poc-empty-state>
-      </poc-section>
+      <mvp-section title="Verifica documento">
+        <mvp-empty-state>Seleziona un documento dallo storico per visualizzare il dettaglio.</mvp-empty-state>
+      </mvp-section>
     }
   `,
   styleUrl: "./sub-document-list.css"

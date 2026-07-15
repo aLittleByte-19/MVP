@@ -5,7 +5,7 @@ Date: 2026-06-24
 
 ## Context
 
-La PoC espone una SPA per operatori HR/CdL e mantiene Laravel come API JSON versionata. Il
+La MVP espone una SPA per operatori HR/CdL e mantiene Laravel come API JSON versionata. Il
 Capitolato cita una dashboard Angular e un pattern di distribuzione statico su S3 + CloudFront.
 La repository usa gia' Docker Compose, Terraform e LocalStack per modellare servizi AWS-like
 locali.
@@ -50,7 +50,7 @@ applicativo.
   default per demo end-to-end.
 - S3 LocalStack + emulatore CDN locale (Nginx) valida il pattern build → bucket → distribuzione
   edge, **non** la semantica di Amazon CloudFront (OAC, invalidation, signed URL, edge propagation).
-- I documenti possono usare `POC_DOCUMENT_DISK=real_s3` e `AWS_REAL_*` per Textract reale senza
+- I documenti possono usare `MVP_DOCUMENT_DISK=real_s3` e `AWS_REAL_*` per Textract reale senza
   toccare `FRONTEND_STATIC_BUCKET`, che resta dedicato alla SPA locale.
 
 ## Evoluzione

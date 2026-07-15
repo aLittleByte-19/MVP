@@ -7,7 +7,7 @@ import { ChangeDetectionStrategy, Component, input } from "@angular/core";
  * L'intestazione (titolo + azioni) compare solo quando e' presente un titolo.
  */
 @Component({
-  selector: "poc-section",
+  selector: "mvp-section",
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (title()) {

@@ -1,6 +1,6 @@
 .shell {
   display: grid;
-  grid-template-columns: var(--poc-sidebar-width) minmax(0, 1fr);
+  grid-template-columns: var(--mvp-sidebar-width) minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -8,7 +8,7 @@
   width: 100%;
   max-width: 1180px;
   justify-self: center;
-  padding: var(--poc-space-6);
+  padding: var(--mvp-space-6);
 }
 
 .main {

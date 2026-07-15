@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')
     ->name('api.v1.')
-    ->middleware(['poc.identity', 'poc.authorize', 'throttle:60,1'])
+    ->middleware(['mvp.identity', 'mvp.authorize', 'throttle:60,1'])
     ->group(function () {
         Route::get('/state', StateController::class)->name('state');
 

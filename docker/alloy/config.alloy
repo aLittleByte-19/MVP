@@ -6,19 +6,19 @@ logging {
   format = "logfmt"
 }
 
-// Discover only containers belonging to the "poc" compose project.
-discovery.docker "poc" {
+// Discover only containers belonging to the "mvp" compose project.
+discovery.docker "mvp" {
   host = "unix:///var/run/docker.sock"
 
   filter {
     name   = "label"
-    values = ["com.docker.compose.project=poc"]
+    values = ["com.docker.compose.project=mvp"]
   }
 }
 
 // Map Docker metadata to useful Loki labels (service, container, project).
-discovery.relabel "poc" {
-  targets = discovery.docker.poc.targets
+discovery.relabel "mvp" {
+  targets = discovery.docker.mvp.targets
 
   rule {
     source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
@@ -37,9 +37,9 @@ discovery.relabel "poc" {
   }
 }
 
-loki.source.docker "poc" {
+loki.source.docker "mvp" {
   host             = "unix:///var/run/docker.sock"
-  targets          = discovery.relabel.poc.output
+  targets          = discovery.relabel.mvp.output
   forward_to       = [loki.write.default.receiver]
   refresh_interval = "10s"
 }

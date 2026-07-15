@@ -4,13 +4,13 @@ export type ButtonVariant = "primary" | "secondary" | "icon";
 
 /**
  * Pulsante dell'app applicato come attributo su un `<button>` nativo
- * (`<button pocButton variant="secondary">`). Cosi' restano nativi tipo,
+ * (`<button mvpButton variant="secondary">`). Cosi' restano nativi tipo,
  * stato disabilitato, attributi ARIA ed eventi, mentre la variante guida lo
  * stile sull'host.
  */
 @Component({
   // eslint-disable-next-line @angular-eslint/component-selector
-  selector: "button[pocButton]",
+  selector: "button[mvpButton]",
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: "<ng-content />",
   styleUrl: "./button.css",

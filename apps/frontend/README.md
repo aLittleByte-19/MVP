@@ -1,6 +1,6 @@
 # Frontend SPA
 
-Angular/TypeScript SPA for the document pipeline PoC.
+Angular/TypeScript SPA for the document pipeline MVP.
 
 ## Structure
 

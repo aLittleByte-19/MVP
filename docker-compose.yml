@@ -1,18 +1,18 @@
 x-backend-environment: &backend-environment
   CONFIG_SOURCE: aws
-  CONFIG_SSM_PATH: ${CONFIG_SSM_PATH:-/poc/app}
-  CONFIG_SECRET_IDS: ${CONFIG_SECRET_IDS:-/poc/app/runtime}
+  CONFIG_SSM_PATH: ${CONFIG_SSM_PATH:-/mvp/app}
+  CONFIG_SECRET_IDS: ${CONFIG_SECRET_IDS:-/mvp/app/runtime}
   CONFIG_AWS_ENDPOINT: ${LOCALSTACK_ENDPOINT_INTERNAL:-http://localstack:4566}
-  CONFIG_AWS_REGION: ${POC_AWS_DEFAULT_REGION:-eu-north-1}
+  CONFIG_AWS_REGION: ${MVP_AWS_DEFAULT_REGION:-eu-north-1}
   CONFIG_AWS_ACCESS_KEY_ID: ${LOCALSTACK_AWS_ACCESS_KEY_ID:-test}
   CONFIG_AWS_SECRET_ACCESS_KEY: ${LOCALSTACK_AWS_SECRET_ACCESS_KEY:-test}
   CONFIG_AWS_SESSION_TOKEN: ${LOCALSTACK_AWS_SESSION_TOKEN:-}
   OTEL_SERVICE_NAMESPACE: ${OTEL_SERVICE_NAMESPACE:-alittlebyte}
-  OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-poc-document-pipeline}
+  OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-mvp-document-pipeline}
   OTEL_DEPLOYMENT_ENVIRONMENT: ${OTEL_DEPLOYMENT_ENVIRONMENT:-local}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
-  POC_RELEASE_VERSION: ${POC_RELEASE_VERSION:-local}
-  POC_METRICS_ENABLED: ${POC_METRICS_ENABLED:-true}
+  MVP_RELEASE_VERSION: ${MVP_RELEASE_VERSION:-local}
+  MVP_METRICS_ENABLED: ${MVP_METRICS_ENABLED:-true}
 
 services:
   traefik:
@@ -172,7 +172,7 @@ services:
   edge-cdn:
     image: nginx:1.29-alpine
     environment:
-      FRONTEND_STATIC_BUCKET: ${FRONTEND_STATIC_BUCKET:-poc-frontend-static-local}
+      FRONTEND_STATIC_BUCKET: ${FRONTEND_STATIC_BUCKET:-mvp-frontend-static-local}
     volumes:
       - ./docker/edge-cdn/default.conf.template:/etc/nginx/templates/default.conf.template:ro
     depends_on:
@@ -221,7 +221,7 @@ services:
       dockerfile: docker/php/Dockerfile
       args:
         COMPOSER_INSTALL_DEV: ${COMPOSER_INSTALL_DEV:-true}
-    command: php artisan poc:workflow:consume --max=0 --wait=10
+    command: php artisan mvp:workflow:consume --max=0 --wait=10
     restart: unless-stopped
     environment:
       <<: *backend-environment
@@ -269,24 +269,24 @@ services:
     environment:
       AWS_ACCESS_KEY_ID: ${LOCALSTACK_AWS_ACCESS_KEY_ID:-test}
       AWS_SECRET_ACCESS_KEY: ${LOCALSTACK_AWS_SECRET_ACCESS_KEY:-test}
-      AWS_DEFAULT_REGION: ${POC_AWS_DEFAULT_REGION:-eu-north-1}
+      AWS_DEFAULT_REGION: ${MVP_AWS_DEFAULT_REGION:-eu-north-1}
       TF_PLUGIN_CACHE_DIR: /terraform/plugin-cache
-      TF_VAR_aws_region: ${POC_AWS_DEFAULT_REGION:-eu-north-1}
+      TF_VAR_aws_region: ${MVP_AWS_DEFAULT_REGION:-eu-north-1}
       TF_VAR_localstack_endpoint: ${LOCALSTACK_ENDPOINT_INTERNAL:-http://localstack:4566}
-      TF_VAR_ssm_parameter_path: ${CONFIG_SSM_PATH:-/poc/app}
-      TF_VAR_runtime_secret_name: ${CONFIG_SECRET_IDS:-/poc/app/runtime}
-      TF_VAR_app_url: ${POC_APP_URL:-https://localhost:8443}
-      TF_VAR_frontend_static_bucket: ${FRONTEND_STATIC_BUCKET:-poc-frontend-static-local}
+      TF_VAR_ssm_parameter_path: ${CONFIG_SSM_PATH:-/mvp/app}
+      TF_VAR_runtime_secret_name: ${CONFIG_SECRET_IDS:-/mvp/app/runtime}
+      TF_VAR_app_url: ${MVP_APP_URL:-https://localhost:8443}
+      TF_VAR_frontend_static_bucket: ${FRONTEND_STATIC_BUCKET:-mvp-frontend-static-local}
       TF_VAR_edge_cdn_local_url: ${EDGE_CDN_LOCAL_URL:-https://localhost:8443}
-      TF_VAR_db_database: ${POC_DB_DATABASE:-poc}
-      TF_VAR_db_username: ${POC_DB_USERNAME:-poc}
-      TF_VAR_db_password: ${POC_DB_PASSWORD:-poc-local-password}
-      TF_VAR_redis_password: ${POC_REDIS_PASSWORD:-poc-redis-local-password}
-      TF_VAR_bedrock_model_id: ${POC_BEDROCK_MODEL_ID:-amazon.nova-lite-v1:0}
+      TF_VAR_db_database: ${MVP_DB_DATABASE:-mvp}
+      TF_VAR_db_username: ${MVP_DB_USERNAME:-mvp}
+      TF_VAR_db_password: ${MVP_DB_PASSWORD:-mvp-local-password}
+      TF_VAR_redis_password: ${MVP_REDIS_PASSWORD:-mvp-redis-local-password}
+      TF_VAR_bedrock_model_id: ${MVP_BEDROCK_MODEL_ID:-amazon.nova-lite-v1:0}
       TF_VAR_bedrock_region: ${BEDROCK_REGION:-eu-north-1}
       TF_VAR_bedrock_endpoint: ${BEDROCK_ENDPOINT:-not-configured}
-      TF_VAR_confidence_threshold: ${POC_CONFIDENCE_THRESHOLD:-80}
-      TF_VAR_document_disk: ${POC_DOCUMENT_DISK:-s3}
+      TF_VAR_confidence_threshold: ${MVP_CONFIDENCE_THRESHOLD:-80}
+      TF_VAR_document_disk: ${MVP_DOCUMENT_DISK:-s3}
       TF_VAR_real_aws_region: ${AWS_REAL_REGION:-eu-central-1}
       TF_VAR_real_aws_access_key_id: ${AWS_REAL_ACCESS_KEY_ID:-}
       TF_VAR_real_aws_secret_access_key: ${AWS_REAL_SECRET_ACCESS_KEY:-}
@@ -350,9 +350,9 @@ services:
     environment:
       AWS_ACCESS_KEY_ID: ${LOCALSTACK_AWS_ACCESS_KEY_ID:-test}
       AWS_SECRET_ACCESS_KEY: ${LOCALSTACK_AWS_SECRET_ACCESS_KEY:-test}
-      AWS_DEFAULT_REGION: ${POC_AWS_DEFAULT_REGION:-eu-north-1}
+      AWS_DEFAULT_REGION: ${MVP_AWS_DEFAULT_REGION:-eu-north-1}
       AWS_ENDPOINT_URL: ${LOCALSTACK_ENDPOINT_INTERNAL:-http://localstack:4566}
-      FRONTEND_STATIC_BUCKET: ${FRONTEND_STATIC_BUCKET:-poc-frontend-static-local}
+      FRONTEND_STATIC_BUCKET: ${FRONTEND_STATIC_BUCKET:-mvp-frontend-static-local}
       FRONTEND_DIST: ${FRONTEND_DIST:-apps/frontend/dist}
     volumes:
       - .:/workspace
@@ -378,11 +378,11 @@ services:
   postgres:
     image: postgres:16-alpine
     # Nessuna porta esposta sull'host: vi accedono solo i servizi sulla rete
-    # interna. Per il debug: docker compose exec postgres psql -U poc -d poc
+    # interna. Per il debug: docker compose exec postgres psql -U mvp -d mvp
     environment:
-      POSTGRES_DB: ${POC_DB_DATABASE:-poc}
-      POSTGRES_USER: ${POC_DB_USERNAME:-poc}
-      POSTGRES_PASSWORD: ${POC_DB_PASSWORD:-poc-local-password}
+      POSTGRES_DB: ${MVP_DB_DATABASE:-mvp}
+      POSTGRES_USER: ${MVP_DB_USERNAME:-mvp}
+      POSTGRES_PASSWORD: ${MVP_DB_PASSWORD:-mvp-local-password}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -402,14 +402,14 @@ services:
     command:
       - redis-server
       - --requirepass
-      - ${POC_REDIS_PASSWORD:-poc-redis-local-password}
+      - ${MVP_REDIS_PASSWORD:-mvp-redis-local-password}
       - --maxmemory
       - 256mb
       - --maxmemory-policy
       - volatile-lru
     environment:
       # Autentica redis-cli (healthcheck e make fresh) senza password in argv
-      REDISCLI_AUTH: ${POC_REDIS_PASSWORD:-poc-redis-local-password}
+      REDISCLI_AUTH: ${MVP_REDIS_PASSWORD:-mvp-redis-local-password}
     volumes:
       - redis-data:/data
     healthcheck:
@@ -423,7 +423,7 @@ services:
   localstack:
     image: localstack/localstack:4.5
     environment:
-      AWS_DEFAULT_REGION: ${POC_AWS_DEFAULT_REGION:-eu-north-1}
+      AWS_DEFAULT_REGION: ${MVP_AWS_DEFAULT_REGION:-eu-north-1}
       DEBUG: ${LOCALSTACK_DEBUG:-0}
       SERVICES: s3,sqs,stepfunctions,ssm,secretsmanager,events,ses,iam,sts,logs
     # Bind solo su loopback: serve a terraform/aws CLI dall'host, non alla LAN

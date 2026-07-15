@@ -6,7 +6,7 @@ use App\Copilot\Ai\BedrockService;
 use App\Copilot\Audit\Services\AuditLogger;
 use App\Copilot\Documents\Enums\ProcessingStatus;
 use App\Copilot\Documents\Enums\ReviewStatus;
-use App\Copilot\Identity\PocUser;
+use App\Copilot\Identity\MvpUser;
 use App\Copilot\Observability\MetricsRecorder;
 use App\Copilot\Workflow\Services\WorkflowTaskHeartbeat;
 use App\Exceptions\Copilot\InvalidAiOutputException;
@@ -32,7 +32,7 @@ class DocumentProcessingService
     /**
      * @throws \RuntimeException when the upload cannot be persisted to the configured disk.
      */
-    public function storeUpload(UploadedFile $file, PocUser $actor): OriginalDocument
+    public function storeUpload(UploadedFile $file, MvpUser $actor): OriginalDocument
     {
         $path = $file->store('originals', $this->documentDisk());
 
@@ -45,10 +45,10 @@ class DocumentProcessingService
         return $this->handleStoredFile($path, $safeName, $actor);
     }
 
-    public function handleStoredFile(string $path, string $filename, ?PocUser $actor = null): OriginalDocument
+    public function handleStoredFile(string $path, string $filename, ?MvpUser $actor = null): OriginalDocument
     {
         return OriginalDocument::create([
-            'tenant_id' => $actor?->tenantId ?? 'poc-local-tenant',
+            'tenant_id' => $actor?->tenantId ?? 'mvp-local-tenant',
             'created_by' => $actor?->id,
             'file_path' => $path,
             'original_filename' => $filename,
@@ -81,8 +81,8 @@ class DocumentProcessingService
             ]);
             $this->audit->record(
                 $reviewStatus === ReviewStatus::AutoValidated
-                    ? 'poc-sub-document-auto-validated'
-                    : 'poc-sub-document-needs-review',
+                    ? 'mvp-sub-document-auto-validated'
+                    : 'mvp-sub-document-needs-review',
                 resourceType: 'sub_document',
                 resourceId: (string) $subDocument->id,
                 metadata: [
@@ -108,7 +108,7 @@ class DocumentProcessingService
                 'error_message' => $safeMessage,
             ]);
             $this->audit->record(
-                'poc-sub-document-ai-output-quarantined',
+                'mvp-sub-document-ai-output-quarantined',
                 resourceType: 'sub_document',
                 resourceId: (string) $subDocument->id,
                 metadata: [
@@ -148,7 +148,7 @@ class DocumentProcessingService
                 'error_message' => null,
             ]);
             $this->audit->record(
-                'poc-document-processing-started',
+                'mvp-document-processing-started',
                 resourceType: 'original_document',
                 resourceId: (string) $original->id,
                 metadata: ['status' => ProcessingStatus::Processing->value],
@@ -190,7 +190,7 @@ class DocumentProcessingService
                 'error_message' => null,
             ]);
             $this->audit->record(
-                'poc-document-processing-completed',
+                'mvp-document-processing-completed',
                 resourceType: 'original_document',
                 resourceId: (string) $original->id,
                 metadata: ['status' => ProcessingStatus::Completed->value],
@@ -260,7 +260,7 @@ class DocumentProcessingService
             'error_message' => $userMessage,
         ]);
         $this->audit->record(
-            'poc-document-processing-failed',
+            'mvp-document-processing-failed',
             resourceType: 'original_document',
             resourceId: (string) $original->id,
             metadata: [
@@ -355,7 +355,7 @@ class DocumentProcessingService
 
     private function confidenceThreshold(): int
     {
-        return max(0, min(100, (int) config('services.bedrock.poc_confidence_threshold', 80)));
+        return max(0, min(100, (int) config('services.bedrock.mvp_confidence_threshold', 80)));
     }
 
     /**
@@ -425,7 +425,7 @@ class DocumentProcessingService
 
     public function documentDisk(): string
     {
-        return (string) config('poc.documents.storage_disk', config('filesystems.default', 'local'));
+        return (string) config('mvp.documents.storage_disk', config('filesystems.default', 'local'));
     }
 
     /**
@@ -571,7 +571,7 @@ class DocumentProcessingService
      */
     private function temporaryPath(string $prefix): string
     {
-        $directory = storage_path('app/tmp/poc-processing');
+        $directory = storage_path('app/tmp/mvp-processing');
         File::ensureDirectoryExists($directory);
 
         $path = tempnam($directory, $prefix);

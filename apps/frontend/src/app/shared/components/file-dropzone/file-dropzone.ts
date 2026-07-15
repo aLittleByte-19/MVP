@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, input, output } from "@angular/core
 import { LucideUploadCloud } from "@lucide/angular";
 
 @Component({
-  selector: "poc-file-dropzone",
+  selector: "mvp-file-dropzone",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [LucideUploadCloud],
   template: `

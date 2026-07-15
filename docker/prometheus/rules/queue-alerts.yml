@@ -1,8 +1,8 @@
 groups:
-  - name: poc-queue-alerts
+  - name: mvp-queue-alerts
     rules:
       - alert: QueueBacklogHigh
-        expr: increase(poc_sqs_messages_received_total[30m]) == 0 and poc_original_documents_total{status="processing"} > 0
+        expr: increase(mvp_sqs_messages_received_total[30m]) == 0 and mvp_original_documents_total{status="processing"} > 0
         for: 15m
         labels:
           severity: warning
@@ -10,15 +10,15 @@ groups:
         annotations:
           summary: "Workflow queue may be stalled"
           description: "Documents are processing but no SQS messages were consumed recently."
-          runbook: "https://github.com/aLittleByte-19/PoC/blob/main/docs/runbooks/document-pipeline.md"
+          runbook: "https://github.com/aLittleByte-19/MVP/blob/main/docs/runbooks/document-pipeline.md"
 
       - alert: DLQNotEmpty
-        expr: poc_dlq_messages_total > 0
+        expr: mvp_dlq_messages_total > 0
         for: 1m
         labels:
           severity: critical
           service_namespace: alittlebyte
         annotations:
           summary: "Document workflow DLQ contains messages"
-          description: "Run php artisan poc:dlq:list to inspect failed messages."
-          runbook: "https://github.com/aLittleByte-19/PoC/blob/main/docs/runbooks/dlq-recovery.md"
+          description: "Run php artisan mvp:dlq:list to inspect failed messages."
+          runbook: "https://github.com/aLittleByte-19/MVP/blob/main/docs/runbooks/dlq-recovery.md"

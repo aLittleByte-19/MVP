@@ -123,7 +123,7 @@ jobs:
         run: docker compose --profile tools run --rm node npm ci --ignore-scripts
 
       - name: Lint OpenAPI contract
-        run: docker compose --profile tools run --rm node npx --yes @redocly/cli@latest lint openapi/v1/alittlebyte-poc-api.yaml
+        run: docker compose --profile tools run --rm node npx --yes @redocly/cli@latest lint openapi/v1/alittlebyte-mvp-api.yaml
 
       - name: Generate OpenAPI client
         run: docker compose --profile tools run --rm node npm run openapi:generate
@@ -220,11 +220,11 @@ jobs:
         run: |
           docker build \
             --build-arg COMPOSER_INSTALL_DEV=false \
-            --tag local/poc-app:${{ github.sha }} \
+            --tag local/mvp-app:${{ github.sha }} \
             --file docker/php/Dockerfile \
             .
           docker build \
-            --tag local/poc-nginx:${{ github.sha }} \
+            --tag local/mvp-nginx:${{ github.sha }} \
             --file docker/nginx/Dockerfile \
             .
 
@@ -240,7 +240,7 @@ jobs:
               --severity HIGH,CRITICAL \
               --scanners vuln,secret,config \
               --ignore-unfixed \
-              "local/poc-${image}:${{ github.sha }}"
+              "local/mvp-${image}:${{ github.sha }}"
           done
 
       # --- Stack completo: smoke HTTPS + accessibilità sullo stesso ambiente ---
@@ -248,7 +248,7 @@ jobs:
       - name: Generate local TLS certificate
         # Stesso script di make local-tls: i SAN (incluso *.localhost per le
         # dashboard) vivono in un posto solo
-        run: sh scripts/tls/generate-local-cert.sh docker/traefik/certs/poc-local.test.crt docker/traefik/certs/poc-local.test.key
+        run: sh scripts/tls/generate-local-cert.sh docker/traefik/certs/mvp-local.test.crt docker/traefik/certs/mvp-local.test.key
 
       - name: Start dependencies
         run: docker compose up -d postgres redis localstack
@@ -292,7 +292,7 @@ jobs:
             local host="$1" path="$2"
             wait_for "https://${host}:8443${path}" \
               --resolve "${host}:8443:127.0.0.1" \
-              --user "poc:poc-obs-local-password"
+              --user "mvp:mvp-obs-local-password"
           }
 
           wait_for https://localhost:8443/health
@@ -301,7 +301,7 @@ jobs:
           curl --silent --fail --insecure https://localhost:8443/ready
           curl --silent --fail --insecure https://localhost:8443/api/v1/state
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure https://localhost:8443/internal/metrics)" = "404"
-          docker compose exec -T nginx wget -q -O - http://127.0.0.1:8081/internal/metrics | grep poc_app_info
+          docker compose exec -T nginx wget -q -O - http://127.0.0.1:8081/internal/metrics | grep mvp_app_info
 
           # Security headers: CSP enforced ovunque, con frame-ancestors 'self'
           # solo sulla preview PDF (incorporata in iframe dalla SPA)
@@ -312,8 +312,8 @@ jobs:
 
           # La SPA Angular deve essere servita da S3 LocalStack via edge-cdn,
           # sia sulla root sia su un deep link (fallback SPA verso index.html)
-          curl --silent --fail --insecure https://localhost:8443/ | grep -q '<poc-root'
-          curl --silent --fail --insecure https://localhost:8443/copilot | grep -q '<poc-root'
+          curl --silent --fail --insecure https://localhost:8443/ | grep -q '<mvp-root'
+          curl --silent --fail --insecure https://localhost:8443/copilot | grep -q '<mvp-root'
           curl --silent --insecure -I https://localhost:8443/api/v1/documents/1/preview \
             | grep -i '^content-security-policy:' | grep -F "frame-ancestors 'self'"
 
@@ -383,12 +383,12 @@ jobs:
         run: |
           while IFS= read -r tag; do
             [ -n "$tag" ] || continue
-            docker tag "local/poc-app:${{ github.sha }}" "$tag"
+            docker tag "local/mvp-app:${{ github.sha }}" "$tag"
             docker push "$tag"
           done <<< "$APP_TAGS"
 
           while IFS= read -r tag; do
             [ -n "$tag" ] || continue
-            docker tag "local/poc-nginx:${{ github.sha }}" "$tag"
+            docker tag "local/mvp-nginx:${{ github.sha }}" "$tag"
             docker push "$tag"
           done <<< "$NGINX_TAGS"

@@ -12,9 +12,9 @@ dominio.
 - `app/Copilot/Observability`: exporter Prometheus e registrazione delle metriche.
 - `app/Copilot/Ocr`: integrazione OCR Textract.
 - `app/Copilot/Workflow`: servizi di orchestrazione del workflow Step Functions/SQS.
-- `app/Console/Commands`: comandi artisan, incluso il worker `poc:workflow:consume`.
+- `app/Console/Commands`: comandi artisan, incluso il worker `mvp:workflow:consume`.
 - `app/Http`: controller HTTP, middleware e validazione delle richieste.
-- `app/Models/Copilot`: model Eloquent del dominio PoC.
+- `app/Models/Copilot`: model Eloquent del dominio MVP.
 - `apps/frontend`: SPA Angular/TypeScript.
 - `openapi/v1`: contratto API versionato.
 - `infra/localstack`: modello Terraform LocalStack per le esecuzioni locali production-like.

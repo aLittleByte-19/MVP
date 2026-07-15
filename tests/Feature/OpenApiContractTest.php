@@ -30,7 +30,7 @@ test('GET /api/v1/state rispetta il contratto OpenAPI', function () {
 });
 
 test('GET /api/v1/state senza identita valida rispetta il contratto per il 401', function () {
-    config(['poc.identity.mode' => 'trusted-headers']);
+    config(['mvp.identity.mode' => 'trusted-headers']);
 
     $response = $this->getJson('/api/v1/state')->assertUnauthorized();
 
@@ -38,7 +38,7 @@ test('GET /api/v1/state senza identita valida rispetta il contratto per il 401',
 });
 
 test('GET /api/v1/state senza ruolo abilitato rispetta il contratto per il 403', function () {
-    config(['poc.identity.local.roles' => ['ruolo-non-abilitato']]);
+    config(['mvp.identity.local.roles' => ['ruolo-non-abilitato']]);
 
     $response = $this->getJson('/api/v1/state')->assertForbidden();
 

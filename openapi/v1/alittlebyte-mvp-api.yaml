@@ -1,6 +1,6 @@
 openapi: 3.1.1
 info:
-  title: Alittlebyte PoC API
+  title: Alittlebyte MVP API
   version: 1.0.0
   description: Versioned JSON contract consumed by the Angular SPA.
   license:
@@ -9,7 +9,7 @@ info:
 servers:
   - url: /
 security:
-  - PocIdentity: []
+  - MvpIdentity: []
 tags:
   - name: State
     description: Current assistant and document pipeline state for the SPA.
@@ -20,8 +20,8 @@ tags:
 paths:
   /api/v1/state:
     get:
-      summary: Get current PoC state
-      operationId: getPocState
+      summary: Get current MVP state
+      operationId: getMvpState
       tags: [State]
       responses:
         "200":
@@ -29,7 +29,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PocState"
+                $ref: "#/components/schemas/MvpState"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -37,7 +37,7 @@ paths:
   /api/v1/communications:
     post:
       summary: Generate a communication draft
-      operationId: generatePocCommunication
+      operationId: generateMvpCommunication
       tags: [Communications]
       requestBody:
         required: true
@@ -59,7 +59,7 @@ paths:
   /api/v1/documents/ocr:
     post:
       summary: Upload a document for OCR and AI extraction
-      operationId: uploadPocDocument
+      operationId: uploadMvpDocument
       tags: [Documents]
       requestBody:
         required: true
@@ -84,7 +84,7 @@ paths:
   /api/v1/documents/{originalDocument}/stream:
     get:
       summary: Stream document processing events
-      operationId: streamPocDocumentProcessing
+      operationId: streamMvpDocumentProcessing
       tags: [Documents]
       parameters:
         - $ref: "#/components/parameters/OriginalDocumentId"
@@ -100,7 +100,7 @@ paths:
   /api/v1/documents/{subDocument}:
     delete:
       summary: Delete a processed sub-document
-      operationId: deletePocSubDocument
+      operationId: deleteMvpSubDocument
       tags: [Documents]
       parameters:
         - $ref: "#/components/parameters/SubDocumentId"
@@ -116,7 +116,7 @@ paths:
   /api/v1/documents/{subDocument}/extracted-data:
     put:
       summary: Correct extracted data for a sub-document
-      operationId: updatePocSubDocumentExtractedData
+      operationId: updateMvpSubDocumentExtractedData
       tags: [Documents]
       parameters:
         - $ref: "#/components/parameters/SubDocumentId"
@@ -142,7 +142,7 @@ paths:
   /api/v1/documents/{subDocument}/review:
     post:
       summary: Mark a sub-document as manually reviewed
-      operationId: reviewPocSubDocument
+      operationId: reviewMvpSubDocument
       tags: [Documents]
       parameters:
         - $ref: "#/components/parameters/SubDocumentId"
@@ -162,7 +162,7 @@ paths:
   /api/v1/documents/{subDocument}/preview:
     get:
       summary: Preview a processed sub-document PDF
-      operationId: previewPocSubDocument
+      operationId: previewMvpSubDocument
       tags: [Documents]
       parameters:
         - $ref: "#/components/parameters/SubDocumentId"
@@ -178,11 +178,11 @@ paths:
           $ref: "#/components/responses/NotFound"
 components:
   securitySchemes:
-    PocIdentity:
+    MvpIdentity:
       type: apiKey
       in: header
-      name: X-Poc-User-Id
-      description: Identity claims injected by the enterprise boundary or local PoC middleware.
+      name: X-Mvp-User-Id
+      description: Identity claims injected by the enterprise boundary or local MVP middleware.
   parameters:
     OriginalDocumentId:
       name: originalDocument
@@ -230,7 +230,7 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
   schemas:
-    PocState:
+    MvpState:
       type: object
       required: [assistant, copilot]
       properties:
@@ -295,7 +295,7 @@ components:
         communication:
           $ref: "#/components/schemas/Communication"
         state:
-          $ref: "#/components/schemas/PocState"
+          $ref: "#/components/schemas/MvpState"
     UploadDocumentResponse:
       type: object
       required: [message, streamUrl]
@@ -311,7 +311,7 @@ components:
         message:
           type: string
         state:
-          $ref: "#/components/schemas/PocState"
+          $ref: "#/components/schemas/MvpState"
     UpdateSubDocumentReviewResponse:
       type: object
       required: [message, document, state]
@@ -321,7 +321,7 @@ components:
         document:
           $ref: "#/components/schemas/SubDocument"
         state:
-          $ref: "#/components/schemas/PocState"
+          $ref: "#/components/schemas/MvpState"
     UpdateExtractedDataRequest:
       type: object
       properties:

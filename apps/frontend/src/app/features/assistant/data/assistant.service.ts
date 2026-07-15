@@ -1,8 +1,8 @@
 import { Injectable, inject } from "@angular/core";
 import { type Observable, tap } from "rxjs";
-import { AlittlebytePoCAPIService } from "../../../../api/generated/poc-api";
+import { AlittlebyteMVPAPIService } from "../../../../api/generated/mvp-api";
 import type { GenerateCommunicationResponse } from "../../../../api/generated/model";
-import { PocStateStore } from "../../../core/state/poc-state.store";
+import { MvpStateStore } from "../../../core/state/mvp-state.store";
 import type { CommunicationDraftForm } from "../assistant.model";
 
 /**
@@ -13,12 +13,12 @@ import type { CommunicationDraftForm } from "../assistant.model";
  */
 @Injectable({ providedIn: "root" })
 export class AssistantService {
-  private readonly api = inject(AlittlebytePoCAPIService);
-  private readonly store = inject(PocStateStore);
+  private readonly api = inject(AlittlebyteMVPAPIService);
+  private readonly store = inject(MvpStateStore);
 
   generate(payload: CommunicationDraftForm): Observable<GenerateCommunicationResponse> {
     return this.api
-      .generatePocCommunication(payload)
+      .generateMvpCommunication(payload)
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 }

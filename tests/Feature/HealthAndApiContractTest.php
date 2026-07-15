@@ -32,13 +32,13 @@ test('internal metrics endpoint exposes application and http telemetry', functio
     $this->get('/internal/metrics')
         ->assertOk()
         ->assertHeader('content-type', 'text/plain; version=0.0.4; charset=utf-8')
-        ->assertSee('poc_app_info', false)
-        ->assertSee('poc_http_requests_total', false)
+        ->assertSee('mvp_app_info', false)
+        ->assertSee('mvp_http_requests_total', false)
         ->assertSee('route="health"', false)
-        ->assertSee('poc_readiness_status', false);
+        ->assertSee('mvp_readiness_status', false);
 });
 
-test('versioned api exposes existing poc state contract', function () {
+test('versioned api exposes existing mvp state contract', function () {
     $this->getJson('/api/v1/state')
         ->assertOk()
         ->assertJsonStructure(['assistant', 'copilot']);

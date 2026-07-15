@@ -25,7 +25,7 @@ Endpoint:
 - Health: https://localhost:8443/health
 - Readiness: https://localhost:8443/ready
 - Grafana: https://grafana.localhost:8443 (login Grafana)
-- Prometheus: https://prometheus.localhost:8443 (basic auth `poc` / `poc-obs-local-password`)
+- Prometheus: https://prometheus.localhost:8443 (basic auth `mvp` / `mvp-obs-local-password`)
 - Alertmanager: https://alertmanager.localhost:8443 (basic auth)
 - Tempo: https://tempo.localhost:8443 (basic auth)
 - LocalStack edge: http://localhost:4566 (bind solo 127.0.0.1)
@@ -48,7 +48,7 @@ docker compose restart traefik
 ```
 
 Il target esegue `mkcert -install`, crea un certificato valido per
-`localhost`, `poc.localhost`, `*.localhost`, `127.0.0.1` e `::1`, e lo scrive
+`localhost`, `mvp.localhost`, `*.localhost`, `127.0.0.1` e `::1`, e lo scrive
 negli stessi file montati da Traefik. Non viene eseguito dentro Docker perche'
 deve aggiornare il trust store della macchina locale.
 
@@ -70,8 +70,8 @@ Il servizio `terraform` usa l'endpoint interno `http://localstack:4566` e crea S
 
 I container applicativi ricevono solo parametri bootstrap `CONFIG_*`. I valori runtime sono caricati da:
 
-- SSM Parameter Store: `/poc/app`
-- Secrets Manager: `/poc/app/runtime`
+- SSM Parameter Store: `/mvp/app`
+- Secrets Manager: `/mvp/app/runtime`
 
 Se una chiave obbligatoria manca, il bootstrap Laravel fallisce. Questa scelta evita configurazioni implicite e rende visibili errori di provisioning.
 
@@ -101,7 +101,7 @@ make reset-all          # chiede conferma
 make reset-all FORCE=1  # senza conferma
 ```
 
-Elimina tutti i volumi locali (PostgreSQL, Redis, LocalStack, osservabilita'), svuota il prefisso del bucket S3 reale se `AWS_REAL_S3_BUCKET` e' configurato nel `.env`, e riesegue `make setup` da zero. E' distruttivo per design: pensato per riportare la PoC allo stato iniziale.
+Elimina tutti i volumi locali (PostgreSQL, Redis, LocalStack, osservabilita'), svuota il prefisso del bucket S3 reale se `AWS_REAL_S3_BUCKET` e' configurato nel `.env`, e riesegue `make setup` da zero. E' distruttivo per design: pensato per riportare la MVP allo stato iniziale.
 
 ## Checks
 
@@ -124,7 +124,7 @@ La suite imposta `CONFIG_SOURCE=env` per restare indipendente da LocalStack. I t
 La configurazione locale standard usa LocalStack S3 e `TEXTRACT_ENABLED=false`. Per validare il percorso critico con S3/Textract reali, impostare esplicitamente:
 
 ```bash
-POC_DOCUMENT_DISK=real_s3
+MVP_DOCUMENT_DISK=real_s3
 AWS_REAL_REGION=...
 AWS_REAL_S3_BUCKET=...
 AWS_REAL_S3_PREFIX=documents/

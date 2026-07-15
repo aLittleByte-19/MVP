@@ -4,7 +4,7 @@ namespace App\Copilot\Identity;
 
 use Illuminate\Contracts\Auth\Authenticatable;
 
-class PocUser implements Authenticatable
+class MvpUser implements Authenticatable
 {
     /**
      * @param  array<int, string>  $roles
@@ -19,7 +19,7 @@ class PocUser implements Authenticatable
 
     public function getAuthIdentifierName(): string
     {
-        return 'poc_user_id';
+        return 'mvp_user_id';
     }
 
     public function getAuthIdentifier(): string
@@ -29,7 +29,7 @@ class PocUser implements Authenticatable
 
     public function getAuthPasswordName(): string
     {
-        return 'poc_password';
+        return 'mvp_password';
     }
 
     public function getAuthPassword(): string

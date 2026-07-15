@@ -1,6 +1,6 @@
 # Tracciabilità delle scelte tecnologiche rispetto al Capitolato
 
-Questo documento raccoglie le scelte tecnologiche e architetturali della PoC e, per ciascuna,
+Questo documento raccoglie le scelte tecnologiche e architetturali della MVP e, per ciascuna,
 il razionale ingegneristico che la motiva insieme al riscontro che trova nel Capitolato C5
 (`[NEXUM] BRD-FASE02-2025`, v. 12). Le scelte nascono da criteri di progettazione —
 semplicità, sicurezza, riproducibilità, osservabilità, disaccoppiamento — e si è verificato
@@ -9,18 +9,18 @@ con indicazione della sezione di provenienza. Gli ADR in
 [`docs/architecture-decisions/`](../architecture-decisions/) restano il razionale di dettaglio
 e non vengono qui duplicati.
 
-Dove la PoC adotta framework diversi da quelli ipotizzati nel Capitolato (Ruby on Rails,
+Dove la MVP adotta framework diversi da quelli ipotizzati nel Capitolato (Ruby on Rails,
 Angular, Next.js), la scelta risponde a ragioni pratiche di ecosistema, maturità e velocità di
 sviluppo, e rientra comunque nella libertà tecnologica esplicitamente prevista nella sezione
 «Vincoli». Dove un servizio cloud è emulato in locale (LocalStack), si riporta la voce del
-servizio AWS corrispondente: la PoC ne è la simulazione locale.
+servizio AWS corrispondente: la MVP ne è la simulazione locale.
 
 ---
 
 ## 1. Framework backend (Laravel 12 / PHP 8.4)
 
-**Scelta nella PoC:** API backend in Laravel 12 su PHP 8.4 ([`composer.json`](../../composer.json):
-`"laravel/framework": "^12.0"`, `"php": "^8.4"`). È una scelta solida per una PoC: ecosistema
+**Scelta nella MVP:** API backend in Laravel 12 su PHP 8.4 ([`composer.json`](../../composer.json):
+`"laravel/framework": "^12.0"`, `"php": "^8.4"`). È una scelta solida per una MVP: ecosistema
 maturo con coda, validazione, policy di autorizzazione, migrazioni e SDK AWS già integrati,
 che riduce il codice infrastrutturale e accelera lo sviluppo. Si discosta dal Ruby on Rails
 ipotizzato restando nel perimetro consentito.
@@ -39,7 +39,7 @@ La voce di stack ipotizzata resta indicativa e non vincolante:
 
 ## 2. Frontend SPA (Angular + TypeScript)
 
-**Scelta nella PoC:** SPA Angular + TypeScript in [`apps/frontend/`](../../apps/frontend/).
+**Scelta nella MVP:** SPA Angular + TypeScript in [`apps/frontend/`](../../apps/frontend/).
 Un singolo frontend tipizzato con client API Angular/HttpClient generato da OpenAPI mantiene
 la dashboard semplice, testabile e allineata al contratto; evita la complessità di gestire due
 superfici applicative distinte in fase di prototipo.
@@ -62,7 +62,7 @@ Le voci di stack ipotizzate restano indicative:
 
 ## 3. API versionata e integrabile con NEXUM (JSON `/api/v1`)
 
-**Scelta nella PoC:** contratto JSON esposto solo sotto `/api/v1`, generato da OpenAPI
+**Scelta nella MVP:** contratto JSON esposto solo sotto `/api/v1`, generato da OpenAPI
 ([`openapi/v1/`](../../openapi/v1/)), con autorizzazione server-side e error envelope
 centralizzato. Un contratto versionato e descritto formalmente dà stabilità, abilita un client
 tipizzato e separa nettamente frontend e backend: la base naturale per integrarsi con un
@@ -81,7 +81,7 @@ ecosistema esistente.
 
 ## 4. Code asincrone su SQS
 
-**Scelta nella PoC:** driver coda predefinito SQS ([`config/queue.php`](../../config/queue.php):
+**Scelta nella MVP:** driver coda predefinito SQS ([`config/queue.php`](../../config/queue.php):
 `'default' => env('QUEUE_CONNECTION', 'sqs')`), con DLQ e worker dedicato per la pipeline
 documentale. Disaccoppiare la richiesta HTTP dall'elaborazione lunga è la scelta corretta per
 una pipeline documentale: retry e dead-letter nativi, worker scalabili orizzontalmente e
@@ -102,7 +102,7 @@ Coerente con il requisito prestazionale:
 
 ## 5. Cache e sessioni su Redis
 
-**Scelta nella PoC:** cache e sessioni su Redis ([`config/cache.php`](../../config/cache.php):
+**Scelta nella MVP:** cache e sessioni su Redis ([`config/cache.php`](../../config/cache.php):
 `'default' => env('CACHE_STORE', 'redis')`; [`config/session.php`](../../config/session.php):
 `'driver' => env('SESSION_DRIVER', 'redis')`). Redis è lo strumento giusto per dati a bassa
 latenza e volatili (cache, sessioni, rate limiting); tenerlo distinto dal backend di coda
@@ -120,7 +120,7 @@ In locale Redis è eseguito come servizio container, simulazione locale di Elast
 
 ## 6. Database PostgreSQL
 
-**Scelta nella PoC:** PostgreSQL come connessione predefinita
+**Scelta nella MVP:** PostgreSQL come connessione predefinita
 ([`config/database.php`](../../config/database.php): `'default' => env('DB_CONNECTION', 'pgsql')`),
 in locale come servizio container `postgres`. Un RDBMS robusto con vincoli di integrità,
 transazioni, JSONB e Row-Level Security è la base adatta a stati applicativi, audit e dati
@@ -130,7 +130,7 @@ estratti che devono restare consistenti e interrogabili.
 > «Database: Amazon RDS for PostgreSQL (Multi-AZ, snapshot automatici).»
 > — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
-La PoC ne è la simulazione locale: stesso motore PostgreSQL, senza Multi-AZ/snapshot gestiti di RDS.
+La MVP ne è la simulazione locale: stesso motore PostgreSQL, senza Multi-AZ/snapshot gestiti di RDS.
 
 **ADR correlato:** —
 
@@ -138,7 +138,7 @@ La PoC ne è la simulazione locale: stesso motore PostgreSQL, senza Multi-AZ/sna
 
 ## 7. Object storage S3 (bucket uploads/processed) e cifratura KMS
 
-**Scelta nella PoC:** disco predefinito S3 ([`config/filesystems.php`](../../config/filesystems.php):
+**Scelta nella MVP:** disco predefinito S3 ([`config/filesystems.php`](../../config/filesystems.php):
 `'default' => env('FILESYSTEM_DISK', 's3')`), bucket e chiave KMS provisionati via Terraform su
 LocalStack ([`infra/localstack/main.tf`](../../infra/localstack/main.tf): `aws_s3_bucket.documents`,
 `aws_kms_key.documents`, `aws_s3_bucket_server_side_encryption_configuration.documents`). Tenere
@@ -153,7 +153,7 @@ un requisito.
 > «Sicurezza dati: KMS per chiavi gestite (S3, RDS, Secrets).»
 > — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
-La PoC è la simulazione locale di S3+KMS tramite LocalStack; Lifecycle e Object Lock non sono attivati.
+La MVP è la simulazione locale di S3+KMS tramite LocalStack; Lifecycle e Object Lock non sono attivati.
 
 **ADR correlato:** [0004 - LocalStack And Terraform](../architecture-decisions/0004-localstack-terraform.md)
 
@@ -161,7 +161,7 @@ La PoC è la simulazione locale di S3+KMS tramite LocalStack; Lifecycle e Object
 
 ## 8. Gestione segreti (Secrets Manager + SSM Parameter Store)
 
-**Scelta nella PoC:** caricamento runtime di parametri e segreti da SSM e Secrets Manager
+**Scelta nella MVP:** caricamento runtime di parametri e segreti da SSM e Secrets Manager
 ([`app/Copilot/Support/RuntimeConfigurationLoader.php`](../../app/Copilot/Support/RuntimeConfigurationLoader.php):
 `SsmClient`, `SecretsManagerClient`), provisionati via Terraform
 ([`infra/localstack/main.tf`](../../infra/localstack/main.tf): `aws_secretsmanager_secret.app_runtime`,
@@ -173,7 +173,7 @@ audit.
 > «Segreti: Secrets Manager (credenziali DB, API keys, JWT secrets).»
 > — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
-La PoC è la simulazione locale di Secrets Manager/SSM tramite LocalStack.
+La MVP è la simulazione locale di Secrets Manager/SSM tramite LocalStack.
 
 **ADR correlato:** [0004 - LocalStack And Terraform](../architecture-decisions/0004-localstack-terraform.md)
 
@@ -181,14 +181,14 @@ La PoC è la simulazione locale di Secrets Manager/SSM tramite LocalStack.
 
 ## 9. Autenticazione/autorizzazione (identità simulata, JWT, RBAC/ABAC server-side)
 
-**Scelta nella PoC:** nessun IdP reale; middleware di identità che inietta claim equivalenti
+**Scelta nella MVP:** nessun IdP reale; middleware di identità che inietta claim equivalenti
 a OIDC/SAML (id, email, tenant, ruoli) — modalità locale o trusted-header
-([`app/Http/Middleware/ResolvePocIdentity.php`](../../app/Http/Middleware/ResolvePocIdentity.php))
+([`app/Http/Middleware/ResolveMvpIdentity.php`](../../app/Http/Middleware/ResolveMvpIdentity.php))
 — e autorizzazione RBAC/ABAC server-side
-([`app/Http/Middleware/AuthorizePocAccess.php`](../../app/Http/Middleware/AuthorizePocAccess.php)).
+([`app/Http/Middleware/AuthorizeMvpAccess.php`](../../app/Http/Middleware/AuthorizeMvpAccess.php)).
 L'autorizzazione applicata lato server è l'unica fonte di verità affidabile sugli accessi;
 simulare l'identità dietro un confine ben definito permette di sviluppare e testare l'authz
-senza accoppiare la PoC a uno specifico IdP.
+senza accoppiare la MVP a uno specifico IdP.
 
 **Riscontro nel Capitolato:**
 > «Identity/Access: Amazon Cognito (pool utenti/identity) oppure identity provider esterno; token JWT verso Rails.»
@@ -198,7 +198,7 @@ Il modello dei ruoli adottato coincide con quello descritto:
 > «Definizione ruoli (Admin CdL, Editor, Viewer, Auditor).»
 > — Capitolato C5, sezione «Ambito Funzionale → AI Co-Pilot, UC-9: Gestione ruoli, permessi e policy»
 
-La PoC simula in locale l'avvenuta autenticazione di un IdP corporate e implementa
+La MVP simula in locale l'avvenuta autenticazione di un IdP corporate e implementa
 l'autorizzazione lato Laravel; il token JWT verso il backend è modellato dal middleware di identità.
 
 **ADR correlato:** [0007 - Authn Authz Boundary](../architecture-decisions/0007-authn-authz-boundary.md)
@@ -207,7 +207,7 @@ l'autorizzazione lato Laravel; il token JWT verso il backend è modellato dal mi
 
 ## 10. Osservabilità e audit trail
 
-**Scelta nella PoC:** request/correlation ID, log JSON strutturati, metriche golden-signal in
+**Scelta nella MVP:** request/correlation ID, log JSON strutturati, metriche golden-signal in
 formato Prometheus e gateway OpenTelemetry Collector locale → Prometheus/Tempo/Grafana
 ([`config/observability.php`](../../config/observability.php),
 [`docker-compose.yml`](../../docker-compose.yml): `otel-collector`, `prometheus`, `tempo`, `grafana`),
@@ -223,7 +223,7 @@ L'audit trail riflette il flusso di tracciabilità documentale richiesto:
 > «Visualizzazione audit trail: upload → riconoscimento → split → mapping → invio → lettura.»
 > — Capitolato C5, sezione «Ambito Funzionale → AI Co-Pilot, UC-8: Ricerca, audit e conservazione»
 
-La PoC usa lo stack OTel/Prometheus/Tempo/Grafana (vendor-neutral, open source) come
+La MVP usa lo stack OTel/Prometheus/Tempo/Grafana (vendor-neutral, open source) come
 equivalente locale di CloudWatch/X-Ray.
 
 **ADR correlato:** [0006 - Observability And Audit](../architecture-decisions/0006-observability-and-audit.md)
@@ -232,7 +232,7 @@ equivalente locale di CloudWatch/X-Ray.
 
 ## 11. Servizio AI di generazione contenuti (AI Assistant)
 
-**Scelta nella PoC:** generazione di titolo/testo via Bedrock
+**Scelta nella MVP:** generazione di titolo/testo via Bedrock
 ([`config/services.php`](../../config/services.php): `'bedrock' => ['model_id' => ...]`),
 con tono e stile parametrizzati. Il backend resta il punto di controllo attorno al modello:
 valida lo schema della risposta, persiste il risultato come bozza e ne traccia generazione e
@@ -247,7 +247,7 @@ stato e tracciabilità.
 > — Capitolato C5, sezione «Ambito Funzionale → AI Assistant Generativo, UC-1: Creazione di un nuovo contenuto tramite prompt»
 
 Nota: il Capitolato prescrive l'uso di un «motore AI» generativo ma non nomina uno specifico
-servizio cloud; la scelta di Amazon Bedrock è interna alla PoC (vedi elenco finale).
+servizio cloud; la scelta di Amazon Bedrock è interna alla MVP (vedi elenco finale).
 
 **ADR correlato:** [0005 - No Automatic Fallbacks](../architecture-decisions/0005-no-automatic-fallbacks.md)
 
@@ -255,9 +255,9 @@ servizio cloud; la scelta di Amazon Bedrock è interna alla PoC (vedi elenco fin
 
 ## 12. Servizio AI di OCR/riconoscimento documentale (Co-Pilot)
 
-**Scelta nella PoC:** OCR/parsing e split documentale via Bedrock/Textract
+**Scelta nella MVP:** OCR/parsing e split documentale via Bedrock/Textract
 ([`config/services.php`](../../config/services.php): `'bedrock'`, `'textract'`), con soglia di
-confidenza (`poc_confidence_threshold`). Affiancare OCR e classificazione a una soglia di
+confidenza (`mvp_confidence_threshold`). Affiancare OCR e classificazione a una soglia di
 confidenza misurabile rende il riconoscimento verificabile e instradabile verso la revisione
 umana quando l'affidabilità è bassa: la base per garantire qualità su documenti eterogenei.
 
@@ -272,7 +272,7 @@ La soglia di confidenza adottata è allineata al criterio di accettazione:
 > «AI Co-Pilot: confidenza media OCR ≥ 90%, mapping CF ≥ 99%.»
 > — Capitolato C5, sezione «Criteri di Accettazione»
 
-Nota: come per §11, lo specifico servizio (Bedrock/Textract) è scelta interna alla PoC; il
+Nota: come per §11, lo specifico servizio (Bedrock/Textract) è scelta interna alla MVP; il
 Capitolato prescrive la funzione OCR ma non il vendor.
 
 **ADR correlato:** [0005 - No Automatic Fallbacks](../architecture-decisions/0005-no-automatic-fallbacks.md)
@@ -281,7 +281,7 @@ Capitolato prescrive la funzione OCR ma non il vendor.
 
 ## 13. Human-in-the-Loop e soglia di confidenza
 
-**Scelta nella PoC:** stati di revisione del sotto-documento (`needs_review`, `auto_validated`,
+**Scelta nella MVP:** stati di revisione del sotto-documento (`needs_review`, `auto_validated`,
 `quarantined`, `manually_validated`) e correzione manuale dei campi estratti sotto soglia di
 confidenza. Sotto una certa affidabilità l'intervento umano è necessario per qualità e
 compliance; modellarlo con stati espliciti rende il processo controllabile e auditabile invece
@@ -300,7 +300,7 @@ di accettare ciecamente l'output del modello.
 
 ## 14. Policy "nessun fallback automatico" dei modelli AI
 
-**Scelta nella PoC:** in caso di fallimento di un servizio AI core, la pipeline passa a uno
+**Scelta nella MVP:** in caso di fallimento di un servizio AI core, la pipeline passa a uno
 stato `failed` esplicito e logga contesto non sensibile; nessuna sostituzione automatica con
 dati surrogati ([`config/services.php`](../../config/services.php), pipeline Co-Pilot). Un
 fallback silenzioso maschererebbe guasti di servizio o di permessi producendo dati sostitutivi
@@ -312,7 +312,7 @@ così che l'errore sia evidente e gestibile anziché propagato a valle.
 > — Capitolato C5, sezione «Rischi e Mitigazioni» (mitigazione del rischio «Dipendenza da API esterne (LLM, OCR)»)
 
 Il Capitolato cita il fallback open-source come *mitigazione* di un rischio, non come obbligo:
-la PoC ne condivide l'obiettivo (non dipendere ciecamente dal servizio esterno) ma sceglie di
+la MVP ne condivide l'obiettivo (non dipendere ciecamente dal servizio esterno) ma sceglie di
 non automatizzarlo, perché la sostituzione silenziosa contrasterebbe con l'osservabilità e la
 tracciabilità adottate; l'errore viene quindi reso esplicito anziché aggirato.
 
@@ -322,7 +322,7 @@ tracciabilità adottate; l'errore viene quindi reso esplicito anziché aggirato.
 
 ## 15. Infrastructure-as-Code ed emulazione locale dei servizi cloud (LocalStack + Terraform)
 
-**Scelta nella PoC:** Docker Compose per i processi locali e LocalStack per i servizi AWS-like,
+**Scelta nella MVP:** Docker Compose per i processi locali e LocalStack per i servizi AWS-like,
 provisionati con Terraform ([`infra/localstack/`](../../infra/localstack/): SQS+DLQ, S3, KMS,
 SSM, Secrets Manager, EventBridge, Step Functions, SES). Descrivere l'infrastruttura come
 codice rende l'ambiente riproducibile, revisionabile e veloce da ricreare; emularlo in locale
@@ -332,7 +332,7 @@ mantiene parità con AWS e abbatte i tempi di onboarding e di iterazione.
 > «Eggon fornirà un ambiente di test e credenziali di sviluppo.»
 > — Capitolato C5, sezione «Assunzioni del Progetto»
 
-L'intera sezione «Componenti & servizi AWS» del Capitolato definisce i servizi target; la PoC
+L'intera sezione «Componenti & servizi AWS» del Capitolato definisce i servizi target; la MVP
 ne fornisce l'emulazione locale ripetibile (LocalStack), nello spirito di:
 > «Integrazione complessa con NEXUM Core» → «API documentate e sandbox condivisa»
 > — Capitolato C5, sezione «Rischi e Mitigazioni»
@@ -343,7 +343,7 @@ ne fornisce l'emulazione locale ripetibile (LocalStack), nello spirito di:
 
 ## 16. Hardening di rete e perimetro (Traefik/Nginx, IAM a minimo privilegio)
 
-**Scelta nella PoC:** TLS edge via Traefik, emulatore CDN locale (`edge-cdn`, Nginx) che serve
+**Scelta nella MVP:** TLS edge via Traefik, emulatore CDN locale (`edge-cdn`, Nginx) che serve
 la SPA statica da S3 LocalStack e Nginx applicativo come proxy con superfici non
 API bloccate, IAM role granulari sulle risorse LocalStack
 ([`docker-compose.yml`](../../docker-compose.yml): `traefik`, `edge-cdn`, `nginx`;
@@ -358,7 +358,7 @@ di igiene di base che riducono il rischio a prescindere dall'ambiente.
 > «WAF + AWS Shield su ALB/CloudFront.»
 > — Capitolato C5, sezione «Vincoli tecnico tecnologici → Rete & Sicurezza»
 
-La PoC modella in locale il principio di minimo privilegio e il perimetro edge; WAF/Shield e
+La MVP modella in locale il principio di minimo privilegio e il perimetro edge; WAF/Shield e
 ALB/CloudFront gestiti non sono replicati (equivalenti locali Traefik/Nginx).
 
 **ADR correlato:** [0002 - Laravel API JSON](../architecture-decisions/0002-laravel-api-json.md)
@@ -367,9 +367,9 @@ ALB/CloudFront gestiti non sono replicati (equivalenti locali Traefik/Nginx).
 
 ## 17. Canale e-mail (identità SES provisionata)
 
-**Scelta nella PoC:** identità mittente SES creata via Terraform
+**Scelta nella MVP:** identità mittente SES creata via Terraform
 ([`infra/localstack/main.tf`](../../infra/localstack/main.tf): `aws_ses_email_identity.sender`);
-il codice di invio effettivo è fuori scope PoC. Predisporre l'identità mittente lascia il
+il codice di invio effettivo è fuori scope MVP. Predisporre l'identità mittente lascia il
 canale e-mail pronto all'attivazione senza introdurre, in fase di prototipo, la complessità
 dell'invio reale e della prova di consegna.
 
@@ -380,7 +380,7 @@ dell'invio reale e della prova di consegna.
 > «Integrazioni e-mail/notify: SES (email), SNS (notifiche push/eventi).»
 > — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
-La PoC predispone l'identità SES in locale come simulazione del servizio; l'invio reale non è implementato.
+La MVP predispone l'identità SES in locale come simulazione del servizio; l'invio reale non è implementato.
 
 **ADR correlato:** —
 
@@ -388,7 +388,7 @@ La PoC predispone l'identità SES in locale come simulazione del servizio; l'inv
 
 ## Scelte interne non esplicitate nel Capitolato
 
-Le seguenti scelte sono decisioni ingegneristiche interne alla PoC: rispondono a esigenze
+Le seguenti scelte sono decisioni ingegneristiche interne alla MVP: rispondono a esigenze
 concrete e non contrastano con il Capitolato, che però non le nomina esplicitamente. Rientrano
 nella libertà tecnologica della sezione «Vincoli».
 

@@ -15,7 +15,7 @@ lato server.
 ## Decision
 
 Mantenere il frontend iniziale in `apps/frontend`. Generare il client TypeScript da
-`openapi/v1/alittlebyte-poc-api.yaml` tramite Orval, usare TanStack Query per lo stato server,
+`openapi/v1/alittlebyte-mvp-api.yaml` tramite Orval, usare TanStack Query per lo stato server,
 React Hook Form per la gestione dei form, Vitest per i component test e controlli axe/Pa11y in
 container per una validazione di accessibilita' rappresentativa.
 

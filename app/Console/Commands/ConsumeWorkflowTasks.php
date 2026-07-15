@@ -12,7 +12,7 @@ use Illuminate\Console\Command;
 
 class ConsumeWorkflowTasks extends Command
 {
-    protected $signature = 'poc:workflow:consume {--once : Stop after one polling cycle} {--max=0 : Maximum messages before exit; 0 means unlimited} {--wait= : Long polling wait seconds}';
+    protected $signature = 'mvp:workflow:consume {--once : Stop after one polling cycle} {--max=0 : Maximum messages before exit; 0 means unlimited} {--wait= : Long polling wait seconds}';
 
     protected $description = 'Consume Step Functions callback-token tasks from SQS and report completion back to Step Functions.';
 
@@ -22,7 +22,7 @@ class ConsumeWorkflowTasks extends Command
         $maxMessages = max(0, (int) $this->option('max'));
         $waitSeconds = $this->option('wait') !== null
             ? max(0, (int) $this->option('wait'))
-            : max(0, (int) config('poc.workflow.poll_wait_seconds', 10));
+            : max(0, (int) config('mvp.workflow.poll_wait_seconds', 10));
         $processed = 0;
 
         if ($queueUrl === '') {
@@ -34,7 +34,7 @@ class ConsumeWorkflowTasks extends Command
         do {
             $result = $sqs->receiveMessage([
                 'QueueUrl' => $queueUrl,
-                'MaxNumberOfMessages' => min(10, max(1, (int) config('poc.workflow.max_messages', 5))),
+                'MaxNumberOfMessages' => min(10, max(1, (int) config('mvp.workflow.max_messages', 5))),
                 'WaitTimeSeconds' => $waitSeconds,
                 'MessageAttributeNames' => ['All'],
             ]);

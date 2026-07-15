@@ -4,7 +4,7 @@ namespace App\Copilot\Workflow\Services;
 
 use App\Copilot\Audit\Services\AuditLogger;
 use App\Copilot\Documents\Enums\ProcessingStatus;
-use App\Copilot\Identity\PocUser;
+use App\Copilot\Identity\MvpUser;
 use App\Copilot\Observability\MetricsRecorder;
 use App\Models\Copilot\OriginalDocument;
 use Aws\Exception\AwsException;
@@ -21,7 +21,7 @@ class DocumentWorkflowService
         private readonly MetricsRecorder $metrics,
     ) {}
 
-    public function start(OriginalDocument $document, ?PocUser $actor = null, ?Request $request = null): OriginalDocument
+    public function start(OriginalDocument $document, ?MvpUser $actor = null, ?Request $request = null): OriginalDocument
     {
         if ($document->workflow_execution_arn && $document->processing_status === ProcessingStatus::Processing) {
             return $document;
@@ -37,8 +37,8 @@ class DocumentWorkflowService
         // Real Textract can only read objects from real S3. If OCR is enabled while
         // documents live on the LocalStack disk, Textract fails with a cryptic
         // InvalidS3ObjectException, so fail fast with an actionable message instead.
-        if ((bool) config('services.textract.enabled') && config('poc.documents.storage_disk') !== 'real_s3') {
-            throw new \RuntimeException('Textract è abilitato (TEXTRACT_ENABLED=true) ma POC_DOCUMENT_DISK non è "real_s3": i documenti restano su S3 LocalStack e Textract reale non può leggerli. Imposta POC_DOCUMENT_DISK=real_s3 ed esegui "make refresh-runtime".');
+        if ((bool) config('services.textract.enabled') && config('mvp.documents.storage_disk') !== 'real_s3') {
+            throw new \RuntimeException('Textract è abilitato (TEXTRACT_ENABLED=true) ma MVP_DOCUMENT_DISK non è "real_s3": i documenti restano su S3 LocalStack e Textract reale non può leggerli. Imposta MVP_DOCUMENT_DISK=real_s3 ed esegui "make refresh-runtime".');
         }
 
         $input = $this->workflowInput($document, $taskQueueUrl, $request);
@@ -64,7 +64,7 @@ class DocumentWorkflowService
             ]);
 
             $this->audit->record(
-                'poc-document-workflow-started',
+                'mvp-document-workflow-started',
                 $actor,
                 'original_document',
                 (string) $document->id,
@@ -112,7 +112,7 @@ class DocumentWorkflowService
         ];
     }
 
-    private function markStartFailure(OriginalDocument $document, \Throwable $e, ?PocUser $actor, ?Request $request): void
+    private function markStartFailure(OriginalDocument $document, \Throwable $e, ?MvpUser $actor, ?Request $request): void
     {
         Log::error('Document workflow start failed', [
             'document_id' => $document->id,
@@ -126,7 +126,7 @@ class DocumentWorkflowService
             'error_message' => 'Avvio workflow documentale non disponibile.',
         ]);
         $this->audit->record(
-            'poc-document-workflow-start-failed',
+            'mvp-document-workflow-start-failed',
             $actor,
             'original_document',
             (string) $document->id,
@@ -141,7 +141,7 @@ class DocumentWorkflowService
 
     private function executionName(OriginalDocument $document): string
     {
-        return 'poc-doc-'.$document->id.'-'.Str::uuid();
+        return 'mvp-doc-'.$document->id.'-'.Str::uuid();
     }
 
     private function taskQueueUrl(): string
@@ -164,7 +164,7 @@ class DocumentWorkflowService
             return $document->s3_bucket;
         }
 
-        $disk = (string) config('poc.documents.storage_disk', config('filesystems.default'));
+        $disk = (string) config('mvp.documents.storage_disk', config('filesystems.default'));
 
         return (string) config("filesystems.disks.{$disk}.bucket", config('services.textract.s3_bucket'));
     }
@@ -175,7 +175,7 @@ class DocumentWorkflowService
             return $document->s3_key;
         }
 
-        $disk = (string) config('poc.documents.storage_disk', config('filesystems.default'));
+        $disk = (string) config('mvp.documents.storage_disk', config('filesystems.default'));
         $root = trim((string) config("filesystems.disks.{$disk}.root", ''), '/');
 
         // file_path is always disk-relative (no root prefix, e.g. "originals/..",

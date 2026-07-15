@@ -1,6 +1,6 @@
-# Architettura della PoC
+# Architettura della MVP
 
-Questo documento descrive l'architettura runtime effettivamente implementata nella PoC: i
+Questo documento descrive l'architettura runtime effettivamente implementata nella MVP: i
 confini tra i componenti, cosa gira in locale tramite LocalStack e cosa può essere indirizzato
 verso AWS reale, e i principi di qualità che trovano riscontro nel codice.
 
@@ -28,7 +28,7 @@ export PNG/SVG vanno rigenerati da draw.io dopo ogni modifica (`drawio -x -f png
 | Edge | Traefik (TLS), emulatore CDN locale (Nginx) e Nginx applicativo | HTTPS locale, serving della SPA da S3 LocalStack, proxy API, blocco delle superfici `/admin`. |
 | API | API JSON Laravel in `app/Http` | Validazione, controlli di tenant, audit event, avvio del workflow. |
 | Workflow | Step Functions e SQS (LocalStack) | Orchestrazione production-like con callback task token, end-to-end. |
-| Worker | `php artisan poc:workflow:consume` | Ricezione SQS, esecuzione dei task, `SendTaskSuccess`/`SendTaskFailure`, `SendTaskHeartbeat`. |
+| Worker | `php artisan mvp:workflow:consume` | Ricezione SQS, esecuzione dei task, `SendTaskSuccess`/`SendTaskFailure`, `SendTaskHeartbeat`. |
 | OCR | `App\Copilot\Ocr\Services\TextractService` | Integrazione Textract reale, disabilitata di default nelle esecuzioni locali/CI standard. |
 | AI | `App\Copilot\Ai\BedrockService` | Integrazione Bedrock reale per split/estrazione/generazione. |
 | Storage | Dischi Laravel `s3` o `real_s3`, bucket `frontend_static` | S3 LocalStack per documenti locali e asset Angular, S3 reale opzionale solo per documenti/Textract. |
@@ -73,7 +73,7 @@ solo sul percorso AWS reale.
 AWS reale viene usato solo per il percorso critico di validazione AI/OCR, quando sono fornite
 credenziali e configurazione esplicite:
 
-- `POC_DOCUMENT_DISK=real_s3`
+- `MVP_DOCUMENT_DISK=real_s3`
 - `AWS_REAL_REGION`
 - `AWS_REAL_ACCESS_KEY_ID`
 - `AWS_REAL_SECRET_ACCESS_KEY`

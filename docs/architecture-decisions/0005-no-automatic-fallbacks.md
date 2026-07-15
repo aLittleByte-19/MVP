@@ -16,7 +16,7 @@ Non usare fallback automatici nei flussi applicativi principali. Se un servizio 
 dalla pipeline fallisce o non è disponibile, la pipeline deve passare a uno stato `failed`
 esplicito e registrare contesto strutturato non sensibile.
 
-Mock e fake sono ammessi solo nei test unitari isolati. I flussi end-to-end della PoC non devono
+Mock e fake sono ammessi solo nei test unitari isolati. I flussi end-to-end della MVP non devono
 sostituire silenziosamente i servizi AWS reali con implementazioni fittizie: la "simulazione"
 vive nell'infrastruttura (LocalStack), non in branch condizionali del codice applicativo.
 
