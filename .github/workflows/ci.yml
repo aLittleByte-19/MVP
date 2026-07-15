@@ -154,6 +154,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # I runner ubuntu-latest hanno ~14 GB liberi su /: insufficienti per
+      # caricare tutte le immagini esterne + buildare le immagini di produzione
+      # + avviare l'intero stack (LocalStack compreso). Si rimuovono i
+      # toolchain preinstallati non usati per liberare oltre 20 GB ed evitare
+      # "no space left on device".
+      - name: Free disk space
+        run: |
+          echo "Spazio prima della pulizia:"
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/.ghcup \
+            /usr/local/share/powershell /usr/share/swift || true
+          sudo docker image prune --all --force || true
+          echo "Spazio dopo la pulizia:"
+          df -h /
+
       - name: Login to Docker Hub
         if: env.DOCKERHUB_USERNAME != ''
         uses: docker/login-action@v3
