@@ -23,7 +23,7 @@ output "edge_cdn_local_url" {
 }
 
 output "event_bus_name" {
-  value = aws_cloudwatch_event_bus.poc.name
+  value = aws_cloudwatch_event_bus.mvp.name
 }
 
 output "state_machine_arn" {

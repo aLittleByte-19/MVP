@@ -7,7 +7,7 @@ import { formatFallback } from "../../../shared/util/formatters";
 import { getReviewStatusTone } from "../../../shared/util/status";
 
 @Component({
-  selector: "poc-document-list",
+  selector: "mvp-document-list",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ButtonComponent, EmptyStateComponent, StatusBadgeComponent],
   template: `
@@ -45,13 +45,13 @@ import { getReviewStatusTone } from "../../../shared/util/status";
                   {{ formatFallback(documentItem.confidence, "Da verificare") }}
                 </td>
                 <td data-column="status" data-label="Stato">
-                  <poc-status-badge [tone]="getReviewStatusTone(documentItem.reviewStatus, documentItem.error)">
+                  <mvp-status-badge [tone]="getReviewStatusTone(documentItem.reviewStatus, documentItem.error)">
                     {{ documentItem.reviewStatusLabel }}
-                  </poc-status-badge>
+                  </mvp-status-badge>
                 </td>
                 <td data-column="actions" data-label="Azioni">
                   <button
-                    pocButton
+                    mvpButton
                     class="action"
                     [variant]="documentItem.id === selectedDocumentId() ? 'primary' : 'secondary'"
                     type="button"
@@ -66,7 +66,7 @@ import { getReviewStatusTone } from "../../../shared/util/status";
         </table>
       </div>
     } @else {
-      <poc-empty-state>I documenti caricati compariranno qui.</poc-empty-state>
+      <mvp-empty-state>I documenti caricati compariranno qui.</mvp-empty-state>
     }
   `,
   styleUrls: ["../../../shared/components/data-table/data-table.css", "./document-list.css"]

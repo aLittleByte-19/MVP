@@ -2,13 +2,13 @@
 
 use App\Console\Commands\ConsumeWorkflowTasks;
 use App\Console\Commands\ListDlqMessages;
-use App\Console\Commands\ResetPocData;
+use App\Console\Commands\ResetMvpData;
 use App\Copilot\Support\RuntimeConfigurationLoader;
 use App\Exceptions\Copilot\AiServiceException;
-use App\Http\Middleware\AuthorizePocAccess;
+use App\Http\Middleware\AuthorizeMvpAccess;
 use App\Http\Middleware\CorrelateRequests;
 use App\Http\Middleware\RecordHttpMetrics;
-use App\Http\Middleware\ResolvePocIdentity;
+use App\Http\Middleware\ResolveMvpIdentity;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -47,7 +47,7 @@ return (new ApplicationBuilder($app))
     ->withCommands([
         ConsumeWorkflowTasks::class,
         ListDlqMessages::class,
-        ResetPocData::class,
+        ResetMvpData::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         // The app sits behind Traefik (TLS termination) and Nginx; trust forwarded
@@ -57,8 +57,8 @@ return (new ApplicationBuilder($app))
         $middleware->append(CorrelateRequests::class);
         $middleware->append(RecordHttpMetrics::class);
         $middleware->alias([
-            'poc.identity' => ResolvePocIdentity::class,
-            'poc.authorize' => AuthorizePocAccess::class,
+            'mvp.identity' => ResolveMvpIdentity::class,
+            'mvp.authorize' => AuthorizeMvpAccess::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -10,8 +10,8 @@
   position: relative;
   height: 10px;
   border-radius: 999px;
-  background: var(--poc-surface-soft);
-  border: 1px solid var(--poc-border-soft);
+  background: var(--mvp-surface-soft);
+  border: 1px solid var(--mvp-border-soft);
   overflow: hidden;
 }
 
@@ -21,7 +21,7 @@
   width: 0;
   border-radius: inherit;
   overflow: hidden;
-  background: linear-gradient(90deg, var(--poc-primary), var(--poc-primary-deep));
+  background: linear-gradient(90deg, var(--mvp-primary), var(--mvp-primary-deep));
   /* Riempimento fluido al cambio di fase (no animazione continua). */
   transition: width 0.45s ease;
 }
@@ -36,18 +36,18 @@
   left: -40%;
   width: 40%;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
-  animation: pocUploadSweep 1.4s ease-in-out infinite;
+  animation: mvpUploadSweep 1.4s ease-in-out infinite;
 }
 
 .progress.isDone .fill {
-  background: linear-gradient(90deg, var(--poc-success), var(--poc-success));
+  background: linear-gradient(90deg, var(--mvp-success), var(--mvp-success));
 }
 
 .progress.isError .fill {
-  background: var(--poc-danger);
+  background: var(--mvp-danger);
 }
 
-@keyframes pocUploadSweep {
+@keyframes mvpUploadSweep {
   from {
     left: -40%;
   }

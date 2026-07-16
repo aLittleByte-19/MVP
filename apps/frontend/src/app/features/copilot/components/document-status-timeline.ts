@@ -4,15 +4,15 @@ import { StatusBadgeComponent } from "../../../shared/components/status-badge/st
 import { getReviewStatusTone } from "../../../shared/util/status";
 
 @Component({
-  selector: "poc-document-status-timeline",
+  selector: "mvp-document-status-timeline",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [StatusBadgeComponent],
   template: `
     <ul class="timeline" aria-label="Stato documento">
       <li>
-        <poc-status-badge [tone]="getReviewStatusTone(documentItem().reviewStatus, documentItem().error)">
+        <mvp-status-badge [tone]="getReviewStatusTone(documentItem().reviewStatus, documentItem().error)">
           {{ documentItem().reviewStatusLabel }}
-        </poc-status-badge>
+        </mvp-status-badge>
       </li>
     </ul>
   `,

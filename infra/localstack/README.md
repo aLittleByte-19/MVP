@@ -1,6 +1,6 @@
 # LocalStack Terraform
 
-This directory contains the local AWS-like infrastructure contract for the PoC.
+This directory contains the local AWS-like infrastructure contract for the MVP.
 
 LocalStack endpoint:
 
@@ -46,7 +46,7 @@ make frontend-serving-local-test
 ```
 
 The CDN emulator is local and Docker-based (a plain Nginx) because the LocalStack image used by
-this PoC does not expose the CloudFront API in the default local license. It validates the local
+this MVP does not expose the CloudFront API in the default local license. It validates the local
 build-to-bucket-to-edge flow, but it does not replace a real CDN: in production the role would be
 filled by AWS CloudFront (TLS certificates, edge propagation, invalidations, OAC/OAI, response
 headers policies, AWS IAM enforcement).

@@ -4,18 +4,18 @@ namespace App\Copilot\Support;
 
 use App\Copilot\Communications\Enums\CommunicationStatus;
 use App\Copilot\Documents\Enums\ReviewStatus;
-use App\Copilot\Identity\PocUser;
+use App\Copilot\Identity\MvpUser;
 use App\Models\Copilot\Communication;
 use App\Models\Copilot\ExtractedData;
 use App\Models\Copilot\OriginalDocument;
 use App\Models\Copilot\SubDocument;
 
-class PocStateService
+class MvpStateService
 {
     /**
      * @return array<string, mixed>
      */
-    public function forActor(PocUser $actor): array
+    public function forActor(MvpUser $actor): array
     {
         return [
             'assistant' => $this->assistantState($actor),
@@ -26,7 +26,7 @@ class PocStateService
     /**
      * @return array<string, mixed>
      */
-    public function assistantState(PocUser $actor): array
+    public function assistantState(MvpUser $actor): array
     {
         $baseQuery = Communication::query()->where('tenant_id', $actor->tenantId);
         $total = (clone $baseQuery)->count();
@@ -45,7 +45,7 @@ class PocStateService
     /**
      * @return array<string, mixed>
      */
-    public function copilotState(PocUser $actor): array
+    public function copilotState(MvpUser $actor): array
     {
         $documents = SubDocument::query()
             ->with(['originalDocument', 'extractedData'])
@@ -55,7 +55,7 @@ class PocStateService
             ->get();
 
         $originalCount = OriginalDocument::query()->where('tenant_id', $actor->tenantId)->count();
-        $confidenceThreshold = (int) config('services.bedrock.poc_confidence_threshold', 80);
+        $confidenceThreshold = (int) config('services.bedrock.mvp_confidence_threshold', 80);
 
         return [
             'metrics' => [

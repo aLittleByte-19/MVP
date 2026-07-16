@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from "@angular/core";
 import { Router } from "@angular/router";
-import type { PocView } from "../../core/navigation/app-views";
-import { PocStateStore } from "../../core/state/poc-state.store";
+import type { MvpView } from "../../core/navigation/app-views";
+import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { ButtonComponent } from "../../shared/components/button/button";
 import { EmptyStateComponent } from "../../shared/components/empty-state/empty-state";
 import { ErrorStateComponent } from "../../shared/components/error-state/error-state";
@@ -12,7 +12,7 @@ import { SectionComponent } from "../../layout/section/section";
 import { formatFallback } from "../../shared/util/formatters";
 
 @Component({
-  selector: "poc-overview-page",
+  selector: "mvp-overview-page",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ButtonComponent,
@@ -26,10 +26,10 @@ import { formatFallback } from "../../shared/util/formatters";
   template: `
     <section class="view" aria-label="Overview operativa">
       @if (store.error(); as error) {
-        <poc-error-state [message]="error" />
+        <mvp-error-state [message]="error" />
       }
 
-      <poc-section class="hero">
+      <mvp-section class="hero">
         <p class="eyebrow">Console operativa</p>
         <h2>Gestione assistita di comunicazioni interne e documenti del personale.</h2>
         <p>
@@ -37,14 +37,14 @@ import { formatFallback } from "../../shared/util/formatters";
           classificazione documentale, verifica degli esiti e tracciamento delle consegne.
         </p>
         <div class="buttonRow">
-          <button pocButton type="button" (click)="navigate('assistant', 'assistant-compose')">Crea contenuto</button>
-          <button pocButton variant="secondary" type="button" (click)="navigate('copilot', 'copilot-upload')">
+          <button mvpButton type="button" (click)="navigate('assistant', 'assistant-compose')">Crea contenuto</button>
+          <button mvpButton variant="secondary" type="button" (click)="navigate('copilot', 'copilot-upload')">
             Carica documenti
           </button>
         </div>
-      </poc-section>
+      </mvp-section>
 
-      <poc-section id="overview-modules" title="Da dove partire">
+      <mvp-section id="overview-modules" title="Da dove partire">
         <ul class="flowList">
           <li>
             <strong>AI Assistant Generativo</strong>
@@ -59,30 +59,30 @@ import { formatFallback } from "../../shared/util/formatters";
             <span>Controlla volumi, qualita e stato delle attivita direttamente nelle pagine degli strumenti.</span>
           </li>
         </ul>
-      </poc-section>
+      </mvp-section>
 
-      <poc-section id="overview-priorities" title="Priorita essenziali">
+      <mvp-section id="overview-priorities" title="Priorita essenziali">
         <div class="priorityGrid">
-          <poc-metric-card label="Bozze generate" [value]="communications().length" />
-          <poc-metric-card label="Documenti da verificare" [value]="documentsToReview()" />
-          <poc-metric-card label="Documenti pronti" [value]="readyDocuments()" />
+          <mvp-metric-card label="Bozze generate" [value]="communications().length" />
+          <mvp-metric-card label="Documenti da verificare" [value]="documentsToReview()" />
+          <mvp-metric-card label="Documenti pronti" [value]="readyDocuments()" />
         </div>
-      </poc-section>
+      </mvp-section>
 
-      <poc-section title="Metriche strumenti">
+      <mvp-section title="Metriche strumenti">
         <div class="overviewGrid">
           <div class="metricGroup">
             <h3>AI Assistant</h3>
-            <poc-metrics-panel [isLoading]="store.loading()" [metrics]="store.state()?.assistant?.metrics ?? []" />
+            <mvp-metrics-panel [isLoading]="store.loading()" [metrics]="store.state()?.assistant?.metrics ?? []" />
           </div>
           <div class="metricGroup">
             <h3>Co-Pilot documentale</h3>
-            <poc-metrics-panel [isLoading]="store.loading()" [metrics]="store.state()?.copilot?.metrics ?? []" />
+            <mvp-metrics-panel [isLoading]="store.loading()" [metrics]="store.state()?.copilot?.metrics ?? []" />
           </div>
         </div>
-      </poc-section>
+      </mvp-section>
 
-      <poc-section title="Attivita recenti">
+      <mvp-section title="Attivita recenti">
         @if (communications().length) {
           <div class="tableWrapper">
             <table class="table">
@@ -98,7 +98,7 @@ import { formatFallback } from "../../shared/util/formatters";
                   <tr>
                     <td data-column="title" data-label="Titolo"><strong>{{ communication.title }}</strong></td>
                     <td data-column="status" data-label="Stato">
-                      <poc-status-badge>{{ communication.status }}</poc-status-badge>
+                      <mvp-status-badge>{{ communication.status }}</mvp-status-badge>
                     </td>
                     <td data-column="createdAt" data-label="Creazione">
                       {{ formatFallback(communication.createdAt) }}
@@ -109,15 +109,15 @@ import { formatFallback } from "../../shared/util/formatters";
             </table>
           </div>
         } @else {
-          <poc-empty-state>Le nuove attivita compariranno qui.</poc-empty-state>
+          <mvp-empty-state>Le nuove attivita compariranno qui.</mvp-empty-state>
         }
-      </poc-section>
+      </mvp-section>
     </section>
   `,
   styleUrls: ["./overview-page.css", "../../shared/components/data-table/data-table.css"]
 })
 export class OverviewPage {
-  protected readonly store = inject(PocStateStore);
+  protected readonly store = inject(MvpStateStore);
   protected readonly communications = this.store.history;
   protected readonly documents = this.store.documents;
   protected readonly documentsToReview = computed(
@@ -130,7 +130,7 @@ export class OverviewPage {
 
   private readonly router = inject(Router);
 
-  protected navigate(view: PocView, targetId: string): void {
+  protected navigate(view: MvpView, targetId: string): void {
     void this.router.navigate([view]).then(() => {
       window.requestAnimationFrame(() => {
         document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });

@@ -3,7 +3,7 @@
  * operativa. Le sezioni figlie sono gli id DOM verso cui scorrere e che lo
  * scroll-spy evidenzia nella sidebar.
  */
-export type PocView = "overview" | "assistant" | "copilot";
+export type MvpView = "overview" | "assistant" | "copilot";
 
 export interface SidebarNavChild {
   label: string;
@@ -11,7 +11,7 @@ export interface SidebarNavChild {
 }
 
 export interface SidebarNavItem {
-  id: PocView;
+  id: MvpView;
   label: string;
   children?: SidebarNavChild[];
 }
@@ -21,7 +21,7 @@ export interface SidebarNavGroup {
   items: SidebarNavItem[];
 }
 
-export const pocNavGroups: SidebarNavGroup[] = [
+export const mvpNavGroups: SidebarNavGroup[] = [
   {
     title: "Panoramica",
     items: [
@@ -65,12 +65,12 @@ export const pocNavGroups: SidebarNavGroup[] = [
   }
 ];
 
-export const pocViewTitles: Record<PocView, string> = {
+export const mvpViewTitles: Record<MvpView, string> = {
   overview: "Overview operativa",
   assistant: "AI Assistant Generativo",
   copilot: "AI Co-Pilot per i CdL"
 };
 
-export function isPocView(value: unknown): value is PocView {
+export function isMvpView(value: unknown): value is MvpView {
   return value === "overview" || value === "assistant" || value === "copilot";
 }

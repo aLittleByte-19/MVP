@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, input } from "@angular/core";
 
 @Component({
-  selector: "poc-metric-card",
+  selector: "mvp-metric-card",
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <article class="card">

@@ -1,6 +1,6 @@
 # Matrice dei permessi IAM
 
-Questa matrice è una **proposta derivata dalla PoC** secondo il principio del privilegio minimo:
+Questa matrice è una **proposta derivata dalla MVP** secondo il principio del privilegio minimo:
 **non è una policy IAM di produzione definitiva**. In LocalStack i permessi non sono applicati
 realmente; servono come riferimento per il passaggio ad AWS reale.
 
@@ -20,6 +20,6 @@ realmente; servono come riferimento per il passaggio ad AWS reale.
 | Worker OCR | `textract:StartDocumentTextDetection` | `*` o risorsa scoped supportata | Avviare l'OCR asincrono | Solo AWS reale | Lo scoping risorsa di Textract è limitato per alcune API. |
 | Worker OCR | `textract:GetDocumentTextDetection` | `*` o risorsa scoped supportata | Recuperare il risultato OCR | Solo AWS reale | Validare con il policy simulator dell'account target. |
 | Worker AI | `bedrock:InvokeModel` / `bedrock:Converse` | Modello o inference profile selezionato | Split/estrazione/generazione contenuti | Solo AWS reale | L'accesso al modello dipende da account/regione. |
-| Config loader | `ssm:GetParameter` / `ssm:GetParametersByPath` | Path SSM della PoC | Caricare la configurazione runtime | LocalStack / futura prod | Sola lettura. |
+| Config loader | `ssm:GetParameter` / `ssm:GetParametersByPath` | Path SSM della MVP | Caricare la configurazione runtime | LocalStack / futura prod | Sola lettura. |
 | Config loader | `secretsmanager:GetSecretValue` | Secret runtime | Caricare i segreti | LocalStack / futura prod | Sola lettura; nessun permesso di list necessario. |
 | CI smoke AWS | `sts:AssumeRoleWithWebIdentity` | Ruolo fornito dall'azienda | Smoke OIDC | GitHub Actions (manuale) | Nessuna credenziale AWS statica in CI. |

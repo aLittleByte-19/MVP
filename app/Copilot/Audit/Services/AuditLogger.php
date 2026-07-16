@@ -2,7 +2,7 @@
 
 namespace App\Copilot\Audit\Services;
 
-use App\Copilot\Identity\PocUser;
+use App\Copilot\Identity\MvpUser;
 use App\Models\Copilot\AuditEvent;
 use Illuminate\Http\Request;
 
@@ -13,7 +13,7 @@ class AuditLogger
      */
     public function record(
         string $eventType,
-        ?PocUser $actor = null,
+        ?MvpUser $actor = null,
         ?string $resourceType = null,
         ?string $resourceId = null,
         array $metadata = [],

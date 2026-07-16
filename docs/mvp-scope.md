@@ -4,10 +4,10 @@ Il progetto copre i flussi principali di Document Intelligence per comunicazioni
 
 Ogni area distingue quattro livelli:
 
-- **Incluso**: presente e funzionante nella PoC.
+- **Incluso**: presente e funzionante nella MVP.
 - **Parziale**: presente in forma ridotta rispetto al prodotto finale.
-- **Fuori scope PoC**: previsto per il prodotto finale, ma non implementato qui.
-- **Evoluzione futura**: direzione di sviluppo successiva, non richiesta dal perimetro PoC.
+- **Fuori scope MVP**: previsto per il prodotto finale, ma non implementato qui.
+- **Evoluzione futura**: direzione di sviluppo successiva, non richiesta dal perimetro MVP.
 
 Per lo stato implementativo di dettaglio (con evidenze nei path) il riferimento è
 [`IMPLEMENTATION_OVERVIEW.md`](IMPLEMENTATION_OVERVIEW.md); questo documento ne è il
@@ -28,7 +28,7 @@ Parziale:
 
 - lo storico elenca le ultime generazioni ma non offre i filtri avanzati (parola chiave, tono, stile, data).
 
-Fuori scope PoC:
+Fuori scope MVP:
 
 - modifica manuale persistente di titolo e testo;
 - immagine di copertina e sua sostituzione;
@@ -45,7 +45,7 @@ Incluso:
 
 - upload singolo di PDF;
 - controllo formato e duplicato tramite hash;
-- avvio asincrono tramite state machine Step Functions (emulata in LocalStack) con task pubblicati su SQS tramite callback task token, consumati dal worker `poc:workflow:consume`;
+- avvio asincrono tramite state machine Step Functions (emulata in LocalStack) con task pubblicati su SQS tramite callback task token, consumati dal worker `mvp:workflow:consume`;
 - classificazione e split per destinatario tramite Bedrock sul testo OCR (qualsiasi tipologia di documento, sempre almeno un destinatario);
 - estrazione dei campi principali tramite Bedrock sul testo OCR (nome/cognome, azienda, data, tipologia, descrizione);
 - confidenza calcolata oggettivamente come leggibilità OCR (Textract) ponderata sulla completezza dei campi chiave, non come auto-valutazione del modello;
@@ -61,7 +61,7 @@ Parziale:
 
 - lo storico dei documenti analizzati è ordinato dal più recente ma non offre i filtri avanzati (ricerca per destinatario/azienda, soglia di confidenza, mese e anno).
 
-Fuori scope PoC:
+Fuori scope MVP:
 
 - invio dei documenti e relativo "stato invio" (`Inviato`/`Non inviato`): la colonna `sub_documents.send_status` e l'identità SES Terraform esistono ma non c'è codice di invio;
 - campi estratti email destinatario, codice fiscale e matricola dipendente;
@@ -84,9 +84,9 @@ Incluso:
 
 ## Esclusioni trasversali
 
-### Fuori scope PoC
+### Fuori scope MVP
 
-- identity provider reale e policy RBAC/ABAC complete (l'identità è simulata dal middleware `poc.identity`);
+- identity provider reale e policy RBAC/ABAC complete (l'identità è simulata dal middleware `mvp.identity`);
 - integrazione SES per invio effettivo (l'identità SES Terraform esiste, ma non c'è codice di invio);
 - bus eventi EventBridge per gli eventi terminali della pipeline (bus, rule e target verso SQS esistono in Terraform, ma l'applicativo non pubblica né consuma eventi: nessun `PutEvents`);
 - contract OpenAPI completo per ogni evento operativo interno (il contratto copre le API applicative, non gli eventi di dominio interni della pipeline).

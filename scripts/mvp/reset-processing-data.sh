@@ -3,5 +3,5 @@ set -eu
 
 cd "$(dirname "$0")/../.."
 
-php artisan poc:reset-data --force
+php artisan mvp:reset-data --force
 

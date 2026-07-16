@@ -3,11 +3,11 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "poc-frontend": {
+    "mvp-frontend": {
       "projectType": "application",
       "root": "",
       "sourceRoot": "src",
-      "prefix": "poc",
+      "prefix": "mvp",
       "architect": {
         "build": {
           "builder": "@angular/build:application",
@@ -74,10 +74,10 @@
           },
           "configurations": {
             "production": {
-              "buildTarget": "poc-frontend:build:production"
+              "buildTarget": "mvp-frontend:build:production"
             },
             "development": {
-              "buildTarget": "poc-frontend:build:development"
+              "buildTarget": "mvp-frontend:build:development"
             }
           },
           "defaultConfiguration": "development"

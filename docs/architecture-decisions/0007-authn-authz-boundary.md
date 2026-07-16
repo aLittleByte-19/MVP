@@ -6,13 +6,13 @@ Date: 2026-06-08
 ## Context
 
 Il runtime deve simulare che l'autenticazione sia già avvenuta tramite un IdP aziendale,
-implementando però l'autorizzazione in Laravel. La PoC non deve dipendere da un IdP reale, ma il
+implementando però l'autorizzazione in Laravel. La MVP non deve dipendere da un IdP reale, ma il
 modello di identità deve essere equivalente a quello di un confine OIDC/SAML enterprise.
 
 ## Decision
 
-Non implementare un IdP reale in questa PoC. Aggiungere un middleware di identità solo
-locale/di test (`poc.identity`) che inietta claim strutturati equivalenti a quelli OIDC/SAML
+Non implementare un IdP reale in questa MVP. Aggiungere un middleware di identità solo
+locale/di test (`mvp.identity`) che inietta claim strutturati equivalenti a quelli OIDC/SAML
 enterprise: user ID, email, display name, tenant/azienda, gruppi/ruoli e attributi applicativi.
 
 Usare policy/servizi Laravel per applicare RBAC e ABAC lato server. Il frontend può nascondere
@@ -24,23 +24,23 @@ le azioni non disponibili per UX, ma non deve mai essere la fonte di verità per
 - I test di autorizzazione devono coprire accessi consentiti e negati.
 - Le decisioni di accesso negate rilevanti e gli eventi di autorizzazione sensibili devono essere
   registrati nell'audit.
-- In modalità `trusted_headers` gli header `X-Poc-*` sono falsificabili senza un gateway che li
+- In modalità `trusted_headers` gli header `X-Mvp-*` sono falsificabili senza un gateway che li
   firmi: è un limite dichiarato del confine simulato.
 
 ## Alternatives considered
 
-- **Integrare un IdP reale (Cognito/Keycloak/Entra) nella PoC**: rinviato perché fuori dal
-  perimetro PoC e non necessario a dimostrare l'autorizzazione lato server.
+- **Integrare un IdP reale (Cognito/Keycloak/Entra) nella MVP**: rinviato perché fuori dal
+  perimetro MVP e non necessario a dimostrare l'autorizzazione lato server.
 - **Autorizzazione lato frontend**: scartata perché la UI non può essere fonte di verità per
   l'access control.
 
 ## Implementation evidence
 
-- Middleware: `app/Http/Middleware/ResolvePocIdentity.php` (modalità `local`/`trusted_headers`),
-  `app/Copilot/Identity/PocUser.php`.
-- Autorizzazione: `app/Http/Middleware/AuthorizePocAccess.php` (ruoli `poc-operator`/`poc-admin`,
+- Middleware: `app/Http/Middleware/ResolveMvpIdentity.php` (modalità `local`/`trusted_headers`),
+  `app/Copilot/Identity/MvpUser.php`.
+- Autorizzazione: `app/Http/Middleware/AuthorizeMvpAccess.php` (ruoli `mvp-operator`/`mvp-admin`,
   tenant check) e check nei controller.
-- Configurazione identità in `infra/localstack/main.tf` (`POC_IDENTITY_MODE`, `POC_LOCAL_*`).
+- Configurazione identità in `infra/localstack/main.tf` (`MVP_IDENTITY_MODE`, `MVP_LOCAL_*`).
 
 ## References
 

@@ -16,7 +16,7 @@ Usare Amazon SQS come backend di coda primario (`QUEUE_CONNECTION=sqs`), provisi
 via Terraform su LocalStack con coda dei documenti e relativa DLQ. La pipeline documentale **non**
 usa i job Laravel `dispatch`/`queue:work`: l'orchestrazione è affidata a Step Functions (vedi
 [ADR 0004](0004-localstack-terraform.md)) che pubblica su SQS task con callback task token,
-consumati dal worker dedicato `poc:workflow:consume`.
+consumati dal worker dedicato `mvp:workflow:consume`.
 
 Redis resta nell'architettura per cache, sessioni, rate limiting e dati temporanei in memoria.
 Redis non deve essere il backend di coda primario e Horizon non va introdotto.

@@ -29,7 +29,7 @@ class RuntimeConfigurationLoader
         'SQS_PREFIX',
         'SQS_QUEUE',
         'SQS_DLQ_URL',
-        'POC_DOCUMENT_DISK',
+        'MVP_DOCUMENT_DISK',
         'DOCUMENT_PIPELINE_STATE_MACHINE_ARN',
         'DOCUMENT_PIPELINE_TASK_QUEUE_URL',
         'BEDROCK_MODEL_ID',
@@ -52,10 +52,10 @@ class RuntimeConfigurationLoader
 
         $region = self::bootstrapValue('CONFIG_AWS_REGION') ?: self::bootstrapValue('AWS_DEFAULT_REGION') ?: 'eu-north-1';
         $endpoint = self::bootstrapValue('CONFIG_AWS_ENDPOINT');
-        $parametersPath = rtrim(self::bootstrapValue('CONFIG_SSM_PATH') ?: '/poc/app', '/');
+        $parametersPath = rtrim(self::bootstrapValue('CONFIG_SSM_PATH') ?: '/mvp/app', '/');
         $secretIds = array_values(array_filter(array_map(
             trim(...),
-            explode(',', self::bootstrapValue('CONFIG_SECRET_IDS') ?: '/poc/app/runtime')
+            explode(',', self::bootstrapValue('CONFIG_SECRET_IDS') ?: '/mvp/app/runtime')
         )));
 
         $clientConfig = [

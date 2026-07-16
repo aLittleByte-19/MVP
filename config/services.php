@@ -46,7 +46,7 @@ return [
             'secret' => env('AWS_REAL_SECRET_ACCESS_KEY'),
             'token' => env('AWS_REAL_SESSION_TOKEN'),
         ],
-        'poc_confidence_threshold' => (int) env('POC_CONFIDENCE_THRESHOLD', 80),
+        'mvp_confidence_threshold' => (int) env('MVP_CONFIDENCE_THRESHOLD', 80),
     ],
 
     'workflow' => [

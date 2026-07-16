@@ -1,12 +1,12 @@
 # Mapping AWS Well-Architected
 
-Questo documento mette in relazione lo stato attuale della PoC con i sei pilastri dell'AWS
+Questo documento mette in relazione lo stato attuale della MVP con i sei pilastri dell'AWS
 Well-Architected Framework. **Non costituisce una review formale AWS** e non dichiara alcuna
 certificazione di produzione: è un'autovalutazione con evidenze nella codebase, formulata come
-**baseline PoC** con **allineamento parziale** e **lavoro production-like restante**.
+**baseline MVP** con **allineamento parziale** e **lavoro production-like restante**.
 
 Per lo stato implementativo di dettaglio vedi [`../IMPLEMENTATION_OVERVIEW.md`](../IMPLEMENTATION_OVERVIEW.md);
-per il perimetro funzionale [`../poc-scope.md`](../poc-scope.md).
+per il perimetro funzionale [`../mvp-scope.md`](../mvp-scope.md).
 
 | Pilastro | Implementazione corrente | Evidenza nella codebase | Gap residuo | Evoluzione consigliata |
 | --- | --- | --- | --- | --- |

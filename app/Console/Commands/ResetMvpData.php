@@ -8,17 +8,17 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
-class ResetPocData extends Command
+class ResetMvpData extends Command
 {
     /** @var string */
-    protected $signature = 'poc:reset-data {--force : Run without confirmation}';
+    protected $signature = 'mvp:reset-data {--force : Run without confirmation}';
 
     /** @var string */
-    protected $description = 'Reset generated PoC processing data from the database and document storage.';
+    protected $description = 'Reset generated MVP processing data from the database and document storage.';
 
     public function handle(): int
     {
-        if (! $this->option('force') && ! $this->confirm('Reset all generated PoC processing data?')) {
+        if (! $this->option('force') && ! $this->confirm('Reset all generated MVP processing data?')) {
             $this->components->info('Reset skipped.');
 
             return self::SUCCESS;
@@ -34,7 +34,7 @@ class ResetPocData extends Command
         $this->resetTables($tables);
         $this->resetStorage();
 
-        $this->components->info('Generated PoC processing data has been reset.');
+        $this->components->info('Generated MVP processing data has been reset.');
 
         return self::SUCCESS;
     }
@@ -108,7 +108,7 @@ class ResetPocData extends Command
         Storage::disk('local')->deleteDirectory('livewire-tmp');
         Storage::disk('public')->deleteDirectory('documents');
 
-        File::deleteDirectory(storage_path('app/tmp/poc-processing'));
+        File::deleteDirectory(storage_path('app/tmp/mvp-processing'));
         File::deleteDirectory(base_path('documenti_ocr'));
     }
 }

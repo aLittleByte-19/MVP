@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from "@angular/core";
 import { retry } from "rxjs";
-import { AlittlebytePoCAPIService } from "../../../api/generated/poc-api";
-import type { PocState, SubDocument } from "../../../api/generated/model";
+import { AlittlebyteMVPAPIService } from "../../../api/generated/mvp-api";
+import type { MvpState, SubDocument } from "../../../api/generated/model";
 import { getApiErrorMessage } from "../errors/api-error";
 
 /**
@@ -12,10 +12,10 @@ import { getApiErrorMessage } from "../errors/api-error";
  * dal backend.
  */
 @Injectable({ providedIn: "root" })
-export class PocStateStore {
-  private readonly api = inject(AlittlebytePoCAPIService);
+export class MvpStateStore {
+  private readonly api = inject(AlittlebyteMVPAPIService);
 
-  private readonly _state = signal<PocState | null>(null);
+  private readonly _state = signal<MvpState | null>(null);
   private readonly _loading = signal(false);
   private readonly _error = signal<string | null>(null);
   private loadRequested = false;
@@ -45,7 +45,7 @@ export class PocStateStore {
     this._error.set(null);
 
     this.api
-      .getPocState()
+      .getMvpState()
       .pipe(retry(1))
       .subscribe({
         next: (state) => {
@@ -60,7 +60,7 @@ export class PocStateStore {
   }
 
   /** Rimpiazza lo stato con quello autorevole restituito da una mutazione. */
-  setState(state: PocState): void {
+  setState(state: MvpState): void {
     this._state.set(state);
   }
 

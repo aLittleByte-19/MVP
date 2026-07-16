@@ -38,7 +38,7 @@ export class LoggerService {
     const entry = {
       ts: new Date().toISOString(),
       level,
-      source: "poc-frontend",
+      source: "mvp-frontend",
       message,
       ...context
     };

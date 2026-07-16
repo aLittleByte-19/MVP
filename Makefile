@@ -5,7 +5,7 @@ BLUE  := \033[34m
 RESET := \033[0m
 LOCALSTACK_ENDPOINT_INTERNAL ?= http://localstack:4566
 FRONTEND_DIST ?= apps/frontend/dist
-FRONTEND_STATIC_BUCKET ?= poc-frontend-static-local
+FRONTEND_STATIC_BUCKET ?= mvp-frontend-static-local
 EDGE_CDN_LOCAL_URL ?= https://localhost:8443
 # -T: niente pseudo-TTY per i tool non interattivi. Senza, "docker compose run"
 # mette il terminale in raw mode e, se il run si blocca (es. glitch del daemon),
@@ -137,17 +137,17 @@ edge-cdn-local-url:
 	@printf "\n"
 
 frontend-serving-local-test: frontend-s3-local-deploy
-	@if [ ! -f docker/traefik/certs/poc-local.test.crt ] || [ ! -f docker/traefik/certs/poc-local.test.key ]; then $(MAKE) local-tls; fi
+	@if [ ! -f docker/traefik/certs/mvp-local.test.crt ] || [ ! -f docker/traefik/certs/mvp-local.test.key ]; then $(MAKE) local-tls; fi
 	docker compose up -d --wait --force-recreate edge-cdn traefik
 	@url="$(EDGE_CDN_LOCAL_URL)"; \
 	echo "$(BLUE)Testing $$url$(RESET)"; \
-	curl -kfsS "$$url" | grep -q "<poc-root"
+	curl -kfsS "$$url" | grep -q "<mvp-root"
 
 frontend-audit: node-install
 	$(NODE) npm audit --omit=dev --audit-level=high
 
 frontend-a11y: frontend-s3-local-deploy
-	@if [ ! -f docker/traefik/certs/poc-local.test.crt ] || [ ! -f docker/traefik/certs/poc-local.test.key ]; then $(MAKE) local-tls; fi
+	@if [ ! -f docker/traefik/certs/mvp-local.test.crt ] || [ ! -f docker/traefik/certs/mvp-local.test.key ]; then $(MAKE) local-tls; fi
 	docker compose up -d --wait --force-recreate app nginx edge-cdn traefik
 	$(FRONTEND_AUDIT) node scripts/a11y/csp-smoke.mjs https://traefik:8443
 	$(FRONTEND_AUDIT) node scripts/a11y/axe-playwright.mjs https://traefik:8443
@@ -157,7 +157,7 @@ openapi-generate: node-install
 	$(NODE) npm run openapi:generate
 
 openapi-validate: node-install
-	$(NODE) npx --yes @redocly/cli@latest lint openapi/v1/alittlebyte-poc-api.yaml
+	$(NODE) npx --yes @redocly/cli@latest lint openapi/v1/alittlebyte-mvp-api.yaml
 
 observability-config:
 	docker compose run --rm --no-deps otel-collector validate --config=/etc/otelcol-contrib/config.yml
@@ -171,14 +171,14 @@ pint:
 	docker compose run --rm --no-deps app php vendor/bin/pint --test
 
 local-tls:
-	$(TLS_TOOL) scripts/tls/generate-local-cert.sh docker/traefik/certs/poc-local.test.crt docker/traefik/certs/poc-local.test.key
+	$(TLS_TOOL) scripts/tls/generate-local-cert.sh docker/traefik/certs/mvp-local.test.crt docker/traefik/certs/mvp-local.test.key
 
 trusted-local-tls:
-	scripts/tls/generate-trusted-local-cert.sh docker/traefik/certs/poc-local.test.crt docker/traefik/certs/poc-local.test.key
+	scripts/tls/generate-trusted-local-cert.sh docker/traefik/certs/mvp-local.test.crt docker/traefik/certs/mvp-local.test.key
 
 fresh:
 	docker compose --profile release run --rm migrate php artisan migrate:fresh --seed --force
-	docker compose run --rm app php artisan poc:reset-data --force
+	docker compose run --rm app php artisan mvp:reset-data --force
 	docker compose up -d redis
 	docker compose exec -T redis redis-cli FLUSHALL
 
@@ -202,7 +202,7 @@ workers:
 # funziona anche su un database gia' migrato senza errori di oggetti duplicati.
 backup-local:
 	@mkdir -p backups/local
-	docker compose exec -T postgres sh -lc 'pg_dump --clean --if-exists -U "$$POSTGRES_USER" "$$POSTGRES_DB"' > backups/local/poc-$$(date +%Y%m%d-%H%M%S).sql
+	docker compose exec -T postgres sh -lc 'pg_dump --clean --if-exists -U "$$POSTGRES_USER" "$$POSTGRES_DB"' > backups/local/mvp-$$(date +%Y%m%d-%H%M%S).sql
 	@echo "$(BLUE)Backup creato in backups/local.$(RESET)"
 
 restore-local:
@@ -211,7 +211,7 @@ restore-local:
 	docker compose exec -T postgres sh -lc 'psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" "$$POSTGRES_DB"' < "$(BACKUP)"
 
 setup:
-	@if [ ! -f docker/traefik/certs/poc-local.test.crt ] || [ ! -f docker/traefik/certs/poc-local.test.key ]; then $(MAKE) local-tls; else echo "$(BLUE)Certificato TLS locale gia' presente.$(RESET)"; fi
+	@if [ ! -f docker/traefik/certs/mvp-local.test.crt ] || [ ! -f docker/traefik/certs/mvp-local.test.key ]; then $(MAKE) local-tls; else echo "$(BLUE)Certificato TLS locale gia' presente.$(RESET)"; fi
 	docker compose --profile release build
 	docker compose up -d postgres redis localstack
 	$(MAKE) infra-apply
@@ -250,10 +250,10 @@ refresh-runtime: infra-apply
 	docker compose up -d --no-deps --force-recreate app queue
 	@echo "$(BLUE)Runtime aggiornato: SSM/Secrets riscritti, app e queue ricreati.$(RESET)"
 
-# Reset TOTALE della PoC: ferma lo stack, elimina tutti i volumi locali
+# Reset TOTALE della MVP: ferma lo stack, elimina tutti i volumi locali
 # (PostgreSQL, Redis, LocalStack, osservabilita'), svuota il prefisso del
 # bucket S3 reale se configurato nel .env e riparte da zero con make setup.
-# Distruttivo per design (e' una PoC): FORCE=1 salta la conferma interattiva.
+# Distruttivo per design (e' una MVP): FORCE=1 salta la conferma interattiva.
 reset-all:
 	@if [ "$(FORCE)" != "1" ]; then \
 		printf "Verranno eliminati TUTTI i dati locali e gli oggetti del bucket S3 reale. Continuare? [y/N] "; \
@@ -277,7 +277,7 @@ reset-all:
 	fi
 	docker compose --profile tools --profile release down --volumes --remove-orphans
 	$(MAKE) setup
-	@echo "$(BLUE)PoC ripartita da zero: dati locali e remoti azzerati.$(RESET)"
+	@echo "$(BLUE)MVP ripartita da zero: dati locali e remoti azzerati.$(RESET)"
 
 # Legge i valori dal .env (gestendo i commenti inline) anziche' dalla shell:
 # docker compose carica .env da solo, ma make no, quindi li estraiamo qui.

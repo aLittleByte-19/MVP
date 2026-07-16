@@ -1,7 +1,7 @@
 variable "name_prefix" {
   description = "Prefix for LocalStack resources."
   type        = string
-  default     = "poc"
+  default     = "mvp"
 }
 
 variable "aws_region" {
@@ -19,13 +19,13 @@ variable "localstack_endpoint" {
 variable "ssm_parameter_path" {
   description = "Base SSM Parameter Store path used by the application runtime loader."
   type        = string
-  default     = "/poc/app"
+  default     = "/mvp/app"
 }
 
 variable "runtime_secret_name" {
   description = "Secrets Manager secret containing application runtime secrets."
   type        = string
-  default     = "/poc/app/runtime"
+  default     = "/mvp/app/runtime"
 }
 
 variable "app_url" {
@@ -37,7 +37,7 @@ variable "app_url" {
 variable "frontend_static_bucket" {
   description = "LocalStack S3 bucket dedicated to Angular static assets."
   type        = string
-  default     = "poc-frontend-static-local"
+  default     = "mvp-frontend-static-local"
 }
 
 variable "edge_cdn_local_url" {
@@ -49,27 +49,27 @@ variable "edge_cdn_local_url" {
 variable "db_database" {
   description = "PostgreSQL database name used by the application."
   type        = string
-  default     = "poc"
+  default     = "mvp"
 }
 
 variable "db_username" {
   description = "PostgreSQL application user."
   type        = string
-  default     = "poc"
+  default     = "mvp"
 }
 
 variable "db_password" {
   description = "PostgreSQL application password stored in Secrets Manager."
   type        = string
   sensitive   = true
-  default     = "poc-local-password"
+  default     = "mvp-local-password"
 }
 
 variable "redis_password" {
   description = "Redis requirepass stored in Secrets Manager."
   type        = string
   sensitive   = true
-  default     = "poc-redis-local-password"
+  default     = "mvp-redis-local-password"
 }
 
 variable "bedrock_model_id" {

@@ -7,15 +7,15 @@
   gap: 22px;
   padding: 22px 18px;
   overflow-y: auto;
-  border-right: 1px solid var(--poc-border);
-  background: var(--poc-surface);
+  border-right: 1px solid var(--mvp-border);
+  background: var(--mvp-surface);
 }
 
 .brand {
   display: grid;
-  gap: var(--poc-space-2);
+  gap: var(--mvp-space-2);
   justify-items: center;
-  color: var(--poc-primary-deep);
+  color: var(--mvp-primary-deep);
   font-weight: 800;
   min-height: 92px;
   align-content: center;
@@ -23,28 +23,28 @@
 
 .brand img {
   width: 142px;
-  border-radius: var(--poc-radius);
+  border-radius: var(--mvp-radius);
 }
 
-:host-context([data-poc-theme="dark"]) .brand img {
+:host-context([data-mvp-theme="dark"]) .brand img {
   filter: brightness(0) invert(1);
 }
 
 .nav {
   display: grid;
-  gap: var(--poc-space-5);
+  gap: var(--mvp-space-5);
 }
 
 .section {
   display: grid;
-  gap: var(--poc-space-2);
+  gap: var(--mvp-space-2);
 }
 
 .sectionTitle {
   margin: 0;
-  padding: 0 var(--poc-space-2);
-  color: var(--poc-muted);
-  font-size: var(--poc-font-xs);
+  padding: 0 var(--mvp-space-2);
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-xs);
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -60,9 +60,9 @@
   gap: 10px;
   width: 100%;
   padding: 11px 12px;
-  border-radius: var(--poc-radius);
+  border-radius: var(--mvp-radius);
   background: transparent;
-  color: var(--poc-text);
+  color: var(--mvp-text);
   font-weight: 700;
   text-align: left;
 }
@@ -70,35 +70,35 @@
 .subitem {
   width: 100%;
   padding: 8px 12px 8px 22px;
-  border-radius: var(--poc-radius);
+  border-radius: var(--mvp-radius);
   background: transparent;
-  color: var(--poc-muted);
-  font-size: var(--poc-font-sm);
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-sm);
   font-weight: 700;
   text-align: left;
 }
 
 .item:hover,
 .subitem:hover {
-  background: var(--poc-surface-soft);
+  background: var(--mvp-surface-soft);
 }
 
 .active {
-  background: var(--poc-primary);
+  background: var(--mvp-primary);
   color: #ffffff;
 }
 
 /* L'hover generico non deve sovrascrivere lo sfondo dell'item attivo: in tema
-   chiaro lascerebbe il testo bianco su --poc-surface-soft (quasi bianco),
+   chiaro lascerebbe il testo bianco su --mvp-surface-soft (quasi bianco),
    rendendo illeggibile il titolo della sezione corrente. */
 .item.active:hover {
-  background: var(--poc-primary);
+  background: var(--mvp-primary);
   color: #ffffff;
 }
 
 .subitemActive {
-  background: var(--poc-surface-soft);
-  color: var(--poc-primary-deep);
+  background: var(--mvp-surface-soft);
+  color: var(--mvp-primary-deep);
 }
 
 @media (max-width: 920px) {
@@ -106,12 +106,12 @@
     position: static;
     height: auto;
     border-right: 0;
-    border-bottom: 1px solid var(--poc-border);
+    border-bottom: 1px solid var(--mvp-border);
   }
 
   .nav {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--poc-space-3);
+    gap: var(--mvp-space-3);
   }
 
   .item {

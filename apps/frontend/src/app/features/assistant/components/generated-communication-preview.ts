@@ -5,11 +5,11 @@ import { SectionComponent } from "../../../layout/section/section";
 import type { GeneratedDraft } from "../assistant.model";
 
 @Component({
-  selector: "poc-generated-communication-preview",
+  selector: "mvp-generated-communication-preview",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [EmptyStateComponent, SectionComponent, StatusBadgeComponent],
   template: `
-    <poc-section id="assistant-review" title="Controlla il contenuto">
+    <mvp-section id="assistant-review" title="Controlla il contenuto">
       <span actions class="meta">{{ bodyLength() }} caratteri</span>
       @if (draft(); as currentDraft) {
         <article class="draft">
@@ -25,14 +25,14 @@ import type { GeneratedDraft } from "../assistant.model";
             <textarea readOnly rows="7" [value]="currentDraft.body"></textarea>
           </label>
           <div class="footer">
-            <poc-status-badge>{{ currentDraft.status }}</poc-status-badge>
+            <mvp-status-badge>{{ currentDraft.status }}</mvp-status-badge>
             <span>Creato da AI Assistant · anteprima in sola lettura</span>
           </div>
         </article>
       } @else {
-        <poc-empty-state>La bozza generata apparira qui.</poc-empty-state>
+        <mvp-empty-state>La bozza generata apparira qui.</mvp-empty-state>
       }
-    </poc-section>
+    </mvp-section>
   `,
   styleUrl: "./generated-communication-preview.css"
 })

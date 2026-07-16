@@ -17,7 +17,7 @@ function makeHeartbeat(MockInterface $sfn): WorkflowTaskHeartbeat
 }
 
 test('activate sends the initial heartbeat and throttles the following beats', function () {
-    config(['poc.workflow.heartbeat_interval_seconds' => 3600]);
+    config(['mvp.workflow.heartbeat_interval_seconds' => 3600]);
 
     $sfn = Mockery::mock(SfnClient::class);
     $sfn->shouldReceive('sendTaskHeartbeat')
@@ -34,7 +34,7 @@ test('activate sends the initial heartbeat and throttles the following beats', f
 });
 
 test('beat sends again once the interval has elapsed', function () {
-    config(['poc.workflow.heartbeat_interval_seconds' => 1]);
+    config(['mvp.workflow.heartbeat_interval_seconds' => 1]);
 
     $sfn = Mockery::mock(SfnClient::class);
     $sfn->shouldReceive('sendTaskHeartbeat')->twice()->andReturn(new Result([]));
@@ -70,7 +70,7 @@ test('beat is a no-op when the heartbeat is not activated', function () {
 });
 
 test('consumer completes the task even when heartbeat and callback are rejected', function () {
-    config(['services.sqs.queue_url' => 'http://localstack:4566/000000000000/poc-documents']);
+    config(['services.sqs.queue_url' => 'http://localstack:4566/000000000000/mvp-documents']);
 
     $document = OriginalDocument::factory()->create([
         'processing_status' => ProcessingStatus::Processing,
@@ -102,7 +102,7 @@ test('consumer completes the task even when heartbeat and callback are rejected'
     $this->app->instance(SqsClient::class, $sqs);
     $this->app->instance(SfnClient::class, $sfn);
 
-    $this->artisan('poc:workflow:consume', ['--once' => true])->assertExitCode(0);
+    $this->artisan('mvp:workflow:consume', ['--once' => true])->assertExitCode(0);
 
     expect($document->workflowTasks()->where('task_type', 'persist.results')->value('status'))->toBe('succeeded');
 });

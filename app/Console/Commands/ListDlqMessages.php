@@ -8,7 +8,7 @@ use Illuminate\Console\Command;
 
 class ListDlqMessages extends Command
 {
-    protected $signature = 'poc:dlq:list {--limit=10 : Maximum DLQ messages to inspect}';
+    protected $signature = 'mvp:dlq:list {--limit=10 : Maximum DLQ messages to inspect}';
 
     protected $description = 'List document workflow DLQ messages without deleting them.';
 

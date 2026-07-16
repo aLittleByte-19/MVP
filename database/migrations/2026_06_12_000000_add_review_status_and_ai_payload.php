@@ -25,7 +25,7 @@ return new class extends Migration
         }
 
         // Backfill: i sotto-documenti gia' estratti con confidenza alta sono
-        // considerati auto-validati; 80 e' il default di POC_CONFIDENCE_THRESHOLD.
+        // considerati auto-validati; 80 e' il default di MVP_CONFIDENCE_THRESHOLD.
         DB::table('sub_documents')
             ->whereIn('id', fn ($query) => $query
                 ->select('sub_document_id')

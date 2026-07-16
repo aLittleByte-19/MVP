@@ -94,7 +94,7 @@ class DocumentWorkflowTaskHandler
                 'completed_at' => now(),
             ]);
             $this->audit->record(
-                'poc-document-workflow-task-'.$status,
+                'mvp-document-workflow-task-'.$status,
                 resourceType: 'original_document',
                 resourceId: (string) $document->id,
                 metadata: ['task_type' => $taskType],
@@ -136,7 +136,7 @@ class DocumentWorkflowTaskHandler
      */
     private function claim(DocumentWorkflowTask $task): bool
     {
-        $staleBefore = now()->subSeconds(max(60, (int) config('poc.workflow.running_claim_ttl_seconds', 900)));
+        $staleBefore = now()->subSeconds(max(60, (int) config('mvp.workflow.running_claim_ttl_seconds', 900)));
 
         $claimed = DocumentWorkflowTask::query()
             ->whereKey($task->id)

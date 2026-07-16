@@ -1,4 +1,4 @@
-# PoC - aLittleByte
+# MVP - aLittleByte
 <p align="center">
   <img src="https://img.shields.io/badge/Laravel-API-red?logo=laravel&logoColor=white" alt="Laravel API">
   <img src="https://img.shields.io/badge/Angular-SPA-DD0031?logo=angular&logoColor=white" alt="Angular SPA">
@@ -9,24 +9,24 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/aLittleByte-19/PoC/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI (main)"></a>
+  <a href="https://github.com/aLittleByte-19/MVP/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/aLittleByte-19/MVP/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI (main)"></a>
 </p>
 
 
-Proof of Concept per workflow HR e documentali assistiti da AI, con generazione di comunicazioni, pipeline asincrona di elaborazione PDF, integrazione AWS-like locale e osservabilità end-to-end.
+MVP per workflow HR e documentali assistiti da AI, con generazione di comunicazioni, pipeline asincrona di elaborazione PDF, integrazione AWS-like locale e osservabilità end-to-end.
 
 
 ## Contesto
 
-Questa Proof of Concept nasce nel contesto del progetto proposto da **Eggon**, orientato all’evoluzione di processi HR e documentali tramite funzionalità intelligenti, automazione operativa e integrazione con strumenti digitali già presenti nell’ecosistema aziendale.
+Questa MVP nasce nel contesto del progetto proposto da **Eggon**, orientato all’evoluzione di processi HR e documentali tramite funzionalità intelligenti, automazione operativa e integrazione con strumenti digitali già presenti nell’ecosistema aziendale.
 
-Il lavoro si concentra su due aree applicative principali: un assistente generativo per comunicazioni HR e un Co-Pilot documentale per supportare l’elaborazione di PDF multi-destinatario. La PoC esplora come un’interfaccia web, un backend API, una pipeline asincrona, uno storage documentale e servizi AI possano cooperare in un flusso tecnico end-to-end, riproducibile in locale e osservabile durante l’esecuzione.
+Il lavoro si concentra su due aree applicative principali: un assistente generativo per comunicazioni HR e un Co-Pilot documentale per supportare l’elaborazione di PDF multi-destinatario. La MVP esplora come un’interfaccia web, un backend API, una pipeline asincrona, uno storage documentale e servizi AI possano cooperare in un flusso tecnico end-to-end, riproducibile in locale e osservabile durante l’esecuzione.
 
 Il valore principale del progetto è architetturale e dimostrativo: ogni fase del processo viene resa esplicita, tracciabile e verificabile, dalla richiesta utente alla persistenza, dall’avvio del workflow alla lavorazione asincrona, fino alla raccolta di metriche, log, trace e risultati applicativi.
 
-## Cosa dimostra la PoC
+## Cosa dimostra la MVP
 
-La PoC dimostra un modello applicativo composto da più livelli cooperanti:
+La MVP dimostra un modello applicativo composto da più livelli cooperanti:
 
 * una **SPA Angular/TypeScript** per l’interazione operatore;
 * un backend **Laravel/PHP** per API, validazione, autorizzazione, orchestrazione applicativa e persistenza;
@@ -49,7 +49,7 @@ Traefik gestisce l’ingresso verso i servizi esposti e instrada il traffico app
 
 I worker Laravel consumano task asincroni da SQS e comunicano con Step Functions tramite callback task token. Questo permette di rappresentare una pipeline documentale composta da stati espliciti, retry, gestione errori, idempotenza e aggiornamento progressivo dello stato.
 
-![Architettura E2E della PoC](docs/architecture/diagrams/final-architecture.drawio.png)
+![Architettura E2E della MVP](docs/architecture/diagrams/final-architecture.drawio.png)
 
 <sub>Architettura e2e</sub>
 
@@ -71,7 +71,7 @@ Il risultato è una pipeline documentale composta da passaggi isolati, monitorab
 
 ## Monitoring e osservabilità
 
-La PoC integra un layer di osservabilità locale per seguire il comportamento dell’applicazione e della pipeline documentale.
+La MVP integra un layer di osservabilità locale per seguire il comportamento dell’applicazione e della pipeline documentale.
 
 Le metriche applicative e infrastrutturali vengono raccolte tramite OpenTelemetry Collector e Prometheus. Le trace vengono inviate a Tempo, i log sono centralizzati su Loki tramite Alloy, mentre Grafana fornisce dashboard per API, workflow documentale, qualità AI/OCR, code, DLQ, log ed errori. Alertmanager completa il flusso operativo con regole collegate a runbook dedicati.
 
@@ -97,8 +97,8 @@ La CI agisce come quality gate del progetto: ogni modifica significativa deve ma
 ### Avvio rapido
 
 ```bash
-git clone https://github.com/alittlebyte-19/PoC.git
-cd PoC
+git clone https://github.com/alittlebyte-19/MVP.git
+cd MVP
 
 make setup
 ```
@@ -120,7 +120,7 @@ make frontend-serving-local-test
 
 Il flusso builda Angular, provisiona il bucket S3 LocalStack via Terraform, carica `apps/frontend/dist` con cache-control differenziato (`index.html` no-cache, bundle hashati immutable) e verifica il serving attraverso l’emulatore CDN locale su `https://localhost:8443`. L’emulazione valida il pattern build → bucket → distribuzione edge in locale, ma non sostituisce una CDN reale (in produzione AWS CloudFront, con TLS/OAC/edge propagation/invalidation).
 
-Il bucket `FRONTEND_STATIC_BUCKET` è dedicato solo alla SPA. I documenti continuano a usare `POC_DOCUMENT_DISK=s3` per S3 LocalStack o `POC_DOCUMENT_DISK=real_s3` con `AWS_REAL_*` per S3/Textract reali.
+Il bucket `FRONTEND_STATIC_BUCKET` è dedicato solo alla SPA. I documenti continuano a usare `MVP_DOCUMENT_DISK=s3` per S3 LocalStack o `MVP_DOCUMENT_DISK=real_s3` con `AWS_REAL_*` per S3/Textract reali.
 
 ### Accesso ai servizi
 
@@ -137,7 +137,7 @@ I comandi disponibili sono raccolti nel `Makefile`, che funge da interfaccia ope
 
 ## Collegamento ad AWS reale
 
-La PoC è progettata per lavorare in locale tramite LocalStack, mantenendo un modello di integrazione compatibile con servizi AWS reali. Il codice applicativo dialoga con servizi astratti tramite configurazione, endpoint e credenziali, rendendo possibile indirizzare gli stessi flussi verso ambienti cloud configurati.
+La MVP è progettata per lavorare in locale tramite LocalStack, mantenendo un modello di integrazione compatibile con servizi AWS reali. Il codice applicativo dialoga con servizi astratti tramite configurazione, endpoint e credenziali, rendendo possibile indirizzare gli stessi flussi verso ambienti cloud configurati.
 
 Le aree predisposte per integrazione AWS reale includono:
 
@@ -154,7 +154,7 @@ Il passaggio a servizi reali richiede configurazione di account, regioni, IAM po
 
 ## Evoluzioni future
 
-La struttura della PoC è predisposta per successive estensioni verso scenari più vicini a un ambiente production-like.
+La struttura della MVP è predisposta per successive estensioni verso scenari più vicini a un ambiente production-like.
 
 Le principali aree di evoluzione riguardano:
 
@@ -176,7 +176,7 @@ documentazione con un percorso di lettura per chi apre il progetto la prima volt
 | Documento                                                          | Contenuto                                       |
 | ----------------------------------------------------------------- | ----------------------------------------------- |
 | [`docs/README.md`](docs/README.md)                                | Indice e percorso di lettura della doc          |
-| [`docs/poc-scope.md`](docs/poc-scope.md)                          | Perimetro funzionale della PoC                  |
+| [`docs/mvp-scope.md`](docs/mvp-scope.md)                          | Perimetro funzionale della MVP                  |
 | [`docs/IMPLEMENTATION_OVERVIEW.md`](docs/IMPLEMENTATION_OVERVIEW.md) | Panoramica implementativa dell'applicativo    |
 | [`docs/architecture/`](docs/architecture/)                        | Architettura, tracciabilità Capitolato, Well-Architected |
 | [`docs/architecture-decisions/`](docs/architecture-decisions/README.md) | Architecture Decision Records (ADR)       |

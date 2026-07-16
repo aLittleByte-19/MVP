@@ -4,7 +4,7 @@ locals {
   runtime_ssm_path    = trimsuffix(var.ssm_parameter_path, "/")
 
   tags = {
-    Project     = "poc-document-pipeline"
+    Project     = "mvp-document-pipeline"
     Environment = "local"
     ManagedBy   = "terraform"
   }
@@ -45,7 +45,7 @@ locals {
     DOCUMENT_PIPELINE_STATE_MACHINE_ARN = aws_sfn_state_machine.document_pipeline.arn
     DOCUMENT_PIPELINE_TASK_QUEUE_URL    = aws_sqs_queue.documents.url
     FILESYSTEM_DISK                     = "s3"
-    POC_DOCUMENT_DISK                   = var.document_disk
+    MVP_DOCUMENT_DISK                   = var.document_disk
     AWS_DEFAULT_REGION                  = var.aws_region
     AWS_BUCKET                          = aws_s3_bucket.documents.bucket
     AWS_ENDPOINT                        = local.localstack_endpoint
@@ -57,10 +57,10 @@ locals {
     BEDROCK_REGION                      = var.bedrock_region
     BEDROCK_ENDPOINT                    = var.bedrock_endpoint
     BEDROCK_MODEL_ID                    = var.bedrock_model_id
-    POC_CONFIDENCE_THRESHOLD            = tostring(var.confidence_threshold)
-    POC_MAX_UPLOAD_MB                   = "20"
-    POC_MAX_PDF_PAGES                   = "50"
-    POC_PROCESSING_TIMEOUT_SECONDS      = "600"
+    MVP_CONFIDENCE_THRESHOLD            = tostring(var.confidence_threshold)
+    MVP_MAX_UPLOAD_MB                   = "20"
+    MVP_MAX_PDF_PAGES                   = "50"
+    MVP_PROCESSING_TIMEOUT_SECONDS      = "600"
     DOCUMENT_MAX_UPLOAD_MB              = "20"
     TEXTRACT_ENABLED                    = tostring(var.textract_enabled)
     TEXTRACT_REGION                     = var.textract_region
@@ -72,12 +72,12 @@ locals {
     MAIL_MAILER                         = "log"
     MAIL_FROM_ADDRESS                   = var.local_ses_sender
     MAIL_FROM_NAME                      = "NEXUM"
-    POC_IDENTITY_MODE                   = "local"
-    POC_LOCAL_USER_ID                   = "poc-local-user"
-    POC_LOCAL_USER_EMAIL                = "operator@alittlebyte.local"
-    POC_LOCAL_USER_NAME                 = "Alittlebyte Operator"
-    POC_LOCAL_TENANT_ID                 = "poc-local-tenant"
-    POC_LOCAL_ROLES                     = "poc-operator"
+    MVP_IDENTITY_MODE                   = "local"
+    MVP_LOCAL_USER_ID                   = "mvp-local-user"
+    MVP_LOCAL_USER_EMAIL                = "operator@alittlebyte.local"
+    MVP_LOCAL_USER_NAME                 = "Alittlebyte Operator"
+    MVP_LOCAL_TENANT_ID                 = "mvp-local-tenant"
+    MVP_LOCAL_ROLES                     = "mvp-operator"
   }
 
   app_secrets = {
@@ -223,17 +223,17 @@ resource "aws_secretsmanager_secret_version" "app_runtime" {
   secret_string = jsonencode(local.app_secrets)
 }
 
-resource "aws_cloudwatch_event_bus" "poc" {
+resource "aws_cloudwatch_event_bus" "mvp" {
   name = "${var.name_prefix}-events"
   tags = local.tags
 }
 
 resource "aws_cloudwatch_event_rule" "pipeline_terminal" {
   name           = "${var.name_prefix}-pipeline-terminal"
-  event_bus_name = aws_cloudwatch_event_bus.poc.name
+  event_bus_name = aws_cloudwatch_event_bus.mvp.name
 
   event_pattern = jsonencode({
-    source      = ["poc.documents"]
+    source      = ["mvp.documents"]
     detail-type = ["DocumentPipelineCompleted", "DocumentPipelineFailed"]
   })
 
@@ -242,7 +242,7 @@ resource "aws_cloudwatch_event_rule" "pipeline_terminal" {
 
 resource "aws_cloudwatch_event_target" "pipeline_terminal_queue" {
   rule           = aws_cloudwatch_event_rule.pipeline_terminal.name
-  event_bus_name = aws_cloudwatch_event_bus.poc.name
+  event_bus_name = aws_cloudwatch_event_bus.mvp.name
   arn            = aws_sqs_queue.documents.arn
 }
 

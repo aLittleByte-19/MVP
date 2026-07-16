@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use setasign\Fpdi\Fpdi;
 
-function pocPdfUpload(string $filename = 'cedolino.pdf'): UploadedFile
+function mvpPdfUpload(string $filename = 'cedolino.pdf'): UploadedFile
 {
     $pdf = new Fpdi;
     $pdf->AddPage();
@@ -24,7 +24,7 @@ function pocPdfUpload(string $filename = 'cedolino.pdf'): UploadedFile
     return UploadedFile::fake()->createWithContent($filename, $pdf->Output('S'));
 }
 
-function pocMockWorkflowStart(object $test): void
+function mvpMockWorkflowStart(object $test): void
 {
     $mock = Mockery::mock(DocumentWorkflowService::class);
     $mock->shouldReceive('start')
@@ -34,7 +34,7 @@ function pocMockWorkflowStart(object $test): void
     app()->instance(DocumentWorkflowService::class, $mock);
 }
 
-function pocMockWorkflowNotStarted(): void
+function mvpMockWorkflowNotStarted(): void
 {
     $mock = Mockery::mock(DocumentWorkflowService::class);
     $mock->shouldNotReceive('start');
@@ -45,7 +45,7 @@ function pocMockWorkflowNotStarted(): void
 /**
  * @return array{callback_required: bool, output: array<string, mixed>}
  */
-function pocRunWorkflowTask(OriginalDocument $document, string $taskType = 'bedrock.extract'): array
+function mvpRunWorkflowTask(OriginalDocument $document, string $taskType = 'bedrock.extract'): array
 {
     return app(DocumentWorkflowTaskHandler::class)->handle([
         'taskToken' => 'test-token-'.$taskType.'-'.$document->id.'-'.str()->uuid(),
@@ -53,7 +53,7 @@ function pocRunWorkflowTask(OriginalDocument $document, string $taskType = 'bedr
         'documentId' => $document->id,
         'tenantId' => $document->tenant_id,
         'correlationId' => 'test-correlation',
-        's3Bucket' => 'poc-test-bucket',
+        's3Bucket' => 'mvp-test-bucket',
         's3Key' => $document->file_path,
     ]);
 }
@@ -69,14 +69,14 @@ test('runtime admin console is not exposed', function () {
         ->assertNotFound();
 });
 
-test('api state uses local poc identity in local mode', function () {
+test('api state uses local mvp identity in local mode', function () {
     $this->getJson('/api/v1/state')
         ->assertOk()
         ->assertJsonStructure(['assistant', 'copilot']);
 });
 
 test('api rejects incomplete trusted identity claims outside local mode', function () {
-    config(['poc.identity.mode' => 'trusted_headers']);
+    config(['mvp.identity.mode' => 'trusted_headers']);
 
     $this->getJson('/api/v1/state')
         ->assertUnauthorized()
@@ -105,8 +105,8 @@ test('ai assistant generation uses only prompt tone and style', function () {
 
     expect(Communication::query()->count())->toBe(1);
     expect(Communication::query()->first()->generated_body)->toBe('Corpo reale')
-        ->and(Communication::query()->first()->tenant_id)->toBe('poc-local-tenant')
-        ->and(AuditEvent::query()->where('event_type', 'poc-communication-generated')->count())->toBe(1);
+        ->and(Communication::query()->first()->tenant_id)->toBe('mvp-local-tenant')
+        ->and(AuditEvent::query()->where('event_type', 'mvp-communication-generated')->count())->toBe(1);
 });
 
 test('document upload performs initial split and field extraction', function () {
@@ -116,7 +116,7 @@ test('document upload performs initial split and field extraction', function () 
 
     Queue::fake();
     Storage::fake('s3');
-    pocMockWorkflowStart($this);
+    mvpMockWorkflowStart($this);
 
     $this->mock(BedrockService::class, function ($mock) {
         $mock->shouldReceive('splitDocument')
@@ -138,7 +138,7 @@ test('document upload performs initial split and field extraction', function () 
             ]);
     });
 
-    $uploadResponse = $this->postJson('/api/v1/documents/ocr', ['document' => pocPdfUpload()])
+    $uploadResponse = $this->postJson('/api/v1/documents/ocr', ['document' => mvpPdfUpload()])
         ->assertStatus(202)
         ->assertJsonStructure(['streamUrl']);
 
@@ -151,7 +151,7 @@ test('document upload performs initial split and field extraction', function () 
     $document->update(['ocr_text' => "[Pagina 1]\nMario Rossi - Azienda Demo Srl", 'ocr_confidence_avg' => 97.5]);
 
     // Run the workflow task manually: this mirrors the SQS callback-token worker path.
-    pocRunWorkflowTask($document);
+    mvpRunWorkflowTask($document);
 
     // Stream finds the document already completed and flushes all results.
     $streamResponse = $this->get($uploadResponse->json('streamUrl'))->assertOk();
@@ -167,13 +167,13 @@ test('document upload performs initial split and field extraction', function () 
         ->assertOk()
         ->assertHeader('content-type', 'application/pdf');
 
-    expect(AuditEvent::query()->where('event_type', 'poc-document-upload-accepted')->count())->toBe(1)
-        ->and(AuditEvent::query()->where('event_type', 'poc-document-processing-completed')->count())->toBe(1);
+    expect(AuditEvent::query()->where('event_type', 'mvp-document-upload-accepted')->count())->toBe(1)
+        ->and(AuditEvent::query()->where('event_type', 'mvp-document-processing-completed')->count())->toBe(1);
 });
 
 test('document upload rejects executable files before workflow start', function () {
     Storage::fake('s3');
-    pocMockWorkflowNotStarted();
+    mvpMockWorkflowNotStarted();
 
     $this->postJson('/api/v1/documents/ocr', [
         'document' => UploadedFile::fake()->createWithContent('payload.php', '<?php echo "blocked";'),
@@ -182,12 +182,12 @@ test('document upload rejects executable files before workflow start', function 
         ->assertJsonPath('error.code', 'validation_failed');
 
     expect(OriginalDocument::query()->count())->toBe(0)
-        ->and(AuditEvent::query()->where('event_type', 'poc-document-upload-rejected')->count())->toBe(1);
+        ->and(AuditEvent::query()->where('event_type', 'mvp-document-upload-rejected')->count())->toBe(1);
 });
 
 test('document upload rejects files without real pdf magic bytes', function () {
     Storage::fake('s3');
-    pocMockWorkflowNotStarted();
+    mvpMockWorkflowNotStarted();
 
     $this->postJson('/api/v1/documents/ocr', [
         'document' => UploadedFile::fake()->createWithContent('fake.pdf', 'not a pdf'),
@@ -200,7 +200,7 @@ test('document upload rejects files without real pdf magic bytes', function () {
 
 test('document upload rejects encrypted pdf files', function () {
     Storage::fake('s3');
-    pocMockWorkflowNotStarted();
+    mvpMockWorkflowNotStarted();
 
     $encryptedPdf = "%PDF-1.4\n1 0 obj\n<< /Encrypt << /Filter /Standard >> >>\nendobj\n%%EOF";
 
@@ -215,7 +215,7 @@ test('document upload rejects encrypted pdf files', function () {
 
 test('document upload rejects corrupted pdf files with valid magic bytes', function () {
     Storage::fake('s3');
-    pocMockWorkflowNotStarted();
+    mvpMockWorkflowNotStarted();
 
     // Firma valida ma struttura inesistente: respinto da qpdf --check quando
     // disponibile, altrimenti dal parse FPDI.
@@ -237,7 +237,7 @@ test('classifier returning no segments yields a single whole-document recipient'
 
     Queue::fake();
     Storage::fake('s3');
-    pocMockWorkflowStart($this);
+    mvpMockWorkflowStart($this);
 
     // Quando il classificatore non distingue destinatari, l'intero documento
     // diventa un unico destinatario (>=1 garantito), quindi l'estrazione parte.
@@ -259,14 +259,14 @@ test('classifier returning no segments yields a single whole-document recipient'
             ]);
     });
 
-    $uploadResponse = $this->postJson('/api/v1/documents/ocr', ['document' => pocPdfUpload()])
+    $uploadResponse = $this->postJson('/api/v1/documents/ocr', ['document' => mvpPdfUpload()])
         ->assertStatus(202)
         ->assertJsonStructure(['streamUrl']);
 
     $document = OriginalDocument::query()->first();
     $document->update(['ocr_text' => "[Pagina 1]\nMario Rossi - Azienda Demo Srl", 'ocr_confidence_avg' => 97.5]);
 
-    pocRunWorkflowTask($document);
+    mvpRunWorkflowTask($document);
 
     $subDocument = SubDocument::query()->first();
 
@@ -286,7 +286,7 @@ test('document processing clamps model page ranges to the uploaded pdf page coun
 
     Queue::fake();
     Storage::fake('s3');
-    pocMockWorkflowStart($this);
+    mvpMockWorkflowStart($this);
 
     $this->mock(BedrockService::class, function ($mock) {
         $mock->shouldReceive('splitDocument')
@@ -308,12 +308,12 @@ test('document processing clamps model page ranges to the uploaded pdf page coun
             ]);
     });
 
-    $this->postJson('/api/v1/documents/ocr', ['document' => pocPdfUpload()])
+    $this->postJson('/api/v1/documents/ocr', ['document' => mvpPdfUpload()])
         ->assertStatus(202);
 
     $document = OriginalDocument::query()->first();
     $document->update(['ocr_text' => "[Pagina 1]\nMario Rossi - Azienda Demo Srl", 'ocr_confidence_avg' => 97.5]);
-    pocRunWorkflowTask($document);
+    mvpRunWorkflowTask($document);
 
     $subDocument = SubDocument::query()->first();
 
@@ -330,7 +330,7 @@ test('document processing keeps split visible when field extraction fails', func
 
     Queue::fake();
     Storage::fake('s3');
-    pocMockWorkflowStart($this);
+    mvpMockWorkflowStart($this);
 
     $expectedMessage = 'Le credenziali runtime AWS sono scadute. Aggiorna il ruolo applicativo o il segreto runtime in Secrets Manager.';
 
@@ -346,12 +346,12 @@ test('document processing keeps split visible when field extraction fails', func
             ->andThrow(new RuntimeException('ExpiredToken: token expired'));
     });
 
-    $this->postJson('/api/v1/documents/ocr', ['document' => pocPdfUpload()])
+    $this->postJson('/api/v1/documents/ocr', ['document' => mvpPdfUpload()])
         ->assertStatus(202);
 
     $document = OriginalDocument::query()->first();
     $document->update(['ocr_text' => "[Pagina 1]\nMario Rossi - Azienda Demo Srl", 'ocr_confidence_avg' => 97.5]);
-    expect(fn () => pocRunWorkflowTask($document))
+    expect(fn () => mvpRunWorkflowTask($document))
         ->toThrow(RuntimeException::class);
 
     $subDocument = SubDocument::query()->first();
@@ -406,7 +406,7 @@ test('operator can correct extracted data and mark a sub document as manually va
         ->and($data->employee_first_name)->toBe('Mario')
         ->and($data->company_name)->toBe('Acme corretta')
         ->and($data->ai_payload['employee_first_name'])->toBe('Maro')
-        ->and(AuditEvent::query()->where('event_type', 'poc-sub-document-extracted-data-corrected')->count())->toBe(1);
+        ->and(AuditEvent::query()->where('event_type', 'mvp-sub-document-extracted-data-corrected')->count())->toBe(1);
 });
 
 test('operator can mark existing extracted data as reviewed without changing fields', function () {
@@ -429,16 +429,16 @@ test('manual review requires extracted data to exist first', function () {
 });
 
 test('manual correction endpoint rejects cross tenant access', function () {
-    config(['poc.identity.mode' => 'trusted_headers']);
+    config(['mvp.identity.mode' => 'trusted_headers']);
     $subDocument = SubDocument::factory()->create();
 
     $this->putJson("/api/v1/documents/{$subDocument->id}/extracted-data", [
         'employeeFirstName' => 'Mario',
     ], [
-        'X-Poc-User-Id' => 'operator-b',
-        'X-Poc-User-Email' => 'operator-b@example.test',
-        'X-Poc-Tenant-Id' => 'another-tenant',
-        'X-Poc-Roles' => 'poc-operator',
+        'X-Mvp-User-Id' => 'operator-b',
+        'X-Mvp-User-Email' => 'operator-b@example.test',
+        'X-Mvp-Tenant-Id' => 'another-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
     ])
         ->assertForbidden()
         ->assertJsonPath('error.code', 'forbidden');

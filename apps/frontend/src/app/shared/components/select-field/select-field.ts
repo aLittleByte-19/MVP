@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from "@angular/co
 import { type FormControl, ReactiveFormsModule } from "@angular/forms";
 
 @Component({
-  selector: "poc-select-field",
+  selector: "mvp-select-field",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ReactiveFormsModule],
   template: `

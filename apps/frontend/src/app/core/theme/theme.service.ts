@@ -2,11 +2,11 @@ import { Injectable, effect, signal } from "@angular/core";
 
 export type Theme = "light" | "dark";
 
-const STORAGE_KEY = "poc-theme";
+const STORAGE_KEY = "mvp-theme";
 
 /**
  * Tema chiaro/scuro: preferenza persistita in `localStorage`, fallback su
- * `prefers-color-scheme` e attributo `data-poc-theme` applicato a `<html>`
+ * `prefers-color-scheme` e attributo `data-mvp-theme` applicato a `<html>`
  * (su cui agiscono i token CSS).
  */
 @Injectable({ providedIn: "root" })
@@ -17,7 +17,7 @@ export class ThemeService {
   constructor() {
     effect(() => {
       const theme = this._theme();
-      document.documentElement.dataset["pocTheme"] = theme;
+      document.documentElement.dataset["mvpTheme"] = theme;
 
       try {
         window.localStorage.setItem(STORAGE_KEY, theme);

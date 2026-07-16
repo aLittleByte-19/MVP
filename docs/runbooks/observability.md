@@ -14,7 +14,7 @@
 
 No host ports: the UIs are reachable only through Traefik on the internal
 `observability` network. Default basic auth credentials live in
-`docker/traefik/usersfile` (`poc` / `poc-obs-local-password`, local only).
+`docker/traefik/usersfile` (`mvp` / `mvp-obs-local-password`, local only).
 Browsers resolve `*.localhost` natively; for `curl` add
 `--resolve prometheus.localhost:8443:127.0.0.1` (or `/etc/hosts` entries).
 
@@ -47,7 +47,7 @@ make observability-up
 
 ## Logs Flow
 
-1. Grafana Alloy discovers the project's containers through the Docker socket (`com.docker.compose.project=poc`).
+1. Grafana Alloy discovers the project's containers through the Docker socket (`com.docker.compose.project=mvp`).
 2. Alloy reads each container's log stream and ships it to Loki, labelling lines with `service`, `container` and `project`.
 3. Application logs sent over OTLP reach the OTel Collector, which forwards them to Loki's native OTLP ingestion endpoint (`loki:3100/otlp`).
 4. Loki stores logs on a local filesystem volume with a 7-day retention.
@@ -56,9 +56,9 @@ make observability-up
 Useful LogQL queries:
 
 ```logql
-{project="poc", service="queue"}
-{project="poc", service=~"queue|app"} |~ "(?i)level_name.{0,6}(error|critical|emergency)"
-{project="poc"} |~ "(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))" != "No such container"
+{project="mvp", service="queue"}
+{project="mvp", service=~"queue|app"} |~ "(?i)level_name.{0,6}(error|critical|emergency)"
+{project="mvp"} |~ "(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))" != "No such container"
 ```
 
 Monolog application logs are JSON with `level_name`; infrastructure containers use logfmt with `level=`. The error filters above match both. The `!= "No such container"` clause drops Alloy's transient errors emitted while containers are being recreated.

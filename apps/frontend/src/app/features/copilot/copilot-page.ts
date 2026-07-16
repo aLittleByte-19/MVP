@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
 import { finalize } from "rxjs";
 import type { UpdateExtractedDataRequest } from "../../../api/generated/model";
-import { PocStateStore } from "../../core/state/poc-state.store";
+import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { getApiErrorMessage } from "../../core/errors/api-error";
 import { ErrorStateComponent } from "../../shared/components/error-state/error-state";
 import { MetricsPanelComponent } from "../../shared/components/metrics-panel/metrics-panel";
@@ -12,7 +12,7 @@ import { DocumentUploadPanelComponent } from "./components/document-upload-panel
 import { SubDocumentListComponent } from "./components/sub-document-list";
 
 @Component({
-  selector: "poc-copilot-page",
+  selector: "mvp-copilot-page",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     DocumentListComponent,
@@ -25,26 +25,26 @@ import { SubDocumentListComponent } from "./components/sub-document-list";
   template: `
     <section class="view" aria-label="AI Co-Pilot per i CdL">
       @if (store.error(); as error) {
-        <poc-error-state [message]="error" />
+        <mvp-error-state [message]="error" />
       }
 
-      <poc-document-upload-panel
+      <mvp-document-upload-panel
         [isUploading]="isUploading()"
         [status]="uploadStatus()"
         [phase]="uploadPhase()"
         (upload)="upload($event)"
       />
 
-      <poc-section id="copilot-documents" title="Storico documenti analizzati">
+      <mvp-section id="copilot-documents" title="Storico documenti analizzati">
         <span actions>{{ documents().length }} record</span>
-        <poc-document-list
+        <mvp-document-list
           [documents]="documents()"
           [selectedDocumentId]="selectedDocumentIdForList()"
           (selectDocument)="selectDocument($event)"
         />
-      </poc-section>
+      </mvp-section>
 
-      <poc-sub-document-list
+      <mvp-sub-document-list
         [documentItem]="selectedDocument()"
         [isDeleting]="isDeleting()"
         [isSavingReview]="isSavingReview()"
@@ -54,15 +54,15 @@ import { SubDocumentListComponent } from "./components/sub-document-list";
         (saveReviewRequested)="saveReview($event)"
       />
 
-      <poc-section id="copilot-metrics" title="Qualita e performance OCR">
-        <poc-metrics-panel [isLoading]="store.loading()" [metrics]="store.copilotMetrics()" />
-      </poc-section>
+      <mvp-section id="copilot-metrics" title="Qualita e performance OCR">
+        <mvp-metrics-panel [isLoading]="store.loading()" [metrics]="store.copilotMetrics()" />
+      </mvp-section>
     </section>
   `,
   styleUrl: "../overview/overview-page.css"
 })
 export class CopilotPage {
-  protected readonly store = inject(PocStateStore);
+  protected readonly store = inject(MvpStateStore);
   protected readonly documents = this.store.documents;
   protected readonly selectedDocumentId = signal<string | null>(null);
   protected readonly selectedDocument = computed(() => {

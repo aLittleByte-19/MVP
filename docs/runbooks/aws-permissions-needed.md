@@ -1,6 +1,6 @@
 # AWS Permissions Needed
 
-The PoC must not use static AWS credentials in GitHub Actions. Real AWS smoke tests and future deployments require an IAM role assumable through GitHub Actions OIDC.
+The MVP must not use static AWS credentials in GitHub Actions. Real AWS smoke tests and future deployments require an IAM role assumable through GitHub Actions OIDC.
 
 ## OIDC Trust
 
@@ -16,7 +16,7 @@ The eventual AWS role needs scoped permissions for:
 
 - S3 bucket/object access for document upload, metadata, read, and lifecycle-managed storage.
 - S3 presigned URL generation through application runtime permissions.
-- S3 static-asset hosting for the Angular SPA bucket — deploy access (`PutObject`/`DeleteObject`/`ListBucket`) plus a **private** bucket fronted by CloudFront with Origin Access Control (`s3:GetObject` granted to the CloudFront service principal, never public) and `cloudfront:CreateInvalidation`, when a real frontend deployment target is defined. The local PoC serves the SPA from LocalStack S3 only, so this is not exercised by the AWS smoke.
+- S3 static-asset hosting for the Angular SPA bucket — deploy access (`PutObject`/`DeleteObject`/`ListBucket`) plus a **private** bucket fronted by CloudFront with Origin Access Control (`s3:GetObject` granted to the CloudFront service principal, never public) and `cloudfront:CreateInvalidation`, when a real frontend deployment target is defined. The local MVP serves the SPA from LocalStack S3 only, so this is not exercised by the AWS smoke.
 - Textract async document text detection and result retrieval.
 - Bedrock Runtime model invocation for approved model IDs.
 - SQS queue and DLQ send/receive/delete/change visibility/get attributes.
@@ -30,7 +30,7 @@ The eventual AWS role needs scoped permissions for:
 
 ## Local Real-AWS Smoke
 
-The local hybrid mode (`POC_DOCUMENT_DISK=real_s3`, `TEXTRACT_ENABLED=true`) reads a single shared credential set from `.env` (`AWS_REAL_ACCESS_KEY_ID` / `AWS_REAL_SECRET_ACCESS_KEY` / `AWS_REAL_SESSION_TOKEN`) used by S3, Textract and Bedrock. That principal must therefore hold S3 object access, Textract async detection and Bedrock `InvokeModel` at once. S3 and Textract must share the same region; Bedrock may use a different region where the model is enabled.
+The local hybrid mode (`MVP_DOCUMENT_DISK=real_s3`, `TEXTRACT_ENABLED=true`) reads a single shared credential set from `.env` (`AWS_REAL_ACCESS_KEY_ID` / `AWS_REAL_SECRET_ACCESS_KEY` / `AWS_REAL_SESSION_TOKEN`) used by S3, Textract and Bedrock. That principal must therefore hold S3 object access, Textract async detection and Bedrock `InvokeModel` at once. S3 and Textract must share the same region; Bedrock may use a different region where the model is enabled.
 
 ## Current Blockers
 
