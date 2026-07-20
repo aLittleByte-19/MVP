@@ -50,6 +50,13 @@ test('POST /api/v1/communications rispetta il contratto OpenAPI', function () {
         $mock->shouldReceive('generateCommunication')
             ->once()
             ->andReturn(['title' => 'Aggiornamento orari', 'body' => 'Testo della comunicazione generata.']);
+
+        $mock->shouldReceive('generateCommunicationImageWithMeta')
+            ->once()
+            ->andReturn([
+                'image' => 'data:image/png;base64,ZmFrZQ==',
+                'warning' => null,
+            ]);
     });
 
     $response = $this->postJson('/api/v1/communications', [

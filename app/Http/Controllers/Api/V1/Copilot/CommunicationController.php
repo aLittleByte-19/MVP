@@ -60,6 +60,12 @@ class CommunicationController
             );
         }
 
+        $imageGeneration = $bedrock->generateCommunicationImageWithMeta(
+            $validated['prompt'],
+            $validated['tone'],
+            $validated['style'],
+        );
+
         $communication = Communication::create([
             'tenant_id' => $actor->tenantId,
             'created_by' => $actor->id,
@@ -68,6 +74,7 @@ class CommunicationController
             'style' => $validated['style'],
             'generated_title' => $generated['title'],
             'generated_body' => $generated['body'],
+            'generated_cover_image' => $imageGeneration['image'],
             'status' => CommunicationStatus::Draft,
         ]);
         $audit->record(
@@ -82,6 +89,7 @@ class CommunicationController
         return response()->json([
             'message' => 'Bozza generata correttamente.',
             'communication' => $state->communication($communication),
+            'coverImageWarning' => $imageGeneration['warning'],
             'state' => $state->forActor($actor),
         ], 201);
     }

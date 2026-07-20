@@ -4,6 +4,8 @@ export type CommunicationDraftForm = GenerateCommunicationRequest;
 
 export interface GeneratedDraft {
   body: string;
+  coverImageUrl?: string;
+  coverImageWarning?: string;
   status: string;
   title: string;
 }

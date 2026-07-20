@@ -294,6 +294,8 @@ components:
           type: string
         communication:
           $ref: "#/components/schemas/Communication"
+        coverImageWarning:
+          type: [string, "null"]
         state:
           $ref: "#/components/schemas/MvpState"
     UploadDocumentResponse:
@@ -365,6 +367,8 @@ components:
           type: string
         body:
           type: string
+        coverImageUrl:
+          type: [string, "null"]
         status:
           type: string
         createdAt:

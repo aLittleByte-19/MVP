@@ -81,6 +81,7 @@ class MvpStateService
             'style' => $communication->style,
             'title' => $communication->generated_title,
             'body' => $communication->generated_body,
+            'coverImageUrl' => $communication->generated_cover_image,
             'status' => $communication->status->label(),
             'createdAt' => $communication->created_at?->format('d/m/Y H:i'),
         ];

@@ -57,6 +57,7 @@ locals {
     BEDROCK_REGION                      = var.bedrock_region
     BEDROCK_ENDPOINT                    = var.bedrock_endpoint
     BEDROCK_MODEL_ID                    = var.bedrock_model_id
+    BEDROCK_IMAGE_MODEL_ID              = var.bedrock_image_model_id
     MVP_CONFIDENCE_THRESHOLD            = tostring(var.confidence_threshold)
     MVP_MAX_UPLOAD_MB                   = "20"
     MVP_MAX_PDF_PAGES                   = "50"

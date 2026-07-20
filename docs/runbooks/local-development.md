@@ -138,4 +138,4 @@ Dopo ogni modifica al `.env`, applicare i nuovi valori a SSM/Secrets e ricaricar
 make refresh-runtime
 ```
 
-Le credenziali `AWS_REAL_*` sono condivise da S3, Textract e Bedrock e non vanno salvate in repository. Bedrock richiede `BEDROCK_REGION` e `BEDROCK_MODEL_ID` con accesso gia' abilitato nell'account.
+Le credenziali `AWS_REAL_*` sono condivise da S3, Textract e Bedrock e non vanno salvate in repository. Bedrock richiede `BEDROCK_REGION` e `BEDROCK_MODEL_ID` con accesso gia' abilitato nell'account. Per le cover immagini dell'Assistant usa `BEDROCK_IMAGE_MODEL_ID=amazon.nova-canvas-v1:0` quando il modello e' disponibile nella tua region.

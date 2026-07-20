@@ -11,5 +11,7 @@ import type { MvpState } from './mvpState';
 export interface GenerateCommunicationResponse {
   message: string;
   communication: Communication;
+  /** @nullable */
+  coverImageWarning?: string | null;
   state: MvpState;
 }

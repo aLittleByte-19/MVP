@@ -13,6 +13,8 @@ export interface Communication {
   style: string;
   title: string;
   body: string;
+  /** @nullable */
+  coverImageUrl?: string | null;
   status: string;
   /** @nullable */
   createdAt?: string | null;

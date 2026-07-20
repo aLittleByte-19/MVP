@@ -37,6 +37,7 @@ return [
 
     'bedrock' => [
         'model_id' => env('BEDROCK_MODEL_ID'),
+        'image_model_id' => env('BEDROCK_IMAGE_MODEL_ID', env('MVP_BEDROCK_IMAGE_MODEL_ID')),
         'region' => env('BEDROCK_REGION', env('AWS_DEFAULT_REGION', 'eu-north-1')),
         'endpoint' => env('BEDROCK_ENDPOINT') === 'not-configured' ? null : env('BEDROCK_ENDPOINT'),
         // Shared real-AWS credentials (same set used by real S3 and Textract).

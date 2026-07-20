@@ -91,7 +91,7 @@ export class AssistantPage {
       .subscribe({
         next: (response) => {
           this.selectedDraftId.set(null);
-          this.latestDraft.set(this.toDraft(response.communication));
+          this.latestDraft.set(this.toDraft(response.communication, response.coverImageWarning));
           this.status.set(response.message);
           this.scrollTo("assistant-review");
         },
@@ -106,11 +106,13 @@ export class AssistantPage {
     this.scrollTo("assistant-review");
   }
 
-  private toDraft(communication: Communication): GeneratedDraft {
+  private toDraft(communication: Communication, coverImageWarning?: string | null): GeneratedDraft {
     return {
       title: communication.title,
       body: communication.body,
-      status: communication.status
+      status: communication.status,
+      coverImageUrl: communication.coverImageUrl ?? undefined,
+      coverImageWarning: coverImageWarning ?? undefined,
     };
   }
 

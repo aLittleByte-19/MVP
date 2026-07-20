@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  * @property string $style
  * @property string|null $generated_title
  * @property string|null $generated_body
+ * @property string|null $generated_cover_image
  * @property CommunicationStatus $status
  * @property Carbon|null $created_at
  */
@@ -31,6 +32,7 @@ class Communication extends Model
         'style',
         'generated_title',
         'generated_body',
+        'generated_cover_image',
         'status',
     ];
 

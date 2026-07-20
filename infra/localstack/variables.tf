@@ -78,6 +78,12 @@ variable "bedrock_model_id" {
   default     = "amazon.nova-lite-v1:0"
 }
 
+variable "bedrock_image_model_id" {
+  description = "Optional Bedrock image model identifier used to generate communication covers."
+  type        = string
+  default     = "amazon.nova-canvas-v1:0"
+}
+
 variable "bedrock_region" {
   description = "AWS region used by Bedrock runtime calls."
   type        = string

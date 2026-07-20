@@ -10,9 +10,19 @@ use Illuminate\Support\Facades\Log;
 
 class BedrockService
 {
+    /** @var array<int, array{width: int, height: int}> */
+    private const NOVA_CANVAS_SIZE_CANDIDATES = [
+        ['width' => 1280, 'height' => 720],
+        ['width' => 1024, 'height' => 1024],
+        ['width' => 720, 'height' => 1280],
+    ];
+
+    private const NOVA_CANVAS_MAX_PROMPT_LENGTH = 1000;
+
     public function __construct(
         private readonly BedrockRuntimeClient $client,
         private readonly ?string $modelId,
+        private readonly ?string $imageModelId,
         private readonly AiOutputValidator $validator,
     ) {}
 
@@ -44,6 +54,93 @@ class BedrockService
             Log::error('AI Generation Error', ['error' => $e->getMessage()]);
             throw new \RuntimeException("Errore di connessione con Bedrock: {$e->getMessage()}", 0, $e);
         }
+    }
+
+    /**
+     * Generate a visual cover for the drafted communication.
+     * Returns a data URL when an image model is configured and reachable.
+     */
+    public function generateCommunicationImage(string $prompt, string $tone, string $style): ?string
+    {
+        return $this->generateCommunicationImageWithMeta($prompt, $tone, $style)['image'];
+    }
+
+    /**
+     * Generate a visual cover and expose a user-facing warning when unavailable.
+     *
+     * @return array{image: ?string, warning: ?string}
+     */
+    public function generateCommunicationImageWithMeta(string $prompt, string $tone, string $style): array
+    {
+        if (! $this->imageModelId) {
+            return [
+                'image' => null,
+                'warning' => 'Copertina AI non disponibile: modello immagini Bedrock non configurato.',
+            ];
+        }
+
+        $imagePrompt = mb_substr($this->buildCommunicationImagePrompt($prompt, $tone, $style), 0, self::NOVA_CANVAS_MAX_PROMPT_LENGTH);
+        $warning = null;
+
+        foreach (self::NOVA_CANVAS_SIZE_CANDIDATES as $size) {
+            try {
+                /** @var Result $result */
+                $result = $this->client->invokeModel([
+                    'modelId' => $this->imageModelId,
+                    'contentType' => 'application/json',
+                    'accept' => 'application/json',
+                    'body' => json_encode([
+                        'taskType' => 'TEXT_IMAGE',
+                        'textToImageParams' => [
+                            'text' => $imagePrompt,
+                            'negativeText' => 'low quality, blur, watermark, text, signature, distorted, unreadable text',
+                        ],
+                        'imageGenerationConfig' => [
+                            'numberOfImages' => 1,
+                            'height' => $size['height'],
+                            'width' => $size['width'],
+                            'cfgScale' => 7.5,
+                            'seed' => random_int(0, 2_147_483_647),
+                        ],
+                    ], JSON_THROW_ON_ERROR),
+                ]);
+
+                $body = $this->decodeInvokeModelBody($result->get('body'));
+                $decoded = json_decode($body, true);
+
+                if (! is_array($decoded)) {
+                    throw new \RuntimeException('Risposta immagine non decodificabile.');
+                }
+
+                $imageDataUrl = $this->extractImageDataUrl($decoded);
+                if ($imageDataUrl !== null) {
+                    return ['image' => $imageDataUrl, 'warning' => null];
+                }
+
+                Log::warning('Nova Canvas returned no image payload', [
+                    'size' => $size,
+                    'keys' => array_keys($decoded),
+                ]);
+                $warning ??= 'Copertina AI non disponibile: il modello non ha restituito un payload immagine valido.';
+            } catch (AwsException $e) {
+                $warning ??= $this->formatImageWarningFromError($e->getMessage());
+                Log::warning('Bedrock communication image generation failed', [
+                    'message' => $e->getMessage(),
+                    'size' => $size,
+                ]);
+            } catch (\Throwable $e) {
+                $warning ??= 'Copertina AI non disponibile per un errore temporaneo del servizio immagini.';
+                Log::warning('Communication image parsing failed', [
+                    'message' => $e->getMessage(),
+                    'size' => $size,
+                ]);
+            }
+        }
+
+        return [
+            'image' => null,
+            'warning' => $warning ?? 'Copertina AI non disponibile al momento.',
+        ];
     }
 
     /**
@@ -81,6 +178,84 @@ class BedrockService
         return "Agisci come un assistente HR. Genera una comunicazione con tono '{$tone}' e stile '{$style}'.\n"
              ."Argomento: {$userPrompt}\n"
              .'Rispondi esclusivamente in formato JSON: {"title": "...", "body": "..."}';
+    }
+
+    private function buildCommunicationImagePrompt(string $userPrompt, string $tone, string $style): string
+    {
+        return "Crea un visual orizzontale per una comunicazione interna aziendale. "
+            ."Tema: {$userPrompt}. "
+            ."Tono richiesto: {$tone}. "
+            ."Stile editoriale: {$style}. "
+            .'Niente testo leggibile nel visual, solo elementi grafici moderni e professionali.';
+    }
+
+    /**
+     * @param  array<string, mixed>  $decoded
+     */
+    private function extractImageDataUrl(array $decoded): ?string
+    {
+        $image = $decoded['images'][0]
+            ?? $decoded['artifacts'][0]['base64']
+            ?? $decoded['result']['images'][0]
+            ?? $decoded['image']
+            ?? $decoded['image_base64']
+            ?? $decoded['imageUriBase64']
+            ?? null;
+
+        if (! is_string($image) || trim($image) === '') {
+            return null;
+        }
+
+        if (str_starts_with($image, 'data:image/')) {
+            return $image;
+        }
+
+        $normalized = preg_replace('/\s+/', '', $image);
+
+        if (! is_string($normalized) || $normalized === '' || ! preg_match('/^[A-Za-z0-9+\/=]+$/', $normalized)) {
+            return null;
+        }
+
+        $mime = $decoded['artifacts'][0]['mimeType']
+            ?? $decoded['mimeType']
+            ?? 'image/png';
+
+        return "data:{$mime};base64,{$normalized}";
+    }
+
+    /**
+     * @param  mixed  $rawBody
+     */
+    private function decodeInvokeModelBody(mixed $rawBody): string
+    {
+        if (is_string($rawBody)) {
+            return $rawBody;
+        }
+
+        if (is_object($rawBody) && method_exists($rawBody, '__toString')) {
+            return (string) $rawBody;
+        }
+
+        return '';
+    }
+
+    private function formatImageWarningFromError(string $errorMessage): string
+    {
+        $message = strtolower($errorMessage);
+
+        if (str_contains($message, 'legacy') || str_contains($message, 'active model')) {
+            return 'Copertina AI non disponibile: il modello immagini configurato su Bedrock risulta legacy/non attivo.';
+        }
+
+        if (str_contains($message, 'model access is denied') || str_contains($message, 'access denied')) {
+            return 'Copertina AI non disponibile: l\'account AWS non ha accesso al modello immagini Bedrock configurato.';
+        }
+
+        if (str_contains($message, 'validationexception')) {
+            return 'Copertina AI non disponibile: Bedrock ha rifiutato i parametri richiesti per la generazione immagini.';
+        }
+
+        return 'Copertina AI non disponibile per un errore del servizio Bedrock.';
     }
 
     /**
@@ -193,6 +368,10 @@ class BedrockService
     public static function formatUserError(\Throwable $e, string $defaultMessage): string
     {
         $message = strtolower($e->getMessage());
+
+        if (str_contains($message, 'unrecognizedclientexception') || str_contains($message, 'security token included in the request is invalid')) {
+            return 'Credenziali AWS Bedrock non valide. Aggiorna AWS_REAL_ACCESS_KEY_ID / AWS_REAL_SECRET_ACCESS_KEY / AWS_REAL_SESSION_TOKEN e ricarica il runtime.';
+        }
 
         if (str_contains($message, 'expiredtoken')) {
             return 'Le credenziali runtime AWS sono scadute. Aggiorna il ruolo applicativo o il segreto runtime in Secrets Manager.';

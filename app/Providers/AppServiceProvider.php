@@ -46,6 +46,7 @@ class AppServiceProvider extends ServiceProvider
             return new BedrockService(
                 $app->make(BedrockRuntimeClient::class),
                 config('services.bedrock.model_id'),
+                config('services.bedrock.image_model_id'),
                 $app->make(AiOutputValidator::class),
             );
         });

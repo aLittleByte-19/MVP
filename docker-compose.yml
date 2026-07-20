@@ -283,6 +283,7 @@ services:
       TF_VAR_db_password: ${MVP_DB_PASSWORD:-mvp-local-password}
       TF_VAR_redis_password: ${MVP_REDIS_PASSWORD:-mvp-redis-local-password}
       TF_VAR_bedrock_model_id: ${MVP_BEDROCK_MODEL_ID:-amazon.nova-lite-v1:0}
+      TF_VAR_bedrock_image_model_id: ${MVP_BEDROCK_IMAGE_MODEL_ID:-amazon.nova-canvas-v1:0}
       TF_VAR_bedrock_region: ${BEDROCK_REGION:-eu-north-1}
       TF_VAR_bedrock_endpoint: ${BEDROCK_ENDPOINT:-not-configured}
       TF_VAR_confidence_threshold: ${MVP_CONFIDENCE_THRESHOLD:-80}

@@ -93,6 +93,13 @@ test('ai assistant generation uses only prompt tone and style', function () {
                 'Testo informativo',
             )
             ->andReturn(['title' => 'Titolo reale', 'body' => 'Corpo reale']);
+
+        $mock->shouldReceive('generateCommunicationImageWithMeta')
+            ->once()
+            ->andReturn([
+                'image' => 'data:image/png;base64,ZmFrZQ==',
+                'warning' => null,
+            ]);
     });
 
     $this->postJson('/api/v1/communications', [
