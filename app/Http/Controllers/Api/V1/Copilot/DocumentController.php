@@ -349,6 +349,9 @@ class DocumentController
             'documentType' => 'document_type',
             'description' => 'description',
             'confidenceScore' => 'confidence_score',
+            'recipientEmail' => 'recipient_email', 
+            'fiscalCode' => 'fiscal_code',
+            'employeeId' => 'employee_id',
         ];
         $updates = [];
 

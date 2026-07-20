@@ -18,6 +18,9 @@ interface ReviewFormState {
   documentDate: string;
   documentType: string;
   description: string;
+  recipientEmail: string;
+  fiscalCode: string;
+  employeeId: string;
 }
 
 const emptyReviewForm: ReviewFormState = {
@@ -27,7 +30,10 @@ const emptyReviewForm: ReviewFormState = {
   companyName: "",
   documentDate: "",
   documentType: "",
-  description: ""
+  description: "",
+  recipientEmail: "",
+  fiscalCode: "",
+  employeeId: ""
 };
 
 @Component({
@@ -165,6 +171,20 @@ const emptyReviewForm: ReviewFormState = {
                     [attr.aria-readonly]="!isEditing()"
                   ></textarea>
                 </label>
+                <label class="field editableField">
+                  <span>Email destinatario</span>
+                  <input formControlName="recipientEmail" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
+                </label>
+
+                <label class="field editableField">
+                  <span>Codice Fiscale</span>
+                  <input formControlName="fiscalCode" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
+                </label>
+
+                <label class="field editableField">
+                  <span>Matricola dipendente</span>
+                  <input formControlName="employeeId" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
+                </label>
               </div>
 
               <div class="reviewActions">
@@ -248,7 +268,10 @@ export class SubDocumentListComponent {
     companyName: new FormControl("", { nonNullable: true }),
     documentDate: new FormControl("", { nonNullable: true }),
     documentType: new FormControl("", { nonNullable: true }),
-    description: new FormControl("", { nonNullable: true })
+    description: new FormControl("", { nonNullable: true }),
+    recipientEmail: new FormControl("", { nonNullable: true }),
+    fiscalCode: new FormControl("", { nonNullable: true }),
+    employeeId: new FormControl("", { nonNullable: true })
   });
 
   private readonly workflow = inject(DocumentWorkflowService);
@@ -308,6 +331,9 @@ export class SubDocumentListComponent {
       documentDate: formValue.documentDate || null,
       documentType: nullableTrim(formValue.documentType),
       description: nullableTrim(formValue.description),
+      recipientEmail: nullableTrim(formValue.recipientEmail),
+      fiscalCode: nullableTrim(formValue.fiscalCode),
+      employeeId: nullableTrim(formValue.employeeId),
       markAsValidated
     };
   }
@@ -334,7 +360,10 @@ function toReviewForm(documentItem: SubDocument | null): ReviewFormState {
     companyName: documentItem.companyName ?? documentItem.company ?? "",
     documentDate: documentItem.documentDate ?? "",
     documentType: documentItem.documentType ?? documentItem.type ?? "",
-    description: documentItem.description ?? ""
+    description: documentItem.description ?? "",
+    recipientEmail: documentItem.recipientEmail ?? documentItem.email ?? "",
+    fiscalCode: documentItem.fiscalCode ?? "",
+    employeeId: documentItem.employeeId ?? documentItem.matricola ?? ""
   };
 }
 

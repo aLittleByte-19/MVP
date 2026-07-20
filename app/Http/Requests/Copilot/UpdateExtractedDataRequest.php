@@ -26,6 +26,9 @@ class UpdateExtractedDataRequest extends FormRequest
             'description' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'confidenceScore' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:100'],
             'markAsValidated' => ['sometimes', 'boolean'],
+            'recipientEmail' => ['nullable', 'email', 'max:255'],
+            'fiscalCode' => ['nullable', 'string', 'size:16'], 
+            'employeeId' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

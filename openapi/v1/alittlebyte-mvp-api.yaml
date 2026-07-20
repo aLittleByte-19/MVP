@@ -349,6 +349,15 @@ components:
           maximum: 100
         markAsValidated:
           type: boolean
+        recipientEmail:
+          type: [string, "null"]
+          maxLength: 255
+        fiscalCode:
+          type: [string, "null"]
+          maxLength: 16
+        employeeId:
+          type: [string, "null"]
+          maxLength: 255
     Communication:
       type: object
       required: [id, prompt, tone, style, title, body, status]
@@ -417,6 +426,16 @@ components:
           type: array
           items:
             type: string
+        recipientEmail:
+          type: [string, "null"]
+        email:
+          type: [string, "null"]
+        fiscalCode:
+          type: [string, "null"]
+        employeeId:
+          type: [string, "null"]
+        matricola:
+          type: [string, "null"]
     ErrorEnvelope:
       type: object
       required: [error]

@@ -42,4 +42,14 @@ export interface SubDocument {
   error?: string | null;
   previewUrl?: string;
   previewLines: string[];
+  /** @nullable */
+  recipientEmail?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  fiscalCode?: string | null;
+  /** @nullable */
+  employeeId?: string | null;
+  /** @nullable */
+  matricola?: string | null;
 }

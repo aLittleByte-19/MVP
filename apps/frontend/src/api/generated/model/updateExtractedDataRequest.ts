@@ -41,4 +41,19 @@ export interface UpdateExtractedDataRequest {
      */
   confidenceScore?: number | null;
   markAsValidated?: boolean;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  recipientEmail?: string | null;
+  /**
+     * @maxLength 16
+     * @nullable
+     */
+  fiscalCode?: string | null;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  employeeId?: string | null;
 }
