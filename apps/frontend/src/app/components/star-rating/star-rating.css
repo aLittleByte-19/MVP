@@ -1,0 +1,23 @@
+.star-container {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.star-button {
+  background: none;
+  border: none;
+  font-size: 1.8rem;
+  cursor: pointer;
+  color: #d1d5db;
+  transition: color 0.2s ease-in-out;
+  padding: 0;
+}
+
+.star-button.active {
+  color: #fbbf24;
+}
+
+.star-button.disabled {
+  cursor: default;
+}
