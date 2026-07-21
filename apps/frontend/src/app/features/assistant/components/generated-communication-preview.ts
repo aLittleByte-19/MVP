@@ -30,7 +30,7 @@ import type { GeneratedDraft } from "../assistant.model";
             <app-star-rating 
               [disabled]="hasRated()" 
               (rated)="onRate($event)">
-            </app-star-rating>
+            </mvp-star-rating>
           </div>
           @if (hasRated()) {
             <p>Valutazione registrata con successo!</p>
