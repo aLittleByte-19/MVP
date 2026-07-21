@@ -372,11 +372,17 @@ test('document processing keeps split visible when field extraction fails', func
 test('assistant generated metric counts every stored communication', function () {
     Communication::factory()->draft()->create();
     Communication::factory()->discarded()->create();
+    Communication::factory()->draft()->rated(5)->create();
+    Communication::factory()->draft()->rated(3, 'Ok')->create();
 
     $this->getJson('/api/v1/state')
         ->assertOk()
-        ->assertJsonPath('assistant.metrics.0.value', 2)
-        ->assertJsonPath('assistant.metrics.1.value', 1);
+        ->assertJsonPath('assistant.metrics.0.value', 4)
+        ->assertJsonPath('assistant.metrics.1.value', 3)
+        ->assertJsonPath('assistant.metrics.2.value', 2)
+        ->assertJsonPath('assistant.metrics.2.label', 'Valutazioni ricevute')
+        ->assertJsonPath('assistant.metrics.3.value', '4.0')
+        ->assertJsonPath('assistant.metrics.3.label', 'Media stelle');
 });
 
 test('operator can correct extracted data and mark a sub document as manually validated', function () {

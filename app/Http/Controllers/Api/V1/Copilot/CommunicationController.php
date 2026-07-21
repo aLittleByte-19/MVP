@@ -11,10 +11,13 @@ use App\Copilot\Support\MvpStateService;
 use App\Exceptions\Copilot\AiServiceException;
 use App\Exceptions\Copilot\InvalidAiOutputException;
 use App\Http\Requests\Copilot\GenerateCommunicationRequest;
+use App\Http\Requests\Copilot\RateCommunicationRequest;
 use App\Models\Copilot\Communication;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class CommunicationController
 {
@@ -86,6 +89,56 @@ class CommunicationController
         ], 201);
     }
 
+    public function rate(
+        RateCommunicationRequest $request,
+        Communication $communication,
+        AuditLogger $audit,
+        MvpStateService $state,
+    ): JsonResponse {
+        $actor = $this->actor($request);
+        $this->authorizeCommunication($communication, $actor);
+
+        if ($communication->rating !== null) {
+            throw ValidationException::withMessages([
+                'rating' => ['La valutazione è già stata registrata per questa bozza.'],
+            ]);
+        }
+
+        $validated = $request->validated();
+        $comment = array_key_exists('comment', $validated)
+            ? (is_string($validated['comment']) ? trim($validated['comment']) : null)
+            : null;
+
+        if ($comment === '') {
+            $comment = null;
+        }
+
+        $communication->update([
+            'rating' => $validated['rating'],
+            'rating_comment' => $comment,
+            'rated_at' => now(),
+            'rated_by' => $actor->id,
+        ]);
+
+        $audit->record(
+            'mvp-communication-rated',
+            $actor,
+            'communication',
+            (string) $communication->id,
+            [
+                'rating' => $communication->rating,
+                'has_comment' => $communication->rating_comment !== null,
+            ],
+            $request,
+        );
+
+        return response()->json([
+            'message' => 'Valutazione registrata con successo.',
+            'communication' => $state->communication($communication->fresh()),
+            'state' => $state->forActor($actor),
+        ]);
+    }
+
     private function actor(Request $request): MvpUser
     {
         $actor = $request->user();
@@ -95,5 +148,15 @@ class CommunicationController
         }
 
         return $actor;
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    private function authorizeCommunication(Communication $communication, MvpUser $actor): void
+    {
+        if ($communication->tenant_id !== $actor->tenantId) {
+            throw new AuthorizationException('Comunicazione non autorizzata per il tenant corrente.');
+        }
     }
 }

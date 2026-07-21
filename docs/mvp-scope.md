@@ -21,8 +21,9 @@ Incluso:
 - validazione del prompt;
 - persistenza della bozza generata (stato `draft`);
 - anteprima di titolo e testo in sola lettura;
+- valutazione opzionale 1–5 stelle con commento qualitativo opzionale (una sola valutazione per generazione);
 - storico delle generazioni con riapertura dell'anteprima di una bozza selezionata;
-- metriche operative di base (contenuti generati, bozze).
+- metriche operative di base (contenuti generati, bozze, valutazioni ricevute, media stelle).
 
 Parziale:
 
@@ -33,7 +34,7 @@ Fuori scope MVP:
 - modifica manuale persistente di titolo e testo;
 - immagine di copertina e sua sostituzione;
 - rigenerazione, annullamento modifiche e scarto della bozza;
-- rating 1–5 con commento, preferiti e relativi feedback;
+- preferiti e relativi feedback oltre alla valutazione 1–5;
 - salvataggio e riuso di una configurazione di prompt etichettata;
 - dashboard analista (rating medio, statistiche di utilizzo, filtri).
 

@@ -11,7 +11,7 @@ import { StatusBadgeComponent } from "../../shared/components/status-badge/statu
 import { formatFallback } from "../../shared/util/formatters";
 import { CommunicationGeneratorPanelComponent } from "./components/communication-generator-panel";
 import { GeneratedCommunicationPreviewComponent } from "./components/generated-communication-preview";
-import type { CommunicationDraftForm, GeneratedDraft } from "./assistant.model";
+import type { CommunicationDraftForm, GeneratedDraft, RateDraftPayload } from "./assistant.model";
 
 @Component({
   selector: "mvp-assistant-page",
@@ -35,7 +35,12 @@ import type { CommunicationDraftForm, GeneratedDraft } from "./assistant.model";
         [status]="status()"
         (generate)="generate($event)"
       />
-      <mvp-generated-communication-preview [draft]="previewDraft()" />
+      <mvp-generated-communication-preview
+        [draft]="previewDraft()"
+        [isRating]="isRating()"
+        [rateError]="rateError()"
+        (rate)="rateDraft($event)"
+      />
 
       <mvp-section id="assistant-history" title="Storico contenuti">
         @if (history().length) {
@@ -64,6 +69,8 @@ export class AssistantPage {
   protected readonly store = inject(MvpStateStore);
   protected readonly history = this.store.history;
   protected readonly isGenerating = signal(false);
+  protected readonly isRating = signal(false);
+  protected readonly rateError = signal<string | null>(null);
   protected readonly status = signal("In attesa di istruzioni.");
   protected readonly selectedDraftId = signal<number | null>(null);
   protected readonly latestDraft = signal<GeneratedDraft | null>(null);
@@ -84,6 +91,7 @@ export class AssistantPage {
   protected generate(payload: CommunicationDraftForm): void {
     this.isGenerating.set(true);
     this.status.set("Generazione in corso.");
+    this.rateError.set(null);
 
     this.assistant
       .generate(payload)
@@ -101,16 +109,48 @@ export class AssistantPage {
       });
   }
 
+  protected rateDraft(payload: RateDraftPayload): void {
+    const draft = this.previewDraft();
+    if (!draft || draft.rating != null) {
+      return;
+    }
+
+    this.isRating.set(true);
+    this.rateError.set(null);
+
+    this.assistant
+      .rate(draft.id, payload)
+      .pipe(finalize(() => this.isRating.set(false)))
+      .subscribe({
+        next: (response) => {
+          const rated = this.toDraft(response.communication);
+          this.latestDraft.set(rated);
+          this.selectedDraftId.set(rated.id);
+          this.status.set(response.message);
+        },
+        error: (error: unknown) => {
+          this.rateError.set(
+            getApiErrorMessage(error, "Valutazione non disponibile. Riprova.")
+          );
+        }
+      });
+  }
+
   protected selectDraft(communicationId: number): void {
     this.selectedDraftId.set(communicationId);
+    this.rateError.set(null);
     this.scrollTo("assistant-review");
   }
 
   private toDraft(communication: Communication): GeneratedDraft {
     return {
+      id: communication.id,
       title: communication.title,
       body: communication.body,
-      status: communication.status
+      status: communication.status,
+      rating: communication.rating ?? null,
+      ratingComment: communication.ratingComment ?? null,
+      ratedAt: communication.ratedAt ?? null
     };
   }
 

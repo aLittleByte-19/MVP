@@ -16,4 +16,17 @@ export interface Communication {
   status: string;
   /** @nullable */
   createdAt?: string | null;
+  /**
+     * @minimum 1
+     * @maximum 5
+     * @nullable
+     */
+  rating?: number | null;
+  /**
+     * @maxLength 1000
+     * @nullable
+     */
+  ratingComment?: string | null;
+  /** @nullable */
+  ratedAt?: string | null;
 }
