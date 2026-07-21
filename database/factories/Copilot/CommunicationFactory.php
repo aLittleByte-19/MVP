@@ -27,6 +27,10 @@ class CommunicationFactory extends Factory
             'generated_title' => fake()->sentence(),
             'generated_body' => fake()->paragraphs(3, true),
             'status' => fake()->randomElement(CommunicationStatus::cases()),
+            'rating' => null,
+            'rating_comment' => null,
+            'rated_at' => null,
+            'rated_by' => null,
         ];
     }
 
@@ -43,5 +47,15 @@ class CommunicationFactory extends Factory
     public function discarded(): static
     {
         return $this->state(['status' => CommunicationStatus::Discarded]);
+    }
+
+    public function rated(int $rating = 4, ?string $comment = null): static
+    {
+        return $this->state([
+            'rating' => $rating,
+            'rating_comment' => $comment,
+            'rated_at' => now(),
+            'rated_by' => 'mvp-local-user',
+        ]);
     }
 }

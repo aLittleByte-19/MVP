@@ -30,6 +30,8 @@ import type {
   GenerateCommunicationRequest,
   GenerateCommunicationResponse,
   MvpState,
+  RateCommunicationRequest,
+  RateCommunicationResponse,
   UpdateExtractedDataRequest,
   UpdateSubDocumentReviewResponse,
   UploadDocumentResponse,
@@ -147,6 +149,47 @@ export class AlittlebyteMVPAPIService {
     return this.http.post<TData>(
       `/api/v1/communications`,
       generateCommunicationRequest,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',
+      }
+    );
+  }
+
+/**
+ * @summary Assign a 1–5 star rating to a generated communication draft
+ */
+ rateMvpCommunication<TData = RateCommunicationResponse>(communication: number,
+    rateCommunicationRequest: RateCommunicationRequest, options?: HttpClientBodyOptions): Observable<TData>;
+ rateMvpCommunication<TData = RateCommunicationResponse>(communication: number,
+    rateCommunicationRequest: RateCommunicationRequest, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ rateMvpCommunication<TData = RateCommunicationResponse>(communication: number,
+    rateCommunicationRequest: RateCommunicationRequest, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  rateMvpCommunication<TData = RateCommunicationResponse>(
+    communication: number,
+    rateCommunicationRequest: RateCommunicationRequest, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
+    if (options?.observe === 'events') {
+      return this.http.post<TData>(
+      `/api/v1/communications/${communication}/rating`,
+      rateCommunicationRequest,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',
+      }
+    );
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.post<TData>(
+      `/api/v1/communications/${communication}/rating`,
+      rateCommunicationRequest,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',
+      }
+    );
+    }
+
+    return this.http.post<TData>(
+      `/api/v1/communications/${communication}/rating`,
+      rateCommunicationRequest,{
         ...(options as Omit<NonNullable<typeof options>, 'observe'>),
         observe: 'body',
       }

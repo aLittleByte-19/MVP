@@ -40,6 +40,61 @@
   line-height: 1.45;
 }
 
+.rating-section {
+  display: grid;
+  gap: var(--mvp-space-3);
+  padding-top: var(--mvp-space-2);
+}
+
+.rating-label {
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-sm);
+  font-weight: 800;
+}
+
+.comment-field textarea {
+  background: var(--mvp-surface);
+}
+
+.comment-meta {
+  justify-self: end;
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-sm);
+}
+
+.comment-meta.isInvalid {
+  color: var(--mvp-danger, #b42318);
+  font-weight: 700;
+}
+
+.rating-error {
+  margin: 0;
+  color: var(--mvp-danger, #b42318);
+  font-size: var(--mvp-font-sm);
+  font-weight: 600;
+}
+
+.rating-success {
+  margin: 0;
+  color: var(--mvp-success, #027a48);
+  font-size: var(--mvp-font-sm);
+  font-weight: 700;
+}
+
+.saved-comment {
+  display: grid;
+  gap: var(--mvp-space-2);
+  margin: 0;
+  color: var(--mvp-text);
+  line-height: 1.45;
+}
+
+.saved-comment span {
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-sm);
+  font-weight: 800;
+}
+
 .footer {
   display: flex;
   flex-wrap: wrap;

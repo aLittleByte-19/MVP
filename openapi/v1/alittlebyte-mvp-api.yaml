@@ -56,6 +56,36 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "502":
           $ref: "#/components/responses/UpstreamUnavailable"
+  /api/v1/communications/{communication}/rating:
+    post:
+      summary: Assign a 1–5 star rating to a generated communication draft
+      operationId: rateMvpCommunication
+      tags: [Communications]
+      parameters:
+        - name: communication
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RateCommunicationRequest"
+      responses:
+        "200":
+          description: Rating stored for the draft; further ratings for this generation are rejected.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateCommunicationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   /api/v1/documents/ocr:
     post:
       summary: Upload a document for OCR and AI extraction
@@ -296,6 +326,28 @@ components:
           $ref: "#/components/schemas/Communication"
         state:
           $ref: "#/components/schemas/MvpState"
+    RateCommunicationRequest:
+      type: object
+      required: [rating]
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: [string, "null"]
+          maxLength: 1000
+          description: Optional qualitative comment for the rating (UC-25).
+    RateCommunicationResponse:
+      type: object
+      required: [message, communication, state]
+      properties:
+        message:
+          type: string
+        communication:
+          $ref: "#/components/schemas/Communication"
+        state:
+          $ref: "#/components/schemas/MvpState"
     UploadDocumentResponse:
       type: object
       required: [message, streamUrl]
@@ -368,6 +420,15 @@ components:
         status:
           type: string
         createdAt:
+          type: [string, "null"]
+        rating:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 5
+        ratingComment:
+          type: [string, "null"]
+          maxLength: 1000
+        ratedAt:
           type: [string, "null"]
     SubDocument:
       type: object

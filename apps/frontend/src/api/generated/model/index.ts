@@ -20,6 +20,8 @@ export * from './generateCommunicationResponse';
 export * from './metric';
 export * from './mvpState';
 export * from './notFoundResponse';
+export * from './rateCommunicationRequest';
+export * from './rateCommunicationResponse';
 export * from './subDocument';
 export * from './subDocumentReviewStatus';
 export * from './unauthorizedResponse';

@@ -15,6 +15,11 @@ Route::prefix('v1')
             ->middleware('throttle:20,1')
             ->name('communications.generate');
 
+        Route::post('/communications/{communication}/rating', [CommunicationController::class, 'rate'])
+            ->middleware('throttle:30,1')
+            ->whereNumber('communication')
+            ->name('communications.rate');
+
         Route::post('/documents/ocr', [DocumentController::class, 'store'])
             ->middleware('throttle:20,1')
             ->name('documents.ocr');
