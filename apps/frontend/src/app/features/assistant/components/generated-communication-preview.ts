@@ -27,7 +27,7 @@ import type { GeneratedDraft } from "../assistant.model";
           </label>
           <div class="rating-section">
             <span>Valuta questa bozza:</span>
-            <app-star-rating 
+            <mvp-star-rating 
               [disabled]="hasRated()" 
               (rated)="onRate($event)">
             </mvp-star-rating>
