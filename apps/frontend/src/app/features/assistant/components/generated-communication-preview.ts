@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, input } from "@angular/core";
+import { ChangeDetectionStrategy, Component, computed, input, output } from "@angular/core";
+import { ButtonComponent } from "../../../shared/components/button/button";
 import { StatusBadgeComponent } from "../../../shared/components/status-badge/status-badge";
 import { SectionComponent } from "../../../layout/section/section";
 import type { GeneratedDraft } from "../assistant.model";
@@ -6,7 +7,7 @@ import type { GeneratedDraft } from "../assistant.model";
 @Component({
   selector: "mvp-generated-communication-preview",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SectionComponent, StatusBadgeComponent],
+  imports: [ButtonComponent, SectionComponent, StatusBadgeComponent],
   template: `
     <mvp-section id="assistant-review" title="Controlla il contenuto">
       <span actions class="meta">{{ bodyLength() }} caratteri</span>
@@ -20,6 +21,28 @@ import type { GeneratedDraft } from "../assistant.model";
           @if (shouldShowCoverWarning(currentDraft)) {
             <p class="cover-warning">{{ currentDraft.coverImageWarning }}</p>
           }
+          <div class="cover-actions">
+            <input
+              #coverInput
+              class="cover-input"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              [disabled]="isUpdatingCover()"
+              (change)="onCoverSelected($event)"
+            />
+            <button mvpButton type="button" variant="secondary" [disabled]="isUpdatingCover()" (click)="coverInput.click()">
+              Cambia immagine
+            </button>
+            <button
+              mvpButton
+              type="button"
+              variant="secondary"
+              [disabled]="isUpdatingCover() || !hasCover(currentDraft)"
+              (click)="removeCover.emit()"
+            >
+              Rimuovi immagine
+            </button>
+          </div>
           <label class="field">
             <span>Titolo</span>
             <input readOnly [value]="currentDraft.title" />
@@ -48,6 +71,9 @@ import type { GeneratedDraft } from "../assistant.model";
 })
 export class GeneratedCommunicationPreviewComponent {
   readonly draft = input<GeneratedDraft | null>(null);
+  readonly isUpdatingCover = input<boolean>(false);
+  readonly uploadCover = output<File>();
+  readonly removeCover = output<void>();
   protected readonly bodyLength = computed(() => this.draft()?.body.length ?? 0);
 
   protected placeholderCover(): string {
@@ -67,6 +93,22 @@ export class GeneratedCommunicationPreviewComponent {
     const warning = draft.coverImageWarning?.trim() ?? "";
 
     return missingCover && warning.length > 0;
+  }
+
+  protected hasCover(draft: GeneratedDraft): boolean {
+    return Boolean(draft.coverImageUrl && draft.coverImageUrl.trim() !== "");
+  }
+
+  protected onCoverSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.item(0);
+
+    if (!file) {
+      return;
+    }
+
+    this.uploadCover.emit(file);
+    input.value = "";
   }
 
   private buildFallbackCover(): string {

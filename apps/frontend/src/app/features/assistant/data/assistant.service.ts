@@ -21,4 +21,16 @@ export class AssistantService {
       .generateMvpCommunication(payload)
       .pipe(tap((response) => this.store.setState(response.state)));
   }
+
+  updateCoverImage(communicationId: number, image: File): Observable<GenerateCommunicationResponse> {
+    return this.api
+      .updateMvpCommunicationCoverImage(communicationId, { image })
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  removeCoverImage(communicationId: number): Observable<GenerateCommunicationResponse> {
+    return this.api
+      .removeMvpCommunicationCoverImage(communicationId)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
 }

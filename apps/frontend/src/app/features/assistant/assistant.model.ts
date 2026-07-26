@@ -3,6 +3,7 @@ import type { GenerateCommunicationRequest } from "../../../api/generated/model"
 export type CommunicationDraftForm = GenerateCommunicationRequest;
 
 export interface GeneratedDraft {
+  id: number;
   body: string;
   coverImageUrl?: string;
   coverImageWarning?: string;

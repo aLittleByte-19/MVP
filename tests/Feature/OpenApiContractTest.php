@@ -2,6 +2,7 @@
 
 use App\Copilot\Ai\BedrockService;
 use App\Copilot\Workflow\Services\DocumentWorkflowService;
+use App\Models\Copilot\Communication;
 use App\Models\Copilot\ExtractedData;
 use App\Models\Copilot\OriginalDocument;
 use App\Models\Copilot\SubDocument;
@@ -76,6 +77,37 @@ test('POST /api/v1/communications con payload invalido rispetta il contratto per
     // requestId e correlationId sono valorizzati dal middleware di correlazione
     expect($response->json('error.requestId'))->toBeString()
         ->and($response->json('error.correlationId'))->toBeString();
+});
+
+test('PUT /api/v1/communications/{communication}/cover-image rispetta il contratto OpenAPI', function () {
+    $communication = Communication::factory()->draft()->create();
+
+    $response = $this->withHeader('Accept', 'application/json')
+        ->put("/api/v1/communications/{$communication->id}/cover-image", [
+            'image' => UploadedFile::fake()->image('contract-cover.png', 1280, 720),
+        ])->assertOk();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/cover-image',
+        'put',
+        '200',
+    );
+});
+
+test('DELETE /api/v1/communications/{communication}/cover-image rispetta il contratto OpenAPI', function () {
+    $communication = Communication::factory()->draft()->create([
+        'generated_cover_image' => 'data:image/png;base64,ZmFrZQ==',
+    ]);
+
+    $response = $this->deleteJson("/api/v1/communications/{$communication->id}/cover-image")->assertOk();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/cover-image',
+        'delete',
+        '200',
+    );
 });
 
 test('POST /api/v1/documents/ocr rispetta il contratto OpenAPI', function () {

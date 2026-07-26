@@ -15,6 +15,15 @@ Route::prefix('v1')
             ->middleware('throttle:20,1')
             ->name('communications.generate');
 
+        Route::put('/communications/{communication}/cover-image', [CommunicationController::class, 'updateCoverImage'])
+            ->whereNumber('communication')
+            ->middleware('throttle:20,1')
+            ->name('communications.cover-image.update');
+
+        Route::delete('/communications/{communication}/cover-image', [CommunicationController::class, 'removeCoverImage'])
+            ->whereNumber('communication')
+            ->name('communications.cover-image.remove');
+
         Route::post('/documents/ocr', [DocumentController::class, 'store'])
             ->middleware('throttle:20,1')
             ->name('documents.ocr');

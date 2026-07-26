@@ -28,6 +28,17 @@
   font-size: var(--mvp-font-sm);
 }
 
+.cover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mvp-space-2);
+  align-items: center;
+}
+
+.cover-input {
+  display: none;
+}
+
 .field {
   display: grid;
   gap: var(--mvp-space-2);

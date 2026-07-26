@@ -11,7 +11,10 @@ use App\Copilot\Support\MvpStateService;
 use App\Exceptions\Copilot\AiServiceException;
 use App\Exceptions\Copilot\InvalidAiOutputException;
 use App\Http\Requests\Copilot\GenerateCommunicationRequest;
+use App\Http\Requests\Copilot\UpdateCommunicationCoverRequest;
 use App\Models\Copilot\Communication;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -94,6 +97,78 @@ class CommunicationController
         ], 201);
     }
 
+    /**
+     * @throws AuthorizationException
+     */
+    public function updateCoverImage(
+        UpdateCommunicationCoverRequest $request,
+        Communication $communication,
+        AuditLogger $audit,
+        MvpStateService $state,
+    ): JsonResponse {
+        $actor = $this->actor($request);
+        $this->assertCommunicationOwnership($communication, $actor);
+
+        /** @var UploadedFile $file */
+        $file = $request->file('image');
+
+        $communication->update([
+            'generated_cover_image' => $this->uploadedImageToDataUrl($file),
+        ]);
+
+        $audit->record(
+            'mvp-communication-cover-updated',
+            $actor,
+            'communication',
+            (string) $communication->id,
+            [
+                'mime' => $file->getMimeType(),
+                'size' => $file->getSize(),
+            ],
+            $request,
+        );
+
+        return response()->json([
+            'message' => 'Immagine di copertina aggiornata correttamente.',
+            'communication' => $state->communication($communication->fresh()),
+            'coverImageWarning' => null,
+            'state' => $state->forActor($actor),
+        ]);
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    public function removeCoverImage(
+        Request $request,
+        Communication $communication,
+        AuditLogger $audit,
+        MvpStateService $state,
+    ): JsonResponse {
+        $actor = $this->actor($request);
+        $this->assertCommunicationOwnership($communication, $actor);
+
+        $communication->update([
+            'generated_cover_image' => null,
+        ]);
+
+        $audit->record(
+            'mvp-communication-cover-removed',
+            $actor,
+            'communication',
+            (string) $communication->id,
+            [],
+            $request,
+        );
+
+        return response()->json([
+            'message' => 'Immagine di copertina rimossa.',
+            'communication' => $state->communication($communication->fresh()),
+            'coverImageWarning' => null,
+            'state' => $state->forActor($actor),
+        ]);
+    }
+
     private function actor(Request $request): MvpUser
     {
         $actor = $request->user();
@@ -103,5 +178,28 @@ class CommunicationController
         }
 
         return $actor;
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    private function assertCommunicationOwnership(Communication $communication, MvpUser $actor): void
+    {
+        if ($communication->tenant_id !== $actor->tenantId) {
+            throw new AuthorizationException('Communication is outside the authenticated tenant scope.');
+        }
+    }
+
+    private function uploadedImageToDataUrl(UploadedFile $file): string
+    {
+        $mime = $file->getMimeType() ?: 'image/png';
+        $path = $file->getRealPath();
+        $content = $path !== false ? file_get_contents($path) : false;
+
+        if ($content === false || $content === '') {
+            throw new \RuntimeException('Unable to read uploaded cover image content.');
+        }
+
+        return 'data:'.$mime.';base64,'.base64_encode($content);
     }
 }

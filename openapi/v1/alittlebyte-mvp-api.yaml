@@ -56,6 +56,54 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "502":
           $ref: "#/components/responses/UpstreamUnavailable"
+  /api/v1/communications/{communication}/cover-image:
+    put:
+      summary: Replace communication cover image manually
+      operationId: updateMvpCommunicationCoverImage
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Cover image updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateCommunicationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      summary: Remove communication cover image
+      operationId: removeMvpCommunicationCoverImage
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Cover image removed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateCommunicationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/documents/ocr:
     post:
       summary: Upload a document for OCR and AI extraction
@@ -193,6 +241,13 @@ components:
         minimum: 1
     SubDocumentId:
       name: subDocument
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    CommunicationId:
+      name: communication
       in: path
       required: true
       schema:

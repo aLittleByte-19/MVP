@@ -24,6 +24,7 @@ export * from './subDocument';
 export * from './subDocumentReviewStatus';
 export * from './unauthorizedResponse';
 export * from './updateExtractedDataRequest';
+export * from './updateMvpCommunicationCoverImageBody';
 export * from './updateSubDocumentReviewResponse';
 export * from './uploadDocumentResponse';
 export * from './uploadMvpDocumentBody';

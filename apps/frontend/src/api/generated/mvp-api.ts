@@ -31,6 +31,7 @@ import type {
   GenerateCommunicationResponse,
   MvpState,
   UpdateExtractedDataRequest,
+  UpdateMvpCommunicationCoverImageBody,
   UpdateSubDocumentReviewResponse,
   UploadDocumentResponse,
   UploadMvpDocumentBody
@@ -147,6 +148,83 @@ export class AlittlebyteMVPAPIService {
     return this.http.post<TData>(
       `/api/v1/communications`,
       generateCommunicationRequest,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',
+      }
+    );
+  }
+
+/**
+ * @summary Replace communication cover image manually
+ */
+ updateMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(communication: number,
+    updateMvpCommunicationCoverImageBody: UpdateMvpCommunicationCoverImageBody, options?: HttpClientBodyOptions): Observable<TData>;
+ updateMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(communication: number,
+    updateMvpCommunicationCoverImageBody: UpdateMvpCommunicationCoverImageBody, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ updateMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(communication: number,
+    updateMvpCommunicationCoverImageBody: UpdateMvpCommunicationCoverImageBody, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  updateMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(
+    communication: number,
+    updateMvpCommunicationCoverImageBody: UpdateMvpCommunicationCoverImageBody, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {const formData = new FormData();
+formData.append(`image`, updateMvpCommunicationCoverImageBody.image);
+
+    if (options?.observe === 'events') {
+      return this.http.put<TData>(
+      `/api/v1/communications/${communication}/cover-image`,
+      formData,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',
+      }
+    );
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.put<TData>(
+      `/api/v1/communications/${communication}/cover-image`,
+      formData,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',
+      }
+    );
+    }
+
+    return this.http.put<TData>(
+      `/api/v1/communications/${communication}/cover-image`,
+      formData,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',
+      }
+    );
+  }
+
+/**
+ * @summary Remove communication cover image
+ */
+ removeMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(communication: number, options?: HttpClientBodyOptions): Observable<TData>;
+ removeMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(communication: number, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ removeMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(communication: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  removeMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(
+    communication: number, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
+    if (options?.observe === 'events') {
+      return this.http.delete<TData>(
+      `/api/v1/communications/${communication}/cover-image`,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',
+      }
+    );
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.delete<TData>(
+      `/api/v1/communications/${communication}/cover-image`,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',
+      }
+    );
+    }
+
+    return this.http.delete<TData>(
+      `/api/v1/communications/${communication}/cover-image`,{
         ...(options as Omit<NonNullable<typeof options>, 'observe'>),
         observe: 'body',
       }

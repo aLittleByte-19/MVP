@@ -19,6 +19,8 @@ class BedrockService
 
     private const NOVA_CANVAS_MAX_PROMPT_LENGTH = 1000;
 
+    private const STABILITY_MAX_PROMPT_LENGTH = 1000;
+
     public function __construct(
         private readonly BedrockRuntimeClient $client,
         private readonly ?string $modelId,
@@ -79,7 +81,9 @@ class BedrockService
             ];
         }
 
-        $imagePrompt = mb_substr($this->buildCommunicationImagePrompt($prompt, $tone, $style), 0, self::NOVA_CANVAS_MAX_PROMPT_LENGTH);
+        $imagePrompt = $this->buildCommunicationImagePrompt($prompt, $tone, $style);
+        $safeImagePrompt = $this->buildSafeFallbackImagePrompt($prompt, $tone, $style);
+        $usingSafePrompt = false;
         $warning = null;
 
         foreach (self::NOVA_CANVAS_SIZE_CANDIDATES as $size) {
@@ -89,20 +93,10 @@ class BedrockService
                     'modelId' => $this->imageModelId,
                     'contentType' => 'application/json',
                     'accept' => 'application/json',
-                    'body' => json_encode([
-                        'taskType' => 'TEXT_IMAGE',
-                        'textToImageParams' => [
-                            'text' => $imagePrompt,
-                            'negativeText' => 'low quality, blur, watermark, text, signature, distorted, unreadable text',
-                        ],
-                        'imageGenerationConfig' => [
-                            'numberOfImages' => 1,
-                            'height' => $size['height'],
-                            'width' => $size['width'],
-                            'cfgScale' => 7.5,
-                            'seed' => random_int(0, 2_147_483_647),
-                        ],
-                    ], JSON_THROW_ON_ERROR),
+                    'body' => json_encode(
+                        $this->buildImageInvokePayload($imagePrompt, $size),
+                        JSON_THROW_ON_ERROR
+                    ),
                 ]);
 
                 $body = $this->decodeInvokeModelBody($result->get('body'));
@@ -117,10 +111,40 @@ class BedrockService
                     return ['image' => $imageDataUrl, 'warning' => null];
                 }
 
-                Log::warning('Nova Canvas returned no image payload', [
+                $responseWarning = $this->classifyImageResponseWarning($decoded);
+
+                Log::warning('Bedrock image model returned no image payload', [
+                    'model' => $this->imageModelId,
                     'size' => $size,
                     'keys' => array_keys($decoded),
+                    'finish_reasons' => $decoded['finish_reasons'] ?? null,
                 ]);
+
+                if ($this->hasPromptFilterFinishReason($decoded) && ! $usingSafePrompt) {
+                    $usingSafePrompt = true;
+                    $imagePrompt = $safeImagePrompt;
+
+                    Log::info('Retrying Bedrock image generation with sanitized prompt after filter reason.', [
+                        'model' => $this->imageModelId,
+                        'size' => $size,
+                    ]);
+
+                    continue;
+                }
+
+                if ($this->hasPromptFilterFinishReason($decoded) && $usingSafePrompt) {
+                    $warning ??= 'Copertina AI non disponibile: la richiesta immagini è stata bloccata dai controlli di sicurezza del modello Stability.';
+                    continue;
+                }
+
+                if ($responseWarning['warning'] !== null) {
+                    $warning ??= $responseWarning['warning'];
+
+                    if (! $responseWarning['retryable']) {
+                        return ['image' => null, 'warning' => $warning];
+                    }
+                }
+
                 $warning ??= 'Copertina AI non disponibile: il modello non ha restituito un payload immagine valido.';
             } catch (AwsException $e) {
                 $warning ??= $this->formatImageWarningFromError($e->getMessage());
@@ -182,11 +206,252 @@ class BedrockService
 
     private function buildCommunicationImagePrompt(string $userPrompt, string $tone, string $style): string
     {
-        return "Crea un visual orizzontale per una comunicazione interna aziendale. "
-            ."Tema: {$userPrompt}. "
-            ."Tono richiesto: {$tone}. "
-            ."Stile editoriale: {$style}. "
-            .'Niente testo leggibile nel visual, solo elementi grafici moderni e professionali.';
+        $themeCues = $this->buildThemeVisualCues($userPrompt);
+
+        return 'Create a horizontal cover image for an internal company communication. '
+            ."Main topic: {$userPrompt}. "
+            ."Tone: {$tone}. Editorial style: {$style}. "
+            ."Visual cues: {$themeCues}. "
+            .'Use a modern corporate art direction with clear focal elements related to the topic. '
+            .'No readable text, no logos, no signatures, no watermarks.';
+    }
+
+    private function buildSafeFallbackImagePrompt(string $userPrompt, string $tone, string $style): string
+    {
+        $themeCues = $this->buildThemeVisualCues($userPrompt);
+
+        return 'Create a safe, professional, horizontal corporate cover image. '
+            ."Tone: {$tone}. Editorial style: {$style}. "
+            ."Visual cues: {$themeCues}. "
+            .'No realistic people faces, no identifiable personal data, no documents, no readable text, no logos, no signatures. '
+            .'Prefer abstract or iconographic elements related to the topic.';
+    }
+
+    private function buildThemeVisualCues(string $userPrompt): string
+    {
+        $prompt = mb_strtolower($userPrompt);
+
+        if ($this->containsAny($prompt, ['compleanno', 'birthday', 'auguri'])) {
+            return 'subtle birthday celebration mood, confetti, balloons, cake iconography, warm festive colors';
+        }
+
+        if ($this->containsAny($prompt, ['onboarding', 'benvenuto', 'welcome', 'nuovo collega', 'new hire'])) {
+            return 'welcoming office mood, friendly team symbols, growth and collaboration motifs';
+        }
+
+        if ($this->containsAny($prompt, ['policy', 'compliance', 'sicurezza', 'security', 'procedura'])) {
+            return 'clear structured composition, shield and checklist iconography, trust and reliability mood';
+        }
+
+        if ($this->containsAny($prompt, ['ferie', 'vacanze', 'holiday', 'chiusura'])) {
+            return 'seasonal vacation mood, calendar and travel-inspired abstract elements, calm positive palette';
+        }
+
+        if ($this->containsAny($prompt, ['evento', 'event', 'meeting', 'town hall', 'webinar'])) {
+            return 'event communication mood, stage-light accents, audience and presentation-inspired abstract elements';
+        }
+
+        return 'professional internal communication concept, balanced composition, modern corporate visual language';
+    }
+
+    /**
+     * @param  array<int, string>  $needles
+     */
+    private function containsAny(string $haystack, array $needles): bool
+    {
+        foreach ($needles as $needle) {
+            if (str_contains($haystack, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array{width: int, height: int}  $size
+     * @return array<string, mixed>
+     */
+    private function buildImageInvokePayload(string $imagePrompt, array $size): array
+    {
+        $seed = random_int(0, 2_147_483_647);
+
+        if ($this->isStabilityImageModel()) {
+            return $this->buildStabilityImagePayload($imagePrompt, $size, $seed);
+        }
+
+        return $this->buildNovaCanvasImagePayload($imagePrompt, $size, $seed);
+    }
+
+    /**
+     * @param  array{width: int, height: int}  $size
+     * @return array<string, mixed>
+     */
+    private function buildNovaCanvasImagePayload(string $imagePrompt, array $size, int $seed): array
+    {
+        return [
+            'taskType' => 'TEXT_IMAGE',
+            'textToImageParams' => [
+                'text' => mb_substr($imagePrompt, 0, self::NOVA_CANVAS_MAX_PROMPT_LENGTH),
+                'negativeText' => 'low quality, blur, watermark, text, signature, distorted, unreadable text',
+            ],
+            'imageGenerationConfig' => [
+                'numberOfImages' => 1,
+                'height' => $size['height'],
+                'width' => $size['width'],
+                'cfgScale' => 7.5,
+                'seed' => $seed,
+            ],
+        ];
+    }
+
+    /**
+     * @param  array{width: int, height: int}  $size
+     * @return array<string, mixed>
+     */
+    private function buildStabilityImagePayload(string $imagePrompt, array $size, int $seed): array
+    {
+        $trimmedPrompt = mb_substr($imagePrompt, 0, self::STABILITY_MAX_PROMPT_LENGTH);
+
+        if ($this->isStabilityCoreImageModel()) {
+            $payload = [
+                'prompt' => $trimmedPrompt,
+                'negative_prompt' => 'low quality, blur, watermark, text, signature, distorted, unreadable text',
+                'aspect_ratio' => $this->stabilityAspectRatioFromSize($size),
+                'output_format' => 'png',
+                'seed' => $seed,
+            ];
+
+            if ($this->isStabilitySd3ImageModel()) {
+                $payload['mode'] = 'text-to-image';
+            }
+
+            return $payload;
+        }
+
+        return [
+            'text_prompts' => [
+                ['text' => $trimmedPrompt],
+                ['text' => 'low quality, blur, watermark, text, signature, distorted, unreadable text', 'weight' => -1],
+            ],
+            'cfg_scale' => 7,
+            'samples' => 1,
+            'height' => $size['height'],
+            'width' => $size['width'],
+            'seed' => $seed,
+        ];
+    }
+
+    /**
+     * @param  array{width: int, height: int}  $size
+     */
+    private function stabilityAspectRatioFromSize(array $size): string
+    {
+        if ($size['width'] > $size['height']) {
+            return '16:9';
+        }
+
+        if ($size['width'] < $size['height']) {
+            return '9:16';
+        }
+
+        return '1:1';
+    }
+
+    private function isStabilityImageModel(): bool
+    {
+        return str_contains(strtolower((string) $this->imageModelId), 'stability');
+    }
+
+    private function isStabilityCoreImageModel(): bool
+    {
+        $modelId = strtolower((string) $this->imageModelId);
+
+        return str_contains($modelId, 'stable-image')
+            || str_contains($modelId, '.sd3')
+            || str_contains($modelId, 'sd3-');
+    }
+
+    private function isStabilitySd3ImageModel(): bool
+    {
+        $modelId = strtolower((string) $this->imageModelId);
+
+        return str_contains($modelId, '.sd3') || str_contains($modelId, 'sd3-');
+    }
+
+    /**
+     * @param  array<string, mixed>  $decoded
+     */
+    private function hasPromptFilterFinishReason(array $decoded): bool
+    {
+        $finishReasons = $decoded['finish_reasons'] ?? $decoded['finishReasons'] ?? null;
+
+        if (! is_array($finishReasons)) {
+            return false;
+        }
+
+        foreach ($finishReasons as $reason) {
+            if (! is_string($reason)) {
+                continue;
+            }
+
+            $normalized = strtolower(trim($reason));
+
+            if ($normalized === '') {
+                continue;
+            }
+
+            if (str_contains($normalized, 'filter reason: prompt')
+                || str_contains($normalized, 'content_filtered')
+                || str_contains($normalized, 'safety')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $decoded
+     * @return array{warning: ?string, retryable: bool}
+     */
+    private function classifyImageResponseWarning(array $decoded): array
+    {
+        $finishReasons = $decoded['finish_reasons'] ?? $decoded['finishReasons'] ?? null;
+
+        if (! is_array($finishReasons)) {
+            return ['warning' => null, 'retryable' => true];
+        }
+
+        $normalized = array_values(array_filter(array_map(static function (mixed $reason): ?string {
+            if (! is_string($reason)) {
+                return null;
+            }
+
+            $trimmed = trim($reason);
+
+            return $trimmed === '' ? null : strtolower($trimmed);
+        }, $finishReasons)));
+
+        if ($normalized === []) {
+            return ['warning' => null, 'retryable' => true];
+        }
+
+        if (array_intersect($normalized, ['content_filtered', 'safety'])) {
+            return [
+                'warning' => 'Copertina AI non disponibile: la richiesta immagini è stata bloccata dai controlli di sicurezza del modello Stability.',
+                'retryable' => false,
+            ];
+        }
+
+        if (in_array('error', $normalized, true)) {
+            return [
+                'warning' => 'Copertina AI non disponibile: il modello Stability ha restituito un esito errore (finish_reasons).',
+                'retryable' => true,
+            ];
+        }
+
+        return ['warning' => null, 'retryable' => true];
     }
 
     /**
@@ -253,6 +518,10 @@ class BedrockService
 
         if (str_contains($message, 'validationexception')) {
             return 'Copertina AI non disponibile: Bedrock ha rifiutato i parametri richiesti per la generazione immagini.';
+        }
+
+        if (str_contains($message, 'safety')) {
+            return 'Copertina AI non disponibile: la richiesta immagini è stata bloccata dai controlli di sicurezza del modello.';
         }
 
         return 'Copertina AI non disponibile per un errore del servizio Bedrock.';

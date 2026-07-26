@@ -450,3 +450,65 @@ test('manual correction endpoint rejects cross tenant access', function () {
         ->assertForbidden()
         ->assertJsonPath('error.code', 'forbidden');
 });
+
+test('operator can upload a manual cover image for a communication draft', function () {
+    $communication = Communication::factory()->draft()->create([
+        'generated_cover_image' => 'data:image/png;base64,ZmFrZQ==',
+    ]);
+
+    $response = $this->withHeader('Accept', 'application/json')
+        ->put("/api/v1/communications/{$communication->id}/cover-image", [
+            'image' => UploadedFile::fake()->image('manual-cover.png', 1280, 720),
+        ]);
+
+    $response->assertOk()
+        ->assertJsonPath('message', 'Immagine di copertina aggiornata correttamente.')
+        ->assertJsonPath('communication.id', $communication->id);
+
+    expect($communication->fresh()->generated_cover_image)
+        ->toStartWith('data:image/')
+        ->and(AuditEvent::query()->where('event_type', 'mvp-communication-cover-updated')->count())->toBe(1);
+});
+
+test('operator can remove a manual cover image from a communication draft', function () {
+    $communication = Communication::factory()->draft()->create([
+        'generated_cover_image' => 'data:image/png;base64,ZmFrZQ==',
+    ]);
+
+    $this->deleteJson("/api/v1/communications/{$communication->id}/cover-image")
+        ->assertOk()
+        ->assertJsonPath('message', 'Immagine di copertina rimossa.')
+        ->assertJsonPath('communication.id', $communication->id)
+        ->assertJsonPath('communication.coverImageUrl', null);
+
+    expect($communication->fresh()->generated_cover_image)->toBeNull()
+        ->and(AuditEvent::query()->where('event_type', 'mvp-communication-cover-removed')->count())->toBe(1);
+});
+
+test('manual cover upload rejects cross tenant access', function () {
+    config(['mvp.identity.mode' => 'trusted_headers']);
+    $communication = Communication::factory()->draft()->create();
+
+    $this->withHeaders([
+        'Accept' => 'application/json',
+        'X-Mvp-User-Id' => 'operator-b',
+        'X-Mvp-User-Email' => 'operator-b@example.test',
+        'X-Mvp-Tenant-Id' => 'another-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
+    ])->put("/api/v1/communications/{$communication->id}/cover-image", [
+        'image' => UploadedFile::fake()->image('manual-cover.png', 1280, 720),
+    ])
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
+});
+
+test('manual cover upload validates image payload', function () {
+    $communication = Communication::factory()->draft()->create();
+
+    $this->withHeader('Accept', 'application/json')
+        ->put("/api/v1/communications/{$communication->id}/cover-image", [
+            'image' => UploadedFile::fake()->createWithContent('cover.txt', 'not an image'),
+        ])
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+});

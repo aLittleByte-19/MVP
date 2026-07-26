@@ -35,7 +35,12 @@ import type { CommunicationDraftForm, GeneratedDraft } from "./assistant.model";
         [status]="status()"
         (generate)="generate($event)"
       />
-      <mvp-generated-communication-preview [draft]="previewDraft()" />
+      <mvp-generated-communication-preview
+        [draft]="previewDraft()"
+        [isUpdatingCover]="isUpdatingCover()"
+        (uploadCover)="uploadCover($event)"
+        (removeCover)="removeCover()"
+      />
 
       <mvp-section id="assistant-history" title="Storico contenuti">
         @if (history().length) {
@@ -64,6 +69,7 @@ export class AssistantPage {
   protected readonly store = inject(MvpStateStore);
   protected readonly history = this.store.history;
   protected readonly isGenerating = signal(false);
+  protected readonly isUpdatingCover = signal(false);
   protected readonly status = signal("In attesa di istruzioni.");
   protected readonly selectedDraftId = signal<number | null>(null);
   protected readonly latestDraft = signal<GeneratedDraft | null>(null);
@@ -106,8 +112,57 @@ export class AssistantPage {
     this.scrollTo("assistant-review");
   }
 
+  protected uploadCover(file: File): void {
+    const draft = this.previewDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    this.isUpdatingCover.set(true);
+    this.status.set("Caricamento immagine in corso.");
+
+    this.assistant
+      .updateCoverImage(draft.id, file)
+      .pipe(finalize(() => this.isUpdatingCover.set(false)))
+      .subscribe({
+        next: (response) => {
+          this.latestDraft.set(this.toDraft(response.communication, response.coverImageWarning));
+          this.status.set(response.message);
+        },
+        error: (error: unknown) => {
+          this.status.set(getApiErrorMessage(error, "Aggiornamento immagine non disponibile."));
+        }
+      });
+  }
+
+  protected removeCover(): void {
+    const draft = this.previewDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    this.isUpdatingCover.set(true);
+    this.status.set("Rimozione immagine in corso.");
+
+    this.assistant
+      .removeCoverImage(draft.id)
+      .pipe(finalize(() => this.isUpdatingCover.set(false)))
+      .subscribe({
+        next: (response) => {
+          this.latestDraft.set(this.toDraft(response.communication, response.coverImageWarning));
+          this.status.set(response.message);
+        },
+        error: (error: unknown) => {
+          this.status.set(getApiErrorMessage(error, "Rimozione immagine non disponibile."));
+        }
+      });
+  }
+
   private toDraft(communication: Communication, coverImageWarning?: string | null): GeneratedDraft {
     return {
+      id: communication.id,
       title: communication.title,
       body: communication.body,
       status: communication.status,
