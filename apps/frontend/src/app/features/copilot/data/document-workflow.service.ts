@@ -5,6 +5,7 @@ import type {
   DeleteDocumentResponse,
   MvpState,
   SubDocument,
+  SubDocumentReviewStatus,
   UpdateExtractedDataRequest,
   UpdateSubDocumentReviewResponse
 } from "../../../../api/generated/model";
@@ -42,6 +43,15 @@ export interface DocumentUploadProgress {
 interface ProcessingProgressEvent {
   status: "pending" | "processing" | "completed" | "failed";
   subDocuments: number;
+}
+
+/** Criteri di filtro per l'elenco documenti mostrato nel Co-Pilot. */
+export interface DocumentFilters {
+  /** Ricerca testuale su nome/cognome dipendente e azienda. */
+  search?: string;
+  status?: SubDocumentReviewStatus;
+  /** Soglia di confidenza: restituisce solo i documenti sotto questo valore. */
+  confidence?: number;
 }
 
 /**
@@ -143,17 +153,43 @@ export class DocumentWorkflowService {
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 
-  getDocuments(filters?: any): Observable<SubDocument[]> {
-  let params = new HttpParams();
+  /**
+   * Filtra i documenti gia' caricati nello store: nessuna chiamata di rete,
+   * lo stato e' popolato una sola volta da `/api/v1/state` e tenuto aggiornato
+   * dalle mutazioni/SSE (vedi `MvpStateStore`).
+   */
+  getDocuments(filters?: DocumentFilters): SubDocument[] {
+    const documents = this.store.documents();
 
-  if (filters) {
-    if (filters.search) params = params.set('search', filters.search);
-    if (filters.status) params = params.set('status', filters.status);
-    if (filters.confidence) params = params.set('confidence', filters.confidence);
+    if (!filters) {
+      return documents;
+    }
+
+    const search = filters.search?.trim().toLowerCase();
+
+    return documents.filter((document) => {
+      if (search) {
+        const haystack = [document.employee, document.company, document.file]
+          .filter((value): value is string => !!value)
+          .join(" ")
+          .toLowerCase();
+
+        if (!haystack.includes(search)) {
+          return false;
+        }
+      }
+
+      if (filters.status && document.reviewStatus !== filters.status) {
+        return false;
+      }
+
+      if (filters.confidence !== undefined && (document.confidence ?? 0) >= filters.confidence) {
+        return false;
+      }
+
+      return true;
+    });
   }
-
-  return this.http.get<SubDocument[]>(`${this.apiUrl}/copilot/documents`, { params });
-}
 
   /**
    * Verifica il content-type dell'anteprima prima di montarne l'iframe:
