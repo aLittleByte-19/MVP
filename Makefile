@@ -183,7 +183,7 @@ fresh:
 	docker compose exec -T redis redis-cli FLUSHALL
 
 logs:
-	docker compose logs -f app queue nginx edge-cdn localstack
+	docker compose logs -f app queue queue-communications nginx edge-cdn localstack
 
 sh:
 	docker compose run --rm app sh
@@ -191,12 +191,12 @@ sh:
 restart:
 	docker compose restart
 
-# Scala i worker della pipeline documentale (default 2): il servizio queue non
-# ha container_name fisso e l'idempotenza dei task e' garantita da
+# Scala i worker delle due pipeline (default 2 ciascuna): i servizi queue non
+# hanno container_name fisso e l'idempotenza dei task e' garantita da
 # task_token_hash + claim atomico, quindi piu' repliche sono sicure.
 WORKERS ?= 2
 workers:
-	docker compose up -d --no-recreate --scale queue=$(WORKERS) queue
+	docker compose up -d --no-recreate --scale queue=$(WORKERS) --scale queue-communications=$(WORKERS) queue queue-communications
 
 # --clean --if-exists: il dump droppa e ricrea gli oggetti, cosi' il restore
 # funziona anche su un database gia' migrato senza errori di oggetti duplicati.
@@ -218,7 +218,7 @@ setup:
 	$(MAKE) frontend-build
 	$(MAKE) frontend-s3-local-upload
 	$(MAKE) release
-	docker compose up -d app nginx queue traefik otel-collector prometheus tempo alertmanager grafana loki alloy
+	docker compose up -d app nginx queue queue-communications traefik otel-collector prometheus tempo alertmanager grafana loki alloy
 	@echo "$(BLUE)L'ambiente è stato configurato ed è in fase di avvio.$(RESET)"
 	@echo "$(BLUE)Endpoint locale: https://localhost:8443$(RESET)"
 	@echo "$(BLUE)Grafana: https://grafana.localhost:8443$(RESET)"
@@ -247,8 +247,8 @@ infra-destroy: infra-init
 # aggiornato le credenziali AWS_REAL_*) e ricrea app e queue per ricaricare la
 # configurazione runtime caricata dal bootstrap Laravel.
 refresh-runtime: infra-apply
-	docker compose up -d --no-deps --force-recreate app queue
-	@echo "$(BLUE)Runtime aggiornato: SSM/Secrets riscritti, app e queue ricreati.$(RESET)"
+	docker compose up -d --no-deps --force-recreate app queue queue-communications
+	@echo "$(BLUE)Runtime aggiornato: SSM/Secrets riscritti, app e worker ricreati.$(RESET)"
 
 # Reset TOTALE della MVP: ferma lo stack, elimina tutti i volumi locali
 # (PostgreSQL, Redis, LocalStack, osservabilita'), svuota il prefisso del
