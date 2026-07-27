@@ -2,7 +2,10 @@
 
 namespace Database\Factories\Copilot;
 
+use App\Copilot\Communications\Enums\CommunicationGenerationStatus;
 use App\Copilot\Communications\Enums\CommunicationStatus;
+use App\Copilot\Communications\Enums\CoverImageSource;
+use App\Copilot\Communications\Enums\CoverImageStatus;
 use App\Models\Copilot\Communication;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -26,6 +29,9 @@ class CommunicationFactory extends Factory
             'style' => fake()->randomElement(['newsletter', 'comunicato', 'memo']),
             'generated_title' => fake()->sentence(),
             'generated_body' => fake()->paragraphs(3, true),
+            'generation_status' => CommunicationGenerationStatus::Completed,
+            'workflow_completed_at' => now(),
+            'cover_status' => CoverImageStatus::Removed,
             'status' => fake()->randomElement(CommunicationStatus::cases()),
         ];
     }
@@ -43,5 +49,39 @@ class CommunicationFactory extends Factory
     public function discarded(): static
     {
         return $this->state(['status' => CommunicationStatus::Discarded]);
+    }
+
+    public function processing(): static
+    {
+        return $this->state([
+            'generated_title' => null,
+            'generated_body' => null,
+            'generation_status' => CommunicationGenerationStatus::Processing,
+            'workflow_started_at' => now(),
+            'workflow_completed_at' => null,
+            'cover_status' => CoverImageStatus::Pending,
+            'status' => CommunicationStatus::Draft,
+        ]);
+    }
+
+    public function coverReady(): static
+    {
+        return $this->state([
+            'cover_image_path' => 'communications/covers/1/'.fake()->uuid().'.png',
+            'cover_image_mime' => 'image/png',
+            'cover_image_size' => 2048,
+            'cover_image_source' => CoverImageSource::Ai,
+            'cover_status' => CoverImageStatus::Ready,
+            'cover_error' => null,
+        ]);
+    }
+
+    public function coverFailed(): static
+    {
+        return $this->state([
+            'cover_image_path' => null,
+            'cover_status' => CoverImageStatus::Failed,
+            'cover_error' => 'Copertina non disponibile: il modello immagini non ha restituito un risultato.',
+        ]);
     }
 }

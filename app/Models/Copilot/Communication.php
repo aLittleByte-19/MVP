@@ -2,9 +2,13 @@
 
 namespace App\Models\Copilot;
 
+use App\Copilot\Communications\Enums\CommunicationGenerationStatus;
 use App\Copilot\Communications\Enums\CommunicationStatus;
+use App\Copilot\Communications\Enums\CoverImageSource;
+use App\Copilot\Communications\Enums\CoverImageStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -16,7 +20,20 @@ use Illuminate\Support\Carbon;
  * @property string $style
  * @property string|null $generated_title
  * @property string|null $generated_body
- * @property string|null $generated_cover_image
+ * @property string|null $image_prompt
+ * @property CommunicationGenerationStatus $generation_status
+ * @property string|null $workflow_execution_arn
+ * @property Carbon|null $workflow_started_at
+ * @property Carbon|null $workflow_completed_at
+ * @property Carbon|null $workflow_failed_at
+ * @property string|null $workflow_failure_reason
+ * @property string|null $error_message
+ * @property string|null $cover_image_path
+ * @property string|null $cover_image_mime
+ * @property int|null $cover_image_size
+ * @property CoverImageSource|null $cover_image_source
+ * @property CoverImageStatus $cover_status
+ * @property string|null $cover_error
  * @property CommunicationStatus $status
  * @property Carbon|null $created_at
  */
@@ -32,7 +49,20 @@ class Communication extends Model
         'style',
         'generated_title',
         'generated_body',
-        'generated_cover_image',
+        'image_prompt',
+        'generation_status',
+        'workflow_execution_arn',
+        'workflow_started_at',
+        'workflow_completed_at',
+        'workflow_failed_at',
+        'workflow_failure_reason',
+        'error_message',
+        'cover_image_path',
+        'cover_image_mime',
+        'cover_image_size',
+        'cover_image_source',
+        'cover_status',
+        'cover_error',
         'status',
     ];
 
@@ -43,6 +73,21 @@ class Communication extends Model
     {
         return [
             'status' => CommunicationStatus::class,
+            'generation_status' => CommunicationGenerationStatus::class,
+            'cover_image_source' => CoverImageSource::class,
+            'cover_status' => CoverImageStatus::class,
+            'workflow_started_at' => 'datetime',
+            'workflow_completed_at' => 'datetime',
+            'workflow_failed_at' => 'datetime',
+            'cover_image_size' => 'integer',
         ];
+    }
+
+    /**
+     * @return MorphMany<WorkflowTask, $this>
+     */
+    public function workflowTasks(): MorphMany
+    {
+        return $this->morphMany(WorkflowTask::class, 'subject');
     }
 }
