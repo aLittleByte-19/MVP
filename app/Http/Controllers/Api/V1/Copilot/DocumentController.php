@@ -304,6 +304,35 @@ class DocumentController
         ]);
     }
 
+    public function index(Request $request)
+    {
+    // Recupera i parametri di filtro dalla request
+    $search = $request->query('search');
+    $status = $request->query('status');
+    $confidence = $request->query('confidence');
+    
+    $documents = SubDocument::query()
+        // Filtro per barra di ricerca (Nome, Cognome, Azienda) - UC-35
+        ->when($search, function ($query, $search) {
+            $query->where(function($q) use ($search) {
+                $q->where('employee_name', 'ilike', "%{$search}%")
+                  ->orWhere('company', 'ilike', "%{$search}%");
+            });
+        })
+        // Filtro per Stato Invio - UC-36
+        ->when($status, function ($query, $status) {
+            $query->where('send_status', $status);
+        })
+        // Filtro per Confidenza (es. sotto una certa soglia) - UC-37
+        ->when($confidence, function ($query, $confidence) {
+            $query->where('confidence_score', '<', $confidence);
+        })
+        ->orderBy('created_at', 'desc')
+        ->paginate(15); // o get() se non usi la paginazione
+
+    return response()->json($documents);
+    }
+
     private function actor(Request $request): MvpUser
     {
         $actor = $request->user();

@@ -143,6 +143,18 @@ export class DocumentWorkflowService {
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 
+  getDocuments(filters?: any): Observable<SubDocument[]> {
+  let params = new HttpParams();
+
+  if (filters) {
+    if (filters.search) params = params.set('search', filters.search);
+    if (filters.status) params = params.set('status', filters.status);
+    if (filters.confidence) params = params.set('confidence', filters.confidence);
+  }
+
+  return this.http.get<SubDocument[]>(`${this.apiUrl}/copilot/documents`, { params });
+}
+
   /**
    * Verifica il content-type dell'anteprima prima di montarne l'iframe:
    * l'endpoint puo' rispondere col PDF (200), 404 se assente o 503 JSON se lo
