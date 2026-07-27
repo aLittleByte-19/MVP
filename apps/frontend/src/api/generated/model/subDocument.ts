@@ -41,5 +41,10 @@ export interface SubDocument {
   /** @nullable */
   error?: string | null;
   previewUrl?: string;
+  sendRecipient?: string;
+  sendSubject?: string;
+  sendBody?: string;
+  sendPreviewUrl?: string;
+  sendExportUrl?: string;
   previewLines: string[];
 }

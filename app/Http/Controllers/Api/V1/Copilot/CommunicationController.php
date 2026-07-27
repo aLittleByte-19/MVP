@@ -7,6 +7,7 @@ use App\Copilot\Communications\Enums\CommunicationGenerationStatus;
 use App\Copilot\Communications\Enums\CommunicationStatus;
 use App\Copilot\Communications\Enums\CoverImageStatus;
 use App\Copilot\Communications\Services\CommunicationCoverService;
+use App\Copilot\Communications\Services\CommunicationPdfService;
 use App\Copilot\Communications\Services\CommunicationWorkflowService;
 use App\Copilot\Identity\MvpUser;
 use App\Copilot\Support\MvpStateService;
@@ -16,8 +17,10 @@ use App\Models\Copilot\Communication;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use League\Flysystem\FilesystemException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -281,6 +284,34 @@ class CommunicationController
         ]);
     }
 
+    /**
+     * @throws AuthorizationException
+     */
+    public function preview(Request $request, Communication $communication, CommunicationPdfService $pdf): Response
+    {
+        $this->assertCommunicationOwnership($communication, $this->actor($request));
+        $this->assertCommunicationReadyForExport($communication);
+
+        return response($pdf->render($communication), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline',
+        ]);
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    public function export(Request $request, Communication $communication, CommunicationPdfService $pdf): Response
+    {
+        $this->assertCommunicationOwnership($communication, $this->actor($request));
+        $this->assertCommunicationReadyForExport($communication);
+
+        return response($pdf->render($communication), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.str_replace('"', '', $pdf->filename($communication)).'"',
+        ]);
+    }
+
     private function actor(Request $request): MvpUser
     {
         $actor = $request->user();
@@ -299,6 +330,21 @@ class CommunicationController
     {
         if ($communication->tenant_id !== $actor->tenantId) {
             throw new AuthorizationException('Communication is outside the authenticated tenant scope.');
+        }
+    }
+
+    /**
+     * @throws ValidationException
+     */
+    private function assertCommunicationReadyForExport(Communication $communication): void
+    {
+        if (
+            $communication->generation_status !== CommunicationGenerationStatus::Completed
+            || $communication->status === CommunicationStatus::Discarded
+        ) {
+            throw ValidationException::withMessages([
+                'communication' => ['La bozza non è ancora pronta per l\'anteprima/esportazione.'],
+            ]);
         }
     }
 }

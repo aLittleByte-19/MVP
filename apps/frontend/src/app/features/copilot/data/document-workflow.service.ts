@@ -6,6 +6,7 @@ import type {
   MvpState,
   SubDocument,
   UpdateExtractedDataRequest,
+  UpdateSendMessageRequest,
   UpdateSubDocumentReviewResponse
 } from "../../../../api/generated/model";
 import { MvpStateStore } from "../../../core/state/mvp-state.store";
@@ -140,6 +141,15 @@ export class DocumentWorkflowService {
   markReviewed(documentId: string): Observable<UpdateSubDocumentReviewResponse> {
     return this.api
       .reviewMvpSubDocument(getSubDocumentNumericId(documentId))
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  saveSendMessage(
+    documentId: string,
+    payload: UpdateSendMessageRequest
+  ): Observable<UpdateSubDocumentReviewResponse> {
+    return this.api
+      .updateMvpSubDocumentSendMessage(getSubDocumentNumericId(documentId), payload)
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 

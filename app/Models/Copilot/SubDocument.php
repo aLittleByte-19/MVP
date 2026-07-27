@@ -18,6 +18,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property SendStatus $send_status
  * @property ReviewStatus $review_status
  * @property string|null $error_message
+ * @property string|null $send_recipient_override
+ * @property string|null $send_subject_override
+ * @property string|null $send_body_override
  * @property OriginalDocument|null $originalDocument
  * @property ExtractedData|null $extractedData
  */
@@ -33,6 +36,9 @@ class SubDocument extends Model
         'send_status',
         'review_status',
         'error_message',
+        'send_recipient_override',
+        'send_subject_override',
+        'send_body_override',
     ];
 
     /**

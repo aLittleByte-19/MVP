@@ -60,6 +60,17 @@ import type { GeneratedDraft } from "../assistant.model";
             <span>Corpo</span>
             <textarea rows="8" [value]="currentDraft.body" readonly></textarea>
           </label>
+          @if (isReadyForPreview(currentDraft)) {
+            <div class="preview-block">
+              <span class="preview-label">Documento finale</span>
+              <div class="preview-actions">
+                <a class="previewLink" [href]="currentDraft.previewUrl" target="_blank" rel="noreferrer">
+                  Apri anteprima
+                </a>
+                <a class="previewLink downloadLink" [href]="currentDraft.exportUrl">Scarica PDF</a>
+              </div>
+            </div>
+          }
           <div class="footer">
             <mvp-status-badge>{{ currentDraft.status }}</mvp-status-badge>
             <span>Pronta per la revisione</span>
@@ -78,6 +89,10 @@ export class GeneratedCommunicationPreviewComponent {
   readonly uploadCover = output<File>();
   readonly removeCover = output<void>();
   protected readonly bodyLength = computed(() => this.draft()?.body.length ?? 0);
+
+  protected isReadyForPreview(draft: GeneratedDraft): boolean {
+    return draft.generationStatus === "completed" && draft.status !== "Scartata" && Boolean(draft.previewUrl);
+  }
 
   protected hasCover(draft: GeneratedDraft): boolean {
     return Boolean(draft.coverImageUrl && draft.coverImageUrl.trim() !== "");

@@ -202,7 +202,10 @@ export class AssistantPage {
       status: communication.status,
       coverImageUrl: communication.coverImageUrl ?? undefined,
       coverStatus: communication.coverStatus,
-      coverError: communication.coverError ?? undefined
+      coverError: communication.coverError ?? undefined,
+      previewUrl: communication.previewUrl,
+      exportUrl: communication.exportUrl,
+      generationStatus: communication.generationStatus
     };
   }
 

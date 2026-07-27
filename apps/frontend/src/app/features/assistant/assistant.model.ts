@@ -27,6 +27,9 @@ export interface GeneratedDraft {
   coverError?: string;
   status: string;
   title: string;
+  previewUrl?: string;
+  exportUrl?: string;
+  generationStatus?: string;
 }
 
 export const communicationTones = [

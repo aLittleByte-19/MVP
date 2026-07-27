@@ -10,6 +10,7 @@ RUN apt-get update \
         libfreetype6-dev \
         libicu-dev \
         libjpeg62-turbo-dev \
+        libonig-dev \
         libpng-dev \
         libpq-dev \
         libzip-dev \
@@ -20,6 +21,7 @@ RUN apt-get update \
         bcmath \
         gd \
         intl \
+        mbstring \
         opcache \
         pcntl \
         pdo_pgsql \

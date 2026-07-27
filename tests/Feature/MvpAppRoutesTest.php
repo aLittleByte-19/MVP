@@ -28,6 +28,19 @@ function mvpPdfUpload(string $filename = 'cedolino.pdf'): UploadedFile
     return UploadedFile::fake()->createWithContent($filename, $pdf->Output('S'));
 }
 
+function mvpAssertWellFormedPdf(string $bytes): void
+{
+    $path = tempnam(sys_get_temp_dir(), 'mvp-pdf-test-');
+    file_put_contents($path, $bytes);
+
+    $pdf = new Fpdi;
+    $pageCount = $pdf->setSourceFile($path);
+
+    @unlink($path);
+
+    expect($pageCount)->toBeGreaterThanOrEqual(1);
+}
+
 function mvpMockWorkflowStart(object $test): void
 {
     $mock = Mockery::mock(DocumentWorkflowService::class);
@@ -583,6 +596,202 @@ test('manual correction endpoint rejects cross tenant access', function () {
         ->assertJsonPath('error.code', 'forbidden');
 });
 
+test('operator can preview a processed sub-document PDF', function () {
+    Storage::fake('s3');
+    config(['mvp.documents.storage_disk' => 's3']);
+
+    $subDocument = SubDocument::factory()->create();
+    Storage::disk('s3')->put($subDocument->file_path, 'contenuto-documento');
+
+    $response = $this->get("/api/v1/documents/{$subDocument->id}/preview");
+
+    $response->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf');
+
+    expect($response->headers->get('Content-Disposition'))->toContain('inline');
+    expect($response->streamedContent())->toBe('contenuto-documento');
+});
+
+test('sub-document preview returns 404 when the file is missing', function () {
+    Storage::fake('s3');
+    config(['mvp.documents.storage_disk' => 's3']);
+
+    $subDocument = SubDocument::factory()->create();
+
+    $this->withHeader('Accept', 'application/json')
+        ->get("/api/v1/documents/{$subDocument->id}/preview")
+        ->assertNotFound();
+});
+
+test('sub-document preview rejects cross tenant access', function () {
+    config(['mvp.identity.mode' => 'trusted_headers']);
+    Storage::fake('s3');
+    config(['mvp.documents.storage_disk' => 's3']);
+
+    $subDocument = SubDocument::factory()->create();
+    Storage::disk('s3')->put($subDocument->file_path, 'contenuto-documento');
+
+    $this->withHeaders([
+        'Accept' => 'application/json',
+        'X-Mvp-User-Id' => 'operator-b',
+        'X-Mvp-User-Email' => 'operator-b@example.test',
+        'X-Mvp-Tenant-Id' => 'another-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
+    ])->get("/api/v1/documents/{$subDocument->id}/preview")
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
+});
+
+test('send message fields are composed from extracted data', function () {
+    $subDocument = SubDocument::factory()->create();
+    ExtractedData::factory()->create([
+        'sub_document_id' => $subDocument->id,
+        'employee_first_name' => 'Mario',
+        'employee_last_name' => 'Rossi',
+        'company_name' => 'Acme S.r.l.',
+        'document_type' => 'Cedolino',
+    ]);
+
+    $response = $this->getJson('/api/v1/state');
+
+    $document = collect($response->json('copilot.documents'))->firstWhere('id', 'sub-'.$subDocument->id);
+
+    expect($document['sendRecipient'])->toBe('Mario Rossi')
+        ->and($document['sendSubject'])->toBe('Invio documento — Cedolino')
+        ->and($document['sendBody'])->toContain('Gentile Mario Rossi,')
+        ->and($document['sendBody'])->toContain('Acme S.r.l.');
+});
+
+test('send message fields fall back gracefully without extracted data', function () {
+    $subDocument = SubDocument::factory()->create();
+
+    $response = $this->getJson('/api/v1/state');
+
+    $document = collect($response->json('copilot.documents'))->firstWhere('id', 'sub-'.$subDocument->id);
+
+    expect($document['sendRecipient'])->toBe('Destinatario non disponibile')
+        ->and($document['sendSubject'])->toBe('Invio documento');
+});
+
+test('operator can correct the send message recipient, subject and body', function () {
+    $subDocument = SubDocument::factory()->create();
+    ExtractedData::factory()->create([
+        'sub_document_id' => $subDocument->id,
+        'employee_first_name' => 'Mario',
+        'employee_last_name' => 'Rossi',
+        'document_type' => 'Cedolino',
+    ]);
+
+    $this->putJson("/api/v1/documents/{$subDocument->id}/send-message", [
+        'recipient' => 'mario.rossi@example.test',
+        'subject' => 'Oggetto corretto a mano',
+        'body' => 'Testo corretto a mano.',
+    ])
+        ->assertOk()
+        ->assertJsonPath('message', 'Messaggio di invio aggiornato.')
+        ->assertJsonPath('document.sendRecipient', 'mario.rossi@example.test')
+        ->assertJsonPath('document.sendSubject', 'Oggetto corretto a mano')
+        ->assertJsonPath('document.sendBody', 'Testo corretto a mano.');
+
+    expect($subDocument->fresh()->send_recipient_override)->toBe('mario.rossi@example.test')
+        ->and($subDocument->fresh()->send_subject_override)->toBe('Oggetto corretto a mano')
+        ->and($subDocument->fresh()->send_body_override)->toBe('Testo corretto a mano.');
+});
+
+test('send message correction is partial and leaves other fields untouched', function () {
+    $subDocument = SubDocument::factory()->create();
+    ExtractedData::factory()->create([
+        'sub_document_id' => $subDocument->id,
+        'employee_first_name' => 'Mario',
+        'employee_last_name' => 'Rossi',
+        'document_type' => 'Cedolino',
+    ]);
+
+    $this->putJson("/api/v1/documents/{$subDocument->id}/send-message", [
+        'subject' => 'Solo oggetto corretto',
+    ])->assertOk();
+
+    $response = $this->getJson('/api/v1/state');
+    $document = collect($response->json('copilot.documents'))->firstWhere('id', 'sub-'.$subDocument->id);
+
+    expect($document['sendSubject'])->toBe('Solo oggetto corretto')
+        ->and($document['sendRecipient'])->toBe('Mario Rossi');
+});
+
+test('send message correction rejects cross tenant access', function () {
+    config(['mvp.identity.mode' => 'trusted_headers']);
+    $subDocument = SubDocument::factory()->create();
+
+    $this->withHeaders([
+        'Accept' => 'application/json',
+        'X-Mvp-User-Id' => 'operator-b',
+        'X-Mvp-User-Email' => 'operator-b@example.test',
+        'X-Mvp-Tenant-Id' => 'another-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
+    ])->putJson("/api/v1/documents/{$subDocument->id}/send-message", [
+        'subject' => 'Tentativo non autorizzato',
+    ])
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
+});
+
+test('send message correction validates field lengths', function () {
+    $subDocument = SubDocument::factory()->create();
+
+    $this->putJson("/api/v1/documents/{$subDocument->id}/send-message", [
+        'subject' => str_repeat('a', 256),
+    ])
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+});
+
+test('operator can preview and export the precompiled send message', function () {
+    $subDocument = SubDocument::factory()->create();
+    ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
+
+    $preview = $this->get("/api/v1/documents/{$subDocument->id}/send-preview");
+    $preview->assertOk()->assertHeader('Content-Type', 'application/pdf');
+    expect($preview->headers->get('Content-Disposition'))->toContain('inline');
+
+    $export = $this->get("/api/v1/documents/{$subDocument->id}/send-export");
+    $export->assertOk()->assertHeader('Content-Type', 'application/pdf');
+    expect($export->headers->get('Content-Disposition'))->toContain('attachment');
+
+    mvpAssertWellFormedPdf($preview->getContent());
+    mvpAssertWellFormedPdf($export->getContent());
+});
+
+test('send-preview and send-export return 404 for a nonexistent sub-document', function () {
+    $this->withHeader('Accept', 'application/json')
+        ->get('/api/v1/documents/999999/send-preview')
+        ->assertNotFound();
+
+    $this->withHeader('Accept', 'application/json')
+        ->get('/api/v1/documents/999999/send-export')
+        ->assertNotFound();
+});
+
+test('send-preview and send-export reject cross tenant access', function () {
+    config(['mvp.identity.mode' => 'trusted_headers']);
+    $subDocument = SubDocument::factory()->create();
+
+    $headers = [
+        'Accept' => 'application/json',
+        'X-Mvp-User-Id' => 'operator-b',
+        'X-Mvp-User-Email' => 'operator-b@example.test',
+        'X-Mvp-Tenant-Id' => 'another-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
+    ];
+
+    $this->withHeaders($headers)->get("/api/v1/documents/{$subDocument->id}/send-preview")
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
+
+    $this->withHeaders($headers)->get("/api/v1/documents/{$subDocument->id}/send-export")
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
+});
+
 test('operator can upload a manual cover image for a communication draft', function () {
     Storage::fake('s3');
     config(['mvp.communications.cover_disk' => 's3']);
@@ -685,4 +894,103 @@ test('manual cover upload validates image payload', function () {
         ])
         ->assertUnprocessable()
         ->assertJsonPath('error.code', 'validation_failed');
+});
+
+test('operator can preview the final laid-out communication PDF', function () {
+    $communication = Communication::factory()->draft()->create();
+
+    $response = $this->get("/api/v1/communications/{$communication->id}/preview");
+
+    $response->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf')
+        ->assertHeader('Content-Disposition', 'inline');
+
+    mvpAssertWellFormedPdf($response->getContent());
+});
+
+test('operator can export the communication as a downloadable PDF', function () {
+    $communication = Communication::factory()->draft()->create();
+
+    $response = $this->get("/api/v1/communications/{$communication->id}/export");
+
+    $response->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf');
+
+    expect($response->headers->get('Content-Disposition'))
+        ->toContain('attachment')
+        ->toContain('.pdf');
+
+    mvpAssertWellFormedPdf($response->getContent());
+});
+
+test('preview embeds the cover image when one is ready', function () {
+    Storage::fake('s3');
+    config(['mvp.communications.cover_disk' => 's3']);
+
+    $communication = Communication::factory()->draft()->coverReady()->create();
+    Storage::disk('s3')->put($communication->cover_image_path, 'contenuto-copertina');
+
+    $response = $this->get("/api/v1/communications/{$communication->id}/preview");
+
+    $response->assertOk();
+    mvpAssertWellFormedPdf($response->getContent());
+});
+
+test('preview and export reject cross tenant access', function () {
+    config(['mvp.identity.mode' => 'trusted_headers']);
+    $communication = Communication::factory()->draft()->create();
+
+    $headers = [
+        'Accept' => 'application/json',
+        'X-Mvp-User-Id' => 'operator-b',
+        'X-Mvp-User-Email' => 'operator-b@example.test',
+        'X-Mvp-Tenant-Id' => 'another-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
+    ];
+
+    $this->withHeaders($headers)->get("/api/v1/communications/{$communication->id}/preview")
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
+
+    $this->withHeaders($headers)->get("/api/v1/communications/{$communication->id}/export")
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
+});
+
+test('preview and export are blocked while generation is not completed', function () {
+    $communication = Communication::factory()->processing()->create();
+
+    $this->withHeader('Accept', 'application/json')
+        ->get("/api/v1/communications/{$communication->id}/preview")
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+
+    $this->withHeader('Accept', 'application/json')
+        ->get("/api/v1/communications/{$communication->id}/export")
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+});
+
+test('preview and export are blocked for a discarded communication', function () {
+    $communication = Communication::factory()->discarded()->create();
+
+    $this->withHeader('Accept', 'application/json')
+        ->get("/api/v1/communications/{$communication->id}/preview")
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+
+    $this->withHeader('Accept', 'application/json')
+        ->get("/api/v1/communications/{$communication->id}/export")
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+});
+
+test('preview and export return 404 for a nonexistent communication', function () {
+    $this->withHeader('Accept', 'application/json')
+        ->get('/api/v1/communications/999999/preview')
+        ->assertNotFound();
+
+    $this->withHeader('Accept', 'application/json')
+        ->get('/api/v1/communications/999999/export')
+        ->assertNotFound();
 });

@@ -4,6 +4,7 @@ namespace App\Copilot\Support;
 
 use App\Copilot\Communications\Enums\CommunicationStatus;
 use App\Copilot\Documents\Enums\ReviewStatus;
+use App\Copilot\Documents\Services\SubDocumentSendMessageService;
 use App\Copilot\Identity\MvpUser;
 use App\Models\Copilot\Communication;
 use App\Models\Copilot\ExtractedData;
@@ -12,6 +13,10 @@ use App\Models\Copilot\SubDocument;
 
 class MvpStateService
 {
+    public function __construct(
+        private readonly SubDocumentSendMessageService $sendMessages,
+    ) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -81,6 +86,8 @@ class MvpStateService
             'style' => $communication->style,
             'title' => $communication->generated_title,
             'body' => $communication->generated_body,
+            'previewUrl' => route('api.v1.communications.preview', ['communication' => $communication->id], false),
+            'exportUrl' => route('api.v1.communications.export', ['communication' => $communication->id], false),
             'coverImageUrl' => $this->coverImageUrl($communication),
             'coverStatus' => $communication->cover_status->value,
             'coverStatusLabel' => $communication->cover_status->label(),
@@ -134,6 +141,8 @@ class MvpStateService
             $previewLines[] = 'Errore estrazione: '.$subDocument->error_message;
         }
 
+        $sendMessage = $this->sendMessages->compose($subDocument);
+
         return [
             'id' => 'sub-'.$subDocument->id,
             'title' => $data?->document_type ?: $original?->original_filename,
@@ -157,6 +166,11 @@ class MvpStateService
             // sarebbe generato con schema "http://" dietro Traefik e bloccato dal
             // browser (mixed-content sull'iframe e sul fetch dell'anteprima).
             'previewUrl' => route('api.v1.documents.preview', ['subDocument' => $subDocument->id], false),
+            'sendRecipient' => $sendMessage['recipient'],
+            'sendSubject' => $sendMessage['subject'],
+            'sendBody' => $sendMessage['body'],
+            'sendPreviewUrl' => route('api.v1.documents.send-preview', ['subDocument' => $subDocument->id], false),
+            'sendExportUrl' => route('api.v1.documents.send-export', ['subDocument' => $subDocument->id], false),
             'previewLines' => $previewLines,
         ];
     }

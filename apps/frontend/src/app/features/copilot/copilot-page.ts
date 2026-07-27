@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
 import { finalize } from "rxjs";
-import type { UpdateExtractedDataRequest } from "../../../api/generated/model";
+import type { UpdateExtractedDataRequest, UpdateSendMessageRequest } from "../../../api/generated/model";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { getApiErrorMessage } from "../../core/errors/api-error";
 import { ErrorStateComponent } from "../../shared/components/error-state/error-state";
@@ -49,9 +49,12 @@ import { SubDocumentListComponent } from "./components/sub-document-list";
         [isDeleting]="isDeleting()"
         [isSavingReview]="isSavingReview()"
         [reviewError]="reviewError()"
+        [isSavingSendMessage]="isSavingSendMessage()"
+        [sendMessageError]="sendMessageError()"
         (deleteDocument)="deleteDocument($event)"
         (markReviewed)="markReviewed($event)"
         (saveReviewRequested)="saveReview($event)"
+        (saveSendMessageRequested)="saveSendMessage($event)"
       />
 
       <mvp-section id="copilot-metrics" title="Qualita e performance OCR">
@@ -76,6 +79,8 @@ export class CopilotPage {
   protected readonly isDeleting = signal(false);
   protected readonly isSavingReview = signal(false);
   protected readonly reviewError = signal<string | null>(null);
+  protected readonly isSavingSendMessage = signal(false);
+  protected readonly sendMessageError = signal<string | null>(null);
 
   private readonly workflow = inject(DocumentWorkflowService);
 
@@ -148,6 +153,21 @@ export class CopilotPage {
         next: () => this.selectedDocumentId.set(event.documentId),
         error: (error: unknown) => {
           this.reviewError.set(getApiErrorMessage(error, "Salvataggio revisione non disponibile."));
+        }
+      });
+  }
+
+  protected saveSendMessage(event: { documentId: string; payload: UpdateSendMessageRequest }): void {
+    this.sendMessageError.set(null);
+    this.isSavingSendMessage.set(true);
+
+    this.workflow
+      .saveSendMessage(event.documentId, event.payload)
+      .pipe(finalize(() => this.isSavingSendMessage.set(false)))
+      .subscribe({
+        next: () => this.selectedDocumentId.set(event.documentId),
+        error: (error: unknown) => {
+          this.sendMessageError.set(getApiErrorMessage(error, "Salvataggio messaggio di invio non disponibile."));
         }
       });
   }

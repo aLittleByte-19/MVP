@@ -17,6 +17,8 @@ export interface Communication {
   title?: string | null;
   /** @nullable */
   body?: string | null;
+  previewUrl: string;
+  exportUrl: string;
   /** @nullable */
   coverImageUrl?: string | null;
   coverStatus: CommunicationCoverStatus;

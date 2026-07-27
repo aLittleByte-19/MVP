@@ -148,6 +148,48 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/communications/{communication}/preview:
+    get:
+      summary: Preview the final laid-out communication PDF
+      operationId: previewMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: PDF preview stream.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/communications/{communication}/export:
+    get:
+      summary: Export the communication as a finalized downloadable PDF
+      operationId: exportMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: PDF attachment.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   /api/v1/documents/ocr:
     post:
       summary: Upload a document for OCR and AI extraction
@@ -268,6 +310,66 @@ paths:
                 format: binary
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/documents/{subDocument}/send-preview:
+    get:
+      summary: Preview the precompiled send message for a sub-document
+      operationId: sendPreviewMvpSubDocument
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      responses:
+        "200":
+          description: PDF preview stream.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/documents/{subDocument}/send-export:
+    get:
+      summary: Export the precompiled send message for a sub-document as a downloadable PDF
+      operationId: sendExportMvpSubDocument
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      responses:
+        "200":
+          description: PDF attachment.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/documents/{subDocument}/send-message:
+    put:
+      summary: Correct the precompiled send message fields for a sub-document
+      operationId: updateMvpSubDocumentSendMessage
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSendMessageRequest"
+      responses:
+        "200":
+          description: Send message updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateSubDocumentReviewResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
 components:
   securitySchemes:
     MvpIdentity:
@@ -458,9 +560,21 @@ components:
           maximum: 100
         markAsValidated:
           type: boolean
+    UpdateSendMessageRequest:
+      type: object
+      properties:
+        recipient:
+          type: [string, "null"]
+          maxLength: 255
+        subject:
+          type: [string, "null"]
+          maxLength: 255
+        body:
+          type: [string, "null"]
+          maxLength: 5000
     Communication:
       type: object
-      required: [id, prompt, tone, style, status, generationStatus, generationStatusLabel, coverStatus, coverStatusLabel]
+      required: [id, prompt, tone, style, status, previewUrl, exportUrl, generationStatus, generationStatusLabel, coverStatus, coverStatusLabel]
       properties:
         id:
           type: integer
@@ -474,6 +588,10 @@ components:
           type: [string, "null"]
         body:
           type: [string, "null"]
+        previewUrl:
+          type: string
+        exportUrl:
+          type: string
         coverImageUrl:
           type: [string, "null"]
         coverStatus:
@@ -537,6 +655,16 @@ components:
         error:
           type: [string, "null"]
         previewUrl:
+          type: string
+        sendRecipient:
+          type: string
+        sendSubject:
+          type: string
+        sendBody:
+          type: string
+        sendPreviewUrl:
+          type: string
+        sendExportUrl:
           type: string
         previewLines:
           type: array

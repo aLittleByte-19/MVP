@@ -23,7 +23,9 @@ Incluso:
 - anteprima di titolo e testo in sola lettura;
 - immagine di copertina generata dall'AI, con sostituzione manuale e rimozione;
 - storico delle generazioni con riapertura dell'anteprima di una bozza selezionata;
-- metriche operative di base (contenuti generati, bozze, stato della generazione e delle copertine).
+- metriche operative di base (contenuti generati, bozze, stato della generazione e delle copertine);
+- anteprima del documento finale impaginato, con marcatore di trasparenza "Creato da AI Assistant";
+- esportazione del documento finale in PDF, con lo stesso marcatore di trasparenza.
 
 Parziale:
 
@@ -54,6 +56,7 @@ Incluso:
 - correzione manuale dei campi estratti e validazione manuale (human-in-the-loop);
 - stati di revisione del sotto-documento (`needs_review`, `auto_validated`, `quarantined`, `manually_validated`);
 - preview PDF del sotto-documento con gestione esplicita dell'errore (risposta applicativa leggibile) quando lo storage non è raggiungibile o il file manca;
+- messaggio di invio precompilato (destinatario, oggetto, testo) calcolato dai dati estratti, con anteprima ed esportazione PDF (UC-48/48.1/48.2/48.3);
 - stato `failed` esplicito quando split o estrazione non riescono;
 - metriche operative su documenti elaborati e soglie di confidenza.
 
@@ -63,7 +66,7 @@ Parziale:
 
 Fuori scope MVP:
 
-- invio dei documenti e relativo "stato invio" (`Inviato`/`Non inviato`): la colonna `sub_documents.send_status` e l'identità SES Terraform esistono ma non c'è codice di invio;
+- invio effettivo del messaggio precompilato e relativo "stato invio" (`Inviato`/`Non inviato`): la colonna `sub_documents.send_status` e l'identità SES Terraform esistono ma non c'è codice di invio; resta esclusa anche la modifica dei campi destinatario/oggetto/testo (UC-49/50/51/52);
 - campi estratti email destinatario, codice fiscale e matricola dipendente;
 - classificazione manuale iniziale in upload;
 - metriche e dashboard sugli invii.

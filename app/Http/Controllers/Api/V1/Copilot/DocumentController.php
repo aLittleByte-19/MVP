@@ -7,9 +7,11 @@ use App\Copilot\Documents\Enums\ProcessingStatus;
 use App\Copilot\Documents\Enums\ReviewStatus;
 use App\Copilot\Documents\Services\DocumentProcessingService;
 use App\Copilot\Documents\Services\DocumentWorkflowService;
+use App\Copilot\Documents\Services\SubDocumentSendMessageService;
 use App\Copilot\Identity\MvpUser;
 use App\Copilot\Support\MvpStateService;
 use App\Http\Requests\Copilot\UpdateExtractedDataRequest;
+use App\Http\Requests\Copilot\UpdateSendMessageRequest;
 use App\Http\Requests\Copilot\UploadDocumentRequest;
 use App\Models\Copilot\ExtractedData;
 use App\Models\Copilot\OriginalDocument;
@@ -17,6 +19,7 @@ use App\Models\Copilot\SubDocument;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use League\Flysystem\FilesystemException;
@@ -304,6 +307,68 @@ class DocumentController
         }, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="'.str_replace('"', '', $filename).'"',
+        ]);
+    }
+
+    public function sendPreview(Request $request, SubDocument $subDocument, SubDocumentSendMessageService $messages): Response
+    {
+        if ($subDocument->originalDocument) {
+            $this->authorizeOriginalDocument($subDocument->originalDocument, $this->actor($request));
+        }
+
+        return response($messages->renderPdf($subDocument), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline',
+        ]);
+    }
+
+    public function sendExport(Request $request, SubDocument $subDocument, SubDocumentSendMessageService $messages): Response
+    {
+        if ($subDocument->originalDocument) {
+            $this->authorizeOriginalDocument($subDocument->originalDocument, $this->actor($request));
+        }
+
+        return response($messages->renderPdf($subDocument), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.str_replace('"', '', $messages->filename($subDocument)).'"',
+        ]);
+    }
+
+    public function updateSendMessage(
+        UpdateSendMessageRequest $request,
+        SubDocument $subDocument,
+        AuditLogger $audit,
+        MvpStateService $state,
+    ): JsonResponse {
+        $actor = $this->actor($request);
+        $this->authorizeSubDocument($subDocument, $actor);
+
+        $validated = $request->validated();
+        $subDocument->update([
+            'send_recipient_override' => array_key_exists('recipient', $validated)
+                ? $validated['recipient']
+                : $subDocument->send_recipient_override,
+            'send_subject_override' => array_key_exists('subject', $validated)
+                ? $validated['subject']
+                : $subDocument->send_subject_override,
+            'send_body_override' => array_key_exists('body', $validated)
+                ? $validated['body']
+                : $subDocument->send_body_override,
+        ]);
+
+        $audit->record(
+            'mvp-sub-document-send-message-corrected',
+            $actor,
+            'sub_document',
+            (string) $subDocument->id,
+            ['fields' => array_keys($validated)],
+            $request,
+        );
+
+        return response()->json([
+            'message' => 'Messaggio di invio aggiornato.',
+            'document' => $state->document($subDocument->fresh()),
+            'state' => $state->forActor($actor),
         ]);
     }
 

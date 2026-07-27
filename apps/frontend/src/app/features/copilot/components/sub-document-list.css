@@ -81,6 +81,11 @@
   box-shadow: 0 8px 18px rgba(47, 103, 143, 0.14);
 }
 
+.downloadLink {
+  background: var(--mvp-primary);
+  color: #ffffff;
+}
+
 .previewLines {
   display: grid;
   gap: 2px;
@@ -266,6 +271,20 @@
   margin-top: var(--mvp-space-1);
   padding-top: var(--mvp-space-3);
   border-top: 1px solid var(--mvp-border-soft);
+}
+
+.sendSection {
+  display: grid;
+  gap: var(--mvp-space-3);
+  margin-top: var(--mvp-space-3);
+  padding-top: var(--mvp-space-3);
+  border-top: 1px solid var(--mvp-border-soft);
+}
+
+.previewActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mvp-space-2);
 }
 
 @media (max-width: 760px) {

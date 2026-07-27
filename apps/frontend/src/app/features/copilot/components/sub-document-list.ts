@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, ou
 import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
 import { DomSanitizer, type SafeResourceUrl } from "@angular/platform-browser";
 import { LucideCheckCircle2, LucidePencil, LucideSave, LucideTrash2, LucideX } from "@lucide/angular";
-import type { SubDocument, UpdateExtractedDataRequest } from "../../../../api/generated/model";
+import type { SubDocument, UpdateExtractedDataRequest, UpdateSendMessageRequest } from "../../../../api/generated/model";
 import { ButtonComponent } from "../../../shared/components/button/button";
 import { EmptyStateComponent } from "../../../shared/components/empty-state/empty-state";
 import { SectionComponent } from "../../../layout/section/section";
@@ -28,6 +28,18 @@ const emptyReviewForm: ReviewFormState = {
   documentDate: "",
   documentType: "",
   description: ""
+};
+
+interface SendMessageFormState {
+  recipient: string;
+  subject: string;
+  body: string;
+}
+
+const emptySendMessageForm: SendMessageFormState = {
+  recipient: "",
+  subject: "",
+  body: ""
 };
 
 @Component({
@@ -207,9 +219,83 @@ const emptyReviewForm: ReviewFormState = {
                     <svg lucideCheckCircle2 aria-hidden="true"></svg>
                     Conferma dati correnti
                   </button>
+                  <button mvpButton variant="secondary" type="button" (click)="isSendOpen.set(true)">
+                    Invia
+                  </button>
                 }
               </div>
             </form>
+
+            @if (isSendOpen()) {
+              <form
+                [formGroup]="sendForm"
+                class="sendSection"
+                [class.isEditing]="isSendEditing()"
+                (ngSubmit)="saveSendMessage(document)"
+              >
+                <div class="inspectorHeading">
+                  <p class="eyebrow">Messaggio di invio</p>
+                  <button mvpButton variant="icon" type="button" aria-label="Chiudi" (click)="isSendOpen.set(false)">
+                    <svg lucideX aria-hidden="true"></svg>
+                  </button>
+                </div>
+                @if (sendMessageError()) {
+                  <p class="errorNote">{{ sendMessageError() }}</p>
+                }
+                <label class="field editableField">
+                  <span>Destinatario</span>
+                  <input
+                    formControlName="recipient"
+                    [readOnly]="!isSendEditing()"
+                    [attr.aria-readonly]="!isSendEditing()"
+                  />
+                </label>
+                <label class="field editableField">
+                  <span>Oggetto</span>
+                  <input
+                    formControlName="subject"
+                    [readOnly]="!isSendEditing()"
+                    [attr.aria-readonly]="!isSendEditing()"
+                  />
+                </label>
+                <label class="field editableField">
+                  <span>Testo</span>
+                  <textarea
+                    rows="6"
+                    formControlName="body"
+                    [readOnly]="!isSendEditing()"
+                    [attr.aria-readonly]="!isSendEditing()"
+                  ></textarea>
+                </label>
+                <div class="previewActions">
+                  @if (isSendEditing()) {
+                    <button
+                      mvpButton
+                      variant="secondary"
+                      type="button"
+                      [disabled]="isSavingSendMessage()"
+                      (click)="cancelSendMessageEdit(document)"
+                    >
+                      <svg lucideX aria-hidden="true"></svg>
+                      Annulla
+                    </button>
+                    <button mvpButton variant="secondary" type="submit" [disabled]="isSavingSendMessage()">
+                      <svg lucideSave aria-hidden="true"></svg>
+                      Salva
+                    </button>
+                  } @else {
+                    <button mvpButton variant="secondary" type="button" (click)="isSendEditing.set(true)">
+                      <svg lucidePencil aria-hidden="true"></svg>
+                      Modifica
+                    </button>
+                    <a class="previewLink" [href]="document.sendPreviewUrl" target="_blank" rel="noreferrer">
+                      Apri anteprima
+                    </a>
+                    <a class="previewLink downloadLink" [href]="document.sendExportUrl">Scarica PDF</a>
+                  }
+                </div>
+              </form>
+            }
           </article>
         </div>
       </mvp-section>
@@ -226,12 +312,17 @@ export class SubDocumentListComponent {
   readonly isDeleting = input.required<boolean>();
   readonly isSavingReview = input.required<boolean>();
   readonly reviewError = input<string | null>(null);
+  readonly isSavingSendMessage = input<boolean>(false);
+  readonly sendMessageError = input<string | null>(null);
   readonly deleteDocument = output<string>();
   readonly markReviewed = output<string>();
   readonly saveReviewRequested = output<{ documentId: string; payload: UpdateExtractedDataRequest }>();
+  readonly saveSendMessageRequested = output<{ documentId: string; payload: UpdateSendMessageRequest }>();
 
   protected readonly formatFallback = formatFallback;
   protected readonly isEditing = signal(false);
+  protected readonly isSendOpen = signal(false);
+  protected readonly isSendEditing = signal(false);
   protected readonly previewStatus = signal<DocumentPreviewStatus>("idle");
   // L'URL dell'anteprima e' una risorsa same-origin generata dal backend; va
   // marcato come SafeResourceUrl, altrimenti Angular blocca il binding su
@@ -249,6 +340,11 @@ export class SubDocumentListComponent {
     documentDate: new FormControl("", { nonNullable: true }),
     documentType: new FormControl("", { nonNullable: true }),
     description: new FormControl("", { nonNullable: true })
+  });
+  protected readonly sendForm = new FormGroup({
+    recipient: new FormControl("", { nonNullable: true }),
+    subject: new FormControl("", { nonNullable: true }),
+    body: new FormControl("", { nonNullable: true })
   });
 
   private readonly workflow = inject(DocumentWorkflowService);
@@ -275,6 +371,27 @@ export class SubDocumentListComponent {
   protected resetForm(document: SubDocument | null): void {
     this.form.setValue(toReviewForm(document));
     this.isEditing.set(false);
+    this.sendForm.setValue(toSendMessageForm(document));
+    this.isSendOpen.set(false);
+    this.isSendEditing.set(false);
+  }
+
+  protected cancelSendMessageEdit(document: SubDocument): void {
+    this.sendForm.setValue(toSendMessageForm(document));
+    this.isSendEditing.set(false);
+  }
+
+  protected saveSendMessage(document: SubDocument): void {
+    const formValue = this.sendForm.getRawValue();
+
+    this.saveSendMessageRequested.emit({
+      documentId: document.id,
+      payload: {
+        recipient: nullableTrim(formValue.recipient),
+        subject: nullableTrim(formValue.subject),
+        body: nullableTrim(formValue.body)
+      }
+    });
   }
 
   protected confidenceDisplay(document: SubDocument): string {
@@ -335,6 +452,18 @@ function toReviewForm(documentItem: SubDocument | null): ReviewFormState {
     documentDate: documentItem.documentDate ?? "",
     documentType: documentItem.documentType ?? documentItem.type ?? "",
     description: documentItem.description ?? ""
+  };
+}
+
+function toSendMessageForm(documentItem: SubDocument | null): SendMessageFormState {
+  if (!documentItem) {
+    return emptySendMessageForm;
+  }
+
+  return {
+    recipient: documentItem.sendRecipient ?? "",
+    subject: documentItem.sendSubject ?? "",
+    body: documentItem.sendBody ?? ""
   };
 }
 

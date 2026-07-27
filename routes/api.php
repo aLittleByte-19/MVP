@@ -37,6 +37,14 @@ Route::prefix('v1')
             ->middleware('throttle:120,1')
             ->name('communications.cover-image.show');
 
+        Route::get('/communications/{communication}/preview', [CommunicationController::class, 'preview'])
+            ->whereNumber('communication')
+            ->name('communications.preview');
+
+        Route::get('/communications/{communication}/export', [CommunicationController::class, 'export'])
+            ->whereNumber('communication')
+            ->name('communications.export');
+
         Route::post('/documents/ocr', [DocumentController::class, 'store'])
             ->middleware('throttle:20,1')
             ->name('documents.ocr');
@@ -60,4 +68,16 @@ Route::prefix('v1')
         Route::get('/documents/{subDocument}/preview', [DocumentController::class, 'preview'])
             ->whereNumber('subDocument')
             ->name('documents.preview');
+
+        Route::get('/documents/{subDocument}/send-preview', [DocumentController::class, 'sendPreview'])
+            ->whereNumber('subDocument')
+            ->name('documents.send-preview');
+
+        Route::get('/documents/{subDocument}/send-export', [DocumentController::class, 'sendExport'])
+            ->whereNumber('subDocument')
+            ->name('documents.send-export');
+
+        Route::put('/documents/{subDocument}/send-message', [DocumentController::class, 'updateSendMessage'])
+            ->whereNumber('subDocument')
+            ->name('documents.send-message.update');
     });

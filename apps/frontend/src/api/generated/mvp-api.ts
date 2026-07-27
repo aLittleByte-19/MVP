@@ -33,6 +33,7 @@ import type {
   StartCommunicationGenerationResponse,
   UpdateExtractedDataRequest,
   UpdateMvpCommunicationCoverImageBody,
+  UpdateSendMessageRequest,
   UpdateSubDocumentReviewResponse,
   UploadDocumentResponse,
   UploadMvpDocumentBody
@@ -320,6 +321,74 @@ formData.append(`image`, updateMvpCommunicationCoverImageBody.image);
   }
 
 /**
+ * @summary Preview the final laid-out communication PDF
+ */
+ previewMvpCommunication(communication: number, options?: HttpClientBodyOptions): Observable<Blob>;
+ previewMvpCommunication(communication: number, options?: HttpClientEventOptions): Observable<HttpEvent<Blob>>;
+ previewMvpCommunication(communication: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<Blob>>;
+  previewMvpCommunication(
+    communication: number, options?: HttpClientObserveOptions): Observable<Blob | HttpEvent<Blob> | AngularHttpResponse<Blob>> {
+    if (options?.observe === 'events') {
+      return this.http.get(
+      `/api/v1/communications/${communication}/preview`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',}
+    ) as Observable<HttpEvent<Blob>>;
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.get(
+      `/api/v1/communications/${communication}/preview`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',}
+    ) as Observable<AngularHttpResponse<Blob>>;
+    }
+
+    return this.http.get(
+      `/api/v1/communications/${communication}/preview`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',}
+    ) as Observable<Blob>;
+  }
+
+/**
+ * @summary Export the communication as a finalized downloadable PDF
+ */
+ exportMvpCommunication(communication: number, options?: HttpClientBodyOptions): Observable<Blob>;
+ exportMvpCommunication(communication: number, options?: HttpClientEventOptions): Observable<HttpEvent<Blob>>;
+ exportMvpCommunication(communication: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<Blob>>;
+  exportMvpCommunication(
+    communication: number, options?: HttpClientObserveOptions): Observable<Blob | HttpEvent<Blob> | AngularHttpResponse<Blob>> {
+    if (options?.observe === 'events') {
+      return this.http.get(
+      `/api/v1/communications/${communication}/export`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',}
+    ) as Observable<HttpEvent<Blob>>;
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.get(
+      `/api/v1/communications/${communication}/export`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',}
+    ) as Observable<AngularHttpResponse<Blob>>;
+    }
+
+    return this.http.get(
+      `/api/v1/communications/${communication}/export`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',}
+    ) as Observable<Blob>;
+  }
+
+/**
  * @summary Upload a document for OCR and AI extraction
  */
  uploadMvpDocument<TData = UploadDocumentResponse>(uploadMvpDocumentBody: UploadMvpDocumentBody, options?: HttpClientBodyOptions): Observable<TData>;
@@ -536,6 +605,115 @@ formData.append(`document`, uploadMvpDocumentBody.document);
     ...(options as Omit<NonNullable<typeof options>, 'observe'>),
         observe: 'body',}
     ) as Observable<Blob>;
+  }
+
+/**
+ * @summary Preview the precompiled send message for a sub-document
+ */
+ sendPreviewMvpSubDocument(subDocument: number, options?: HttpClientBodyOptions): Observable<Blob>;
+ sendPreviewMvpSubDocument(subDocument: number, options?: HttpClientEventOptions): Observable<HttpEvent<Blob>>;
+ sendPreviewMvpSubDocument(subDocument: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<Blob>>;
+  sendPreviewMvpSubDocument(
+    subDocument: number, options?: HttpClientObserveOptions): Observable<Blob | HttpEvent<Blob> | AngularHttpResponse<Blob>> {
+    if (options?.observe === 'events') {
+      return this.http.get(
+      `/api/v1/documents/${subDocument}/send-preview`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',}
+    ) as Observable<HttpEvent<Blob>>;
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.get(
+      `/api/v1/documents/${subDocument}/send-preview`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',}
+    ) as Observable<AngularHttpResponse<Blob>>;
+    }
+
+    return this.http.get(
+      `/api/v1/documents/${subDocument}/send-preview`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',}
+    ) as Observable<Blob>;
+  }
+
+/**
+ * @summary Export the precompiled send message for a sub-document as a downloadable PDF
+ */
+ sendExportMvpSubDocument(subDocument: number, options?: HttpClientBodyOptions): Observable<Blob>;
+ sendExportMvpSubDocument(subDocument: number, options?: HttpClientEventOptions): Observable<HttpEvent<Blob>>;
+ sendExportMvpSubDocument(subDocument: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<Blob>>;
+  sendExportMvpSubDocument(
+    subDocument: number, options?: HttpClientObserveOptions): Observable<Blob | HttpEvent<Blob> | AngularHttpResponse<Blob>> {
+    if (options?.observe === 'events') {
+      return this.http.get(
+      `/api/v1/documents/${subDocument}/send-export`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',}
+    ) as Observable<HttpEvent<Blob>>;
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.get(
+      `/api/v1/documents/${subDocument}/send-export`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',}
+    ) as Observable<AngularHttpResponse<Blob>>;
+    }
+
+    return this.http.get(
+      `/api/v1/documents/${subDocument}/send-export`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',}
+    ) as Observable<Blob>;
+  }
+
+/**
+ * @summary Correct the precompiled send message fields for a sub-document
+ */
+ updateMvpSubDocumentSendMessage<TData = UpdateSubDocumentReviewResponse>(subDocument: number,
+    updateSendMessageRequest: UpdateSendMessageRequest, options?: HttpClientBodyOptions): Observable<TData>;
+ updateMvpSubDocumentSendMessage<TData = UpdateSubDocumentReviewResponse>(subDocument: number,
+    updateSendMessageRequest: UpdateSendMessageRequest, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ updateMvpSubDocumentSendMessage<TData = UpdateSubDocumentReviewResponse>(subDocument: number,
+    updateSendMessageRequest: UpdateSendMessageRequest, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  updateMvpSubDocumentSendMessage<TData = UpdateSubDocumentReviewResponse>(
+    subDocument: number,
+    updateSendMessageRequest: UpdateSendMessageRequest, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
+    if (options?.observe === 'events') {
+      return this.http.put<TData>(
+      `/api/v1/documents/${subDocument}/send-message`,
+      updateSendMessageRequest,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',
+      }
+    );
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.put<TData>(
+      `/api/v1/documents/${subDocument}/send-message`,
+      updateSendMessageRequest,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',
+      }
+    );
+    }
+
+    return this.http.put<TData>(
+      `/api/v1/documents/${subDocument}/send-message`,
+      updateSendMessageRequest,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',
+      }
+    );
   }
 
 };
