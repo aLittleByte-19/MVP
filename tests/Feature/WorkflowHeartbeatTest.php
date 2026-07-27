@@ -70,7 +70,7 @@ test('beat is a no-op when the heartbeat is not activated', function () {
 });
 
 test('consumer completes the task even when heartbeat and callback are rejected', function () {
-    config(['services.sqs.queue_url' => 'http://localstack:4566/000000000000/mvp-documents']);
+    config(['services.workflow.task_queue_url' => 'http://localstack:4566/000000000000/mvp-documents']);
 
     $document = OriginalDocument::factory()->create([
         'processing_status' => ProcessingStatus::Processing,

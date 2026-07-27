@@ -6,9 +6,9 @@ use App\Copilot\Audit\Services\AuditLogger;
 use App\Copilot\Documents\Enums\ProcessingStatus;
 use App\Copilot\Documents\Enums\ReviewStatus;
 use App\Copilot\Documents\Services\DocumentProcessingService;
+use App\Copilot\Documents\Services\DocumentWorkflowService;
 use App\Copilot\Identity\MvpUser;
 use App\Copilot\Support\MvpStateService;
-use App\Copilot\Workflow\Services\DocumentWorkflowService;
 use App\Http\Requests\Copilot\UpdateExtractedDataRequest;
 use App\Http\Requests\Copilot\UploadDocumentRequest;
 use App\Models\Copilot\ExtractedData;
@@ -179,6 +179,9 @@ class DocumentController
 
         if ($original && $original->subDocuments()->doesntExist()) {
             $originalFilePath = $original->file_path;
+            // I task workflow sono legati da una relazione morph, senza foreign
+            // key: vanno rimossi insieme al documento che li ha generati.
+            $original->workflowTasks()->delete();
             $original->delete();
             Storage::disk($disk)->delete($originalFilePath);
         }

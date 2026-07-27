@@ -3,19 +3,19 @@
 namespace App\Copilot\Workflow\Services;
 
 use App\Copilot\Audit\Services\AuditLogger;
-use App\Copilot\Documents\Enums\ProcessingStatus;
-use App\Copilot\Documents\Services\DocumentProcessingService;
 use App\Copilot\Observability\MetricsRecorder;
-use App\Copilot\Ocr\Services\TextractService;
-use App\Models\Copilot\DocumentWorkflowTask;
-use App\Models\Copilot\OriginalDocument;
+use App\Models\Copilot\WorkflowTask;
 use Illuminate\Support\Facades\Log;
 
-class DocumentWorkflowTaskHandler
+/**
+ * Domain-agnostic execution of a Step Functions callback task: it owns
+ * deduplication, the atomic claim, audit and metrics, and delegates the
+ * business step to the handler registered for the task type.
+ */
+class WorkflowTaskRunner
 {
     public function __construct(
-        private readonly DocumentProcessingService $documents,
-        private readonly TextractService $textract,
+        private readonly WorkflowTaskRegistry $registry,
         private readonly AuditLogger $audit,
         private readonly MetricsRecorder $metrics,
     ) {}
@@ -28,19 +28,20 @@ class DocumentWorkflowTaskHandler
     {
         $taskToken = (string) ($message['taskToken'] ?? $message['task_token'] ?? '');
         $taskType = (string) ($message['taskType'] ?? $message['task_type'] ?? '');
-        $documentId = (int) ($message['documentId'] ?? $message['document_id'] ?? 0);
 
-        if ($taskToken === '' || $taskType === '' || $documentId <= 0) {
-            throw new \InvalidArgumentException('Messaggio workflow non valido: taskToken, taskType e documentId sono obbligatori.');
+        if ($taskToken === '' || $taskType === '') {
+            throw new \InvalidArgumentException('Messaggio workflow non valido: taskToken e taskType sono obbligatori.');
         }
 
+        $handler = $this->registry->for($taskType);
+        $subject = $handler->resolveSubject($message);
         $tokenHash = hash('sha256', $taskToken);
-        $document = OriginalDocument::query()->findOrFail($documentId);
 
-        $task = DocumentWorkflowTask::query()->firstOrCreate(
+        $task = WorkflowTask::query()->firstOrCreate(
             ['task_token_hash' => $tokenHash],
             [
-                'original_document_id' => $document->id,
+                'subject_type' => $handler->subjectType(),
+                'subject_id' => $subject->getKey(),
                 'task_type' => $taskType,
                 'status' => 'pending',
                 'input_payload' => $this->redactTaskToken($message),
@@ -79,7 +80,7 @@ class DocumentWorkflowTaskHandler
         $this->metrics->recordDomainCounter('sqs_messages_received_total', ['task_type' => $taskType]);
 
         try {
-            $result = $this->executeTask($taskType, $document->refresh(), $message);
+            $result = $handler->execute($taskType, $subject->refresh(), $message);
             $status = ($result['skipped'] ?? false) ? 'skipped' : 'succeeded';
             $output = array_merge($this->baseOutput($message), [
                 'task_result' => array_merge($result, [
@@ -94,33 +95,27 @@ class DocumentWorkflowTaskHandler
                 'completed_at' => now(),
             ]);
             $this->audit->record(
-                'mvp-document-workflow-task-'.$status,
-                resourceType: 'original_document',
-                resourceId: (string) $document->id,
+                $handler->auditEventPrefix().$status,
+                resourceType: $handler->subjectType(),
+                resourceId: (string) $subject->getKey(),
                 metadata: ['task_type' => $taskType],
-                tenantId: $document->tenant_id,
+                tenantId: $subject->getAttribute('tenant_id'),
             );
 
             return ['callback_required' => true, 'output' => $output];
         } catch (\Throwable $e) {
-            $document->refresh();
-            $userMessage = $document->error_message ?: $e->getMessage();
-
             $task->update([
                 'status' => 'failed',
                 'error_message' => $e->getMessage(),
                 'failed_at' => now(),
             ]);
-            $document->update([
-                'processing_status' => ProcessingStatus::Failed,
-                'workflow_failed_at' => now(),
-                'workflow_failure_reason' => $e->getMessage(),
-                'error_message' => $userMessage,
-            ]);
+            $handler->onFailure($subject->refresh(), $taskType, $e);
+
             $this->metrics->recordDomainCounter('sqs_messages_failed_total', ['task_type' => $taskType]);
             $this->metrics->recordDomainCounter('stepfunctions_executions_failed_total', ['reason' => 'task_failure']);
-            Log::error('Document workflow task failed', [
-                'document_id' => $document->id,
+            Log::error('Workflow task failed', [
+                'subject_type' => $handler->subjectType(),
+                'subject_id' => $subject->getKey(),
                 'task_type' => $taskType,
                 'message' => $e->getMessage(),
             ]);
@@ -134,11 +129,11 @@ class DocumentWorkflowTaskHandler
      * running. Un task gia' running viene riconquistato solo se stale (worker
      * morto oltre il visibility timeout SQS).
      */
-    private function claim(DocumentWorkflowTask $task): bool
+    private function claim(WorkflowTask $task): bool
     {
         $staleBefore = now()->subSeconds(max(60, (int) config('mvp.workflow.running_claim_ttl_seconds', 900)));
 
-        $claimed = DocumentWorkflowTask::query()
+        $claimed = WorkflowTask::query()
             ->whereKey($task->id)
             ->where(function ($query) use ($staleBefore) {
                 $query->whereIn('status', ['pending', 'failed'])
@@ -162,88 +157,6 @@ class DocumentWorkflowTaskHandler
         }
 
         return false;
-    }
-
-    /**
-     * @param  array<string, mixed>  $message
-     * @return array<string, mixed>
-     */
-    private function executeTask(string $taskType, OriginalDocument $document, array $message): array
-    {
-        if ($document->processing_status === ProcessingStatus::Completed && $taskType !== 'dispatch.domain_event') {
-            return ['skipped' => true, 'reason' => 'document_already_completed'];
-        }
-
-        return match ($taskType) {
-            'textract.ocr' => $this->runTextract($document, $message),
-            'bedrock.extract' => $this->runBedrockExtraction($document),
-            'persist.results' => $this->persistResults($document),
-            'dispatch.domain_event' => $this->dispatchDomainEvent($document),
-            default => throw new \InvalidArgumentException("Task workflow non supportato: {$taskType}"),
-        };
-    }
-
-    /**
-     * @param  array<string, mixed>  $message
-     * @return array<string, mixed>
-     */
-    private function runTextract(OriginalDocument $document, array $message): array
-    {
-        $bucket = (string) ($message['s3Bucket'] ?? $message['s3_bucket'] ?? $document->s3_bucket ?? '');
-        $key = (string) ($message['s3Key'] ?? $message['s3_key'] ?? $document->s3_key ?? '');
-        $result = $this->textract->detectText($bucket, $key, $document);
-
-        return [
-            'skipped' => ! $result['enabled'],
-            'textract_job_id' => $result['job_id'],
-            'ocr_confidence_avg' => $result['confidence_avg'],
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function runBedrockExtraction(OriginalDocument $document): array
-    {
-        $this->documents->process($document->refresh());
-
-        return [
-            'skipped' => false,
-            'sub_documents' => $document->refresh()->subDocuments()->count(),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function persistResults(OriginalDocument $document): array
-    {
-        $document->refresh();
-        $status = $document->processing_status;
-
-        return [
-            'skipped' => false,
-            'processing_status' => $status instanceof ProcessingStatus ? $status->value : (string) $status,
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function dispatchDomainEvent(OriginalDocument $document): array
-    {
-        if ($document->processing_status === ProcessingStatus::Completed && $document->workflow_completed_at === null) {
-            $document->update(['workflow_completed_at' => now()]);
-        }
-
-        $this->metrics->recordDomainCounter('document_workflow_completed_total');
-
-        return [
-            'skipped' => false,
-            'event' => $document->processing_status === ProcessingStatus::Completed
-                ? 'DocumentPipelineCompleted'
-                : 'DocumentPipelineProgressed',
-        ];
     }
 
     /**

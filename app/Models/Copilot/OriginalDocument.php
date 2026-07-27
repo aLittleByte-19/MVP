@@ -6,6 +6,7 @@ use App\Copilot\Documents\Enums\ProcessingStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -76,10 +77,10 @@ class OriginalDocument extends Model
     }
 
     /**
-     * @return HasMany<DocumentWorkflowTask, $this>
+     * @return MorphMany<WorkflowTask, $this>
      */
-    public function workflowTasks(): HasMany
+    public function workflowTasks(): MorphMany
     {
-        return $this->hasMany(DocumentWorkflowTask::class);
+        return $this->morphMany(WorkflowTask::class, 'subject');
     }
 }

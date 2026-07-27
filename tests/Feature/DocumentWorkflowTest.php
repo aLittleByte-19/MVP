@@ -2,12 +2,12 @@
 
 use App\Copilot\Audit\Services\AuditLogger;
 use App\Copilot\Documents\Enums\ProcessingStatus;
+use App\Copilot\Documents\Services\DocumentWorkflowService;
 use App\Copilot\Observability\MetricsRecorder;
-use App\Copilot\Workflow\Services\DocumentWorkflowService;
-use App\Copilot\Workflow\Services\DocumentWorkflowTaskHandler;
+use App\Copilot\Workflow\Services\WorkflowTaskRunner;
 use App\Models\Copilot\AuditEvent;
-use App\Models\Copilot\DocumentWorkflowTask;
 use App\Models\Copilot\OriginalDocument;
+use App\Models\Copilot\WorkflowTask;
 use Aws\Result;
 use Aws\Sfn\SfnClient;
 
@@ -51,7 +51,7 @@ test('document workflow service starts a Step Functions execution and stores met
         ->and(AuditEvent::query()->where('event_type', 'mvp-document-workflow-started')->count())->toBe(1);
 });
 
-test('workflow task handler processes textract task idempotently when textract is disabled', function () {
+test('workflow runner processes textract task idempotently when textract is disabled', function () {
     config(['services.textract.enabled' => false]);
 
     $document = OriginalDocument::factory()->create([
@@ -59,7 +59,7 @@ test('workflow task handler processes textract task idempotently when textract i
         's3_bucket' => 'real-bucket',
         's3_key' => 'documents/test.pdf',
     ]);
-    $handler = app(DocumentWorkflowTaskHandler::class);
+    $runner = app(WorkflowTaskRunner::class);
     $message = [
         'taskToken' => 'opaque-token',
         'taskType' => 'textract.ocr',
@@ -72,31 +72,33 @@ test('workflow task handler processes textract task idempotently when textract i
         'taskQueueUrl' => 'http://localstack/queue',
     ];
 
-    $first = $handler->handle($message);
-    $second = $handler->handle($message);
+    $first = $runner->handle($message);
+    $second = $runner->handle($message);
 
     expect($first['callback_required'])->toBeTrue()
         ->and($first['output']['task_result']['status'])->toBe('skipped')
         ->and($second['callback_required'])->toBeFalse()
-        ->and(DocumentWorkflowTask::query()->count())->toBe(1)
-        ->and(DocumentWorkflowTask::query()->first()->status)->toBe('skipped');
+        ->and(WorkflowTask::query()->count())->toBe(1)
+        ->and(WorkflowTask::query()->first()->status)->toBe('skipped')
+        ->and(WorkflowTask::query()->first()->subject_type)->toBe('original_document');
 });
 
-test('workflow task handler does not re-run a task already running on another worker', function () {
+test('workflow runner does not re-run a task already running on another worker', function () {
     $document = OriginalDocument::factory()->create([
         'processing_status' => ProcessingStatus::Processing,
     ]);
 
-    DocumentWorkflowTask::query()->create([
-        'original_document_id' => $document->id,
+    WorkflowTask::query()->create([
+        'subject_type' => 'original_document',
+        'subject_id' => $document->id,
         'task_type' => 'textract.ocr',
         'task_token_hash' => hash('sha256', 'in-flight-token'),
         'status' => 'running',
         'started_at' => now()->subSeconds(30),
     ]);
 
-    $handler = app(DocumentWorkflowTaskHandler::class);
-    $result = $handler->handle([
+    $runner = app(WorkflowTaskRunner::class);
+    $result = $runner->handle([
         'taskToken' => 'in-flight-token',
         'taskType' => 'textract.ocr',
         'documentId' => $document->id,
@@ -104,26 +106,27 @@ test('workflow task handler does not re-run a task already running on another wo
 
     expect($result['callback_required'])->toBeFalse()
         ->and($result['output']['task_result']['duplicate_in_flight'])->toBeTrue()
-        ->and(DocumentWorkflowTask::query()->sole()->status)->toBe('running');
+        ->and(WorkflowTask::query()->sole()->status)->toBe('running');
 });
 
-test('workflow task handler re-claims a stale running task left by a dead worker', function () {
+test('workflow runner re-claims a stale running task left by a dead worker', function () {
     config(['services.textract.enabled' => false, 'mvp.workflow.running_claim_ttl_seconds' => 900]);
 
     $document = OriginalDocument::factory()->create([
         'processing_status' => ProcessingStatus::Processing,
     ]);
 
-    DocumentWorkflowTask::query()->create([
-        'original_document_id' => $document->id,
+    WorkflowTask::query()->create([
+        'subject_type' => 'original_document',
+        'subject_id' => $document->id,
         'task_type' => 'textract.ocr',
         'task_token_hash' => hash('sha256', 'stale-token'),
         'status' => 'running',
         'started_at' => now()->subSeconds(2000),
     ]);
 
-    $handler = app(DocumentWorkflowTaskHandler::class);
-    $result = $handler->handle([
+    $runner = app(WorkflowTaskRunner::class);
+    $result = $runner->handle([
         'taskToken' => 'stale-token',
         'taskType' => 'textract.ocr',
         'documentId' => $document->id,
@@ -131,5 +134,13 @@ test('workflow task handler re-claims a stale running task left by a dead worker
 
     // Textract disabilitato: il task ri-conquistato termina come skipped.
     expect($result['callback_required'])->toBeTrue()
-        ->and(DocumentWorkflowTask::query()->sole()->status)->toBe('skipped');
+        ->and(WorkflowTask::query()->sole()->status)->toBe('skipped');
+});
+
+test('workflow runner rejects a task type without a registered handler', function () {
+    expect(fn () => app(WorkflowTaskRunner::class)->handle([
+        'taskToken' => 'token',
+        'taskType' => 'unknown.task',
+        'documentId' => 1,
+    ]))->toThrow(InvalidArgumentException::class, 'Task workflow non supportato: unknown.task');
 });

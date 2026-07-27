@@ -3,12 +3,13 @@
 namespace App\Models\Copilot;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
- * @property int $original_document_id
+ * @property string $subject_type
+ * @property int $subject_id
  * @property string $task_type
  * @property string $task_token_hash
  * @property string $status
@@ -18,12 +19,13 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $started_at
  * @property Carbon|null $completed_at
  * @property Carbon|null $failed_at
- * @property OriginalDocument|null $originalDocument
+ * @property Model|null $subject
  */
-class DocumentWorkflowTask extends Model
+class WorkflowTask extends Model
 {
     protected $fillable = [
-        'original_document_id',
+        'subject_type',
+        'subject_id',
         'task_type',
         'task_token_hash',
         'status',
@@ -50,10 +52,10 @@ class DocumentWorkflowTask extends Model
     }
 
     /**
-     * @return BelongsTo<OriginalDocument, $this>
+     * @return MorphTo<Model, $this>
      */
-    public function originalDocument(): BelongsTo
+    public function subject(): MorphTo
     {
-        return $this->belongsTo(OriginalDocument::class);
+        return $this->morphTo();
     }
 }

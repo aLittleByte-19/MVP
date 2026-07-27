@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Copilot\Workflow\Services;
+namespace App\Copilot\Documents\Services;
 
 use App\Copilot\Audit\Services\AuditLogger;
 use App\Copilot\Documents\Enums\ProcessingStatus;
