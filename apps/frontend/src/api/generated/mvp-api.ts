@@ -30,6 +30,8 @@ import type {
   GenerateCommunicationRequest,
   GenerateCommunicationResponse,
   MvpState,
+  UpdateCommunicationRequest,
+  UpdateCommunicationResponse,
   UpdateExtractedDataRequest,
   UpdateSubDocumentReviewResponse,
   UploadDocumentResponse,
@@ -147,6 +149,47 @@ export class AlittlebyteMVPAPIService {
     return this.http.post<TData>(
       `/api/v1/communications`,
       generateCommunicationRequest,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',
+      }
+    );
+  }
+
+/**
+ * @summary Update the title and body of a draft communication
+ */
+ updateMvpCommunication<TData = UpdateCommunicationResponse>(communication: number,
+    updateCommunicationRequest: UpdateCommunicationRequest, options?: HttpClientBodyOptions): Observable<TData>;
+ updateMvpCommunication<TData = UpdateCommunicationResponse>(communication: number,
+    updateCommunicationRequest: UpdateCommunicationRequest, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ updateMvpCommunication<TData = UpdateCommunicationResponse>(communication: number,
+    updateCommunicationRequest: UpdateCommunicationRequest, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  updateMvpCommunication<TData = UpdateCommunicationResponse>(
+    communication: number,
+    updateCommunicationRequest: UpdateCommunicationRequest, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
+    if (options?.observe === 'events') {
+      return this.http.put<TData>(
+      `/api/v1/communications/${communication}`,
+      updateCommunicationRequest,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',
+      }
+    );
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.put<TData>(
+      `/api/v1/communications/${communication}`,
+      updateCommunicationRequest,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',
+      }
+    );
+    }
+
+    return this.http.put<TData>(
+      `/api/v1/communications/${communication}`,
+      updateCommunicationRequest,{
         ...(options as Omit<NonNullable<typeof options>, 'observe'>),
         observe: 'body',
       }

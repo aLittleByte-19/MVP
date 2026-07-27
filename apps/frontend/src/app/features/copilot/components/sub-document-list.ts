@@ -1,12 +1,13 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from "@angular/core";
-import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
 import { DomSanitizer, type SafeResourceUrl } from "@angular/platform-browser";
 import { LucideCheckCircle2, LucidePencil, LucideSave, LucideTrash2, LucideX } from "@lucide/angular";
 import type { SubDocument, UpdateExtractedDataRequest } from "../../../../api/generated/model";
 import { ButtonComponent } from "../../../shared/components/button/button";
 import { EmptyStateComponent } from "../../../shared/components/empty-state/empty-state";
 import { SectionComponent } from "../../../layout/section/section";
-import { formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
+import { capitalizeFirst, formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
+import { DOCUMENT_TYPE_OPTIONS, codiceFiscaleValidator } from "../../../shared/util/document-field-validators";
 import { DocumentWorkflowService, type DocumentPreviewStatus } from "../data/document-workflow.service";
 import { DocumentStatusTimelineComponent } from "./document-status-timeline";
 
@@ -123,7 +124,7 @@ const emptyReviewForm: ReviewFormState = {
               [class.confidenceLow]="document.confidence !== null && document.confidence !== undefined && document.confidence < 80"
               [class.statusAuto]="document.reviewStatus === 'auto_validated'"
               [class.statusManual]="document.reviewStatus === 'manually_validated'"
-              (ngSubmit)="saveReview(false)"
+              (ngSubmit)="saveReview()"
             >
               <div class="inspectorGrid">
                 <label class="field editableField">
@@ -150,9 +151,26 @@ const emptyReviewForm: ReviewFormState = {
                   <span>Numero pagine</span>
                   <input [value]="formatFallback(document.pages)" readOnly disabled tabindex="-1" />
                 </label>
-                <label class="field editableField">
+                <label class="field editableField" for="document-type-field">
                   <span>Tipologia documento</span>
-                  <input formControlName="documentType" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
+                  @if (isEditing()) {
+                    <select id="document-type-field" formControlName="documentType">
+                      <option value="">Seleziona...</option>
+                      @for (option of documentTypeOptions(); track option) {
+                        <option [value]="option">
+                          {{ isPredefinedDocumentType(option) ? capitalizeFirst(option) : option }}
+                        </option>
+                      }
+                    </select>
+                  } @else {
+                    <input
+                      id="document-type-field"
+                      [value]="formatFallback(document.documentType ?? document.type)"
+                      readOnly
+                      disabled
+                      tabindex="-1"
+                    />
+                  }
                 </label>
                 <label class="field lockedField">
                   <span>Confidenza</span>
@@ -173,12 +191,28 @@ const emptyReviewForm: ReviewFormState = {
                 </label>
                 <label class="field editableField">
                   <span>Email destinatario</span>
-                  <input formControlName="recipientEmail" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
+                  <input
+                    formControlName="recipientEmail"
+                    [readOnly]="!isEditing()"
+                    [attr.aria-readonly]="!isEditing()"
+                    [class.invalid]="fieldError('recipientEmail')"
+                  />
+                  @if (fieldError("recipientEmail"); as message) {
+                    <span class="fieldError">{{ message }}</span>
+                  }
                 </label>
 
                 <label class="field editableField">
                   <span>Codice Fiscale</span>
-                  <input formControlName="fiscalCode" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
+                  <input
+                    formControlName="fiscalCode"
+                    [readOnly]="!isEditing()"
+                    [attr.aria-readonly]="!isEditing()"
+                    [class.invalid]="fieldError('fiscalCode')"
+                  />
+                  @if (fieldError("fiscalCode"); as message) {
+                    <span class="fieldError">{{ message }}</span>
+                  }
                 </label>
 
                 <label class="field editableField">
@@ -199,13 +233,9 @@ const emptyReviewForm: ReviewFormState = {
                     <svg lucideX aria-hidden="true"></svg>
                     Annulla
                   </button>
-                  <button mvpButton variant="secondary" type="submit" [disabled]="isSavingReview()">
+                  <button mvpButton type="submit" [disabled]="isSavingReview()">
                     <svg lucideSave aria-hidden="true"></svg>
-                    Salva correzioni
-                  </button>
-                  <button mvpButton type="button" [disabled]="isSavingReview()" (click)="saveReview(true)">
-                    <svg lucideCheckCircle2 aria-hidden="true"></svg>
-                    Salva e valida
+                    {{ isSavingReview() ? "Salvataggio" : "Salva" }}
                   </button>
                 } @else {
                   <button
@@ -246,11 +276,22 @@ export class SubDocumentListComponent {
   readonly isDeleting = input.required<boolean>();
   readonly isSavingReview = input.required<boolean>();
   readonly reviewError = input<string | null>(null);
+  readonly fieldErrors = input<Record<string, string> | null>(null);
   readonly deleteDocument = output<string>();
   readonly markReviewed = output<string>();
   readonly saveReviewRequested = output<{ documentId: string; payload: UpdateExtractedDataRequest }>();
 
   protected readonly formatFallback = formatFallback;
+  protected readonly capitalizeFirst = capitalizeFirst;
+  // Il classificatore AI non e' vincolato alle 6 tipologie fisse (UC-43): se il
+  // documento ha gia' un valore fuori enum, lo si aggiunge come opzione extra
+  // cosi' la select lo mostra selezionato invece di apparire vuota.
+  protected readonly documentTypeOptions = computed<string[]>(() => {
+    const current = this.documentItem()?.documentType ?? this.documentItem()?.type ?? "";
+    return current && !this.isPredefinedDocumentType(current)
+      ? [current, ...DOCUMENT_TYPE_OPTIONS]
+      : [...DOCUMENT_TYPE_OPTIONS];
+  });
   protected readonly isEditing = signal(false);
   protected readonly previewStatus = signal<DocumentPreviewStatus>("idle");
   // L'URL dell'anteprima e' una risorsa same-origin generata dal backend; va
@@ -269,8 +310,8 @@ export class SubDocumentListComponent {
     documentDate: new FormControl("", { nonNullable: true }),
     documentType: new FormControl("", { nonNullable: true }),
     description: new FormControl("", { nonNullable: true }),
-    recipientEmail: new FormControl("", { nonNullable: true }),
-    fiscalCode: new FormControl("", { nonNullable: true }),
+    recipientEmail: new FormControl("", { nonNullable: true, validators: [Validators.email] }),
+    fiscalCode: new FormControl("", { nonNullable: true, validators: [codiceFiscaleValidator] }),
     employeeId: new FormControl("", { nonNullable: true })
   });
 
@@ -293,10 +334,66 @@ export class SubDocumentListComponent {
 
       onCleanup(() => subscription.unsubscribe());
     });
+
+    // Evidenzia il campo segnalato dal backend (UC-55/UC-69) invece di un
+    // banner generico: rimuove prima i vecchi errori "backend" residui, poi
+    // riapplica quelli correnti (l'oggetto arriva nuovo ad ogni tentativo).
+    effect(() => {
+      const errors = this.fieldErrors();
+
+      for (const control of Object.values(this.form.controls)) {
+        if (control.hasError("backend")) {
+          const remainingErrors = { ...control.errors };
+          delete remainingErrors["backend"];
+          control.setErrors(Object.keys(remainingErrors).length ? remainingErrors : null);
+        }
+      }
+
+      if (!errors) {
+        return;
+      }
+
+      for (const [field, message] of Object.entries(errors)) {
+        const control = this.form.get(field);
+
+        if (control) {
+          control.setErrors({ ...control.errors, backend: message });
+          control.markAsTouched();
+        }
+      }
+    });
+  }
+
+  /** Messaggio d'errore per il campo, se non valido e gia' toccato dall'utente. */
+  protected fieldError(name: "recipientEmail" | "fiscalCode"): string | null {
+    const control = this.form.get(name);
+
+    if (!control || !control.touched || control.valid) {
+      return null;
+    }
+
+    if (typeof control.errors?.["backend"] === "string") {
+      return control.errors["backend"];
+    }
+
+    if (control.errors?.["email"]) {
+      return "Formato e-mail non valido.";
+    }
+
+    if (control.errors?.["codiceFiscale"]) {
+      return "Il codice fiscale non supera il controllo di validità formale.";
+    }
+
+    return null;
+  }
+
+  protected isPredefinedDocumentType(value: string): boolean {
+    return (DOCUMENT_TYPE_OPTIONS as readonly string[]).includes(value);
   }
 
   protected resetForm(document: SubDocument | null): void {
     this.form.setValue(toReviewForm(document));
+    this.form.markAsUntouched();
     this.isEditing.set(false);
   }
 
@@ -308,20 +405,25 @@ export class SubDocumentListComponent {
     return formatDateForDisplay(document.documentDate ?? document.date);
   }
 
-  protected saveReview(markAsValidated: boolean): void {
+  protected saveReview(): void {
     const document = this.documentItem();
 
     if (!document) {
       return;
     }
 
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
     this.saveReviewRequested.emit({
       documentId: document.id,
-      payload: this.buildPayload(markAsValidated)
+      payload: this.buildPayload()
     });
   }
 
-  private buildPayload(markAsValidated: boolean): UpdateExtractedDataRequest {
+  private buildPayload(): UpdateExtractedDataRequest {
     const formValue = this.form.getRawValue();
     const employee = splitEmployeeName(formValue);
 
@@ -334,7 +436,7 @@ export class SubDocumentListComponent {
       recipientEmail: nullableTrim(formValue.recipientEmail),
       fiscalCode: nullableTrim(formValue.fiscalCode),
       employeeId: nullableTrim(formValue.employeeId),
-      markAsValidated
+      markAsValidated: false
     };
   }
 }

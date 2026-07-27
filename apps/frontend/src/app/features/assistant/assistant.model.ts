@@ -3,8 +3,10 @@ import type { GenerateCommunicationRequest } from "../../../api/generated/model"
 export type CommunicationDraftForm = GenerateCommunicationRequest;
 
 export interface GeneratedDraft {
+  id: number;
   body: string;
   status: string;
+  statusValue: string;
   title: string;
 }
 

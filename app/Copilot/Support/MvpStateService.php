@@ -82,6 +82,7 @@ class MvpStateService
             'title' => $communication->generated_title,
             'body' => $communication->generated_body,
             'status' => $communication->status->label(),
+            'statusValue' => $communication->status->value,
             'createdAt' => $communication->created_at?->format('d/m/Y H:i'),
         ];
     }

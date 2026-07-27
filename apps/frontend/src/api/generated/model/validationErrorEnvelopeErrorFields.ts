@@ -5,8 +5,5 @@
  * Versioned JSON contract consumed by the Angular SPA.
  * OpenAPI spec version: 1.0.0
  */
-import type { ValidationErrorEnvelopeError } from './validationErrorEnvelopeError';
 
-export interface ValidationErrorEnvelope {
-  error: ValidationErrorEnvelopeError;
-}
+export type ValidationErrorEnvelopeErrorFields = {[key: string]: string[]};

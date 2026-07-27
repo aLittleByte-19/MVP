@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@a
 import { finalize } from "rxjs";
 import type { UpdateExtractedDataRequest } from "../../../api/generated/model";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
-import { getApiErrorMessage } from "../../core/errors/api-error";
+import { extractFieldErrors, getApiErrorMessage } from "../../core/errors/api-error";
 import { ErrorStateComponent } from "../../shared/components/error-state/error-state";
 import { MetricsPanelComponent } from "../../shared/components/metrics-panel/metrics-panel";
 import { SectionComponent } from "../../layout/section/section";
@@ -49,6 +49,7 @@ import { SubDocumentListComponent } from "./components/sub-document-list";
         [isDeleting]="isDeleting()"
         [isSavingReview]="isSavingReview()"
         [reviewError]="reviewError()"
+        [fieldErrors]="reviewFieldErrors()"
         (deleteDocument)="deleteDocument($event)"
         (markReviewed)="markReviewed($event)"
         (saveReviewRequested)="saveReview($event)"
@@ -76,6 +77,7 @@ export class CopilotPage {
   protected readonly isDeleting = signal(false);
   protected readonly isSavingReview = signal(false);
   protected readonly reviewError = signal<string | null>(null);
+  protected readonly reviewFieldErrors = signal<Record<string, string> | null>(null);
 
   private readonly workflow = inject(DocumentWorkflowService);
 
@@ -139,6 +141,7 @@ export class CopilotPage {
 
   protected saveReview(event: { documentId: string; payload: UpdateExtractedDataRequest }): void {
     this.reviewError.set(null);
+    this.reviewFieldErrors.set(null);
     this.isSavingReview.set(true);
 
     this.workflow
@@ -148,6 +151,7 @@ export class CopilotPage {
         next: () => this.selectedDocumentId.set(event.documentId),
         error: (error: unknown) => {
           this.reviewError.set(getApiErrorMessage(error, "Salvataggio revisione non disponibile."));
+          this.reviewFieldErrors.set(extractFieldErrors(error));
         }
       });
   }

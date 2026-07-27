@@ -56,6 +56,32 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "502":
           $ref: "#/components/responses/UpstreamUnavailable"
+  /api/v1/communications/{communication}:
+    put:
+      summary: Update the title and body of a draft communication
+      operationId: updateMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCommunicationRequest"
+      responses:
+        "200":
+          description: Communication draft updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateCommunicationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   /api/v1/documents/ocr:
     post:
       summary: Upload a document for OCR and AI extraction
@@ -184,6 +210,13 @@ components:
       name: X-Mvp-User-Id
       description: Identity claims injected by the enterprise boundary or local MVP middleware.
   parameters:
+    CommunicationId:
+      name: communication
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
     OriginalDocumentId:
       name: originalDocument
       in: path
@@ -296,6 +329,28 @@ components:
           $ref: "#/components/schemas/Communication"
         state:
           $ref: "#/components/schemas/MvpState"
+    UpdateCommunicationRequest:
+      type: object
+      required: [title, body]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        body:
+          type: string
+          minLength: 1
+          maxLength: 20000
+    UpdateCommunicationResponse:
+      type: object
+      required: [message, communication, state]
+      properties:
+        message:
+          type: string
+        communication:
+          $ref: "#/components/schemas/Communication"
+        state:
+          $ref: "#/components/schemas/MvpState"
     UploadDocumentResponse:
       type: object
       required: [message, streamUrl]
@@ -376,6 +431,8 @@ components:
           type: string
         status:
           type: string
+        statusValue:
+          type: string
         createdAt:
           type: [string, "null"]
     SubDocument:
@@ -453,5 +510,24 @@ components:
             correlationId:
               type: [string, "null"]
     ValidationErrorEnvelope:
-      allOf:
-        - $ref: "#/components/schemas/ErrorEnvelope"
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId, correlationId, fields]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            requestId:
+              type: [string, "null"]
+            correlationId:
+              type: [string, "null"]
+            fields:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string

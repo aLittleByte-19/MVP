@@ -11,10 +11,13 @@ use App\Copilot\Support\MvpStateService;
 use App\Exceptions\Copilot\AiServiceException;
 use App\Exceptions\Copilot\InvalidAiOutputException;
 use App\Http\Requests\Copilot\GenerateCommunicationRequest;
+use App\Http\Requests\Copilot\UpdateCommunicationRequest;
 use App\Models\Copilot\Communication;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class CommunicationController
 {
@@ -86,6 +89,43 @@ class CommunicationController
         ], 201);
     }
 
+    public function update(
+        UpdateCommunicationRequest $request,
+        Communication $communication,
+        AuditLogger $audit,
+        MvpStateService $state,
+    ): JsonResponse {
+        $actor = $this->actor($request);
+        $this->authorizeCommunication($communication, $actor);
+
+        if ($communication->status !== CommunicationStatus::Draft) {
+            throw ValidationException::withMessages([
+                'communication' => ['Solo le bozze in stato draft sono modificabili.'],
+            ]);
+        }
+
+        $validated = $request->validated();
+
+        $communication->update([
+            'generated_title' => $validated['title'],
+            'generated_body' => $validated['body'],
+        ]);
+        $audit->record(
+            'mvp-communication-edited',
+            $actor,
+            'communication',
+            (string) $communication->id,
+            ['fields' => ['title', 'body']],
+            $request,
+        );
+
+        return response()->json([
+            'message' => 'Bozza aggiornata.',
+            'communication' => $state->communication($communication->fresh()),
+            'state' => $state->forActor($actor),
+        ]);
+    }
+
     private function actor(Request $request): MvpUser
     {
         $actor = $request->user();
@@ -95,5 +135,15 @@ class CommunicationController
         }
 
         return $actor;
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    private function authorizeCommunication(Communication $communication, MvpUser $actor): void
+    {
+        if ($communication->tenant_id !== $actor->tenantId) {
+            throw new AuthorizationException('Comunicazione non autorizzata per il tenant corrente.');
+        }
     }
 }

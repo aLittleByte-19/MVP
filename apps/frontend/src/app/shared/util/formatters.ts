@@ -25,6 +25,11 @@ export function formatDateForDisplay(value: string | null | undefined, fallback 
   return value;
 }
 
+/** Maiuscola solo la prima lettera (es. "documento da firmare" -> "Documento da firmare"). */
+export function capitalizeFirst(value: string): string {
+  return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
+}
+
 export function getSubDocumentNumericId(documentId: string): number {
   return Number.parseInt(documentId.replace("sub-", ""), 10);
 }

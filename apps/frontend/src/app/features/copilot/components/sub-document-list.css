@@ -254,6 +254,28 @@
   outline: 3px solid rgba(111, 166, 207, 0.22);
 }
 
+.field input.invalid,
+.field select.invalid {
+  border-color: #f0bf98;
+  background: var(--mvp-warning-soft);
+}
+
+.fieldError {
+  color: var(--mvp-warning);
+  font-size: var(--mvp-font-xs);
+  font-weight: 700;
+}
+
+.field select {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--mvp-border-soft);
+  border-radius: var(--mvp-radius);
+  background: var(--mvp-surface);
+  color: var(--mvp-text);
+  font-weight: 700;
+}
+
 .formFull {
   grid-column: 1 / -1;
 }

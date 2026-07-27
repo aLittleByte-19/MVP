@@ -40,12 +40,42 @@
   line-height: 1.45;
 }
 
+.isEditing .field input,
+.isEditing .field textarea {
+  border-color: var(--mvp-primary);
+  background: var(--mvp-surface);
+}
+
+.isEditing .field input:focus,
+.isEditing .field textarea:focus {
+  border-color: var(--mvp-primary);
+  outline: 3px solid rgba(111, 166, 207, 0.22);
+}
+
 .footer {
   display: flex;
   flex-wrap: wrap;
   gap: var(--mvp-space-3);
   align-items: center;
   color: var(--mvp-muted);
+}
+
+.errorNote {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #f0bf98;
+  border-radius: var(--mvp-radius);
+  background: var(--mvp-warning-soft);
+  color: var(--mvp-warning);
+  font-weight: 700;
+}
+
+.reviewActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mvp-space-2);
+  justify-content: flex-end;
+  margin-top: var(--mvp-space-1);
 }
 
 .draft h3,

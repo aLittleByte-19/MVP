@@ -6,15 +6,15 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface Communication {
-  id: number;
-  prompt: string;
-  tone: string;
-  style: string;
+export interface UpdateCommunicationRequest {
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
   title: string;
+  /**
+     * @minLength 1
+     * @maxLength 20000
+     */
   body: string;
-  status: string;
-  statusValue?: string;
-  /** @nullable */
-  createdAt?: string | null;
 }

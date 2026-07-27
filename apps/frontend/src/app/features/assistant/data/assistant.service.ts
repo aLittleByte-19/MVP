@@ -1,7 +1,11 @@
 import { Injectable, inject } from "@angular/core";
 import { type Observable, tap } from "rxjs";
 import { AlittlebyteMVPAPIService } from "../../../../api/generated/mvp-api";
-import type { GenerateCommunicationResponse } from "../../../../api/generated/model";
+import type {
+  GenerateCommunicationResponse,
+  UpdateCommunicationRequest,
+  UpdateCommunicationResponse
+} from "../../../../api/generated/model";
 import { MvpStateStore } from "../../../core/state/mvp-state.store";
 import type { CommunicationDraftForm } from "../assistant.model";
 
@@ -19,6 +23,12 @@ export class AssistantService {
   generate(payload: CommunicationDraftForm): Observable<GenerateCommunicationResponse> {
     return this.api
       .generateMvpCommunication(payload)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  update(communicationId: number, payload: UpdateCommunicationRequest): Observable<UpdateCommunicationResponse> {
+    return this.api
+      .updateMvpCommunication(communicationId, payload)
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 }
