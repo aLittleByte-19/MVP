@@ -12,7 +12,7 @@ Le tabelle collegate ereditano il tenant tramite relazioni:
 
 - `sub_documents` via `original_documents`;
 - `extracted_data` via `sub_documents -> original_documents`;
-- `document_workflow_tasks` via `original_documents`.
+- `workflow_tasks` via `original_documents`.
 
 ## Possibile Modello
 

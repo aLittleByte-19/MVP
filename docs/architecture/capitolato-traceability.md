@@ -82,10 +82,11 @@ ecosistema esistente.
 ## 4. Code asincrone su SQS
 
 **Scelta nella MVP:** driver coda predefinito SQS ([`config/queue.php`](../../config/queue.php):
-`'default' => env('QUEUE_CONNECTION', 'sqs')`), con DLQ e worker dedicato per la pipeline
-documentale. Disaccoppiare la richiesta HTTP dall'elaborazione lunga è la scelta corretta per
-una pipeline documentale: retry e dead-letter nativi, worker scalabili orizzontalmente e
-fallimenti isolati e osservabili. Il job runner ipotizzato (Sidekiq, Ruby) è sostituito dal
+`'default' => env('QUEUE_CONNECTION', 'sqs')`), con una coppia coda/DLQ e un worker dedicati per
+ciascuna delle due pipeline: documentale e comunicazioni. Disaccoppiare la richiesta HTTP
+dall'elaborazione lunga è la scelta corretta per entrambe: retry e dead-letter nativi, worker
+scalabili orizzontalmente e fallimenti isolati e osservabili, con il backlog di un dominio che non
+ritarda l'altro. Il job runner ipotizzato (Sidekiq, Ruby) è sostituito dal
 worker queue di Laravel, coerente con la scelta di backend (§1).
 
 **Riscontro nel Capitolato:**
@@ -232,12 +233,17 @@ equivalente locale di CloudWatch/X-Ray.
 
 ## 11. Servizio AI di generazione contenuti (AI Assistant)
 
-**Scelta nella MVP:** generazione di titolo/testo via Bedrock
-([`config/services.php`](../../config/services.php): `'bedrock' => ['model_id' => ...]`),
-con tono e stile parametrizzati. Il backend resta il punto di controllo attorno al modello:
-valida lo schema della risposta, persiste il risultato come bozza e ne traccia generazione e
-qualità. L'AI produce il contenuto, l'applicazione mantiene responsabilità su validazione,
-stato e tracciabilità.
+**Scelta nella MVP:** generazione di titolo/testo e immagine di copertina via Bedrock
+([`config/services.php`](../../config/services.php): `'bedrock' => ['model_id' => ..., 'image_model_id' => ...]`),
+con tono e stile parametrizzati. I due contenuti sono step distinti di una pipeline asincrona
+([`infra/localstack/state-machines/communication-pipeline.asl.json`](../../infra/localstack/state-machines/communication-pipeline.asl.json)):
+il testo è la comunicazione e un suo fallimento fallisce la generazione, mentre una copertina non
+disponibile viene segnalata e lascia la bozza utilizzabile. La copertina è sostituibile e
+rimovibile manualmente dall'operatore
+([`app/Copilot/Communications/Services/CommunicationCoverService.php`](../../app/Copilot/Communications/Services/CommunicationCoverService.php)).
+Il backend resta il punto di controllo attorno al modello: valida lo schema della risposta,
+persiste il risultato come bozza e ne traccia generazione e qualità. L'AI produce il contenuto,
+l'applicazione mantiene responsabilità su validazione, stato e tracciabilità.
 
 **Riscontro nel Capitolato:**
 > «AI Assistant Generativo, dovrà permettere agli utenti della dashboard di creare in autonomia contenuti accattivanti con titolo, descrizione e immagine di copertina attraverso l'uso di AI generativa adeguando tono e stile della comunicazione a quello aziendale (formale, informale, ecc..)»
@@ -249,7 +255,8 @@ stato e tracciabilità.
 Nota: il Capitolato prescrive l'uso di un «motore AI» generativo ma non nomina uno specifico
 servizio cloud; la scelta di Amazon Bedrock è interna alla MVP (vedi elenco finale).
 
-**ADR correlato:** [0005 - No Automatic Fallbacks](../architecture-decisions/0005-no-automatic-fallbacks.md)
+**ADR correlati:** [0005 - No Automatic Fallbacks](../architecture-decisions/0005-no-automatic-fallbacks.md),
+[0009 - Pipeline asincrona delle comunicazioni](../architecture-decisions/0009-communication-async-pipeline-and-cover-storage.md)
 
 ---
 

@@ -11,7 +11,7 @@
 3. `DocumentProcessingService::storeUpload()` stores the original file on the configured document disk.
 4. `DocumentWorkflowService::start()` starts the Step Functions execution and stores execution metadata on `original_documents`.
 5. Step Functions sends callback-token tasks to SQS.
-6. `php artisan mvp:workflow:consume` receives each message, executes the task through `DocumentWorkflowTaskHandler`, and calls `SendTaskSuccess` or `SendTaskFailure`.
+6. `php artisan mvp:workflow:consume --queue=documents` receives each message, executes the task through `DocumentWorkflowTaskHandler`, and calls `SendTaskSuccess` or `SendTaskFailure`.
 7. `textract.ocr` calls real Textract only when `TEXTRACT_ENABLED=true` and stores the page-aware OCR text (`ocr_text` + `ocr_pages`) consumed by the next step.
 8. `bedrock.extract` classifies the document and splits it by recipient, then extracts fields, both from the OCR text via Bedrock (text-only Converse, no PDF document block); it persists `sub_documents` and `extracted_data`. The confidence score is computed from OCR legibility × key-field completeness, not from the model's self-assessment.
 9. `persist.results` returns the current processing state.
@@ -23,7 +23,7 @@
 | --- | --- | --- |
 | `DOCUMENT_PIPELINE_STATE_MACHINE_ARN` | API workflow start | Created by LocalStack Terraform in local runs. |
 | `DOCUMENT_PIPELINE_TASK_QUEUE_URL` | API and worker | SQS callback-token queue URL. |
-| `SQS_DLQ_URL` | DLQ diagnostics | Used by `mvp:dlq:list`. |
+| `SQS_DLQ_URL` | DLQ diagnostics | Used by `mvp:dlq:list --queue=documents`. |
 | `MVP_DOCUMENT_DISK` | Upload storage | Use `s3` for LocalStack demo, `real_s3` for real Textract validation. |
 | `AWS_REAL_*` | Real S3/Textract | Must not be committed. |
 | `TEXTRACT_ENABLED` | OCR | Defaults false in local/CI. Requires `MVP_DOCUMENT_DISK=real_s3`. |
@@ -43,7 +43,7 @@ Upload a small PDF from the SPA, then watch:
 
 ```bash
 make logs
-docker compose exec app php artisan mvp:dlq:list
+docker compose exec app php artisan mvp:dlq:list --queue=documents
 ```
 
 Worker logs are also available in Grafana (Loki): see the `document-pipeline` and `ai-ocr-quality` dashboards or query `{project="mvp", service="queue"}` in the `Logs and Errors` dashboard.
@@ -54,7 +54,7 @@ Worker logs are also available in Grafana (Loki): see the `document-pipeline` an
 make workers WORKERS=2   # docker compose up -d --scale queue=2
 ```
 
-Multiple workers are safe: each Step Functions callback token is tracked in `document_workflow_tasks` (`task_token_hash` unique) and claimed atomically, so a duplicate SQS delivery is consumed without re-running the business logic (`mvp_sqs_messages_duplicate_total` counts these). The SQS `visibility_timeout_seconds` (900s, Terraform) exceeds the longest ASL task timeout (720s), so an in-flight message never becomes visible to a second worker while still being processed. Workers send `SendTaskHeartbeat` while polling Textract and between Bedrock segments; a stale `running` task (dead worker) is re-claimable after `MVP_WORKFLOW_CLAIM_TTL_SECONDS` (default 900s).
+Multiple workers are safe: each Step Functions callback token is tracked in `workflow_tasks` (`task_token_hash` unique) and claimed atomically, so a duplicate SQS delivery is consumed without re-running the business logic (`mvp_sqs_messages_duplicate_total` counts these). The SQS `visibility_timeout_seconds` (900s, Terraform) exceeds the longest ASL task timeout (720s), so an in-flight message never becomes visible to a second worker while still being processed. Workers send `SendTaskHeartbeat` while polling Textract and between Bedrock segments; a stale `running` task (dead worker) is re-claimable after `MVP_WORKFLOW_CLAIM_TTL_SECONDS` (default 900s).
 
 Real AWS OCR smoke is intentionally separate:
 
@@ -69,7 +69,7 @@ MVP_DOCUMENT_DISK=real_s3 TEXTRACT_ENABLED=true make aws-smoke
 | Failure | Observable signal | Operator action |
 | --- | --- | --- |
 | Workflow start failure | `workflow_failed_at`, audit event, `mvp_stepfunctions_executions_failed_total` | Check state machine ARN and SQS queue URL. |
-| SQS task failure | `document_workflow_tasks.status=failed`, worker log | Inspect DLQ and task error. |
+| SQS task failure | `workflow_tasks.status=failed`, worker log | Inspect DLQ and task error. |
 | Textract failure | `mvp_textract_jobs_failed_total` | Check real S3 object key, IAM and Textract limits. |
 | Bedrock failure | failed document/sub-document error message | Check model access, model ID and credentials. |
 | Stuck document | `mvp_document_stuck_processing_total` | Check worker, SQS queue and Step Functions execution. |

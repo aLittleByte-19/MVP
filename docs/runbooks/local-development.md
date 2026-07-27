@@ -138,4 +138,15 @@ Dopo ogni modifica al `.env`, applicare i nuovi valori a SSM/Secrets e ricaricar
 make refresh-runtime
 ```
 
-Le credenziali `AWS_REAL_*` sono condivise da S3, Textract e Bedrock e non vanno salvate in repository. Bedrock richiede `BEDROCK_REGION` e `BEDROCK_MODEL_ID` con accesso gia' abilitato nell'account. Per le cover immagini dell'Assistant imposta `BEDROCK_IMAGE_MODEL_ID` su un modello supportato nel tuo account/regione (ad esempio `amazon.nova-canvas-v1:0` oppure un modello Stability come `stability.sd3-5-large-v1:0`).
+Le credenziali `AWS_REAL_*` sono condivise da S3, Textract e Bedrock e non vanno salvate in repository. Bedrock richiede `BEDROCK_REGION` e `BEDROCK_MODEL_ID` con accesso gia' abilitato nell'account. Per le copertine dell'Assistant imposta `BEDROCK_IMAGE_MODEL_ID` su un modello supportato nel tuo account (default `stability.sd3-5-large-v1:0`; alternative `stability.stable-image-core-v1:0` o `amazon.nova-canvas-v1:0`) e `BEDROCK_IMAGE_REGION` sulla region che lo serve (default `us-west-2`). I modelli immagine sono attivi in region diverse da quelli testo, quindi le copertine usano un client Bedrock dedicato: `BEDROCK_REGION` resta la region del modello testo. Il payload della richiesta viene scelto dal modello configurato, quindi cambiare famiglia non richiede modifiche al codice. Senza modello immagini la generazione del testo funziona normalmente e ogni copertina risulta degradata con motivo esplicito: e' il comportamento atteso, non un errore.
+
+## Worker delle pipeline
+
+Lo stack avvia un worker per pipeline: `queue` consuma la coda documentale, `queue-communications` quella delle comunicazioni. `make workers WORKERS=n` scala entrambi.
+
+```bash
+docker compose logs -f queue-communications
+docker compose exec app php artisan mvp:dlq:list --queue=communications
+```
+
+`COMMUNICATION_PIPELINE_STATE_MACHINE_ARN` e `COMMUNICATION_PIPELINE_TASK_QUEUE_URL` sono chiavi runtime obbligatorie: dopo un aggiornamento del codice che le introduce, esegui `make refresh-runtime` prima di avviare lo stack, altrimenti il boot si interrompe con l'elenco delle chiavi mancanti.

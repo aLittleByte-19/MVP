@@ -41,7 +41,7 @@ vive nell'infrastruttura (LocalStack), non in branch condizionali del codice app
 
 ## Implementation evidence
 
-- Stato `failed` esplicito e `workflow_failure_reason` in `app/Copilot/Workflow/Services/DocumentWorkflowService.php`.
+- Stato `failed` esplicito e `workflow_failure_reason` in `app/Copilot/Documents/Services/DocumentWorkflowService.php`.
 - Errori Bedrock → `AiServiceException` → 502 in `app/Copilot/Ai/BedrockService.php`.
 - Guard fail-fast Textract/`real_s3` in `DocumentWorkflowService::start()`; assert chiavi
   obbligatorie in `app/Copilot/Support/RuntimeConfigurationLoader.php`.

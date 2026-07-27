@@ -10,9 +10,9 @@
 
 L'applicativo è una MVP di **pipeline documentale HR assistita da AI** composta da due moduli funzionali: un **AI Assistant** che genera comunicazioni aziendali a partire da un prompt (tono e stile vincolati), e un **Co-Pilot CdL** che riceve PDF di qualsiasi tipologia, ne riconosce tipo e destinatari (sempre almeno uno) dal testo OCR tramite LLM, li separa in sotto-documenti per destinatario, ne estrae campi strutturati e ne traccia lo stato di lavorazione con una confidenza calcolata su leggibilità OCR e completezza dei campi.
 
-Il backend è **Laravel 12 / PHP 8.4** con PostgreSQL e Redis; il frontend è una **SPA Angular + TypeScript** servita di default tramite **Traefik → emulatore CDN locale (Nginx) → S3 LocalStack**, con Nginx applicativo come proxy per `/api/`, `/health` e `/ready`. L'elaborazione documentale è asincrona: una **state machine AWS Step Functions** (emulata in LocalStack) orchestra i task via **SQS con callback task token**, consumati da un worker Laravel dedicato. Le integrazioni AI usano **AWS Bedrock** (classificazione/split ed estrazione campi sul testo OCR, generazione comunicazioni — tutte chiamate solo-testo via Converse) e **AWS Textract** per l'OCR che alimenta la pipeline documentale (necessario per l'analisi, attivabile solo con S3 reale). La configurazione runtime arriva da **SSM Parameter Store + Secrets Manager**, caricata prima del boot di Laravel.
+Il backend è **Laravel 12 / PHP 8.4** con PostgreSQL e Redis; il frontend è una **SPA Angular + TypeScript** servita di default tramite **Traefik → emulatore CDN locale (Nginx) → S3 LocalStack**, con Nginx applicativo come proxy per `/api/`, `/health` e `/ready`. Entrambi i flussi AI sono asincroni: due **state machine AWS Step Functions** (emulate in LocalStack) orchestrano i task via **SQS con callback task token**, ciascuna con la propria coda e il proprio worker Laravel dedicato. Le integrazioni AI usano **AWS Bedrock** (classificazione/split ed estrazione campi sul testo OCR e generazione del testo delle comunicazioni via Converse, copertine via `invokeModel` su un modello immagini in una region propria) e **AWS Textract** per l'OCR che alimenta la pipeline documentale (necessario per l'analisi, attivabile solo con S3 reale). La configurazione runtime arriva da **SSM Parameter Store + Secrets Manager**, caricata prima del boot di Laravel.
 
-L'osservabilità è il tratto più maturo della MVP: metriche golden-signal e di dominio esposte in formato Prometheus, trace OTLP verso Tempo, log dei container verso Loki via Alloy, 10 alert rule, 5 dashboard Grafana provisioned e runbook collegati. La CI (GitHub Actions) copre lint, analisi statica, test backend e frontend, scansione Trivy delle immagini, validazione Terraform e audit di accessibilità axe/pa11y contro lo stack reale.
+L'osservabilità è il tratto più maturo della MVP: metriche golden-signal e di dominio esposte in formato Prometheus, trace OTLP verso Tempo, log dei container verso Loki via Alloy, 15 alert rule, 6 dashboard Grafana provisioned e runbook collegati. La CI (GitHub Actions) copre lint, analisi statica, test backend e frontend, scansione Trivy delle immagini, validazione Terraform e audit di accessibilità axe/pa11y contro lo stack reale.
 
 Il livello di maturità è **alto per una MVP**: confini architetturali chiari, validazione input sistematica, idempotenza nel workflow, audit trail, hardening container e di rete. Non è production-ready per scelta dichiarata di scope: mancano IdP reale, invio email, gestione segreti non-default e ridondanza operativa (dettagli in §17–19).
 
@@ -29,14 +29,14 @@ L'analisi si basa sullo **stato attuale del codice**: route, controller, service
 | Area | Path | Responsabilità |
 |---|---|---|
 | Backend applicativo | `app/` | Controller HTTP, middleware, model, console command |
-| Domini MVP | `app/Copilot/` | Service layer per dominio: `Ai/` (Bedrock), `Ocr/` (Textract), `Documents/`, `Workflow/`, `Identity/`, `Audit/`, `Observability/`, `Support/` |
+| Domini MVP | `app/Copilot/` | Service layer per dominio: `Ai/` (Bedrock), `Ocr/` (Textract), `Documents/` (Co-Pilot, elaborazione e orchestrazione), `Communications/` (AI Assistant, copertine e orchestrazione), `Workflow/` (infrastruttura di orchestrazione comune), `Identity/`, `Audit/`, `Observability/`, `Support/` |
 | Route | `routes/api.php`, `routes/web.php` | API v1 + endpoint di sistema |
 | Schema dati | `database/migrations/` | 6 tabelle di dominio + indici/FK |
 | Frontend SPA | `apps/frontend/` | Angular + TypeScript, client API Angular generato |
 | Contratto API | `openapi/v1/alittlebyte-mvp-api.yaml` | OpenAPI 3.1, fonte del client frontend |
-| Infrastruttura locale | `docker-compose.yml`, `docker/` | 21 servizi: app, worker, nginx, edge-cdn, traefik, datastore, stack osservabilità, tool |
-| Infrastruttura AWS (emulata) | `infra/localstack/` | Terraform: SQS+DLQ, S3 documenti, S3 frontend, SSM, Secrets Manager, EventBridge, IAM, Step Functions, SES identity |
-| State machine | `infra/localstack/state-machines/document-pipeline.asl.json` | Definizione ASL della pipeline documentale |
+| Infrastruttura locale | `docker-compose.yml`, `docker/` | 22 servizi: app, due worker (uno per pipeline), nginx, edge-cdn, traefik, datastore, stack osservabilità, tool |
+| Infrastruttura AWS (emulata) | `infra/localstack/` | Terraform: due coppie SQS+DLQ, S3 documenti, S3 frontend, SSM, Secrets Manager, EventBridge, IAM, due Step Functions, SES identity |
+| State machine | `infra/localstack/state-machines/` | Definizioni ASL delle pipeline documentale e comunicazioni |
 | Osservabilità | `docker/otel-collector/`, `docker/prometheus/`, `docker/grafana/`, `docker/loki/`, `docker/alloy/`, `docker/tempo/`, `docker/alertmanager/` | Collector, scrape, alert rule, dashboard, log shipping |
 | CI | `.github/workflows/ci.yml`, `mirror-images.yml`, `scripts/ci/` | Pipeline unica a 3 job (backend, frontend, stack) + mirroring immagini su GHCR |
 | Test | `tests/` (backend Pest), `apps/frontend/src/**/*.spec.ts` (Jest) | Feature + Unit backend, unit/component test frontend |
@@ -166,10 +166,10 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 
 ### AWS Bedrock (LLM)
 
-**Dove**: `app/Copilot/Ai/BedrockService.php` (client `BedrockRuntimeClient` costruito in `AppServiceProvider` con timeout 300s), config in `config/services.php` (`model_id`, `region`, `endpoint`, credenziali AWS reali opzionali; default modello `amazon.nova-lite-v1:0` da `docker-compose.yml`).
-**Ruolo**: tre operazioni — `generateCommunication()` (JSON `{title, body}` da prompt+tono+stile), `splitDocument()` (segmenti per destinatario dal testo OCR), `extractFields()` (campi strutturati dal testo OCR; la confidenza effettiva è calcolata a valle su leggibilità OCR e completezza dei campi). Tutte le chiamate sono solo-testo via Converse.
-**Valutazione**: parsing difensivo dell'output LLM (estrazione JSON da fence markdown con fallback regex, normalizzazione campi in `normalizeSplitResponse()`), errori AWS mappati su `AiServiceException` → 502 con messaggio user-friendly, metriche di fallimento dedicate (`BedrockFailureRateHigh` alert).
-**Gap**: l'output del modello non è validato contro uno schema rigido (solo normalizzazione); nessuna mitigazione esplicita di prompt injection veicolata dal contenuto del PDF; nessun circuit breaker (solo retry SDK).
+**Dove**: `app/Copilot/Ai/BedrockService.php` (due client `BedrockRuntimeClient` costruiti in `AppServiceProvider` con timeout 300s: uno per i modelli testo, uno per quelli immagine, che sono serviti in region diverse), config in `config/services.php` (`model_id`, `image_model_id`, `region`, `image_region`, `endpoint`, credenziali AWS reali opzionali; default `amazon.nova-lite-v1:0` e `stability.sd3-5-large-v1:0` da `docker-compose.yml`).
+**Ruolo**: quattro operazioni — `generateCommunication()` (JSON `{title, body, imagePrompt}` da prompt+tono+stile: lo stesso modello scrive anche la direzione visiva della copertina, avendo davanti il testo appena generato), `generateCommunicationImageWithMeta()` (copertina via `invokeModel`, con payload derivato dalla famiglia del modello configurato — Stability SD3/Core, Stability XL, Nova Canvas), `splitDocument()` (segmenti per destinatario dal testo OCR), `extractFields()` (campi strutturati dal testo OCR; la confidenza effettiva è calcolata a valle su leggibilità OCR e completezza dei campi). Le operazioni testuali usano Converse, la generazione immagini `invokeModel`.
+**Valutazione**: ogni risposta è trattata come input non attendibile — parsing difensivo (estrazione JSON da fence markdown con fallback regex) seguito da validazione contro JSON Schema in `AiOutputValidator` (`resources/schemas/ai/`) più le regole semantiche che uno schema non esprime; errori AWS mappati su `AiServiceException` → 502 con messaggio user-friendly, metriche di fallimento dedicate (`BedrockFailureRateHigh` alert). Sugli errori immagine la classificazione distingue i casi permanenti (accesso negato, modello non attivo, credenziali) da quelli ritentabili, evitando tentativi certi di fallire.
+**Gap**: nessuna mitigazione esplicita di prompt injection veicolata dal contenuto del PDF; nessun circuit breaker (solo retry SDK).
 
 ### AWS Textract (OCR, opzionale)
 
@@ -180,10 +180,10 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 
 ### AWS Step Functions + SQS (workflow asincrono)
 
-**Dove**: `infra/localstack/state-machines/document-pipeline.asl.json`, `infra/localstack/main.tf` (state machine, coda + DLQ, IAM role/policy, EventBridge), `app/Copilot/Workflow/Services/DocumentWorkflowService.php`, `DocumentWorkflowTaskHandler.php`, `app/Console/Commands/ConsumeWorkflowTasks.php`.
+**Dove**: `infra/localstack/state-machines/` (document e communication pipeline), `infra/localstack/main.tf` (state machine, code + DLQ per dominio, IAM role/policy, EventBridge), `app/Copilot/Workflow/` (runner, registry, heartbeat, contesto di correlazione), `app/Copilot/Documents/Services/DocumentWorkflowService.php` e `DocumentWorkflowTaskHandler.php`, `app/Copilot/Communications/Services/CommunicationWorkflowService.php` e `CommunicationWorkflowTaskHandler.php`, `app/Console/Commands/ConsumeWorkflowTasks.php`.
 **Ruolo**: la state machine usa il **callback pattern** (`arn:aws:states:::sqs:sendMessage.waitForTaskToken`): ogni stato pubblica su SQS un messaggio con task token e tipo (`textract.ocr`, `bedrock.extract`, `persist.results`, `dispatch.domain_event`); il worker Laravel esegue e risponde con `sendTaskSuccess/Failure`. Retry dichiarativi nello ASL (2 tentativi, backoff 2x), timeout per stato (420s Textract, 720s Bedrock), `Catch` → stato `Failed`.
 **Motivazione**: separa lo stato del workflow dall'esecutore; i task pesanti (LLM, OCR) escono dal ciclo HTTP; la DLQ cattura i messaggi non processabili.
-**Valutazione**: **idempotenza reale** — `document_workflow_tasks.task_token_hash` (SHA-256, unique) deduplica i re-delivery SQS e un task già `succeeded/skipped` ritorna il risultato cached senza rieseguire. **Heartbeat implementato**: l'ASL dichiara `HeartbeatSeconds` per ogni task (180s Textract, 240s Bedrock, 90s persist/dispatch) e il worker invia `SendTaskHeartbeat` tramite `WorkflowTaskHeartbeat` durante il polling Textract e tra i segmenti Bedrock (`TextractService`, `DocumentProcessingService`); un heartbeat rifiutato degrada a no-op senza abortire il task di business. È il punto più sofisticato del backend.
+**Valutazione**: **idempotenza reale** — `workflow_tasks.task_token_hash` (SHA-256, unique) deduplica i re-delivery SQS e un task già `succeeded/skipped` ritorna il risultato cached senza rieseguire. **Heartbeat implementato**: l'ASL dichiara `HeartbeatSeconds` per ogni task (180s Textract, 240s Bedrock, 90s persist/dispatch) e il worker invia `SendTaskHeartbeat` tramite `WorkflowTaskHeartbeat` durante il polling Textract e tra i segmenti Bedrock (`TextractService`, `DocumentProcessingService`); un heartbeat rifiutato degrada a no-op senza abortire il task di business. È il punto più sofisticato del backend.
 **Gap vs best practice AWS** ([Step Functions best practices](https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html)): in compose gira una sola replica del worker (`restart: unless-stopped`), anche se il design è già concorrenza-safe (claim atomico via `task_token_hash` + `MVP_WORKFLOW_CLAIM_TTL_SECONDS`, `visibility_timeout_seconds` SQS 900s > timeout ASL massimo 720s); in LocalStack il comportamento di SFN non è identico ad AWS (Express vs Standard, quota, exactly-once non garantito).
 
 ### LocalStack 4.5 + Terraform 1.10
@@ -203,7 +203,7 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 ### OpenTelemetry Collector + Prometheus + Tempo + Loki + Alloy + Grafana + Alertmanager
 
 **Dove**: `docker/otel-collector/config.yml`, `docker/prometheus/{prometheus.yml,rules/}`, `docker/tempo/`, `docker/loki/`, `docker/alloy/config.alloy`, `docker/grafana/{provisioning,dashboards}/`, `docker/alertmanager/`.
-**Ruolo e flusso**: il collector è l'**unico punto di raccolta** — riceve OTLP (gRPC/HTTP) da app e worker, scrappa `/internal/metrics` via nginx e le metriche Traefik `:9100`, e re-espone tutto su `:9464` dove Prometheus fa un solo scrape. Trace → Tempo (OTLP), log applicativi → Loki (ingestion OTLP nativa di Loki 3.x); Alloy raccoglie i log dei container (filtrati per label compose project) e li spedisce a Loki. Grafana ha datasource provisioned da file (Prometheus/Tempo/Loki, non editabili) e 5 dashboard versionate: `api-golden-signals`, `document-pipeline`, `ai-ocr-quality`, `queues-and-dlq`, `logs-and-errors`.
+**Ruolo e flusso**: il collector è l'**unico punto di raccolta** — riceve OTLP (gRPC/HTTP) da app e worker, scrappa `/internal/metrics` via nginx e le metriche Traefik `:9100`, e re-espone tutto su `:9464` dove Prometheus fa un solo scrape. Trace → Tempo (OTLP), log applicativi → Loki (ingestion OTLP nativa di Loki 3.x); Alloy raccoglie i log dei container (filtrati per label compose project) e li spedisce a Loki. Grafana ha datasource provisioned da file (Prometheus/Tempo/Loki, non editabili) e 6 dashboard versionate: `api-golden-signals`, `document-pipeline`, `communication-pipeline`, `ai-ocr-quality`, `queues-and-dlq`, `logs-and-errors`.
 **Alerting**: 10 regole in 4 file (`docker/prometheus/rules/`): `WorkerDown`, `DocumentStuckInProcessing`, `StepFunctionExecutionFailed`, `TextractFailureRateHigh`, `BedrockFailureRateHigh`, `TargetDown`, `APIHighErrorRate`, `APIHighLatencyP95`, `QueueBacklogHigh`, `DLQNotEmpty` — ognuna rimanda a un runbook in `docs/runbooks/`.
 **Motivazione**: copre i [quattro golden signal SRE](https://sre.google/sre-book/monitoring-distributed-systems/) (latency, traffic, errors, saturation) più le metriche di dominio della pipeline.
 **Valutazione**: architettura corretta (un solo collettore, processori `memory_limiter`+`batch`, config validate in CI con `promtool` e `otelcol validate` via `make observability-config`). Gap: niente retention/SLO formalizzati; Alertmanager senza receiver reali (routing demo).
@@ -231,14 +231,47 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 
 ### 6.1 Generazione comunicazione HR (implementato)
 
+```mermaid
+sequenceDiagram
+    participant FE as SPA (EventSource)
+    participant API as Laravel API
+    participant SFN as Step Functions
+    participant SQS as SQS communications queue
+    participant W as Worker (--queue=communications)
+    participant BR as Bedrock
+    participant S3 as S3 (LocalStack)
+
+    FE->>API: POST /api/v1/communications (prompt, tono, stile)
+    API->>API: GenerateCommunicationRequest (whitelist tono/stile)
+    API->>API: Communication generation_status=pending
+    API->>SFN: startExecution (communication_id, correlation_id)
+    API-->>FE: 202 + streamUrl
+    FE->>API: GET /communications/{id}/stream (SSE)
+    SFN->>SQS: communication.generate_text + taskToken
+    W->>SQS: long polling (wait 10s)
+    W->>BR: converse (titolo + corpo)
+    W-->>SFN: sendTaskSuccess
+    API-->>FE: event text (titolo, corpo)
+    SFN->>SQS: communication.generate_cover + taskToken
+    W->>BR: invokeModel (immagine)
+    W->>S3: put communications/covers/{id}/{uuid}.png
+    W-->>SFN: sendTaskSuccess (anche se la copertina degrada)
+    API-->>FE: event cover (url o motivo del degrado)
+    SFN->>SQS: communication.finalize + taskToken
+    W->>W: generation_status=completed
+    API-->>FE: event done (stato aggiornato)
+```
+
 1. `POST /api/v1/communications` (throttle 20/min) → middleware `mvp.identity` (risolve `MvpUser` da config locale o trusted header) e `mvp.authorize` (tenant + ruolo `mvp-operator|mvp-admin`).
 2. `GenerateCommunicationRequest` valida `prompt` (12–5000 char), `tone` e `style` su whitelist chiuse.
-3. `CommunicationController::store()` → `BedrockService::generateCommunication()` → parsing/normalizzazione JSON.
-4. Persistenza `Communication` con stato `Draft`; audit event `mvp-communication-generated` (con request/correlation ID).
-5. Risposta 201 con la comunicazione e lo stato attore aggiornato; su errore AWS → 502 `upstream_unavailable`.
-6. Frontend: `AssistantService` aggiorna lo store Angular con lo stato autorevole e mostra la bozza.
+3. `CommunicationController::store()` persiste la `Communication` con `generation_status=pending` e stato `Draft`, registra l'audit event `mvp-communication-generation-requested` e avvia l'esecuzione con `CommunicationWorkflowService::start()`.
+4. Risposta **202** con `communicationId` e `streamUrl` relativo; la SPA apre l'`EventSource`.
+5. `communication.generate_text` chiama Bedrock e persiste titolo, corpo e `image_prompt` (audit `mvp-communication-generated`). Lo stesso modello testuale scrive la direzione visiva della copertina avendo davanti il testo appena generato, quindi l'immagine segue la comunicazione reale e non il solo prompt dell'operatore. Un fallimento qui porta `generation_status=failed`: il testo è la comunicazione.
+6. `communication.generate_cover` passa `image_prompt` al modello immagini, scrive il risultato sul disco copertine (`MVP_COMMUNICATION_COVER_DISK`, l'S3 emulato per default) sotto `communications/covers/` e valorizza `cover_status=ready`. Senza direzione visiva dal modello si usa un soggetto corporate generico. Se il modello non è configurato, nega l'accesso o filtra il contenuto, il task registra `cover_status=failed` con `cover_error` e **chiude comunque con successo**.
+7. `communication.finalize` porta `generation_status=completed`, chiude una copertina rimasta pendente e registra `communication_workflow_completed_total`.
+8. Frontend: `AssistantService` popola la bozza per gradi (evento `text`, poi `cover`) e sul `done` rimpiazza lo store con lo stato autorevole.
 
-**Test**: `CommunicationStorageTest`, `BedrockServiceTest` (parsing), `HealthAndApiContractTest`.
+**Test**: `MvpAppRoutesTest` (accettazione 202, pipeline completa, copertina degradata, fallimento testo, correlation id negli audit), `CommunicationCoverStorageTest` equivalenti sulle rotte cover, `BedrockServiceTest` (parsing testo e immagini), `OpenApiContractTest`.
 
 ### 6.2 Pipeline documentale (implementato, con orchestrazione simulata in LocalStack)
 
@@ -302,14 +335,14 @@ Sei tabelle di dominio (`database/migrations/`):
 
 | Tabella | Chiavi/indici notevoli | Note |
 |---|---|---|
-| `communications` | indice su `status`; CHECK su stati (`draft`, `approved`, `discarded`) | stato castato a enum PHP `CommunicationStatus` |
+| `communications` | indici su `status`, `generation_status`, `cover_status`, `workflow_execution_arn`; CHECK su tutti e tre gli stati | `status` è la decisione dell'operatore, `generation_status` il ciclo della pipeline, `cover_status` l'esito della copertina; colonne workflow (arn, started/completed/failed_at, failure_reason), `image_prompt` con la direzione visiva prodotta dal modello testuale e cover (`cover_image_path` sul disco copertine, mime, size, source) |
 | `original_documents` | `(tenant_id, processing_status)`, `workflow_execution_arn`, `textract_job_id` | colonne workflow (arn, started/completed/failed_at, failure_reason), OCR (job id, testo, confidence), `s3_bucket/s3_key` |
 | `sub_documents` | FK cascade su original, indici su FK e `send_status` | range pagine, stato invio |
 | `extracted_data` | FK **unique** cascade su sub_document | 1:1 con sotto-documento; confidence 0–100 |
 | `audit_events` | `(tenant_id, event_type)`, `(resource_type, resource_id)`, `created_at` | append-only (nessun `updated_at`), metadata JSON |
-| `document_workflow_tasks` | `task_token_hash` char(64) **unique**; `(original_document_id, task_type)`, `(status, task_type)` | input/output payload JSON, stati pending→running→succeeded/skipped/failed |
+| `workflow_tasks` | `task_token_hash` char(64) **unique**; `(subject_type, subject_id, task_type)`, `(status, task_type)` | tabella unica delle due pipeline, soggetto polimorfico (`original_document`/`communication`), input/output payload JSON, stati pending→running→succeeded/skipped/failed |
 
-Gli stati applicativi sono enum PHP con cast Eloquent (`ProcessingStatus`, `SendStatus`, `CommunicationStatus`) duplicati come CHECK a livello DB: doppia difesa coerente. Le relazioni Eloquent rispecchiano le FK.
+Gli stati applicativi sono enum PHP con cast Eloquent (`ProcessingStatus`, `SendStatus`, `CommunicationStatus`, `CommunicationGenerationStatus`, `CoverImageStatus`, `CoverImageSource`) duplicati come CHECK a livello DB: doppia difesa coerente. Le relazioni Eloquent rispecchiano le FK.
 
 **Punti da rafforzare in ottica production**: multi-tenancy garantita solo da `where tenant_id` applicativi (nessun Postgres Row-Level Security); nessuna strategia di migrazione dati/rollback documentata; niente backup/PITR (accettabile in MVP, bloccante in produzione); `ocr_text` longText cresce senza retention.
 
@@ -333,20 +366,22 @@ Gli stati applicativi sono enum PHP con cast Eloquent (`ProcessingStatus`, `Send
 
 ## 9. Elaborazione asincrona, code e workflow
 
-Già descritto in §5/§6.2; sintesi valutativa:
+Due pipeline gemelle, documentale (§6.2) e comunicazioni (§6.1), con code e DLQ dedicate; sintesi valutativa:
 
 | Aspetto | Stato | Evidenza |
 |---|---|---|
-| Separazione dal ciclo HTTP | ✅ | upload risponde 202, lavoro nel worker |
+| Separazione dal ciclo HTTP | ✅ | upload e generazione rispondono 202, lavoro nei worker |
 | Retry/backoff | ✅ dichiarativi | ASL: 2 attempts, backoff 2x, per-stato |
-| Timeout | ✅ per stato | 420s/720s in ASL; polling Textract con timeout proprio |
-| Idempotenza | ✅ reale | `task_token_hash` unique + risultato cached |
-| DLQ | ✅ | `aws_sqs_queue.documents_dlq` + alert `DLQNotEmpty` |
+| Timeout | ✅ per stato | 420s/720s (documenti) e 180s/300s/120s (comunicazioni) in ASL; polling Textract con timeout proprio |
+| Idempotenza | ✅ reale | `task_token_hash` unique + risultato cached, in `WorkflowTaskRunner` condiviso |
+| DLQ | ✅ una per dominio | `documents_dlq` e `communications_dlq` + alert `DLQNotEmpty`/`CommunicationDLQNotEmpty` |
 | Long polling | ✅ | `WaitTimeSeconds` 10s nel consumer |
 | Heartbeat | ✅ | `HeartbeatSeconds` nell'ASL + `SendTaskHeartbeat` via `WorkflowTaskHeartbeat` (Textract/Bedrock) |
 | Concorrenza-safe | ✅ design | claim atomico `task_token_hash` + `MVP_WORKFLOW_CLAIM_TTL_SECONDS`; `visibility_timeout` 900s > timeout ASL |
-| Scaling worker | ⚠️ | in compose gira una sola replica (`restart: unless-stopped`), nessun autoscaling |
-| Osservabilità job | ✅ | counter sqs/stepfunctions + dashboard `queues-and-dlq`, `document-pipeline` |
+| Isolamento dei guasti | ✅ | code e worker separati per dominio: il backlog di un flusso non ritarda l'altro |
+| Degrado esplicito | ✅ | la copertina fallita non fallisce l'esecuzione, viene registrata su `cover_status`/`cover_error` |
+| Scaling worker | ⚠️ | in compose gira una replica per pipeline (`make workers` le scala entrambe), nessun autoscaling |
+| Osservabilità job | ✅ | counter sqs/stepfunctions + dashboard `queues-and-dlq`, `document-pipeline`, `communication-pipeline` |
 
 In produzione servirebbero: più repliche del worker con visibilità SQS calibrata (il design è già concorrenza-safe, manca solo lo scaling effettivo) e una policy di redrive dalla DLQ. L'heartbeat per i task lunghi — raccomandazione esplicita [AWS](https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html) — è già implementato.
 
@@ -401,7 +436,7 @@ Coperto in §5; valutazione sintetica:
 | CSP | ✅ | Content-Security-Policy restrittiva in nginx via `map $request_uri` (`docker/nginx/default.conf`): `default-src 'self'`, `object-src 'none'`, `frame-ancestors 'none'` (eccetto la preview PDF same-origin, `'self'`), più X-Frame-Options, X-Content-Type-Options, Referrer-Policy |
 | CSRF | n/a | API stateless senza cookie di sessione per le route v1; mapping 419 comunque presente |
 | Upload | ⚠️ | buona validazione, manca AV/CDR (§8) |
-| Logging dati sensibili | ✅ parziale | payload dei task redatti (`input_payload` redacted in `document_workflow_tasks`); prompt utente però persistito in chiaro in `communications.prompt` (da valutare per privacy) |
+| Logging dati sensibili | ✅ parziale | payload dei task redatti (`input_payload` redacted in `workflow_tasks`); prompt utente però persistito in chiaro in `communications.prompt` (da valutare per privacy) |
 
 Rischi OWASP applicabili più rilevanti per il passaggio a produzione: A01 Broken Access Control (header spoofing senza IdP), A02 Cryptographic Failures (segreti default), upload malevolo senza AV/CDR (§8).
 
@@ -411,7 +446,7 @@ Rischi OWASP applicabili più rilevanti per il passaggio a produzione: A01 Broke
 
 Area più matura della MVP (dettagli §5):
 
-- **Implementato**: golden signals + metriche dominio; tracing OTLP→Tempo; log container (Alloy) e applicativi (OTLP→Loki) correlabili per servizio; 5 dashboard provisioned; 10 alert con runbook dedicati (`docs/runbooks/`); healthcheck applicativi `/health` e `/ready` (quest'ultimo verifica config, DB, Redis, SQS e ritorna 503 su fallimento — readiness reale, non liveness mascherata); healthcheck Docker su tutti i servizi; `make observability-config` valida le config; smoke CI sull'intero stack.
+- **Implementato**: golden signals + metriche dominio; tracing OTLP→Tempo; log container (Alloy) e applicativi (OTLP→Loki) correlabili per servizio; 6 dashboard provisioned; 15 alert con runbook dedicati (`docs/runbooks/`); healthcheck applicativi `/health` e `/ready` (quest'ultimo verifica config, DB, Redis, SQS e ritorna 503 su fallimento — readiness reale, non liveness mascherata); healthcheck Docker su tutti i servizi; `make observability-config` valida le config; smoke CI sull'intero stack.
 - **Mancante per production-like**: SLO/error budget formalizzati (gli alert su latenza/errori sono soglie statiche, non burn-rate); receiver Alertmanager reali (PagerDuty/Slack); retention dichiarate per Prometheus/Tempo/Loki; dashboard di capacity (saturazione DB/Redis oltre ai segnali HTTP); tracing distribuito fino a SQS/SFN (il trace context non attraversa il task token).
 
 ---
@@ -431,7 +466,7 @@ Area più matura della MVP (dettagli §5):
 
 | Accorgimento | Dove | Perché è una buona scelta |
 |---|---|---|
-| Idempotenza workflow via token hash | `document_workflow_tasks.task_token_hash` unique + cached result | SQS è at-least-once: i re-delivery non duplicano lavoro né effetti |
+| Idempotenza workflow via token hash | `workflow_tasks.task_token_hash` unique + cached result | SQS è at-least-once: i re-delivery non duplicano lavoro né effetti |
 | Fail-fast su config incoerenti | guard Textract/`real_s3` in `DocumentWorkflowService::start()`; assert chiavi in `RuntimeConfigurationLoader` | errori di configurazione emergono subito e con messaggio chiaro, non a metà pipeline |
 | Cache config runtime con fingerprint | `bootstrap/cache/runtime-config.php` | evita una chiamata SSM/SM per ogni richiesta PHP-FPM |
 | Collector come unico punto di raccolta | `docker/otel-collector/config.yml` | Prometheus scrappa un solo target; pipeline telemetria uniforme per scrape e push |

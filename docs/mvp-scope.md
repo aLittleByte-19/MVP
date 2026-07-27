@@ -17,12 +17,13 @@ complemento funzionale e non deve contraddirlo.
 
 Incluso:
 
-- generazione di una bozza a partire da prompt, tono e stile;
+- generazione di una bozza a partire da prompt, tono e stile, elaborata da una pipeline asincrona con avanzamento in tempo reale;
 - validazione del prompt;
 - persistenza della bozza generata (stato `draft`);
 - anteprima di titolo e testo in sola lettura;
+- immagine di copertina generata dall'AI, con sostituzione manuale e rimozione;
 - storico delle generazioni con riapertura dell'anteprima di una bozza selezionata;
-- metriche operative di base (contenuti generati, bozze).
+- metriche operative di base (contenuti generati, bozze, stato della generazione e delle copertine).
 
 Parziale:
 
@@ -31,13 +32,12 @@ Parziale:
 Fuori scope MVP:
 
 - modifica manuale persistente di titolo e testo;
-- immagine di copertina e sua sostituzione;
 - rigenerazione, annullamento modifiche e scarto della bozza;
 - rating 1–5 con commento, preferiti e relativi feedback;
 - salvataggio e riuso di una configurazione di prompt etichettata;
 - dashboard analista (rating medio, statistiche di utilizzo, filtri).
 
-La generazione usa il servizio AI configurato. Errori di configurazione, credenziali o modello vengono esposti come errori applicativi, senza contenuti sostitutivi.
+La generazione usa il servizio AI configurato. Errori di configurazione, credenziali o modello vengono esposti come errori applicativi, senza contenuti sostitutivi. Il testo e la copertina hanno criticità diverse: se il testo non viene generato la bozza è fallita, mentre una copertina non disponibile viene segnalata all'operatore e lascia la comunicazione valida.
 
 ## AI Co-Pilot Documentale
 
@@ -45,7 +45,7 @@ Incluso:
 
 - upload singolo di PDF;
 - controllo formato e duplicato tramite hash;
-- avvio asincrono tramite state machine Step Functions (emulata in LocalStack) con task pubblicati su SQS tramite callback task token, consumati dal worker `mvp:workflow:consume`;
+- avvio asincrono tramite state machine Step Functions (emulata in LocalStack) con task pubblicati su SQS tramite callback task token, consumati dal worker `mvp:workflow:consume --queue=documents`;
 - classificazione e split per destinatario tramite Bedrock sul testo OCR (qualsiasi tipologia di documento, sempre almeno un destinatario);
 - estrazione dei campi principali tramite Bedrock sul testo OCR (nome/cognome, azienda, data, tipologia, descrizione);
 - confidenza calcolata oggettivamente come leggibilità OCR (Textract) ponderata sulla completezza dei campi chiave, non come auto-valutazione del modello;
@@ -77,8 +77,8 @@ Incluso:
 - metriche HTTP golden-signal e di dominio in formato Prometheus;
 - OpenTelemetry Collector come unico gateway locale (metriche verso Prometheus, trace verso Tempo);
 - raccolta log dei container via Grafana Alloy verso Loki;
-- 5 dashboard Grafana provisionate (`api-golden-signals`, `document-pipeline`, `ai-ocr-quality`, `queues-and-dlq`, `logs-and-errors`);
-- 10 alert rule Prometheus su error ratio, latenza, readiness, stato worker, coda/DLQ ed esecuzioni Step Functions, collegate a runbook dedicati;
+- 6 dashboard Grafana provisionate (`api-golden-signals`, `document-pipeline`, `communication-pipeline`, `ai-ocr-quality`, `queues-and-dlq`, `logs-and-errors`);
+- 15 alert rule Prometheus su error ratio, latenza, readiness, stato worker, code/DLQ per dominio, esecuzioni Step Functions, generazioni bloccate e degrado delle copertine, collegate a runbook dedicati;
 - contract OpenAPI 3.1 come fonte del client frontend, verificato in CI;
 - blocco runtime delle superfici non appartenenti alla SPA/API.
 

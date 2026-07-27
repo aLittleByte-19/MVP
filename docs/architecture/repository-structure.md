@@ -6,12 +6,12 @@ dominio.
 - `app/Copilot`: codice applicativo di dominio del co-pilot AI.
 - `app/Copilot/Ai`: integrazione Bedrock e servizi specifici dell'AI.
 - `app/Copilot/Audit`: servizi di audit logging.
-- `app/Copilot/Documents`: enum ed elaborazione dei documenti.
-- `app/Copilot/Communications`: enum delle comunicazioni e relativi servizi.
+- `app/Copilot/Documents`: enum, elaborazione e orchestrazione del flusso documentale (Co-Pilot).
+- `app/Copilot/Communications`: enum, copertine e orchestrazione del flusso generativo (AI Assistant).
 - `app/Copilot/Identity`: identità utente risolta a runtime.
 - `app/Copilot/Observability`: exporter Prometheus e registrazione delle metriche.
 - `app/Copilot/Ocr`: integrazione OCR Textract.
-- `app/Copilot/Workflow`: servizi di orchestrazione del workflow Step Functions/SQS.
+- `app/Copilot/Workflow`: infrastruttura di orchestrazione Step Functions/SQS comune alle pipeline (contratto degli handler, registry, runner, heartbeat, contesto di correlazione). I servizi specifici di un flusso vivono nella cartella del flusso.
 - `app/Console/Commands`: comandi artisan, incluso il worker `mvp:workflow:consume`.
 - `app/Http`: controller HTTP, middleware e validazione delle richieste.
 - `app/Models/Copilot`: model Eloquent del dominio MVP.

@@ -57,7 +57,9 @@ I worker Laravel consumano task asincroni da SQS e comunicano con Step Functions
 
 Il flusso AI Assistant supporta la generazione di comunicazioni HR a partire da un prompt, con tono e stile selezionati dall’operatore.
 
-La richiesta parte dalla SPA e arriva alle API Laravel, dove viene validata e normalizzata. Il backend invoca il servizio AI configurato, interpreta la risposta, verifica la struttura dei dati ottenuti e registra il risultato come comunicazione applicativa. La generazione viene tracciata attraverso audit event e metriche, così da rendere osservabile l’intero processo.
+La richiesta parte dalla SPA e arriva alle API Laravel, dove viene validata e normalizzata. Il backend registra la comunicazione e avvia una state machine dedicata in LocalStack Step Functions, rispondendo subito senza attendere il modello. La pipeline genera prima il testo e poi l’immagine di copertina, e la SPA segue l’avanzamento via Server-Sent Events: il titolo e il corpo compaiono appena pronti, la copertina quando arriva. La generazione viene tracciata attraverso audit event e metriche, così da rendere osservabile l’intero processo.
+
+I due contenuti hanno criticità diverse e sono trattati di conseguenza: senza testo non esiste una comunicazione e l’esecuzione fallisce, mentre una copertina non disponibile viene segnalata all’operatore e lascia la bozza valida e utilizzabile.
 
 Il flusso evidenzia il ruolo del backend come livello di controllo tra interfaccia e modello AI: il provider genera il contenuto, mentre l’applicazione mantiene responsabilità su validazione, persistenza, stato e tracciabilità.
 

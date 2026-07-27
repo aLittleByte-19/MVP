@@ -57,6 +57,7 @@ Per evitare informazioni duplicate o divergenti, ogni tema ha **un** documento d
 
 - [Sviluppo locale production-like](runbooks/local-development.md) — avvio e uso dello stack.
 - [Pipeline documentale](runbooks/document-pipeline.md) — flusso Co-Pilot end-to-end.
+- [Pipeline comunicazioni](runbooks/communication-pipeline.md) — flusso AI Assistant end-to-end.
 - [Osservabilità](runbooks/observability.md) — metriche, trace, log, dashboard, alert.
 - [DLQ e recovery](runbooks/dlq-recovery.md) — gestione job falliti e ripristino.
 - [Backup/restore locale](runbooks/backup-restore-local.md) — PostgreSQL.
