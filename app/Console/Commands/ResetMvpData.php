@@ -29,6 +29,8 @@ class ResetMvpData extends Command
             'sub_documents',
             'original_documents',
             'communications',
+            // Relazione morph senza foreign key: va svuotata esplicitamente.
+            'workflow_tasks',
         ], fn (string $table): bool => Schema::hasTable($table)));
 
         $this->resetTables($tables);
@@ -103,6 +105,9 @@ class ResetMvpData extends Command
         Storage::disk($documentDisk)->deleteDirectory('sub');
         Storage::disk($documentDisk)->deleteDirectory('documents');
         Storage::disk($documentDisk)->deleteDirectory('livewire-tmp');
+
+        Storage::disk((string) config('mvp.communications.cover_disk', $documentDisk))
+            ->deleteDirectory((string) config('mvp.communications.cover_prefix', 'communications/covers'));
 
         Storage::disk('local')->deleteDirectory('documents');
         Storage::disk('local')->deleteDirectory('livewire-tmp');

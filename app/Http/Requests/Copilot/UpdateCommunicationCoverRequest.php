@@ -17,13 +17,15 @@ class UpdateCommunicationCoverRequest extends FormRequest
      */
     public function rules(): array
     {
+        $maxKilobytes = max(1, (int) config('mvp.communications.cover_max_mb', 5)) * 1024;
+
         return [
             'image' => [
                 'required',
                 'file',
                 'image',
                 'mimes:jpg,jpeg,png,webp',
-                'max:5120',
+                'max:'.$maxKilobytes,
             ],
         ];
     }

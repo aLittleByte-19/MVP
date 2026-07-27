@@ -81,10 +81,36 @@ class MvpStateService
             'style' => $communication->style,
             'title' => $communication->generated_title,
             'body' => $communication->generated_body,
-            'coverImageUrl' => $communication->generated_cover_image,
+            'coverImageUrl' => $this->coverImageUrl($communication),
+            'coverStatus' => $communication->cover_status->value,
+            'coverStatusLabel' => $communication->cover_status->label(),
+            'coverError' => $communication->cover_error,
+            'generationStatus' => $communication->generation_status->value,
+            'generationStatusLabel' => $communication->generation_status->label(),
+            'error' => $communication->error_message,
             'status' => $communication->status->label(),
             'createdAt' => $communication->created_at?->format('d/m/Y H:i'),
         ];
+    }
+
+    /**
+     * URL relativo dell'endpoint di serving: vedi la nota in
+     * DocumentController::store sul mixed-content dietro Traefik.
+     *
+     * Il percorso non cambia quando la copertina viene sostituita, quindi porta
+     * una versione derivata dalla chiave dell'oggetto: senza, il browser
+     * continuerebbe a mostrare l'immagine precedente finche' la cache non scade.
+     */
+    public function coverImageUrl(Communication $communication): ?string
+    {
+        if (! $communication->cover_image_path) {
+            return null;
+        }
+
+        return route('api.v1.communications.cover-image.show', [
+            'communication' => $communication->id,
+            'v' => substr(hash('xxh128', $communication->cover_image_path), 0, 12),
+        ], false);
     }
 
     /**

@@ -15,7 +15,13 @@ Route::prefix('v1')
             ->middleware('throttle:20,1')
             ->name('communications.generate');
 
-        Route::put('/communications/{communication}/cover-image', [CommunicationController::class, 'updateCoverImage'])
+        Route::get('/communications/{communication}/stream', [CommunicationController::class, 'stream'])
+            ->whereNumber('communication')
+            ->name('communications.stream');
+
+        // POST e non PUT: PHP popola $_FILES solo sulle richieste POST, su PUT
+        // il body multipart resterebbe grezzo e il file non arriverebbe mai.
+        Route::post('/communications/{communication}/cover-image', [CommunicationController::class, 'updateCoverImage'])
             ->whereNumber('communication')
             ->middleware('throttle:20,1')
             ->name('communications.cover-image.update');
@@ -23,6 +29,13 @@ Route::prefix('v1')
         Route::delete('/communications/{communication}/cover-image', [CommunicationController::class, 'removeCoverImage'])
             ->whereNumber('communication')
             ->name('communications.cover-image.remove');
+
+        // Lo storico rende fino a 10 copertine per pagina: il limite di gruppo
+        // (60/min) verrebbe consumato da una manciata di visite.
+        Route::get('/communications/{communication}/cover-image', [CommunicationController::class, 'coverImage'])
+            ->whereNumber('communication')
+            ->middleware('throttle:120,1')
+            ->name('communications.cover-image.show');
 
         Route::post('/documents/ocr', [DocumentController::class, 'store'])
             ->middleware('throttle:20,1')

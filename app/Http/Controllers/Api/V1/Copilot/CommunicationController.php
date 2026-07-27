@@ -2,72 +2,34 @@
 
 namespace App\Http\Controllers\Api\V1\Copilot;
 
-use App\Copilot\Ai\BedrockService;
 use App\Copilot\Audit\Services\AuditLogger;
+use App\Copilot\Communications\Enums\CommunicationGenerationStatus;
 use App\Copilot\Communications\Enums\CommunicationStatus;
+use App\Copilot\Communications\Enums\CoverImageStatus;
+use App\Copilot\Communications\Services\CommunicationCoverService;
+use App\Copilot\Communications\Services\CommunicationWorkflowService;
 use App\Copilot\Identity\MvpUser;
-use App\Copilot\Observability\MetricsRecorder;
 use App\Copilot\Support\MvpStateService;
-use App\Exceptions\Copilot\AiServiceException;
-use App\Exceptions\Copilot\InvalidAiOutputException;
 use App\Http\Requests\Copilot\GenerateCommunicationRequest;
 use App\Http\Requests\Copilot\UpdateCommunicationCoverRequest;
 use App\Models\Copilot\Communication;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use League\Flysystem\FilesystemException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CommunicationController
 {
-    /**
-     * @throws AiServiceException
-     */
     public function store(
         GenerateCommunicationRequest $request,
-        BedrockService $bedrock,
+        CommunicationWorkflowService $workflow,
         AuditLogger $audit,
-        MvpStateService $state,
-        MetricsRecorder $metrics,
     ): JsonResponse {
         $validated = $request->validated();
         $actor = $this->actor($request);
-
-        try {
-            $generated = $bedrock->generateCommunication(
-                $validated['prompt'],
-                $validated['tone'],
-                $validated['style'],
-            );
-        } catch (InvalidAiOutputException $e) {
-            Log::warning('MVP communication generation returned invalid AI output', ['errors' => $e->errors()]);
-            $metrics->recordDomainCounter('ai_outputs_invalid_total', ['operation' => $e->operation()]);
-            $audit->record(
-                'mvp-ai-output-invalid',
-                $actor,
-                'communication',
-                null,
-                ['operation' => $e->operation(), 'errors' => $e->errors()],
-                $request,
-            );
-
-            throw new AiServiceException('La risposta del servizio AI non è valida. Riprova la generazione.', 502, $e);
-        } catch (\Throwable $e) {
-            Log::warning('MVP communication generation failed', ['message' => $e->getMessage()]);
-
-            throw new AiServiceException(
-                BedrockService::formatUserError($e, 'Generazione non disponibile. Verifica la configurazione AI.'),
-                502,
-                $e
-            );
-        }
-
-        $imageGeneration = $bedrock->generateCommunicationImageWithMeta(
-            $validated['prompt'],
-            $validated['tone'],
-            $validated['style'],
-        );
 
         $communication = Communication::create([
             'tenant_id' => $actor->tenantId,
@@ -75,13 +37,13 @@ class CommunicationController
             'prompt' => $validated['prompt'],
             'tone' => $validated['tone'],
             'style' => $validated['style'],
-            'generated_title' => $generated['title'],
-            'generated_body' => $generated['body'],
-            'generated_cover_image' => $imageGeneration['image'],
+            'generation_status' => CommunicationGenerationStatus::Pending,
+            'cover_status' => CoverImageStatus::Pending,
             'status' => CommunicationStatus::Draft,
         ]);
+
         $audit->record(
-            'mvp-communication-generated',
+            'mvp-communication-generation-requested',
             $actor,
             'communication',
             (string) $communication->id,
@@ -89,12 +51,125 @@ class CommunicationController
             $request,
         );
 
+        $workflow->start($communication, $actor, $request);
+
         return response()->json([
-            'message' => 'Bozza generata correttamente.',
-            'communication' => $state->communication($communication),
-            'coverImageWarning' => $imageGeneration['warning'],
-            'state' => $state->forActor($actor),
-        ], 201);
+            'message' => 'Generazione avviata.',
+            'communicationId' => $communication->id,
+            // URL relativo: la SPA e' servita in HTTPS dietro Traefik, che termina
+            // il TLS e inoltra in HTTP. Un URL assoluto verrebbe generato con
+            // schema "http://" e bloccato dal browser come mixed-content.
+            'streamUrl' => route('api.v1.communications.stream', ['communication' => $communication->id], false),
+        ], 202);
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    public function stream(Request $request, Communication $communication, MvpStateService $state): StreamedResponse
+    {
+        $actor = $this->actor($request);
+        $this->assertCommunicationOwnership($communication, $actor);
+
+        return response()->stream(function () use ($communication, $actor, $state): void {
+            if (app()->runningUnitTests()) {
+                return;
+            }
+
+            set_time_limit(0);
+
+            $send = function (string $event, array $data): void {
+                echo "event: {$event}\ndata: ".json_encode($data)."\n\n";
+                if (ob_get_level()) {
+                    ob_flush();
+                }
+                flush();
+            };
+
+            // Commento SSE: ignorato dal browser ma mantiene viva la connessione
+            // quando non ci sono novita' (evita chiusure da idle-timeout dei proxy).
+            $heartbeat = function (): void {
+                echo ": keepalive\n\n";
+                if (ob_get_level()) {
+                    ob_flush();
+                }
+                flush();
+            };
+
+            $startedAt = time();
+            $timeoutSeconds = 300;
+            $lastSignature = null;
+            $textSent = false;
+            $coverSent = false;
+
+            while (! connection_aborted()) {
+                $fresh = Communication::query()->find($communication->id);
+
+                if (! $fresh) {
+                    $send('error', ['message' => 'Comunicazione non trovata.']);
+
+                    return;
+                }
+
+                // Il testo arriva prima della copertina: viene emesso appena
+                // disponibile, senza attendere il resto della pipeline.
+                if (! $textSent && $fresh->generated_body) {
+                    $textSent = true;
+                    $send('text', [
+                        'title' => $fresh->generated_title,
+                        'body' => $fresh->generated_body,
+                    ]);
+                }
+
+                if (! $coverSent && ! in_array($fresh->cover_status, [CoverImageStatus::Pending, CoverImageStatus::Processing], true)) {
+                    $coverSent = true;
+                    $send('cover', [
+                        'coverImageUrl' => $state->coverImageUrl($fresh),
+                        'coverStatus' => $fresh->cover_status->value,
+                        'coverError' => $fresh->cover_error,
+                    ]);
+                }
+
+                $signature = $fresh->generation_status->value.':'.$fresh->cover_status->value;
+
+                if ($signature !== $lastSignature) {
+                    $send('progress', [
+                        'generationStatus' => $fresh->generation_status->value,
+                        'coverStatus' => $fresh->cover_status->value,
+                    ]);
+                    $lastSignature = $signature;
+                } else {
+                    $heartbeat();
+                }
+
+                if ($fresh->generation_status === CommunicationGenerationStatus::Completed) {
+                    $send('done', [
+                        'communication' => $state->communication($fresh),
+                        'state' => $state->forActor($actor),
+                    ]);
+
+                    return;
+                }
+
+                if ($fresh->generation_status === CommunicationGenerationStatus::Failed) {
+                    $send('error', ['message' => $fresh->error_message ?: 'Generazione non disponibile.']);
+
+                    return;
+                }
+
+                if (time() - $startedAt >= $timeoutSeconds) {
+                    $send('error', ['message' => 'Timeout generazione.']);
+
+                    return;
+                }
+
+                sleep(1);
+            }
+        }, 200, [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'no-cache',
+            'X-Accel-Buffering' => 'no',
+        ]);
     }
 
     /**
@@ -103,6 +178,7 @@ class CommunicationController
     public function updateCoverImage(
         UpdateCommunicationCoverRequest $request,
         Communication $communication,
+        CommunicationCoverService $covers,
         AuditLogger $audit,
         MvpStateService $state,
     ): JsonResponse {
@@ -111,10 +187,7 @@ class CommunicationController
 
         /** @var UploadedFile $file */
         $file = $request->file('image');
-
-        $communication->update([
-            'generated_cover_image' => $this->uploadedImageToDataUrl($file),
-        ]);
+        $covers->storeUploaded($communication, $file);
 
         $audit->record(
             'mvp-communication-cover-updated',
@@ -130,8 +203,7 @@ class CommunicationController
 
         return response()->json([
             'message' => 'Immagine di copertina aggiornata correttamente.',
-            'communication' => $state->communication($communication->fresh()),
-            'coverImageWarning' => null,
+            'communication' => $state->communication($communication->refresh()),
             'state' => $state->forActor($actor),
         ]);
     }
@@ -142,15 +214,14 @@ class CommunicationController
     public function removeCoverImage(
         Request $request,
         Communication $communication,
+        CommunicationCoverService $covers,
         AuditLogger $audit,
         MvpStateService $state,
     ): JsonResponse {
         $actor = $this->actor($request);
         $this->assertCommunicationOwnership($communication, $actor);
 
-        $communication->update([
-            'generated_cover_image' => null,
-        ]);
+        $covers->remove($communication);
 
         $audit->record(
             'mvp-communication-cover-removed',
@@ -163,9 +234,50 @@ class CommunicationController
 
         return response()->json([
             'message' => 'Immagine di copertina rimossa.',
-            'communication' => $state->communication($communication->fresh()),
-            'coverImageWarning' => null,
+            'communication' => $state->communication($communication->refresh()),
             'state' => $state->forActor($actor),
+        ]);
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    public function coverImage(Request $request, Communication $communication): StreamedResponse
+    {
+        $this->assertCommunicationOwnership($communication, $this->actor($request));
+
+        $path = $communication->cover_image_path;
+        abort_if($path === null || $path === '', 404);
+
+        $disk = Storage::disk((string) config('mvp.communications.cover_disk', config('filesystems.default', 'local')));
+
+        try {
+            abort_unless($disk->exists($path), 404);
+        } catch (FilesystemException $exception) {
+            report($exception);
+
+            abort(503, 'Storage copertine non raggiungibile.');
+        }
+
+        return response()->stream(function () use ($disk, $path): void {
+            $stream = $disk->readStream($path);
+
+            if (! is_resource($stream)) {
+                return;
+            }
+
+            try {
+                fpassthru($stream);
+            } finally {
+                fclose($stream);
+            }
+        }, 200, [
+            'Content-Type' => $communication->cover_image_mime ?: 'image/png',
+            'Content-Disposition' => 'inline',
+            // Il percorso e' stabile e distingue le versioni solo con il
+            // parametro "v": la risposta va rivalidata, altrimenti una
+            // sostituzione resterebbe invisibile fino alla scadenza della cache.
+            'Cache-Control' => 'private, no-cache, must-revalidate',
         ]);
     }
 
@@ -188,18 +300,5 @@ class CommunicationController
         if ($communication->tenant_id !== $actor->tenantId) {
             throw new AuthorizationException('Communication is outside the authenticated tenant scope.');
         }
-    }
-
-    private function uploadedImageToDataUrl(UploadedFile $file): string
-    {
-        $mime = $file->getMimeType() ?: 'image/png';
-        $path = $file->getRealPath();
-        $content = $path !== false ? file_get_contents($path) : false;
-
-        if ($content === false || $content === '') {
-            throw new \RuntimeException('Unable to read uploaded cover image content.');
-        }
-
-        return 'data:'.$mime.';base64,'.base64_encode($content);
     }
 }

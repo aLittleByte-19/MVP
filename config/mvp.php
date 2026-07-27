@@ -30,6 +30,20 @@ return [
         'storage_disk' => env('MVP_DOCUMENT_DISK', env('FILESYSTEM_DISK', 's3')),
     ],
 
+    'communications' => [
+        // Disco separato da quello documentale: le copertine sono asset generati
+        // dall'applicazione, non documenti HR, e restano sull'S3 emulato anche
+        // quando i documenti passano a "real_s3" per Textract.
+        // "?:" e non il default di env(): una chiave presente ma vuota nel .env
+        // restituisce stringa vuota, che qui sarebbe un nome di disco invalido.
+        'cover_disk' => env('MVP_COMMUNICATION_COVER_DISK') ?: env('FILESYSTEM_DISK', 's3'),
+        'cover_prefix' => env('MVP_COMMUNICATION_COVER_PREFIX') ?: 'communications/covers',
+        'cover_max_mb' => (int) (env('MVP_COMMUNICATION_COVER_MAX_MB') ?: 5),
+        // Oltre questa eta' una generazione ancora in processing e' considerata
+        // bloccata e viene esposta come tale dalle metriche.
+        'generation_timeout_seconds' => (int) (env('MVP_COMMUNICATION_TIMEOUT_SECONDS') ?: 300),
+    ],
+
     'document_limits' => [
         'max_upload_mb' => (int) env('MVP_MAX_UPLOAD_MB', env('DOCUMENT_MAX_UPLOAD_MB', 20)),
         'max_pdf_pages' => (int) env('MVP_MAX_PDF_PAGES', 50),

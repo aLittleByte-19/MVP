@@ -2,6 +2,7 @@
 
 namespace App\Copilot\Ai;
 
+use App\Copilot\Workflow\Services\WorkflowTaskHeartbeat;
 use App\Exceptions\Copilot\InvalidAiOutputException;
 use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\Exception\AwsException;
@@ -23,13 +24,15 @@ class BedrockService
 
     public function __construct(
         private readonly BedrockRuntimeClient $client,
+        private readonly BedrockRuntimeClient $imageClient,
         private readonly ?string $modelId,
         private readonly ?string $imageModelId,
         private readonly AiOutputValidator $validator,
+        private readonly WorkflowTaskHeartbeat $heartbeat,
     ) {}
 
     /**
-     * @return array{title: string, body: string}
+     * @return array{title: string, body: string, image_prompt: ?string}
      *
      * @throws \RuntimeException
      */
@@ -60,36 +63,35 @@ class BedrockService
 
     /**
      * Generate a visual cover for the drafted communication.
-     * Returns a data URL when an image model is configured and reachable.
-     */
-    public function generateCommunicationImage(string $prompt, string $tone, string $style): ?string
-    {
-        return $this->generateCommunicationImageWithMeta($prompt, $tone, $style)['image'];
-    }
-
-    /**
-     * Generate a visual cover and expose a user-facing warning when unavailable.
      *
-     * @return array{image: ?string, warning: ?string}
+     * Returns the raw image bytes when a model is configured and reachable, or
+     * a user-facing warning plus a machine-readable reason when the cover is
+     * not available: a missing cover degrades the communication, never fails it.
+     *
+     * @param  ?string  $modelImagePrompt  Direzione visiva prodotta dal modello testuale.
+     * @return array{bytes: ?string, mime: string, warning: ?string, reason: ?string}
      */
-    public function generateCommunicationImageWithMeta(string $prompt, string $tone, string $style): array
+    public function generateCommunicationImageWithMeta(string $prompt, string $tone, string $style, ?string $modelImagePrompt = null): array
     {
         if (! $this->imageModelId) {
-            return [
-                'image' => null,
-                'warning' => 'Copertina AI non disponibile: modello immagini Bedrock non configurato.',
-            ];
+            return $this->imageFailure(
+                'Copertina AI non disponibile: modello immagini Bedrock non configurato.',
+                'model_not_configured',
+            );
         }
 
-        $imagePrompt = $this->buildCommunicationImagePrompt($prompt, $tone, $style);
-        $safeImagePrompt = $this->buildSafeFallbackImagePrompt($prompt, $tone, $style);
+        $imagePrompt = $this->buildCommunicationImagePrompt($prompt, $tone, $style, $modelImagePrompt);
+        $safeImagePrompt = $this->buildSafeFallbackImagePrompt($tone, $style);
         $usingSafePrompt = false;
         $warning = null;
+        $reason = null;
 
         foreach (self::NOVA_CANVAS_SIZE_CANDIDATES as $size) {
             try {
+                $this->heartbeat->beat();
+
                 /** @var Result $result */
-                $result = $this->client->invokeModel([
+                $result = $this->imageClient->invokeModel([
                     'modelId' => $this->imageModelId,
                     'contentType' => 'application/json',
                     'accept' => 'application/json',
@@ -106,9 +108,14 @@ class BedrockService
                     throw new \RuntimeException('Risposta immagine non decodificabile.');
                 }
 
-                $imageDataUrl = $this->extractImageDataUrl($decoded);
-                if ($imageDataUrl !== null) {
-                    return ['image' => $imageDataUrl, 'warning' => null];
+                $image = $this->extractImageBytes($decoded);
+                if ($image !== null) {
+                    return [
+                        'bytes' => $image['bytes'],
+                        'mime' => $image['mime'],
+                        'warning' => null,
+                        'reason' => null,
+                    ];
                 }
 
                 $responseWarning = $this->classifyImageResponseWarning($decoded);
@@ -133,27 +140,42 @@ class BedrockService
                 }
 
                 if ($this->hasPromptFilterFinishReason($decoded) && $usingSafePrompt) {
-                    $warning ??= 'Copertina AI non disponibile: la richiesta immagini è stata bloccata dai controlli di sicurezza del modello Stability.';
-                    continue;
+                    return $this->imageFailure(
+                        'Copertina AI non disponibile: la richiesta immagini è stata bloccata dai controlli di sicurezza del modello.',
+                        'content_filter',
+                    );
                 }
 
                 if ($responseWarning['warning'] !== null) {
                     $warning ??= $responseWarning['warning'];
+                    $reason ??= $responseWarning['reason'];
 
                     if (! $responseWarning['retryable']) {
-                        return ['image' => null, 'warning' => $warning];
+                        return $this->imageFailure($warning, $reason);
                     }
                 }
 
                 $warning ??= 'Copertina AI non disponibile: il modello non ha restituito un payload immagine valido.';
+                $reason ??= 'no_payload';
             } catch (AwsException $e) {
-                $warning ??= $this->formatImageWarningFromError($e->getMessage());
+                $classified = $this->classifyImageError($e->getMessage());
                 Log::warning('Bedrock communication image generation failed', [
                     'message' => $e->getMessage(),
                     'size' => $size,
                 ]);
+
+                // Credenziali, accesso al modello e parametri rifiutati non
+                // cambiano al variare della dimensione richiesta: insistere
+                // sulle altre size aggiunge solo latenza a un esito certo.
+                if (! $classified['retryable']) {
+                    return $this->imageFailure($classified['warning'], $classified['reason']);
+                }
+
+                $warning ??= $classified['warning'];
+                $reason ??= $classified['reason'];
             } catch (\Throwable $e) {
                 $warning ??= 'Copertina AI non disponibile per un errore temporaneo del servizio immagini.';
+                $reason ??= 'invalid_response';
                 Log::warning('Communication image parsing failed', [
                     'message' => $e->getMessage(),
                     'size' => $size,
@@ -161,9 +183,22 @@ class BedrockService
             }
         }
 
+        return $this->imageFailure(
+            $warning ?? 'Copertina AI non disponibile al momento.',
+            $reason ?? 'model_error',
+        );
+    }
+
+    /**
+     * @return array{bytes: ?string, mime: string, warning: string, reason: string}
+     */
+    private function imageFailure(string $warning, string $reason): array
+    {
         return [
-            'image' => null,
-            'warning' => $warning ?? 'Copertina AI non disponibile al momento.',
+            'bytes' => null,
+            'mime' => 'image/png',
+            'warning' => $warning,
+            'reason' => $reason,
         ];
     }
 
@@ -197,75 +232,46 @@ class BedrockService
         return $decoded;
     }
 
+    /**
+     * Il modello testuale descrive anche la copertina: avendo davanti il testo
+     * che ha appena scritto, produce una direzione visiva coerente con la
+     * comunicazione reale invece che con il solo prompt dell'operatore.
+     */
     private function buildCommunicationPrompt(string $userPrompt, string $tone, string $style): string
     {
         return "Agisci come un assistente HR. Genera una comunicazione con tono '{$tone}' e stile '{$style}'.\n"
              ."Argomento: {$userPrompt}\n"
-             .'Rispondi esclusivamente in formato JSON: {"title": "...", "body": "..."}';
+             .'Produci anche "imagePrompt": la descrizione in inglese, massimo 60 parole, dell\'immagine di copertina '
+             .'coerente con il contenuto che hai generato. Descrivi soggetto, composizione, atmosfera e palette. '
+             ."Non includere testo leggibile, loghi, filigrane, volti riconoscibili o dati personali.\n"
+             .'Rispondi esclusivamente in formato JSON: {"title": "...", "body": "...", "imagePrompt": "..."}';
     }
 
-    private function buildCommunicationImagePrompt(string $userPrompt, string $tone, string $style): string
+    /**
+     * Direzione visiva della copertina: quella scritta dal modello testuale
+     * quando disponibile, altrimenti una descrizione corporate generica.
+     */
+    private function buildCommunicationImagePrompt(string $userPrompt, string $tone, string $style, ?string $modelImagePrompt): string
     {
-        $themeCues = $this->buildThemeVisualCues($userPrompt);
+        $subject = $modelImagePrompt ?: "Internal company communication about: {$userPrompt}";
 
         return 'Create a horizontal cover image for an internal company communication. '
-            ."Main topic: {$userPrompt}. "
+            ."{$subject} "
             ."Tone: {$tone}. Editorial style: {$style}. "
-            ."Visual cues: {$themeCues}. "
             .'Use a modern corporate art direction with clear focal elements related to the topic. '
             .'No readable text, no logos, no signatures, no watermarks.';
     }
 
-    private function buildSafeFallbackImagePrompt(string $userPrompt, string $tone, string $style): string
+    /**
+     * Riformulazione conservativa usata dopo un rifiuto sul prompt: rinuncia al
+     * soggetto dettagliato per tenere solo tono, stile e vincoli di sicurezza.
+     */
+    private function buildSafeFallbackImagePrompt(string $tone, string $style): string
     {
-        $themeCues = $this->buildThemeVisualCues($userPrompt);
-
         return 'Create a safe, professional, horizontal corporate cover image. '
             ."Tone: {$tone}. Editorial style: {$style}. "
-            ."Visual cues: {$themeCues}. "
             .'No realistic people faces, no identifiable personal data, no documents, no readable text, no logos, no signatures. '
-            .'Prefer abstract or iconographic elements related to the topic.';
-    }
-
-    private function buildThemeVisualCues(string $userPrompt): string
-    {
-        $prompt = mb_strtolower($userPrompt);
-
-        if ($this->containsAny($prompt, ['compleanno', 'birthday', 'auguri'])) {
-            return 'subtle birthday celebration mood, confetti, balloons, cake iconography, warm festive colors';
-        }
-
-        if ($this->containsAny($prompt, ['onboarding', 'benvenuto', 'welcome', 'nuovo collega', 'new hire'])) {
-            return 'welcoming office mood, friendly team symbols, growth and collaboration motifs';
-        }
-
-        if ($this->containsAny($prompt, ['policy', 'compliance', 'sicurezza', 'security', 'procedura'])) {
-            return 'clear structured composition, shield and checklist iconography, trust and reliability mood';
-        }
-
-        if ($this->containsAny($prompt, ['ferie', 'vacanze', 'holiday', 'chiusura'])) {
-            return 'seasonal vacation mood, calendar and travel-inspired abstract elements, calm positive palette';
-        }
-
-        if ($this->containsAny($prompt, ['evento', 'event', 'meeting', 'town hall', 'webinar'])) {
-            return 'event communication mood, stage-light accents, audience and presentation-inspired abstract elements';
-        }
-
-        return 'professional internal communication concept, balanced composition, modern corporate visual language';
-    }
-
-    /**
-     * @param  array<int, string>  $needles
-     */
-    private function containsAny(string $haystack, array $needles): bool
-    {
-        foreach ($needles as $needle) {
-            if (str_contains($haystack, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
+            .'Prefer abstract or iconographic elements with a modern corporate visual language.';
     }
 
     /**
@@ -380,6 +386,10 @@ class BedrockService
     }
 
     /**
+     * Solo il prompt rifiutato giustifica un secondo tentativo con il prompt
+     * sanificato: "content_filtered" e "safety" sono decisioni definitive del
+     * modello e vengono classificate come non ritentabili.
+     *
      * @param  array<string, mixed>  $decoded
      */
     private function hasPromptFilterFinishReason(array $decoded): bool
@@ -395,15 +405,7 @@ class BedrockService
                 continue;
             }
 
-            $normalized = strtolower(trim($reason));
-
-            if ($normalized === '') {
-                continue;
-            }
-
-            if (str_contains($normalized, 'filter reason: prompt')
-                || str_contains($normalized, 'content_filtered')
-                || str_contains($normalized, 'safety')) {
+            if (str_contains(strtolower(trim($reason)), 'filter reason: prompt')) {
                 return true;
             }
         }
@@ -413,14 +415,14 @@ class BedrockService
 
     /**
      * @param  array<string, mixed>  $decoded
-     * @return array{warning: ?string, retryable: bool}
+     * @return array{warning: ?string, reason: ?string, retryable: bool}
      */
     private function classifyImageResponseWarning(array $decoded): array
     {
         $finishReasons = $decoded['finish_reasons'] ?? $decoded['finishReasons'] ?? null;
 
         if (! is_array($finishReasons)) {
-            return ['warning' => null, 'retryable' => true];
+            return ['warning' => null, 'reason' => null, 'retryable' => true];
         }
 
         $normalized = array_values(array_filter(array_map(static function (mixed $reason): ?string {
@@ -434,30 +436,33 @@ class BedrockService
         }, $finishReasons)));
 
         if ($normalized === []) {
-            return ['warning' => null, 'retryable' => true];
+            return ['warning' => null, 'reason' => null, 'retryable' => true];
         }
 
         if (array_intersect($normalized, ['content_filtered', 'safety'])) {
             return [
-                'warning' => 'Copertina AI non disponibile: la richiesta immagini è stata bloccata dai controlli di sicurezza del modello Stability.',
+                'warning' => 'Copertina AI non disponibile: la richiesta immagini è stata bloccata dai controlli di sicurezza del modello.',
+                'reason' => 'content_filter',
                 'retryable' => false,
             ];
         }
 
         if (in_array('error', $normalized, true)) {
             return [
-                'warning' => 'Copertina AI non disponibile: il modello Stability ha restituito un esito errore (finish_reasons).',
+                'warning' => 'Copertina AI non disponibile: il modello immagini ha restituito un esito errore.',
+                'reason' => 'model_error',
                 'retryable' => true,
             ];
         }
 
-        return ['warning' => null, 'retryable' => true];
+        return ['warning' => null, 'reason' => null, 'retryable' => true];
     }
 
     /**
      * @param  array<string, mixed>  $decoded
+     * @return array{bytes: string, mime: string}|null
      */
-    private function extractImageDataUrl(array $decoded): ?string
+    private function extractImageBytes(array $decoded): ?array
     {
         $image = $decoded['images'][0]
             ?? $decoded['artifacts'][0]['base64']
@@ -471,8 +476,17 @@ class BedrockService
             return null;
         }
 
+        $mime = $decoded['artifacts'][0]['mimeType']
+            ?? $decoded['mimeType']
+            ?? 'image/png';
+
         if (str_starts_with($image, 'data:image/')) {
-            return $image;
+            [$header, $payload] = array_pad(explode(',', $image, 2), 2, '');
+            $image = $payload;
+
+            if (preg_match('#^data:(image/[a-z0-9.+-]+);#i', $header, $matches) === 1) {
+                $mime = $matches[1];
+            }
         }
 
         $normalized = preg_replace('/\s+/', '', $image);
@@ -481,16 +495,15 @@ class BedrockService
             return null;
         }
 
-        $mime = $decoded['artifacts'][0]['mimeType']
-            ?? $decoded['mimeType']
-            ?? 'image/png';
+        $bytes = base64_decode($normalized, true);
 
-        return "data:{$mime};base64,{$normalized}";
+        if ($bytes === false || $bytes === '') {
+            return null;
+        }
+
+        return ['bytes' => $bytes, 'mime' => is_string($mime) ? $mime : 'image/png'];
     }
 
-    /**
-     * @param  mixed  $rawBody
-     */
     private function decodeInvokeModelBody(mixed $rawBody): string
     {
         if (is_string($rawBody)) {
@@ -504,27 +517,64 @@ class BedrockService
         return '';
     }
 
-    private function formatImageWarningFromError(string $errorMessage): string
+    /**
+     * Errori di configurazione e di accesso valgono per il modello, non per la
+     * singola richiesta: solo i parametri rifiutati giustificano un nuovo
+     * tentativo con una dimensione diversa.
+     *
+     * @return array{warning: string, reason: string, retryable: bool}
+     */
+    private function classifyImageError(string $errorMessage): array
     {
         $message = strtolower($errorMessage);
 
         if (str_contains($message, 'legacy') || str_contains($message, 'active model')) {
-            return 'Copertina AI non disponibile: il modello immagini configurato su Bedrock risulta legacy/non attivo.';
+            return [
+                'warning' => 'Copertina AI non disponibile: il modello immagini configurato su Bedrock risulta legacy/non attivo.',
+                'reason' => 'model_not_available',
+                'retryable' => false,
+            ];
         }
 
         if (str_contains($message, 'model access is denied') || str_contains($message, 'access denied')) {
-            return 'Copertina AI non disponibile: l\'account AWS non ha accesso al modello immagini Bedrock configurato.';
+            return [
+                'warning' => 'Copertina AI non disponibile: l\'account AWS non ha accesso al modello immagini Bedrock configurato.',
+                'reason' => 'model_access_denied',
+                'retryable' => false,
+            ];
         }
 
-        if (str_contains($message, 'validationexception')) {
-            return 'Copertina AI non disponibile: Bedrock ha rifiutato i parametri richiesti per la generazione immagini.';
+        if (str_contains($message, 'unrecognizedclientexception') || str_contains($message, 'security token included in the request is invalid')) {
+            return [
+                'warning' => 'Copertina AI non disponibile: credenziali AWS Bedrock non valide.',
+                'reason' => 'invalid_credentials',
+                'retryable' => false,
+            ];
         }
 
         if (str_contains($message, 'safety')) {
-            return 'Copertina AI non disponibile: la richiesta immagini è stata bloccata dai controlli di sicurezza del modello.';
+            return [
+                'warning' => 'Copertina AI non disponibile: la richiesta immagini è stata bloccata dai controlli di sicurezza del modello.',
+                'reason' => 'content_filter',
+                'retryable' => false,
+            ];
         }
 
-        return 'Copertina AI non disponibile per un errore del servizio Bedrock.';
+        // Una dimensione non supportata dal modello e' esattamente il caso per
+        // cui esiste la lista di size candidate: qui il retry ha senso.
+        if (str_contains($message, 'validationexception')) {
+            return [
+                'warning' => 'Copertina AI non disponibile: Bedrock ha rifiutato i parametri richiesti per la generazione immagini.',
+                'reason' => 'invalid_parameters',
+                'retryable' => true,
+            ];
+        }
+
+        return [
+            'warning' => 'Copertina AI non disponibile per un errore del servizio Bedrock.',
+            'reason' => 'model_error',
+            'retryable' => true,
+        ];
     }
 
     /**

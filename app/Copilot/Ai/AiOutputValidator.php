@@ -90,7 +90,7 @@ class AiOutputValidator
     }
 
     /**
-     * @return array{title: string, body: string}
+     * @return array{title: string, body: string, image_prompt: ?string}
      *
      * @throws InvalidAiOutputException
      */
@@ -98,10 +98,15 @@ class AiOutputValidator
     {
         $this->validateAgainstSchema('generate-communication', 'generateCommunication', $decoded);
 
-        /** @var array{title: string, body: string} $decoded */
+        /** @var array{title: string, body: string, imagePrompt?: string} $decoded */
+        $imagePrompt = isset($decoded['imagePrompt']) ? trim($decoded['imagePrompt']) : '';
+
         return [
             'title' => trim($decoded['title']),
             'body' => trim($decoded['body']),
+            // Il prompt visivo e' un contributo opzionale del modello testuale:
+            // quando manca la copertina usa la direzione artistica generica.
+            'image_prompt' => $imagePrompt !== '' ? $imagePrompt : null,
         ];
     }
 

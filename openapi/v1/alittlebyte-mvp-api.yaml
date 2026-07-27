@@ -36,7 +36,7 @@ paths:
           $ref: "#/components/responses/Forbidden"
   /api/v1/communications:
     post:
-      summary: Generate a communication draft
+      summary: Request an AI communication draft
       operationId: generateMvpCommunication
       tags: [Communications]
       requestBody:
@@ -46,18 +46,62 @@ paths:
             schema:
               $ref: "#/components/schemas/GenerateCommunicationRequest"
       responses:
-        "201":
-          description: Communication draft generated.
+        "202":
+          description: Generation accepted and delegated to the communication pipeline.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GenerateCommunicationResponse"
+                $ref: "#/components/schemas/StartCommunicationGenerationResponse"
         "422":
           $ref: "#/components/responses/ValidationError"
         "502":
           $ref: "#/components/responses/UpstreamUnavailable"
+  /api/v1/communications/{communication}/stream:
+    get:
+      summary: Stream communication generation events
+      operationId: streamMvpCommunicationGeneration
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Server-sent events for communication generation.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/communications/{communication}/cover-image:
-    put:
+    get:
+      summary: Download the communication cover image
+      operationId: showMvpCommunicationCoverImage
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Cover image binary.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
       summary: Replace communication cover image manually
       operationId: updateMvpCommunicationCoverImage
       tags: [Communications]
@@ -80,7 +124,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GenerateCommunicationResponse"
+                $ref: "#/components/schemas/CommunicationMutationResponse"
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
@@ -99,7 +143,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GenerateCommunicationResponse"
+                $ref: "#/components/schemas/CommunicationMutationResponse"
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
@@ -341,7 +385,17 @@ components:
         style:
           type: string
           enum: [Testo informativo, Avviso operativo, Aggiornamento breve]
-    GenerateCommunicationResponse:
+    StartCommunicationGenerationResponse:
+      type: object
+      required: [message, communicationId, streamUrl]
+      properties:
+        message:
+          type: string
+        communicationId:
+          type: integer
+        streamUrl:
+          type: string
+    CommunicationMutationResponse:
       type: object
       required: [message, communication, state]
       properties:
@@ -349,8 +403,6 @@ components:
           type: string
         communication:
           $ref: "#/components/schemas/Communication"
-        coverImageWarning:
-          type: [string, "null"]
         state:
           $ref: "#/components/schemas/MvpState"
     UploadDocumentResponse:
@@ -408,7 +460,7 @@ components:
           type: boolean
     Communication:
       type: object
-      required: [id, prompt, tone, style, title, body, status]
+      required: [id, prompt, tone, style, status, generationStatus, generationStatusLabel, coverStatus, coverStatusLabel]
       properties:
         id:
           type: integer
@@ -419,10 +471,24 @@ components:
         style:
           type: string
         title:
-          type: string
+          type: [string, "null"]
         body:
-          type: string
+          type: [string, "null"]
         coverImageUrl:
+          type: [string, "null"]
+        coverStatus:
+          type: string
+          enum: [pending, processing, ready, failed, removed]
+        coverStatusLabel:
+          type: string
+        coverError:
+          type: [string, "null"]
+        generationStatus:
+          type: string
+          enum: [pending, processing, completed, failed]
+        generationStatusLabel:
+          type: string
+        error:
           type: [string, "null"]
         status:
           type: string
