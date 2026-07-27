@@ -131,5 +131,25 @@ test('generate communication validator requires title and body but ignores extra
         'title' => ' Titolo ',
         'body' => 'Corpo',
         'send_now' => true,
-    ]))->toBe(['title' => 'Titolo', 'body' => 'Corpo']);
+    ]))->toBe(['title' => 'Titolo', 'body' => 'Corpo', 'image_prompt' => null]);
+});
+
+test('generate communication validator keeps the visual direction written by the model', function () {
+    expect(app(AiOutputValidator::class)->validateGenerateCommunication([
+        'title' => 'Titolo',
+        'body' => 'Corpo',
+        'imagePrompt' => '  Abstract calendar motifs, calm blue palette  ',
+    ]))->toBe([
+        'title' => 'Titolo',
+        'body' => 'Corpo',
+        'image_prompt' => 'Abstract calendar motifs, calm blue palette',
+    ]);
+
+    // Un imagePrompt vuoto non e' una direzione visiva: la copertina ricade
+    // sulla descrizione corporate generica.
+    expect(app(AiOutputValidator::class)->validateGenerateCommunication([
+        'title' => 'Titolo',
+        'body' => 'Corpo',
+        'imagePrompt' => '   ',
+    ])['image_prompt'])->toBeNull();
 });

@@ -2,7 +2,9 @@
 
 namespace App\Copilot\Observability;
 
+use App\Copilot\Communications\Enums\CommunicationGenerationStatus;
 use App\Copilot\Communications\Enums\CommunicationStatus;
+use App\Copilot\Communications\Enums\CoverImageStatus;
 use App\Copilot\Documents\Enums\ProcessingStatus;
 use App\Copilot\Documents\Enums\ReviewStatus;
 use App\Models\Copilot\Communication;
@@ -136,6 +138,29 @@ class PrometheusExporter
         $lines[] = $this->line('mvp_document_stuck_processing_total', [], OriginalDocument::query()
             ->where('processing_status', ProcessingStatus::Processing)
             ->where('workflow_started_at', '<', now()->subSeconds((int) config('mvp.document_limits.processing_timeout_seconds', 600)))
+            ->count());
+
+        // Stato tecnico della pipeline di generazione, distinto da
+        // mvp_communications_total che conta la decisione sulla bozza.
+        $lines[] = '# HELP mvp_communications_generation_total Communications by generation pipeline status.';
+        $lines[] = '# TYPE mvp_communications_generation_total gauge';
+
+        foreach (CommunicationGenerationStatus::cases() as $status) {
+            $lines[] = $this->line('mvp_communications_generation_total', ['generation_status' => $status->value], Communication::query()->where('generation_status', $status)->count());
+        }
+
+        $lines[] = '# HELP mvp_communication_covers_total Communication covers by status.';
+        $lines[] = '# TYPE mvp_communication_covers_total gauge';
+
+        foreach (CoverImageStatus::cases() as $status) {
+            $lines[] = $this->line('mvp_communication_covers_total', ['cover_status' => $status->value], Communication::query()->where('cover_status', $status)->count());
+        }
+
+        $lines[] = '# HELP mvp_communication_stuck_processing_total Communications generating beyond the configured timeout.';
+        $lines[] = '# TYPE mvp_communication_stuck_processing_total gauge';
+        $lines[] = $this->line('mvp_communication_stuck_processing_total', [], Communication::query()
+            ->where('generation_status', CommunicationGenerationStatus::Processing)
+            ->where('workflow_started_at', '<', now()->subSeconds((int) config('mvp.communications.generation_timeout_seconds', 300)))
             ->count());
 
         return $lines;

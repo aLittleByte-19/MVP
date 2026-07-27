@@ -1,9 +1,13 @@
 <?php
 
 use App\Copilot\Ai\BedrockService;
+use App\Copilot\Communications\Enums\CommunicationGenerationStatus;
+use App\Copilot\Communications\Enums\CoverImageStatus;
+use App\Copilot\Communications\Services\CommunicationWorkflowService;
 use App\Copilot\Documents\Enums\ReviewStatus;
-use App\Copilot\Workflow\Services\DocumentWorkflowService;
-use App\Copilot\Workflow\Services\DocumentWorkflowTaskHandler;
+use App\Copilot\Documents\Services\DocumentWorkflowService;
+use App\Copilot\Workflow\Services\WorkflowTaskRunner;
+use App\Copilot\Workflow\Support\WorkflowContext;
 use App\Models\Copilot\AuditEvent;
 use App\Models\Copilot\Communication;
 use App\Models\Copilot\ExtractedData;
@@ -42,12 +46,36 @@ function mvpMockWorkflowNotStarted(): void
     app()->instance(DocumentWorkflowService::class, $mock);
 }
 
+function mvpMockCommunicationWorkflowStart(object $test): void
+{
+    $mock = Mockery::mock(CommunicationWorkflowService::class);
+    $mock->shouldReceive('start')
+        ->once()
+        ->andReturnUsing(fn (Communication $communication) => $communication);
+
+    app()->instance(CommunicationWorkflowService::class, $mock);
+}
+
+/**
+ * @return array{callback_required: bool, output: array<string, mixed>}
+ */
+function mvpRunCommunicationTask(Communication $communication, string $taskType): array
+{
+    return app(WorkflowTaskRunner::class)->handle([
+        'taskToken' => 'test-token-'.$taskType.'-'.$communication->id.'-'.str()->uuid(),
+        'taskType' => $taskType,
+        'communicationId' => $communication->id,
+        'tenantId' => $communication->tenant_id,
+        'correlationId' => 'test-correlation',
+    ]);
+}
+
 /**
  * @return array{callback_required: bool, output: array<string, mixed>}
  */
 function mvpRunWorkflowTask(OriginalDocument $document, string $taskType = 'bedrock.extract'): array
 {
-    return app(DocumentWorkflowTaskHandler::class)->handle([
+    return app(WorkflowTaskRunner::class)->handle([
         'taskToken' => 'test-token-'.$taskType.'-'.$document->id.'-'.str()->uuid(),
         'taskType' => $taskType,
         'documentId' => $document->id,
@@ -83,37 +111,141 @@ test('api rejects incomplete trusted identity claims outside local mode', functi
         ->assertJsonPath('error.code', 'unauthorized');
 });
 
-test('ai assistant generation uses only prompt tone and style', function () {
-    $this->mock(BedrockService::class, function ($mock) {
-        $mock->shouldReceive('generateCommunication')
-            ->once()
-            ->with(
-                'Comunicazione interna sulla nuova area documentale.',
-                'Chiaro e diretto',
-                'Testo informativo',
-            )
-            ->andReturn(['title' => 'Titolo reale', 'body' => 'Corpo reale']);
-
-        $mock->shouldReceive('generateCommunicationImageWithMeta')
-            ->once()
-            ->andReturn([
-                'image' => 'data:image/png;base64,ZmFrZQ==',
-                'warning' => null,
-            ]);
-    });
+test('ai assistant generation is accepted and delegated to the communication pipeline', function () {
+    mvpMockCommunicationWorkflowStart($this);
 
     $this->postJson('/api/v1/communications', [
         'prompt' => 'Comunicazione interna sulla nuova area documentale.',
         'tone' => 'Chiaro e diretto',
         'style' => 'Testo informativo',
     ])
-        ->assertCreated()
-        ->assertJsonPath('communication.title', 'Titolo reale');
+        ->assertAccepted()
+        ->assertJsonPath('message', 'Generazione avviata.')
+        ->assertJsonStructure(['message', 'communicationId', 'streamUrl']);
 
-    expect(Communication::query()->count())->toBe(1);
-    expect(Communication::query()->first()->generated_body)->toBe('Corpo reale')
-        ->and(Communication::query()->first()->tenant_id)->toBe('mvp-local-tenant')
+    $communication = Communication::query()->sole();
+
+    expect(Communication::query()->count())->toBe(1)
+        ->and($communication->prompt)->toBe('Comunicazione interna sulla nuova area documentale.')
+        ->and($communication->generation_status)->toBe(CommunicationGenerationStatus::Pending)
+        ->and($communication->tenant_id)->toBe('mvp-local-tenant')
+        ->and(AuditEvent::query()->where('event_type', 'mvp-communication-generation-requested')->count())->toBe(1);
+});
+
+test('the communication pipeline generates the text and stores the cover', function () {
+    Storage::fake('s3');
+    config(['mvp.communications.cover_disk' => 's3']);
+
+    $communication = Communication::factory()->processing()->create();
+
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('generateCommunication')
+            ->once()
+            ->andReturn(['title' => 'Titolo reale', 'body' => 'Corpo reale', 'image_prompt' => 'Abstract office motifs, warm palette']);
+
+        // La copertina riceve la direzione visiva scritta dal modello testuale.
+        $mock->shouldReceive('generateCommunicationImageWithMeta')
+            ->once()
+            ->with(Mockery::any(), Mockery::any(), Mockery::any(), 'Abstract office motifs, warm palette')
+            ->andReturn([
+                'bytes' => 'fake-image-bytes',
+                'mime' => 'image/png',
+                'warning' => null,
+                'reason' => null,
+            ]);
+    });
+
+    mvpRunCommunicationTask($communication, 'communication.generate_text');
+    mvpRunCommunicationTask($communication, 'communication.generate_cover');
+    mvpRunCommunicationTask($communication, 'communication.finalize');
+
+    $communication->refresh();
+
+    expect($communication->generated_body)->toBe('Corpo reale')
+        ->and($communication->image_prompt)->toBe('Abstract office motifs, warm palette')
+        ->and($communication->generation_status)->toBe(CommunicationGenerationStatus::Completed)
+        ->and($communication->cover_status)->toBe(CoverImageStatus::Ready)
+        ->and($communication->cover_image_path)->toStartWith('communications/covers/')
         ->and(AuditEvent::query()->where('event_type', 'mvp-communication-generated')->count())->toBe(1);
+
+    Storage::disk('s3')->assertExists($communication->cover_image_path);
+});
+
+test('a failed cover leaves the communication completed with a warning', function () {
+    $communication = Communication::factory()->processing()->create([
+        'generated_title' => 'Titolo',
+        'generated_body' => 'Corpo',
+    ]);
+
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('generateCommunicationImageWithMeta')
+            ->once()
+            ->andReturn([
+                'bytes' => null,
+                'mime' => 'image/png',
+                'warning' => 'Copertina AI non disponibile: modello immagini Bedrock non configurato.',
+                'reason' => 'model_not_configured',
+            ]);
+    });
+
+    // La copertina degradata non solleva eccezioni: il task chiude con successo.
+    $result = mvpRunCommunicationTask($communication, 'communication.generate_cover');
+    mvpRunCommunicationTask($communication, 'communication.finalize');
+
+    $communication->refresh();
+
+    expect($result['callback_required'])->toBeTrue()
+        ->and($communication->generation_status)->toBe(CommunicationGenerationStatus::Completed)
+        ->and($communication->cover_status)->toBe(CoverImageStatus::Failed)
+        ->and($communication->cover_error)->toContain('non configurato')
+        ->and($communication->cover_image_path)->toBeNull()
+        ->and(AuditEvent::query()->where('event_type', 'mvp-communication-cover-degraded')->count())->toBe(1);
+});
+
+test('a failed text generation fails the whole communication', function () {
+    $communication = Communication::factory()->processing()->create();
+
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('generateCommunication')
+            ->once()
+            ->andThrow(new RuntimeException('Bedrock non raggiungibile'));
+    });
+
+    expect(fn () => mvpRunCommunicationTask($communication, 'communication.generate_text'))
+        ->toThrow(RuntimeException::class);
+
+    expect($communication->fresh()->generation_status)->toBe(CommunicationGenerationStatus::Failed);
+});
+
+test('workflow audit events keep the correlation id carried by the message', function () {
+    $communication = Communication::factory()->processing()->create([
+        'generated_title' => 'Titolo',
+        'generated_body' => 'Corpo',
+    ]);
+
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('generateCommunicationImageWithMeta')
+            ->once()
+            ->andReturn([
+                'bytes' => null,
+                'mime' => 'image/png',
+                'warning' => 'Copertina non disponibile.',
+                'reason' => 'model_error',
+            ]);
+    });
+
+    app(WorkflowContext::class)->bind('req-42', 'corr-42', $communication->tenant_id);
+
+    try {
+        mvpRunCommunicationTask($communication, 'communication.generate_cover');
+    } finally {
+        app(WorkflowContext::class)->clear();
+    }
+
+    $event = AuditEvent::query()->where('event_type', 'mvp-communication-cover-degraded')->sole();
+
+    expect($event->request_id)->toBe('req-42')
+        ->and($event->correlation_id)->toBe('corr-42');
 });
 
 test('document upload performs initial split and field extraction', function () {
@@ -452,37 +584,79 @@ test('manual correction endpoint rejects cross tenant access', function () {
 });
 
 test('operator can upload a manual cover image for a communication draft', function () {
-    $communication = Communication::factory()->draft()->create([
-        'generated_cover_image' => 'data:image/png;base64,ZmFrZQ==',
-    ]);
+    Storage::fake('s3');
+    config(['mvp.communications.cover_disk' => 's3']);
+
+    $communication = Communication::factory()->draft()->coverReady()->create();
+    $previousPath = $communication->cover_image_path;
+    Storage::disk('s3')->put($previousPath, 'vecchia-copertina');
 
     $response = $this->withHeader('Accept', 'application/json')
-        ->put("/api/v1/communications/{$communication->id}/cover-image", [
+        ->post("/api/v1/communications/{$communication->id}/cover-image", [
             'image' => UploadedFile::fake()->image('manual-cover.png', 1280, 720),
         ]);
 
     $response->assertOk()
         ->assertJsonPath('message', 'Immagine di copertina aggiornata correttamente.')
-        ->assertJsonPath('communication.id', $communication->id);
+        ->assertJsonPath('communication.id', $communication->id)
+        ->assertJsonPath('communication.coverStatus', 'ready');
 
-    expect($communication->fresh()->generated_cover_image)
-        ->toStartWith('data:image/')
+    $communication->refresh();
+
+    expect($communication->cover_image_path)->not->toBe($previousPath)
+        ->and($communication->cover_image_source->value)->toBe('manual')
         ->and(AuditEvent::query()->where('event_type', 'mvp-communication-cover-updated')->count())->toBe(1);
+
+    Storage::disk('s3')->assertExists($communication->cover_image_path);
+    // La copertina sostituita non deve restare orfana sullo storage.
+    Storage::disk('s3')->assertMissing($previousPath);
+});
+
+test('operator can download the cover image of a communication', function () {
+    Storage::fake('s3');
+    config(['mvp.communications.cover_disk' => 's3']);
+
+    $communication = Communication::factory()->draft()->coverReady()->create();
+    Storage::disk('s3')->put($communication->cover_image_path, 'contenuto-copertina');
+
+    $response = $this->get("/api/v1/communications/{$communication->id}/cover-image");
+
+    $response->assertOk()
+        ->assertHeader('Content-Type', 'image/png');
+
+    expect($response->streamedContent())->toBe('contenuto-copertina');
+});
+
+test('cover download returns 404 when the object is missing', function () {
+    Storage::fake('s3');
+    config(['mvp.communications.cover_disk' => 's3']);
+
+    $communication = Communication::factory()->draft()->coverReady()->create();
+
+    $this->withHeader('Accept', 'application/json')
+        ->get("/api/v1/communications/{$communication->id}/cover-image")
+        ->assertNotFound();
 });
 
 test('operator can remove a manual cover image from a communication draft', function () {
-    $communication = Communication::factory()->draft()->create([
-        'generated_cover_image' => 'data:image/png;base64,ZmFrZQ==',
-    ]);
+    Storage::fake('s3');
+    config(['mvp.communications.cover_disk' => 's3']);
+
+    $communication = Communication::factory()->draft()->coverReady()->create();
+    $path = $communication->cover_image_path;
+    Storage::disk('s3')->put($path, 'copertina');
 
     $this->deleteJson("/api/v1/communications/{$communication->id}/cover-image")
         ->assertOk()
         ->assertJsonPath('message', 'Immagine di copertina rimossa.')
         ->assertJsonPath('communication.id', $communication->id)
-        ->assertJsonPath('communication.coverImageUrl', null);
+        ->assertJsonPath('communication.coverImageUrl', null)
+        ->assertJsonPath('communication.coverStatus', 'removed');
 
-    expect($communication->fresh()->generated_cover_image)->toBeNull()
+    expect($communication->fresh()->cover_image_path)->toBeNull()
         ->and(AuditEvent::query()->where('event_type', 'mvp-communication-cover-removed')->count())->toBe(1);
+
+    Storage::disk('s3')->assertMissing($path);
 });
 
 test('manual cover upload rejects cross tenant access', function () {
@@ -495,7 +669,7 @@ test('manual cover upload rejects cross tenant access', function () {
         'X-Mvp-User-Email' => 'operator-b@example.test',
         'X-Mvp-Tenant-Id' => 'another-tenant',
         'X-Mvp-Roles' => 'mvp-operator',
-    ])->put("/api/v1/communications/{$communication->id}/cover-image", [
+    ])->post("/api/v1/communications/{$communication->id}/cover-image", [
         'image' => UploadedFile::fake()->image('manual-cover.png', 1280, 720),
     ])
         ->assertForbidden()
@@ -506,7 +680,7 @@ test('manual cover upload validates image payload', function () {
     $communication = Communication::factory()->draft()->create();
 
     $this->withHeader('Accept', 'application/json')
-        ->put("/api/v1/communications/{$communication->id}/cover-image", [
+        ->post("/api/v1/communications/{$communication->id}/cover-image", [
             'image' => UploadedFile::fake()->createWithContent('cover.txt', 'not an image'),
         ])
         ->assertUnprocessable()

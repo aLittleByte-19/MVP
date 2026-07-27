@@ -13,12 +13,12 @@ groups:
           runbook: "https://github.com/aLittleByte-19/MVP/blob/main/docs/runbooks/document-pipeline.md"
 
       - alert: DLQNotEmpty
-        expr: mvp_dlq_messages_total > 0
+        expr: mvp_dlq_messages_total{queue="documents"} > 0
         for: 1m
         labels:
           severity: critical
           service_namespace: alittlebyte
         annotations:
           summary: "Document workflow DLQ contains messages"
-          description: "Run php artisan mvp:dlq:list to inspect failed messages."
+          description: "Run php artisan mvp:dlq:list --queue=documents to inspect failed messages."
           runbook: "https://github.com/aLittleByte-19/MVP/blob/main/docs/runbooks/dlq-recovery.md"

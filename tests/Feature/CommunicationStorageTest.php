@@ -8,7 +8,7 @@ test('successful generation creates a draft communication record with all fields
     $this->mock(BedrockService::class, function ($mock) {
         $mock->shouldReceive('generateCommunication')
             ->once()
-            ->andReturn(['title' => 'Titolo generato', 'body' => 'Corpo generato']);
+            ->andReturn(['title' => 'Titolo generato', 'body' => 'Corpo generato', 'image_prompt' => null]);
     });
 
     $service = app(BedrockService::class);
