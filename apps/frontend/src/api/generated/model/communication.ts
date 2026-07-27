@@ -5,16 +5,28 @@
  * Versioned JSON contract consumed by the Angular SPA.
  * OpenAPI spec version: 1.0.0
  */
+import type { CommunicationCoverStatus } from './communicationCoverStatus';
+import type { CommunicationGenerationStatus } from './communicationGenerationStatus';
 
 export interface Communication {
   id: number;
   prompt: string;
   tone: string;
   style: string;
-  title: string;
-  body: string;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  body?: string | null;
   /** @nullable */
   coverImageUrl?: string | null;
+  coverStatus: CommunicationCoverStatus;
+  coverStatusLabel: string;
+  /** @nullable */
+  coverError?: string | null;
+  generationStatus: CommunicationGenerationStatus;
+  generationStatusLabel: string;
+  /** @nullable */
+  error?: string | null;
   status: string;
   /** @nullable */
   createdAt?: string | null;

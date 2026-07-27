@@ -11,7 +11,11 @@ import { StatusBadgeComponent } from "../../shared/components/status-badge/statu
 import { formatFallback } from "../../shared/util/formatters";
 import { CommunicationGeneratorPanelComponent } from "./components/communication-generator-panel";
 import { GeneratedCommunicationPreviewComponent } from "./components/generated-communication-preview";
-import type { CommunicationDraftForm, GeneratedDraft } from "./assistant.model";
+import type {
+  CommunicationDraftForm,
+  CommunicationGenerationPhase,
+  GeneratedDraft
+} from "./assistant.model";
 
 @Component({
   selector: "mvp-assistant-page",
@@ -68,7 +72,10 @@ import type { CommunicationDraftForm, GeneratedDraft } from "./assistant.model";
 export class AssistantPage {
   protected readonly store = inject(MvpStateStore);
   protected readonly history = this.store.history;
-  protected readonly isGenerating = signal(false);
+  protected readonly phase = signal<CommunicationGenerationPhase | "idle">("idle");
+  protected readonly isGenerating = computed(
+    () => this.phase() === "queued" || this.phase() === "generating-text" || this.phase() === "generating-cover"
+  );
   protected readonly isUpdatingCover = signal(false);
   protected readonly status = signal("In attesa di istruzioni.");
   protected readonly selectedDraftId = signal<number | null>(null);
@@ -88,23 +95,50 @@ export class AssistantPage {
   private readonly assistant = inject(AssistantService);
 
   protected generate(payload: CommunicationDraftForm): void {
-    this.isGenerating.set(true);
+    this.phase.set("queued");
     this.status.set("Generazione in corso.");
+    this.selectedDraftId.set(null);
+    this.latestDraft.set(null);
 
-    this.assistant
-      .generate(payload)
-      .pipe(finalize(() => this.isGenerating.set(false)))
-      .subscribe({
-        next: (response) => {
-          this.selectedDraftId.set(null);
-          this.latestDraft.set(this.toDraft(response.communication, response.coverImageWarning));
-          this.status.set(response.message);
+    this.assistant.generate(payload).subscribe({
+      next: (progress) => {
+        this.phase.set(progress.phase);
+        this.status.set(progress.status);
+
+        // Il testo arriva prima della copertina: la bozza si popola per gradi.
+        if (progress.text) {
+          this.latestDraft.set({
+            id: progress.communicationId,
+            title: progress.text.title ?? "",
+            body: progress.text.body ?? "",
+            status: "draft",
+            coverStatus: "processing"
+          });
           this.scrollTo("assistant-review");
-        },
-        error: (error: unknown) => {
-          this.status.set(getApiErrorMessage(error, "Generazione non disponibile."));
         }
-      });
+
+        if (progress.cover) {
+          const current = this.latestDraft();
+          this.latestDraft.set({
+            id: progress.communicationId,
+            title: current?.title ?? "",
+            body: current?.body ?? "",
+            status: current?.status ?? "draft",
+            coverImageUrl: progress.cover.coverImageUrl ?? undefined,
+            coverStatus: progress.cover.coverStatus,
+            coverError: progress.cover.coverError ?? undefined
+          });
+        }
+
+        if (progress.communication) {
+          this.latestDraft.set(this.toDraft(progress.communication));
+        }
+      },
+      error: (error: unknown) => {
+        this.phase.set("failed");
+        this.status.set(getApiErrorMessage(error, "Generazione non disponibile."));
+      }
+    });
   }
 
   protected selectDraft(communicationId: number): void {
@@ -127,7 +161,7 @@ export class AssistantPage {
       .pipe(finalize(() => this.isUpdatingCover.set(false)))
       .subscribe({
         next: (response) => {
-          this.latestDraft.set(this.toDraft(response.communication, response.coverImageWarning));
+          this.latestDraft.set(this.toDraft(response.communication));
           this.status.set(response.message);
         },
         error: (error: unknown) => {
@@ -151,7 +185,7 @@ export class AssistantPage {
       .pipe(finalize(() => this.isUpdatingCover.set(false)))
       .subscribe({
         next: (response) => {
-          this.latestDraft.set(this.toDraft(response.communication, response.coverImageWarning));
+          this.latestDraft.set(this.toDraft(response.communication));
           this.status.set(response.message);
         },
         error: (error: unknown) => {
@@ -160,14 +194,15 @@ export class AssistantPage {
       });
   }
 
-  private toDraft(communication: Communication, coverImageWarning?: string | null): GeneratedDraft {
+  private toDraft(communication: Communication): GeneratedDraft {
     return {
       id: communication.id,
-      title: communication.title,
-      body: communication.body,
+      title: communication.title ?? "",
+      body: communication.body ?? "",
       status: communication.status,
       coverImageUrl: communication.coverImageUrl ?? undefined,
-      coverImageWarning: coverImageWarning ?? undefined,
+      coverStatus: communication.coverStatus,
+      coverError: communication.coverError ?? undefined
     };
   }
 

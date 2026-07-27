@@ -8,10 +8,8 @@
 import type { Communication } from './communication';
 import type { MvpState } from './mvpState';
 
-export interface GenerateCommunicationResponse {
+export interface CommunicationMutationResponse {
   message: string;
   communication: Communication;
-  /** @nullable */
-  coverImageWarning?: string | null;
   state: MvpState;
 }

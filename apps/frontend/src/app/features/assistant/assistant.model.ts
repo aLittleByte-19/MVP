@@ -1,12 +1,30 @@
-import type { GenerateCommunicationRequest } from "../../../api/generated/model";
+import type { Communication, GenerateCommunicationRequest } from "../../../api/generated/model";
 
 export type CommunicationDraftForm = GenerateCommunicationRequest;
+
+/** Fase della pipeline di generazione, usata per etichette e stato dei controlli. */
+export type CommunicationGenerationPhase =
+  | "queued"
+  | "generating-text"
+  | "generating-cover"
+  | "completed"
+  | "failed";
+
+export interface CommunicationGenerationProgress {
+  status: string;
+  phase: CommunicationGenerationPhase;
+  communicationId: number;
+  text?: { title: string | null; body: string | null };
+  cover?: { coverImageUrl: string | null; coverStatus: string; coverError: string | null };
+  communication?: Communication;
+}
 
 export interface GeneratedDraft {
   id: number;
   body: string;
   coverImageUrl?: string;
-  coverImageWarning?: string;
+  coverStatus: string;
+  coverError?: string;
   status: string;
   title: string;
 }

@@ -8,6 +8,9 @@
 
 export * from './assistantState';
 export * from './communication';
+export * from './communicationCoverStatus';
+export * from './communicationGenerationStatus';
+export * from './communicationMutationResponse';
 export * from './copilotState';
 export * from './deleteDocumentResponse';
 export * from './errorEnvelope';
@@ -16,10 +19,10 @@ export * from './forbiddenResponse';
 export * from './generateCommunicationRequest';
 export * from './generateCommunicationRequestStyle';
 export * from './generateCommunicationRequestTone';
-export * from './generateCommunicationResponse';
 export * from './metric';
 export * from './mvpState';
 export * from './notFoundResponse';
+export * from './startCommunicationGenerationResponse';
 export * from './subDocument';
 export * from './subDocumentReviewStatus';
 export * from './unauthorizedResponse';

@@ -26,10 +26,11 @@ import {
 } from 'rxjs';
 
 import type {
+  CommunicationMutationResponse,
   DeleteDocumentResponse,
   GenerateCommunicationRequest,
-  GenerateCommunicationResponse,
   MvpState,
+  StartCommunicationGenerationResponse,
   UpdateExtractedDataRequest,
   UpdateMvpCommunicationCoverImageBody,
   UpdateSubDocumentReviewResponse,
@@ -78,7 +79,13 @@ type HttpClientObserveOptions = HttpClientOptions & {
 
 
 
+export type ShowMvpCommunicationCoverImageAccept = typeof ShowMvpCommunicationCoverImageAccept[keyof typeof ShowMvpCommunicationCoverImageAccept];
 
+export const ShowMvpCommunicationCoverImageAccept = {
+  image_png: 'image/png',
+  image_jpeg: 'image/jpeg',
+  image_webp: 'image/webp',
+} as const;
 
 @Injectable({ providedIn: 'root' })
 export class AlittlebyteMVPAPIService {
@@ -118,12 +125,12 @@ export class AlittlebyteMVPAPIService {
   }
 
 /**
- * @summary Generate a communication draft
+ * @summary Request an AI communication draft
  */
- generateMvpCommunication<TData = GenerateCommunicationResponse>(generateCommunicationRequest: GenerateCommunicationRequest, options?: HttpClientBodyOptions): Observable<TData>;
- generateMvpCommunication<TData = GenerateCommunicationResponse>(generateCommunicationRequest: GenerateCommunicationRequest, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
- generateMvpCommunication<TData = GenerateCommunicationResponse>(generateCommunicationRequest: GenerateCommunicationRequest, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
-  generateMvpCommunication<TData = GenerateCommunicationResponse>(
+ generateMvpCommunication<TData = StartCommunicationGenerationResponse>(generateCommunicationRequest: GenerateCommunicationRequest, options?: HttpClientBodyOptions): Observable<TData>;
+ generateMvpCommunication<TData = StartCommunicationGenerationResponse>(generateCommunicationRequest: GenerateCommunicationRequest, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ generateMvpCommunication<TData = StartCommunicationGenerationResponse>(generateCommunicationRequest: GenerateCommunicationRequest, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  generateMvpCommunication<TData = StartCommunicationGenerationResponse>(
     generateCommunicationRequest: GenerateCommunicationRequest, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
     if (options?.observe === 'events') {
       return this.http.post<TData>(
@@ -155,21 +162,102 @@ export class AlittlebyteMVPAPIService {
   }
 
 /**
+ * @summary Stream communication generation events
+ */
+ streamMvpCommunicationGeneration(communication: number, options?: HttpClientBodyOptions): Observable<string>;
+ streamMvpCommunicationGeneration(communication: number, options?: HttpClientEventOptions): Observable<HttpEvent<string>>;
+ streamMvpCommunicationGeneration(communication: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<string>>;
+  streamMvpCommunicationGeneration(
+    communication: number, options?: HttpClientObserveOptions): Observable<string | HttpEvent<string> | AngularHttpResponse<string>> {
+    if (options?.observe === 'events') {
+      return this.http.get(
+      `/api/v1/communications/${communication}/stream`,{
+        responseType: 'text',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',}
+    ) as Observable<HttpEvent<string>>;
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.get(
+      `/api/v1/communications/${communication}/stream`,{
+        responseType: 'text',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',}
+    ) as Observable<AngularHttpResponse<string>>;
+    }
+
+    return this.http.get(
+      `/api/v1/communications/${communication}/stream`,{
+        responseType: 'text',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',}
+    ) as Observable<string>;
+  }
+
+/**
+ * @summary Download the communication cover image
+ */
+ showMvpCommunicationCoverImage(communication: number,
+    accept: 'image/png', options?: HttpClientOptions): Observable<Blob>;
+  showMvpCommunicationCoverImage(communication: number,
+    accept: 'image/jpeg', options?: HttpClientOptions): Observable<Blob>;
+  showMvpCommunicationCoverImage(communication: number,
+    accept: 'image/webp', options?: HttpClientOptions): Observable<Blob>;
+  showMvpCommunicationCoverImage(communication: number,
+    accept?: ShowMvpCommunicationCoverImageAccept, options?: HttpClientOptions): Observable<unknown | Blob>;
+  showMvpCommunicationCoverImage(
+    communication: number,
+    accept: ShowMvpCommunicationCoverImageAccept = 'image/png',
+    options?: HttpClientOptions
+  ): Observable<unknown | Blob> {
+    const headers = options?.headers instanceof HttpHeaders
+      ? options.headers.set('Accept', accept)
+      : { ...(options?.headers ?? {}), Accept: accept };
+
+    if (accept.includes('json') || accept.includes('+json')) {
+      return this.http.get<unknown>(`/api/v1/communications/${communication}/cover-image`, {
+        ...options,
+        responseType: 'json',
+        headers,
+
+
+      });
+    } else if (accept.startsWith('text/') || accept.includes('xml')) {
+      return this.http.get(`/api/v1/communications/${communication}/cover-image`, {
+        ...options,
+        responseType: 'text',
+        headers,
+
+
+      }) as Observable<any>;
+    } else {
+      return this.http.get(`/api/v1/communications/${communication}/cover-image`, {
+        ...options,
+        responseType: 'blob',
+        headers,
+
+
+      }) as Observable<Blob>;
+    }
+  }
+
+/**
  * @summary Replace communication cover image manually
  */
- updateMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(communication: number,
+ updateMvpCommunicationCoverImage<TData = CommunicationMutationResponse>(communication: number,
     updateMvpCommunicationCoverImageBody: UpdateMvpCommunicationCoverImageBody, options?: HttpClientBodyOptions): Observable<TData>;
- updateMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(communication: number,
+ updateMvpCommunicationCoverImage<TData = CommunicationMutationResponse>(communication: number,
     updateMvpCommunicationCoverImageBody: UpdateMvpCommunicationCoverImageBody, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
- updateMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(communication: number,
+ updateMvpCommunicationCoverImage<TData = CommunicationMutationResponse>(communication: number,
     updateMvpCommunicationCoverImageBody: UpdateMvpCommunicationCoverImageBody, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
-  updateMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(
+  updateMvpCommunicationCoverImage<TData = CommunicationMutationResponse>(
     communication: number,
     updateMvpCommunicationCoverImageBody: UpdateMvpCommunicationCoverImageBody, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {const formData = new FormData();
 formData.append(`image`, updateMvpCommunicationCoverImageBody.image);
 
     if (options?.observe === 'events') {
-      return this.http.put<TData>(
+      return this.http.post<TData>(
       `/api/v1/communications/${communication}/cover-image`,
       formData,{
         ...(options as Omit<NonNullable<typeof options>, 'observe'>),
@@ -179,7 +267,7 @@ formData.append(`image`, updateMvpCommunicationCoverImageBody.image);
     }
 
     if (options?.observe === 'response') {
-      return this.http.put<TData>(
+      return this.http.post<TData>(
       `/api/v1/communications/${communication}/cover-image`,
       formData,{
         ...(options as Omit<NonNullable<typeof options>, 'observe'>),
@@ -188,7 +276,7 @@ formData.append(`image`, updateMvpCommunicationCoverImageBody.image);
     );
     }
 
-    return this.http.put<TData>(
+    return this.http.post<TData>(
       `/api/v1/communications/${communication}/cover-image`,
       formData,{
         ...(options as Omit<NonNullable<typeof options>, 'observe'>),
@@ -200,10 +288,10 @@ formData.append(`image`, updateMvpCommunicationCoverImageBody.image);
 /**
  * @summary Remove communication cover image
  */
- removeMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(communication: number, options?: HttpClientBodyOptions): Observable<TData>;
- removeMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(communication: number, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
- removeMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(communication: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
-  removeMvpCommunicationCoverImage<TData = GenerateCommunicationResponse>(
+ removeMvpCommunicationCoverImage<TData = CommunicationMutationResponse>(communication: number, options?: HttpClientBodyOptions): Observable<TData>;
+ removeMvpCommunicationCoverImage<TData = CommunicationMutationResponse>(communication: number, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ removeMvpCommunicationCoverImage<TData = CommunicationMutationResponse>(communication: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  removeMvpCommunicationCoverImage<TData = CommunicationMutationResponse>(
     communication: number, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
     if (options?.observe === 'events') {
       return this.http.delete<TData>(
