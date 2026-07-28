@@ -125,6 +125,8 @@ class MvpStateService
             'confidence' => $confidence,
             'reviewStatus' => $subDocument->review_status->value,
             'reviewStatusLabel' => $subDocument->review_status->label(),
+            'sendStatus' => $subDocument->send_status->value,
+            'sendStatusLabel' => $subDocument->send_status->label(),
             'error' => $subDocument->error_message,
             // URL relativo: vedi nota in DocumentController::store. Un URL assoluto
             // sarebbe generato con schema "http://" dietro Traefik e bloccato dal

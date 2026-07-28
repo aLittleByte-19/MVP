@@ -22,6 +22,7 @@ export * from './mvpState';
 export * from './notFoundResponse';
 export * from './subDocument';
 export * from './subDocumentReviewStatus';
+export * from './subDocumentSendStatus';
 export * from './unauthorizedResponse';
 export * from './updateExtractedDataRequest';
 export * from './updateSubDocumentReviewResponse';

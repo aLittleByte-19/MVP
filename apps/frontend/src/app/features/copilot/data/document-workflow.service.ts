@@ -5,7 +5,7 @@ import type {
   DeleteDocumentResponse,
   MvpState,
   SubDocument,
-  SubDocumentReviewStatus,
+  SubDocumentSendStatus,
   UpdateExtractedDataRequest,
   UpdateSubDocumentReviewResponse
 } from "../../../../api/generated/model";
@@ -45,13 +45,21 @@ interface ProcessingProgressEvent {
   subDocuments: number;
 }
 
-/** Criteri di filtro per l'elenco documenti mostrato nel Co-Pilot. */
+/** Criterio di confronto per il filtro di confidenza (UC-37). */
+export type ConfidenceCriterion = "above" | "below";
+
+/** Criteri di filtro per l'elenco documenti mostrato nel Co-Pilot (UC-35..UC-38). */
 export interface DocumentFilters {
-  /** Ricerca testuale su nome/cognome dipendente e azienda. */
+  /** Ricerca testuale su nome/cognome dipendente e azienda (UC-35). */
   search?: string;
-  status?: SubDocumentReviewStatus;
-  /** Soglia di confidenza: restituisce solo i documenti sotto questo valore. */
-  confidence?: number;
+  /** Stato di invio: "sent" (Inviato) o "pending" (Non inviato) (UC-36). */
+  sendStatus?: SubDocumentSendStatus;
+  /** Soglia di confidenza e criterio di confronto rispetto alla soglia (UC-37). */
+  confidenceThreshold?: number;
+  confidenceCriterion?: ConfidenceCriterion;
+  /** Mese (1-12) e anno del documento (UC-38). */
+  month?: number;
+  year?: number;
 }
 
 /**
@@ -169,7 +177,7 @@ export class DocumentWorkflowService {
 
     return documents.filter((document) => {
       if (search) {
-        const haystack = [document.employee, document.company, document.file]
+        const haystack = [document.employee, document.company]
           .filter((value): value is string => !!value)
           .join(" ")
           .toLowerCase();
@@ -179,12 +187,36 @@ export class DocumentWorkflowService {
         }
       }
 
-      if (filters.status && document.reviewStatus !== filters.status) {
+      if (filters.sendStatus && document.sendStatus !== filters.sendStatus) {
         return false;
       }
 
-      if (filters.confidence !== undefined && (document.confidence ?? 0) >= filters.confidence) {
-        return false;
+      if (filters.confidenceThreshold !== undefined) {
+        const confidence = document.confidence ?? 0;
+
+        if (filters.confidenceCriterion === "above") {
+          if (confidence <= filters.confidenceThreshold) {
+            return false;
+          }
+        } else if (confidence >= filters.confidenceThreshold) {
+          return false;
+        }
+      }
+
+      if (filters.month !== undefined || filters.year !== undefined) {
+        if (!document.documentDate) {
+          return false;
+        }
+
+        const [documentYear, documentMonth] = document.documentDate.split("-").map(Number);
+
+        if (filters.year !== undefined && documentYear !== filters.year) {
+          return false;
+        }
+
+        if (filters.month !== undefined && documentMonth !== filters.month) {
+          return false;
+        }
       }
 
       return true;

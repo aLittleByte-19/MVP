@@ -371,7 +371,7 @@ components:
           type: [string, "null"]
     SubDocument:
       type: object
-      required: [id, reviewStatus, reviewStatusLabel, previewLines]
+      required: [id, reviewStatus, reviewStatusLabel, sendStatus, sendStatusLabel, previewLines]
       properties:
         id:
           type: string
@@ -408,6 +408,11 @@ components:
           type: string
           enum: [needs_review, auto_validated, quarantined, manually_validated]
         reviewStatusLabel:
+          type: string
+        sendStatus:
+          type: string
+          enum: [pending, sent]
+        sendStatusLabel:
           type: string
         error:
           type: [string, "null"]
