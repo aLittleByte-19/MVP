@@ -46,7 +46,9 @@ describe("AssistantService", () => {
           provide: AlittlebyteMVPAPIService,
           useValue: {
             generateMvpCommunication: () =>
-              of({ message: "Generazione avviata.", communicationId: 7, streamUrl: "/api/v1/communications/7/stream" })
+              of({ message: "Generazione avviata.", communicationId: 7, streamUrl: "/api/v1/communications/7/stream" }),
+            regenerateMvpCommunication: () =>
+              of({ message: "Rigenerazione avviata.", communicationId: 7, streamUrl: "/api/v1/communications/7/stream" })
           }
         },
         { provide: MvpStateStore, useValue: { setState, reload } },
@@ -99,5 +101,20 @@ describe("AssistantService", () => {
     expect(coverEmission?.cover?.coverStatus).toBe("failed");
     expect(coverEmission?.phase).not.toBe("failed");
     expect(emissions[emissions.length - 1].phase).toBe("completed");
+  });
+
+  it("regenerate follows the same progress and completion flow as generate", () => {
+    const emissions: CommunicationGenerationProgress[] = [];
+
+    service.regenerate(7).subscribe((progress) => emissions.push(progress));
+
+    const stream = FakeEventSource.last!;
+    stream.emit("text", { title: "Titolo nuovo", body: "Corpo nuovo" });
+    stream.emit("done", { communication: { id: 7 }, state: { assistant: {}, copilot: {} } });
+
+    expect(emissions[0].status).toBe("Rigenerazione avviata.");
+    expect(emissions[emissions.length - 1].phase).toBe("completed");
+    expect(setState).toHaveBeenCalledTimes(1);
+    expect(stream.closed).toBe(true);
   });
 });

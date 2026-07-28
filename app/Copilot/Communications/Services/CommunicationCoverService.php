@@ -68,6 +68,27 @@ class CommunicationCoverService
         $this->deleteObject($previousPath);
     }
 
+    /**
+     * Scarta la copertina precedente in vista di una rigenerazione: a
+     * differenza di remove() non tocca cover_status, che viene riportato a
+     * Pending da CommunicationWorkflowService::start() insieme al resto della
+     * pipeline.
+     */
+    public function discardForRegeneration(Communication $communication): void
+    {
+        $previousPath = $communication->cover_image_path;
+
+        $communication->update([
+            'cover_image_path' => null,
+            'cover_image_mime' => null,
+            'cover_image_size' => null,
+            'cover_image_source' => null,
+            'cover_error' => null,
+        ]);
+
+        $this->deleteObject($previousPath);
+    }
+
     public function markFailed(Communication $communication, string $warning, string $reason): void
     {
         $communication->update([

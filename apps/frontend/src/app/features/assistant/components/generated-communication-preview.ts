@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from "@angular/core";
+import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal } from "@angular/core";
 import { ButtonComponent } from "../../../shared/components/button/button";
 import { EmptyStateComponent } from "../../../shared/components/empty-state/empty-state";
 import { StatusBadgeComponent } from "../../../shared/components/status-badge/status-badge";
@@ -27,7 +27,7 @@ import type { GeneratedDraft } from "../assistant.model";
           }
 
           @if (currentDraft.coverStatus === "failed" && currentDraft.coverError) {
-            <p class="cover-warning" role="status">{{ currentDraft.coverError }}</p>
+            <p class="warning" role="status">{{ currentDraft.coverError }}</p>
           }
 
           <div class="cover-actions">
@@ -64,6 +64,46 @@ import type { GeneratedDraft } from "../assistant.model";
             <mvp-status-badge>{{ currentDraft.status }}</mvp-status-badge>
             <span>Pronta per la revisione</span>
           </div>
+          <div class="review-actions">
+            @if (!isDiscarded(currentDraft)) {
+              <button
+                mvpButton
+                type="button"
+                variant="secondary"
+                [disabled]="isGenerating() || isDiscarding()"
+                (click)="regenerate.emit()"
+              >
+                Rigenera bozza
+              </button>
+              @if (isConfirmingDiscard()) {
+                <p class="warning" role="status">
+                  Sei sicuro di voler scartare questa bozza? Non sara' piu' modificabile ne' rigenerabile.
+                </p>
+                <button mvpButton type="button" [disabled]="isDiscarding()" (click)="discard.emit()">
+                  Conferma eliminazione
+                </button>
+                <button
+                  mvpButton
+                  type="button"
+                  variant="secondary"
+                  [disabled]="isDiscarding()"
+                  (click)="isConfirmingDiscard.set(false)"
+                >
+                  Annulla
+                </button>
+              } @else {
+                <button
+                  mvpButton
+                  type="button"
+                  variant="secondary"
+                  [disabled]="isGenerating() || isDiscarding()"
+                  (click)="isConfirmingDiscard.set(true)"
+                >
+                  Scarta bozza
+                </button>
+              }
+            }
+          </div>
         </article>
       } @else {
         <mvp-empty-state>La bozza generata apparira qui.</mvp-empty-state>
@@ -75,9 +115,28 @@ import type { GeneratedDraft } from "../assistant.model";
 export class GeneratedCommunicationPreviewComponent {
   readonly draft = input<GeneratedDraft | null>(null);
   readonly isUpdatingCover = input<boolean>(false);
+  readonly isGenerating = input<boolean>(false);
+  readonly isDiscarding = input<boolean>(false);
   readonly uploadCover = output<File>();
   readonly removeCover = output<void>();
+  readonly regenerate = output<void>();
+  readonly discard = output<void>();
   protected readonly bodyLength = computed(() => this.draft()?.body.length ?? 0);
+  protected readonly isConfirmingDiscard = signal(false);
+
+  constructor() {
+    // Il passo di conferma e' locale alla bozza mostrata: qualunque
+    // cambiamento della bozza in anteprima (nuova selezione, aggiornamento
+    // durante una rigenerazione, ecc.) non deve lasciarlo aperto.
+    effect(() => {
+      this.draft();
+      this.isConfirmingDiscard.set(false);
+    });
+  }
+
+  protected isDiscarded(draft: GeneratedDraft): boolean {
+    return draft.status === "Scartata";
+  }
 
   protected hasCover(draft: GeneratedDraft): boolean {
     return Boolean(draft.coverImageUrl && draft.coverImageUrl.trim() !== "");

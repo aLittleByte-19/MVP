@@ -1,7 +1,13 @@
 import { Injectable, inject } from "@angular/core";
 import { Observable, tap } from "rxjs";
 import { AlittlebyteMVPAPIService } from "../../../../api/generated/mvp-api";
-import type { Communication, CommunicationMutationResponse, MvpState } from "../../../../api/generated/model";
+import type {
+  Communication,
+  CommunicationMutationResponse,
+  DeleteDocumentResponse,
+  MvpState,
+  StartCommunicationGenerationResponse
+} from "../../../../api/generated/model";
 import { MvpStateStore } from "../../../core/state/mvp-state.store";
 import type { CommunicationDraftForm, CommunicationGenerationProgress } from "../assistant.model";
 
@@ -37,10 +43,20 @@ export class AssistantService {
   private readonly store = inject(MvpStateStore);
 
   generate(payload: CommunicationDraftForm): Observable<CommunicationGenerationProgress> {
+    return this.trackGeneration(this.api.generateMvpCommunication(payload));
+  }
+
+  regenerate(communicationId: number): Observable<CommunicationGenerationProgress> {
+    return this.trackGeneration(this.api.regenerateMvpCommunication(communicationId));
+  }
+
+  private trackGeneration(
+    start$: Observable<StartCommunicationGenerationResponse>
+  ): Observable<CommunicationGenerationProgress> {
     return new Observable<CommunicationGenerationProgress>((observer) => {
       let eventSource: EventSource | null = null;
 
-      const subscription = this.api.generateMvpCommunication(payload).subscribe({
+      const subscription = start$.subscribe({
         next: (response) => {
           observer.next({
             status: response.message,
@@ -129,6 +145,18 @@ export class AssistantService {
   removeCoverImage(communicationId: number): Observable<CommunicationMutationResponse> {
     return this.api
       .removeMvpCommunicationCoverImage(communicationId)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  discard(communicationId: number): Observable<CommunicationMutationResponse> {
+    return this.api
+      .discardMvpCommunication(communicationId)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  deleteFromHistory(communicationId: number): Observable<DeleteDocumentResponse> {
+    return this.api
+      .deleteMvpCommunication(communicationId)
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 }

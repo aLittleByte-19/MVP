@@ -19,6 +19,20 @@ Route::prefix('v1')
             ->whereNumber('communication')
             ->name('communications.stream');
 
+        Route::post('/communications/{communication}/regenerate', [CommunicationController::class, 'regenerate'])
+            ->whereNumber('communication')
+            ->middleware('throttle:20,1')
+            ->name('communications.regenerate');
+
+        Route::post('/communications/{communication}/discard', [CommunicationController::class, 'discard'])
+            ->whereNumber('communication')
+            ->middleware('throttle:20,1')
+            ->name('communications.discard');
+
+        Route::delete('/communications/{communication}', [CommunicationController::class, 'destroy'])
+            ->whereNumber('communication')
+            ->name('communications.delete');
+
         // POST e non PUT: PHP popola $_FILES solo sulle richieste POST, su PUT
         // il body multipart resterebbe grezzo e il file non arriverebbe mai.
         Route::post('/communications/{communication}/cover-image', [CommunicationController::class, 'updateCoverImage'])

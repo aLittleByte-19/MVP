@@ -56,6 +56,66 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "502":
           $ref: "#/components/responses/UpstreamUnavailable"
+  /api/v1/communications/{communication}:
+    delete:
+      summary: Permanently delete a communication from history
+      operationId: deleteMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Communication deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteDocumentResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/communications/{communication}/regenerate:
+    post:
+      summary: Regenerate a communication draft
+      operationId: regenerateMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "202":
+          description: Regeneration accepted and delegated to the communication pipeline.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartCommunicationGenerationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/communications/{communication}/discard:
+    post:
+      summary: Discard a communication draft
+      operationId: discardMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Communication discarded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunicationMutationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   /api/v1/communications/{communication}/stream:
     get:
       summary: Stream communication generation events
@@ -322,6 +382,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ValidationErrorEnvelope"
+    Conflict:
+      description: Request conflicts with current resource state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
     UpstreamUnavailable:
       description: Required upstream service failed explicitly.
       content:

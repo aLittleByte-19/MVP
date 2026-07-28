@@ -18,7 +18,7 @@
   background: var(--mvp-surface-muted);
 }
 
-.cover-warning {
+.warning {
   margin: 0;
   padding: var(--mvp-space-2) var(--mvp-space-3);
   border: 1px solid color-mix(in srgb, var(--mvp-warning) 50%, transparent);
@@ -67,6 +67,13 @@
   gap: var(--mvp-space-3);
   align-items: center;
   color: var(--mvp-muted);
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mvp-space-2);
+  align-items: center;
 }
 
 .draft h3,

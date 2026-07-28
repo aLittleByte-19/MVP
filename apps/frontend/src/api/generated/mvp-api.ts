@@ -162,6 +162,114 @@ export class AlittlebyteMVPAPIService {
   }
 
 /**
+ * @summary Permanently delete a communication from history
+ */
+ deleteMvpCommunication<TData = DeleteDocumentResponse>(communication: number, options?: HttpClientBodyOptions): Observable<TData>;
+ deleteMvpCommunication<TData = DeleteDocumentResponse>(communication: number, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ deleteMvpCommunication<TData = DeleteDocumentResponse>(communication: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  deleteMvpCommunication<TData = DeleteDocumentResponse>(
+    communication: number, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
+    if (options?.observe === 'events') {
+      return this.http.delete<TData>(
+      `/api/v1/communications/${communication}`,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',
+      }
+    );
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.delete<TData>(
+      `/api/v1/communications/${communication}`,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',
+      }
+    );
+    }
+
+    return this.http.delete<TData>(
+      `/api/v1/communications/${communication}`,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',
+      }
+    );
+  }
+
+/**
+ * @summary Regenerate a communication draft
+ */
+ regenerateMvpCommunication<TData = StartCommunicationGenerationResponse>(communication: number, options?: HttpClientBodyOptions): Observable<TData>;
+ regenerateMvpCommunication<TData = StartCommunicationGenerationResponse>(communication: number, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ regenerateMvpCommunication<TData = StartCommunicationGenerationResponse>(communication: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  regenerateMvpCommunication<TData = StartCommunicationGenerationResponse>(
+    communication: number, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
+    if (options?.observe === 'events') {
+      return this.http.post<TData>(
+      `/api/v1/communications/${communication}/regenerate`,
+      undefined,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',
+      }
+    );
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.post<TData>(
+      `/api/v1/communications/${communication}/regenerate`,
+      undefined,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',
+      }
+    );
+    }
+
+    return this.http.post<TData>(
+      `/api/v1/communications/${communication}/regenerate`,
+      undefined,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',
+      }
+    );
+  }
+
+/**
+ * @summary Discard a communication draft
+ */
+ discardMvpCommunication<TData = CommunicationMutationResponse>(communication: number, options?: HttpClientBodyOptions): Observable<TData>;
+ discardMvpCommunication<TData = CommunicationMutationResponse>(communication: number, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ discardMvpCommunication<TData = CommunicationMutationResponse>(communication: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  discardMvpCommunication<TData = CommunicationMutationResponse>(
+    communication: number, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
+    if (options?.observe === 'events') {
+      return this.http.post<TData>(
+      `/api/v1/communications/${communication}/discard`,
+      undefined,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',
+      }
+    );
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.post<TData>(
+      `/api/v1/communications/${communication}/discard`,
+      undefined,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',
+      }
+    );
+    }
+
+    return this.http.post<TData>(
+      `/api/v1/communications/${communication}/discard`,
+      undefined,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',
+      }
+    );
+  }
+
+/**
  * @summary Stream communication generation events
  */
  streamMvpCommunicationGeneration(communication: number, options?: HttpClientBodyOptions): Observable<string>;

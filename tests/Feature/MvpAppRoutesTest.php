@@ -1,11 +1,15 @@
 <?php
 
 use App\Copilot\Ai\BedrockService;
+use App\Copilot\Audit\Services\AuditLogger;
 use App\Copilot\Communications\Enums\CommunicationGenerationStatus;
+use App\Copilot\Communications\Enums\CommunicationStatus;
 use App\Copilot\Communications\Enums\CoverImageStatus;
+use App\Copilot\Communications\Services\CommunicationCoverService;
 use App\Copilot\Communications\Services\CommunicationWorkflowService;
 use App\Copilot\Documents\Enums\ReviewStatus;
 use App\Copilot\Documents\Services\DocumentWorkflowService;
+use App\Copilot\Observability\MetricsRecorder;
 use App\Copilot\Workflow\Services\WorkflowTaskRunner;
 use App\Copilot\Workflow\Support\WorkflowContext;
 use App\Models\Copilot\AuditEvent;
@@ -13,6 +17,8 @@ use App\Models\Copilot\Communication;
 use App\Models\Copilot\ExtractedData;
 use App\Models\Copilot\OriginalDocument;
 use App\Models\Copilot\SubDocument;
+use Aws\Result;
+use Aws\Sfn\SfnClient;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -50,6 +56,16 @@ function mvpMockCommunicationWorkflowStart(object $test): void
 {
     $mock = Mockery::mock(CommunicationWorkflowService::class);
     $mock->shouldReceive('start')
+        ->once()
+        ->andReturnUsing(fn (Communication $communication) => $communication);
+
+    app()->instance(CommunicationWorkflowService::class, $mock);
+}
+
+function mvpMockCommunicationWorkflowRegenerate(object $test): void
+{
+    $mock = Mockery::mock(CommunicationWorkflowService::class);
+    $mock->shouldReceive('regenerate')
         ->once()
         ->andReturnUsing(fn (Communication $communication) => $communication);
 
@@ -685,4 +701,211 @@ test('manual cover upload validates image payload', function () {
         ])
         ->assertUnprocessable()
         ->assertJsonPath('error.code', 'validation_failed');
+});
+
+test('operator can request a regeneration of a completed communication draft', function () {
+    mvpMockCommunicationWorkflowRegenerate($this);
+
+    $communication = Communication::factory()->draft()->coverReady()->create();
+
+    $this->postJson("/api/v1/communications/{$communication->id}/regenerate")
+        ->assertAccepted()
+        ->assertJsonPath('message', 'Rigenerazione avviata.')
+        ->assertJsonStructure(['message', 'communicationId', 'streamUrl']);
+});
+
+test('a failed communication draft can also be regenerated', function () {
+    mvpMockCommunicationWorkflowRegenerate($this);
+
+    $communication = Communication::factory()->draft()->create([
+        'generation_status' => CommunicationGenerationStatus::Failed,
+        'error_message' => 'Generazione non disponibile.',
+    ]);
+
+    $this->postJson("/api/v1/communications/{$communication->id}/regenerate")
+        ->assertAccepted();
+});
+
+test('regenerating a communication still in progress is rejected', function () {
+    $communication = Communication::factory()->processing()->create();
+
+    $this->withHeader('Accept', 'application/json')
+        ->postJson("/api/v1/communications/{$communication->id}/regenerate")
+        ->assertStatus(409);
+});
+
+test('a discarded communication cannot be regenerated', function () {
+    $communication = Communication::factory()->discarded()->create();
+
+    $this->withHeader('Accept', 'application/json')
+        ->postJson("/api/v1/communications/{$communication->id}/regenerate")
+        ->assertUnprocessable();
+});
+
+test('regenerate endpoint rejects cross tenant access', function () {
+    config(['mvp.identity.mode' => 'trusted_headers']);
+    $communication = Communication::factory()->draft()->coverReady()->create();
+
+    $this->withHeaders([
+        'Accept' => 'application/json',
+        'X-Mvp-User-Id' => 'operator-b',
+        'X-Mvp-User-Email' => 'operator-b@example.test',
+        'X-Mvp-Tenant-Id' => 'another-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
+    ])->postJson("/api/v1/communications/{$communication->id}/regenerate")
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
+});
+
+test('regenerating a communication replaces text and cover with a new variant', function () {
+    config([
+        'services.workflow.communications_state_machine_arn' => 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-communication-pipeline',
+        'services.workflow.communications_task_queue_url' => 'http://localstack:4566/000000000000/mvp-communications',
+    ]);
+    Storage::fake('s3');
+    config(['mvp.communications.cover_disk' => 's3']);
+
+    $communication = Communication::factory()->draft()->coverReady()->create([
+        'generated_title' => 'Titolo vecchio',
+        'generated_body' => 'Corpo vecchio',
+    ]);
+    $previousCoverPath = $communication->cover_image_path;
+    Storage::disk('s3')->put($previousCoverPath, 'vecchia-copertina');
+
+    $client = Mockery::mock(SfnClient::class);
+    $client->shouldReceive('startExecution')
+        ->once()
+        ->andReturn(new Result([
+            'executionArn' => 'arn:aws:states:eu-north-1:000000000000:execution:mvp-communication-pipeline:test',
+        ]));
+
+    $service = new CommunicationWorkflowService(
+        $client,
+        app(AuditLogger::class),
+        app(MetricsRecorder::class),
+        app(CommunicationCoverService::class),
+    );
+
+    $regenerated = $service->regenerate($communication);
+
+    expect($regenerated->generated_title)->toBeNull()
+        ->and($regenerated->generated_body)->toBeNull()
+        ->and($regenerated->generation_status)->toBe(CommunicationGenerationStatus::Processing)
+        ->and($regenerated->cover_image_path)->toBeNull()
+        ->and($regenerated->cover_status)->toBe(CoverImageStatus::Pending)
+        ->and(AuditEvent::query()->where('event_type', 'mvp-communication-regeneration-requested')->count())->toBe(1);
+
+    Storage::disk('s3')->assertMissing($previousCoverPath);
+
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('generateCommunication')
+            ->once()
+            ->andReturn(['title' => 'Titolo nuovo', 'body' => 'Corpo nuovo', 'image_prompt' => 'New visual direction']);
+
+        $mock->shouldReceive('generateCommunicationImageWithMeta')
+            ->once()
+            ->andReturn([
+                'bytes' => 'nuova-immagine',
+                'mime' => 'image/png',
+                'warning' => null,
+                'reason' => null,
+            ]);
+    });
+
+    mvpRunCommunicationTask($regenerated, 'communication.generate_text');
+    mvpRunCommunicationTask($regenerated, 'communication.generate_cover');
+    mvpRunCommunicationTask($regenerated, 'communication.finalize');
+
+    $regenerated->refresh();
+
+    expect($regenerated->generated_title)->toBe('Titolo nuovo')
+        ->and($regenerated->generated_body)->toBe('Corpo nuovo')
+        ->and($regenerated->cover_image_path)->not->toBe($previousCoverPath)
+        ->and($regenerated->generation_status)->toBe(CommunicationGenerationStatus::Completed);
+
+    Storage::disk('s3')->assertExists($regenerated->cover_image_path);
+});
+
+test('operator can discard a communication draft', function () {
+    $communication = Communication::factory()->draft()->coverReady()->create();
+
+    $this->postJson("/api/v1/communications/{$communication->id}/discard")
+        ->assertOk()
+        ->assertJsonPath('message', 'Bozza scartata.')
+        ->assertJsonPath('communication.id', $communication->id)
+        ->assertJsonPath('communication.status', 'Scartata');
+
+    expect($communication->fresh()->status)->toBe(CommunicationStatus::Discarded)
+        ->and(AuditEvent::query()->where('event_type', 'mvp-communication-discarded')->count())->toBe(1);
+});
+
+test('a discarded communication no longer appears in the history returned to the operator', function () {
+    $communication = Communication::factory()->draft()->coverReady()->create();
+
+    $this->postJson("/api/v1/communications/{$communication->id}/discard")->assertOk();
+
+    $response = $this->getJson('/api/v1/state')->assertOk();
+
+    $historyIds = collect($response->json('assistant.history'))->pluck('id');
+
+    expect($historyIds)->not->toContain($communication->id);
+});
+
+test('an already discarded communication cannot be discarded again', function () {
+    $communication = Communication::factory()->discarded()->create();
+
+    $this->withHeader('Accept', 'application/json')
+        ->postJson("/api/v1/communications/{$communication->id}/discard")
+        ->assertUnprocessable();
+});
+
+test('discard endpoint rejects cross tenant access', function () {
+    config(['mvp.identity.mode' => 'trusted_headers']);
+    $communication = Communication::factory()->draft()->coverReady()->create();
+
+    $this->withHeaders([
+        'Accept' => 'application/json',
+        'X-Mvp-User-Id' => 'operator-b',
+        'X-Mvp-User-Email' => 'operator-b@example.test',
+        'X-Mvp-Tenant-Id' => 'another-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
+    ])->postJson("/api/v1/communications/{$communication->id}/discard")
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
+});
+
+test('operator can permanently delete a communication from history', function () {
+    Storage::fake('s3');
+    config(['mvp.communications.cover_disk' => 's3']);
+
+    $communication = Communication::factory()->draft()->coverReady()->create();
+    $coverPath = $communication->cover_image_path;
+    Storage::disk('s3')->put($coverPath, 'copertina');
+
+    $this->deleteJson("/api/v1/communications/{$communication->id}")
+        ->assertOk()
+        ->assertJsonPath('message', 'Generazione eliminata dallo storico.')
+        ->assertJsonStructure(['message', 'state']);
+
+    expect(Communication::query()->find($communication->id))->toBeNull()
+        ->and(AuditEvent::query()->where('event_type', 'mvp-communication-deleted')->count())->toBe(1);
+
+    Storage::disk('s3')->assertMissing($coverPath);
+});
+
+test('delete communication endpoint rejects cross tenant access', function () {
+    config(['mvp.identity.mode' => 'trusted_headers']);
+    $communication = Communication::factory()->draft()->coverReady()->create();
+
+    $this->withHeaders([
+        'Accept' => 'application/json',
+        'X-Mvp-User-Id' => 'operator-b',
+        'X-Mvp-User-Email' => 'operator-b@example.test',
+        'X-Mvp-Tenant-Id' => 'another-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
+    ])->deleteJson("/api/v1/communications/{$communication->id}")
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
+
+    expect(Communication::query()->find($communication->id))->not->toBeNull();
 });

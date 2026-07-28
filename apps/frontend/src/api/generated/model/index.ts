@@ -11,6 +11,7 @@ export * from './communication';
 export * from './communicationCoverStatus';
 export * from './communicationGenerationStatus';
 export * from './communicationMutationResponse';
+export * from './conflictResponse';
 export * from './copilotState';
 export * from './deleteDocumentResponse';
 export * from './errorEnvelope';

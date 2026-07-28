@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
+import { LucideTrash2 } from "@lucide/angular";
 import { finalize } from "rxjs";
 import { AssistantService } from "./data/assistant.service";
 import type { Communication } from "../../../api/generated/model";
@@ -8,12 +9,14 @@ import { EmptyStateComponent } from "../../shared/components/empty-state/empty-s
 import { ErrorStateComponent } from "../../shared/components/error-state/error-state";
 import { SectionComponent } from "../../layout/section/section";
 import { StatusBadgeComponent } from "../../shared/components/status-badge/status-badge";
+import { ButtonComponent } from "../../shared/components/button/button";
 import { formatFallback } from "../../shared/util/formatters";
 import { CommunicationGeneratorPanelComponent } from "./components/communication-generator-panel";
 import { GeneratedCommunicationPreviewComponent } from "./components/generated-communication-preview";
 import type {
   CommunicationDraftForm,
   CommunicationGenerationPhase,
+  CommunicationGenerationProgress,
   GeneratedDraft
 } from "./assistant.model";
 
@@ -21,10 +24,12 @@ import type {
   selector: "mvp-assistant-page",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    ButtonComponent,
     CommunicationGeneratorPanelComponent,
     EmptyStateComponent,
     ErrorStateComponent,
     GeneratedCommunicationPreviewComponent,
+    LucideTrash2,
     SectionComponent,
     StatusBadgeComponent
   ],
@@ -42,24 +47,67 @@ import type {
       <mvp-generated-communication-preview
         [draft]="previewDraft()"
         [isUpdatingCover]="isUpdatingCover()"
+        [isGenerating]="isGenerating()"
+        [isDiscarding]="isDiscarding()"
         (uploadCover)="uploadCover($event)"
         (removeCover)="removeCover()"
+        (regenerate)="regenerate()"
+        (discard)="discard()"
       />
 
       <mvp-section id="assistant-history" title="Storico contenuti">
         @if (history().length) {
           @for (communication of history(); track communication.id) {
-            <button
-              type="button"
-              class="card"
-              [class.isSelected]="communication.id === selectedDraftId()"
-              [attr.aria-pressed]="communication.id === selectedDraftId()"
-              (click)="selectDraft(communication.id)"
-            >
-              <mvp-status-badge>{{ communication.status }}</mvp-status-badge>
-              <span class="title">{{ communication.title }}</span>
-              <p>{{ formatFallback(communication.createdAt) }}</p>
-            </button>
+            <div class="card" [class.isSelected]="communication.id === selectedDraftId()">
+              <button
+                type="button"
+                class="cardSelect"
+                [attr.aria-pressed]="communication.id === selectedDraftId()"
+                (click)="selectDraft(communication.id)"
+              >
+                <mvp-status-badge>{{ communication.status }}</mvp-status-badge>
+                <span class="title">{{ communication.title }}</span>
+              </button>
+              <div class="cardFooter">
+                <p>{{ formatFallback(communication.createdAt) }}</p>
+                @if (confirmingDeleteId() !== communication.id) {
+                  <button
+                    mvpButton
+                    variant="icon"
+                    type="button"
+                    aria-label="Elimina dallo storico"
+                    [disabled]="isDeletingHistoryItem()"
+                    (click)="confirmingDeleteId.set(communication.id)"
+                  >
+                    <svg lucideTrash2 aria-hidden="true"></svg>
+                  </button>
+                }
+              </div>
+              @if (confirmingDeleteId() === communication.id) {
+                <div class="cardConfirm">
+                  <p class="warning" role="status">Eliminare definitivamente questo elemento dallo storico?</p>
+                  <div class="cardActions">
+                    <button
+                      mvpButton
+                      type="button"
+                      [disabled]="isDeletingHistoryItem()"
+                      (click)="deleteHistoryItem(communication.id)"
+                    >
+                      Conferma eliminazione
+                    </button>
+                    <button
+                      mvpButton
+                      type="button"
+                      variant="secondary"
+                      [disabled]="isDeletingHistoryItem()"
+                      (click)="confirmingDeleteId.set(null)"
+                    >
+                      Annulla
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
           }
         } @else {
           <mvp-empty-state>Le bozze generate compariranno qui.</mvp-empty-state>
@@ -77,6 +125,9 @@ export class AssistantPage {
     () => this.phase() === "queued" || this.phase() === "generating-text" || this.phase() === "generating-cover"
   );
   protected readonly isUpdatingCover = signal(false);
+  protected readonly isDiscarding = signal(false);
+  protected readonly confirmingDeleteId = signal<number | null>(null);
+  protected readonly isDeletingHistoryItem = signal(false);
   protected readonly status = signal("In attesa di istruzioni.");
   protected readonly selectedDraftId = signal<number | null>(null);
   protected readonly latestDraft = signal<GeneratedDraft | null>(null);
@@ -101,42 +152,34 @@ export class AssistantPage {
     this.latestDraft.set(null);
 
     this.assistant.generate(payload).subscribe({
-      next: (progress) => {
-        this.phase.set(progress.phase);
-        this.status.set(progress.status);
-
-        // Il testo arriva prima della copertina: la bozza si popola per gradi.
-        if (progress.text) {
-          this.latestDraft.set({
-            id: progress.communicationId,
-            title: progress.text.title ?? "",
-            body: progress.text.body ?? "",
-            status: "draft",
-            coverStatus: "processing"
-          });
-          this.scrollTo("assistant-review");
-        }
-
-        if (progress.cover) {
-          const current = this.latestDraft();
-          this.latestDraft.set({
-            id: progress.communicationId,
-            title: current?.title ?? "",
-            body: current?.body ?? "",
-            status: current?.status ?? "draft",
-            coverImageUrl: progress.cover.coverImageUrl ?? undefined,
-            coverStatus: progress.cover.coverStatus,
-            coverError: progress.cover.coverError ?? undefined
-          });
-        }
-
-        if (progress.communication) {
-          this.latestDraft.set(this.toDraft(progress.communication));
-        }
-      },
+      next: (progress) => this.handleProgress(progress),
       error: (error: unknown) => {
         this.phase.set("failed");
         this.status.set(getApiErrorMessage(error, "Generazione non disponibile."));
+      }
+    });
+  }
+
+  protected regenerate(): void {
+    const draft = this.previewDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    this.phase.set("queued");
+    this.status.set("Rigenerazione in corso.");
+    // Stesso id, non una nuova bozza: manteniamo la visuale sull'ultima
+    // versione (latestDraft) invece che sulla voce di storico selezionata,
+    // cosi' il testo e la copertina si aggiornano per gradi come in generate().
+    this.selectedDraftId.set(null);
+    this.latestDraft.set(draft);
+
+    this.assistant.regenerate(draft.id).subscribe({
+      next: (progress) => this.handleProgress(progress),
+      error: (error: unknown) => {
+        this.phase.set("failed");
+        this.status.set(getApiErrorMessage(error, "Rigenerazione non disponibile."));
       }
     });
   }
@@ -192,6 +235,94 @@ export class AssistantPage {
           this.status.set(getApiErrorMessage(error, "Rimozione immagine non disponibile."));
         }
       });
+  }
+
+  protected discard(): void {
+    const draft = this.previewDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    this.isDiscarding.set(true);
+    this.status.set("Eliminazione bozza in corso.");
+
+    this.assistant
+      .discard(draft.id)
+      .pipe(finalize(() => this.isDiscarding.set(false)))
+      .subscribe({
+        next: (response) => {
+          this.status.set(response.message);
+          this.selectedDraftId.set(null);
+          this.latestDraft.set(null);
+          this.scrollTo("assistant-compose");
+        },
+        error: (error: unknown) => {
+          this.status.set(getApiErrorMessage(error, "Eliminazione bozza non disponibile."));
+        }
+      });
+  }
+
+  protected deleteHistoryItem(communicationId: number): void {
+    this.isDeletingHistoryItem.set(true);
+
+    this.assistant
+      .deleteFromHistory(communicationId)
+      .pipe(
+        finalize(() => {
+          this.isDeletingHistoryItem.set(false);
+          this.confirmingDeleteId.set(null);
+        })
+      )
+      .subscribe({
+        next: (response) => {
+          this.status.set(response.message);
+          // L'elemento eliminato non deve restare in anteprima.
+          if (this.selectedDraftId() === communicationId) {
+            this.selectedDraftId.set(null);
+          }
+          if (this.latestDraft()?.id === communicationId) {
+            this.latestDraft.set(null);
+          }
+        },
+        error: (error: unknown) => {
+          this.status.set(getApiErrorMessage(error, "Eliminazione dallo storico non disponibile."));
+        }
+      });
+  }
+
+  private handleProgress(progress: CommunicationGenerationProgress): void {
+    this.phase.set(progress.phase);
+    this.status.set(progress.status);
+
+    // Il testo arriva prima della copertina: la bozza si popola per gradi.
+    if (progress.text) {
+      this.latestDraft.set({
+        id: progress.communicationId,
+        title: progress.text.title ?? "",
+        body: progress.text.body ?? "",
+        status: "draft",
+        coverStatus: "processing"
+      });
+      this.scrollTo("assistant-review");
+    }
+
+    if (progress.cover) {
+      const current = this.latestDraft();
+      this.latestDraft.set({
+        id: progress.communicationId,
+        title: current?.title ?? "",
+        body: current?.body ?? "",
+        status: current?.status ?? "draft",
+        coverImageUrl: progress.cover.coverImageUrl ?? undefined,
+        coverStatus: progress.cover.coverStatus,
+        coverError: progress.cover.coverError ?? undefined
+      });
+    }
+
+    if (progress.communication) {
+      this.latestDraft.set(this.toDraft(progress.communication));
+    }
   }
 
   private toDraft(communication: Communication): GeneratedDraft {

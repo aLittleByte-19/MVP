@@ -23,6 +23,9 @@ Incluso:
 - anteprima di titolo e testo in sola lettura;
 - immagine di copertina generata dall'AI, con sostituzione manuale e rimozione;
 - storico delle generazioni con riapertura dell'anteprima di una bozza selezionata;
+- richiesta di una nuova variante della bozza corrente, che sostituisce testo e copertina mantenendo prompt, tono e stile (UC-6);
+- scarto della bozza corrente con conferma, che la esclude dallo storico attivo mantenendola tracciata come "Scartata" (UC-7);
+- eliminazione definitiva di un elemento dello storico, con conferma (UC-23);
 - metriche operative di base (contenuti generati, bozze, stato della generazione e delle copertine).
 
 Parziale:
@@ -32,7 +35,7 @@ Parziale:
 Fuori scope MVP:
 
 - modifica manuale persistente di titolo e testo;
-- rigenerazione, annullamento modifiche e scarto della bozza;
+- annullamento modifiche;
 - rating 1–5 con commento, preferiti e relativi feedback;
 - salvataggio e riuso di una configurazione di prompt etichettata;
 - dashboard analista (rating medio, statistiche di utilizzo, filtri).
