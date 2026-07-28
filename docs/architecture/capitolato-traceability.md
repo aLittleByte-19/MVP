@@ -245,6 +245,13 @@ Il backend resta il punto di controllo attorno al modello: valida lo schema dell
 persiste il risultato come bozza e ne traccia generazione e qualità. L'AI produce il contenuto,
 l'applicazione mantiene responsabilità su validazione, stato e tracciabilità.
 
+A generazione completata, titolo, corpo e copertina vengono impaginati nel documento finale, con
+anteprima ed esportazione in PDF
+([`app/Copilot/Communications/Services/CommunicationPdfService.php`](../../app/Copilot/Communications/Services/CommunicationPdfService.php)).
+Ogni pagina porta il marcatore `Creato da AI Assistant`: la provenienza AI del contenuto resta
+leggibile anche quando il PDF esce dall'applicativo e circola per conto proprio, che è il momento in
+cui l'informazione andrebbe altrimenti persa.
+
 **Riscontro nel Capitolato:**
 > «AI Assistant Generativo, dovrà permettere agli utenti della dashboard di creare in autonomia contenuti accattivanti con titolo, descrizione e immagine di copertina attraverso l'uso di AI generativa adeguando tono e stile della comunicazione a quello aziendale (formale, informale, ecc..)»
 > — Capitolato C5, sezione «Requisiti di Business»
@@ -413,5 +420,7 @@ nella libertà tecnologica della sezione «Vincoli».
   che il Capitolato indica come telemetria target.
 - **Edge/runtime locale (Traefik, emulatore CDN locale Nginx, Nginx applicativo):** equivalenti locali di CloudFront/ALB, che il
   Capitolato nomina nella loro forma AWS gestita.
-- **Librerie di manipolazione PDF (`setasign/fpdf`, `setasign/fpdi`) per lo split documentale:**
-  dettaglio implementativo non coperto dal Capitolato.
+- **Librerie di manipolazione PDF (`setasign/fpdf`, `setasign/fpdi`) per lo split documentale e
+  `dompdf/dompdf` per l'impaginazione del documento finale delle comunicazioni:**
+  dettaglio implementativo non coperto dal Capitolato. dompdf richiede l'estensione PHP `mbstring`
+  (con `libonig-dev` in build), aggiunta all'immagine applicativa.

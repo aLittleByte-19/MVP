@@ -19,6 +19,7 @@ export * from './forbiddenResponse';
 export * from './generateCommunicationRequest';
 export * from './generateCommunicationRequestStyle';
 export * from './generateCommunicationRequestTone';
+export * from './ifNoneMatchParameter';
 export * from './metric';
 export * from './mvpState';
 export * from './notFoundResponse';

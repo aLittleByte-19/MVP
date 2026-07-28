@@ -61,6 +61,8 @@ La richiesta parte dalla SPA e arriva alle API Laravel, dove viene validata e no
 
 I due contenuti hanno criticità diverse e sono trattati di conseguenza: senza testo non esiste una comunicazione e l’esecuzione fallisce, mentre una copertina non disponibile viene segnalata all’operatore e lascia la bozza valida e utilizzabile.
 
+A generazione conclusa l’operatore può aprire l’anteprima del documento finale impaginato ed esportarlo in PDF. Ogni pagina riporta il marcatore «Creato da AI Assistant», così la provenienza del contenuto resta leggibile anche fuori dall’applicativo. Il PDF viene materializzato sullo storage a oggetti alla prima richiesta e riusato finché il contenuto non cambia.
+
 Il flusso evidenzia il ruolo del backend come livello di controllo tra interfaccia e modello AI: il provider genera il contenuto, mentre l’applicazione mantiene responsabilità su validazione, persistenza, stato e tracciabilità.
 
 ## Flusso documentale: Co-Pilot CdL

@@ -39,6 +39,12 @@ return [
         'cover_disk' => env('MVP_COMMUNICATION_COVER_DISK') ?: env('FILESYSTEM_DISK', 's3'),
         'cover_prefix' => env('MVP_COMMUNICATION_COVER_PREFIX') ?: 'communications/covers',
         'cover_max_mb' => (int) (env('MVP_COMMUNICATION_COVER_MAX_MB') ?: 5),
+        // Il PDF finale e' un asset derivato come la copertina: stesso disco,
+        // prefisso separato. Il rendering dompdf e' l'operazione piu' costosa
+        // dell'API e l'esito e' deterministico a parita' di titolo/corpo/
+        // copertina, quindi viene materializzato una volta e riletto.
+        'pdf_disk' => env('MVP_COMMUNICATION_PDF_DISK') ?: env('MVP_COMMUNICATION_COVER_DISK') ?: env('FILESYSTEM_DISK', 's3'),
+        'pdf_prefix' => env('MVP_COMMUNICATION_PDF_PREFIX') ?: 'communications/exports',
         // Oltre questa eta' una generazione ancora in processing e' considerata
         // bloccata e viene esposta come tale dalle metriche.
         'generation_timeout_seconds' => (int) (env('MVP_COMMUNICATION_TIMEOUT_SECONDS') ?: 300),

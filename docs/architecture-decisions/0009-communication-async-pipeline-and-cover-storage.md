@@ -44,6 +44,18 @@ streamma l'oggetto; lo stato applicativo espone solo l'URL relativo. Il percorso
 copertina viene sostituita, quindi l'URL porta una versione derivata dalla chiave dell'oggetto: senza,
 il browser continuerebbe a mostrare l'immagine precedente presa dalla propria cache.
 
+Il PDF finale impaginato segue la stessa logica: è un altro asset derivato, va sullo stesso disco sotto
+un prefisso proprio (`MVP_COMMUNICATION_PDF_PREFIX`). A differenza della copertina però è
+**interamente ricostruibile** dal record applicativo, quindi la chiave non è un UUID ma l'impronta del
+contenuto renderizzato. Ne discende un'invalidazione implicita: cambiando titolo, corpo o copertina
+cambia l'impronta e nasce un oggetto nuovo, senza che i servizi che modificano una comunicazione
+debbano conoscere l'esistenza della cache. La stessa impronta fa da `ETag` e risparmia anche la
+lettura da storage quando il client ha già il documento.
+
+Questa cache è un'ottimizzazione, non una dipendenza: se il disco non è raggiungibile il PDF viene
+rigenerato a ogni richiesta e l'errore finisce in `report()`. Non è un fallback nel senso vietato
+dall'ADR 0005 — l'output non è un dato sostitutivo, è lo stesso identico documento.
+
 ## Consequences
 
 - La SPA deve gestire uno stato di avanzamento: la bozza si popola per gradi, prima il testo poi la
@@ -54,6 +66,11 @@ il browser continuerebbe a mostrare l'immagine precedente presa dalla propria ca
 - Una copertina degradata è un esito atteso: l'alert scatta solo oltre tre degradi in trenta minuti.
 - Gli oggetti di copertina vanno rimossi insieme alla comunicazione e alla sostituzione, non essendoci
   vincolo di integrità fra database e storage.
+- I PDF materializzati non vanno rimossi attivamente: sono ricostruibili e l'impronta li rende inerti.
+  Restano però a occupare spazio dopo ogni modifica, quindi il prefisso è separato e svuotabile in blocco.
+- Una modifica al template Blade, al watermark o al piè di pagina non è visibile all'impronta: va
+  accompagnata dall'incremento di `CommunicationPdfService::RENDER_VERSION`, altrimenti i PDF già
+  scritti continuano a essere serviti con il layout precedente.
 
 ## Alternatives considered
 

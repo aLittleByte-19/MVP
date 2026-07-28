@@ -292,10 +292,7 @@ class CommunicationController
         $this->assertCommunicationOwnership($communication, $this->actor($request));
         $this->assertCommunicationReadyForExport($communication);
 
-        return response($pdf->render($communication), 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline',
-        ]);
+        return $this->pdfResponse($request, $communication, $pdf, 'inline');
     }
 
     /**
@@ -306,9 +303,40 @@ class CommunicationController
         $this->assertCommunicationOwnership($communication, $this->actor($request));
         $this->assertCommunicationReadyForExport($communication);
 
+        return $this->pdfResponse(
+            $request,
+            $communication,
+            $pdf,
+            'attachment; filename="'.str_replace('"', '', $pdf->filename($communication)).'"',
+        );
+    }
+
+    /**
+     * L'ETag e' il fingerprint del contenuto: finche' titolo, corpo e copertina
+     * non cambiano il browser si riprende il PDF dalla propria cache con un 304
+     * e dompdf non viene nemmeno interpellato.
+     */
+    private function pdfResponse(
+        Request $request,
+        Communication $communication,
+        CommunicationPdfService $pdf,
+        string $disposition,
+    ): Response {
+        $etag = '"'.$pdf->fingerprint($communication).'"';
+        $knownEtags = $request->getETags();
+
+        if (in_array($etag, $knownEtags, true) || in_array('*', $knownEtags, true)) {
+            return response('', 304, [
+                'ETag' => $etag,
+                'Cache-Control' => 'private, max-age=0, must-revalidate',
+            ]);
+        }
+
         return response($pdf->render($communication), 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="'.str_replace('"', '', $pdf->filename($communication)).'"',
+            'Content-Disposition' => $disposition,
+            'ETag' => $etag,
+            'Cache-Control' => 'private, max-age=0, must-revalidate',
         ]);
     }
 

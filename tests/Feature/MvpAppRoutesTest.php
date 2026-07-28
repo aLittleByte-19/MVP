@@ -936,6 +936,80 @@ test('preview embeds the cover image when one is ready', function () {
     mvpAssertWellFormedPdf($response->getContent());
 });
 
+test('the rendered PDF is materialized once and reused on the next hit', function () {
+    Storage::fake('s3');
+    config(['mvp.communications.pdf_disk' => 's3']);
+
+    $communication = Communication::factory()->draft()->create();
+
+    $this->get("/api/v1/communications/{$communication->id}/preview")->assertOk();
+
+    $stored = Storage::disk('s3')->allFiles("communications/exports/{$communication->id}");
+    expect($stored)->toHaveCount(1);
+
+    // Sostituire la copia materializzata e ritrovarla nella risposta e' l'unico
+    // modo per provare che dompdf non e' stato interpellato una seconda volta.
+    Storage::disk('s3')->put($stored[0], 'copia-materializzata');
+
+    $second = $this->get("/api/v1/communications/{$communication->id}/preview");
+
+    $second->assertOk();
+    expect($second->getContent())->toBe('copia-materializzata');
+});
+
+test('the export survives an unavailable PDF cache disk', function () {
+    // La cache e' un'ottimizzazione: un disco non configurato deve far
+    // rigenerare il PDF, non far fallire il download.
+    config(['mvp.communications.pdf_disk' => 'disco-inesistente']);
+
+    $communication = Communication::factory()->draft()->create();
+
+    $response = $this->get("/api/v1/communications/{$communication->id}/export");
+
+    $response->assertOk()->assertHeader('Content-Type', 'application/pdf');
+    mvpAssertWellFormedPdf($response->getContent());
+});
+
+test('preview answers 304 when the client already holds the current PDF', function () {
+    Storage::fake('s3');
+    config(['mvp.communications.pdf_disk' => 's3']);
+
+    $communication = Communication::factory()->draft()->create();
+
+    $first = $this->get("/api/v1/communications/{$communication->id}/preview");
+    $first->assertOk();
+
+    $etag = $first->headers->get('ETag');
+    expect($etag)->not->toBeEmpty();
+
+    $this->withHeader('If-None-Match', $etag)
+        ->get("/api/v1/communications/{$communication->id}/preview")
+        ->assertStatus(304);
+});
+
+test('a new cover invalidates the materialized PDF', function () {
+    Storage::fake('s3');
+    config(['mvp.communications.cover_disk' => 's3', 'mvp.communications.pdf_disk' => 's3']);
+
+    $communication = Communication::factory()->draft()->create();
+
+    $before = $this->get("/api/v1/communications/{$communication->id}/preview");
+    $before->assertOk();
+
+    $communication->update([
+        'cover_image_path' => "communications/covers/{$communication->id}/nuova.png",
+        'cover_image_mime' => 'image/png',
+        'cover_status' => CoverImageStatus::Ready,
+    ]);
+    Storage::disk('s3')->put("communications/covers/{$communication->id}/nuova.png", 'contenuto-copertina');
+
+    $after = $this->get("/api/v1/communications/{$communication->id}/preview");
+
+    $after->assertOk();
+    expect($after->headers->get('ETag'))->not->toBe($before->headers->get('ETag'));
+    expect(Storage::disk('s3')->allFiles("communications/exports/{$communication->id}"))->toHaveCount(2);
+});
+
 test('preview and export reject cross tenant access', function () {
     config(['mvp.identity.mode' => 'trusted_headers']);
     $communication = Communication::factory()->draft()->create();

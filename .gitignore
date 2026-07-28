@@ -21,6 +21,7 @@ Thumbs.db
 /node_modules/
 /apps/*/node_modules/
 /apps/*/dist/
+/apps/*/.angular/
 /apps/*/tsconfig.tsbuildinfo
 /public/build
 /public/fonts-manifest.dev.json

@@ -12,6 +12,7 @@
 8. `communication.generate_cover` sends `image_prompt` to the image model and stores the result on the cover disk (`MVP_COMMUNICATION_COVER_DISK`, the emulated S3 by default) under `MVP_COMMUNICATION_COVER_PREFIX`. When the text model returned no visual direction, a generic corporate subject is used. A failure here is recorded on `cover_status`/`cover_error` and the task still succeeds: a missing cover degrades the communication, it does not invalidate it.
 9. `communication.finalize` marks `generation_status=completed`, closes a cover left pending by the ASL degraded branch, and records metrics.
 10. The SPA follows `GET /api/v1/communications/{communication}/stream` and receives `progress`, `text`, `cover`, `done` and `error` events. The text arrives roughly ten seconds before the cover.
+11. Once `generation_status=completed`, the SPA exposes the final laid-out document through `GET /api/v1/communications/{communication}/preview` (inline) and `GET .../export` (attachment). Both are gated on a completed, non-discarded communication and answer **422** otherwise. See "Final PDF" below.
 
 ## Required Runtime Configuration
 
@@ -22,6 +23,8 @@
 | `COMMUNICATION_PIPELINE_DLQ_URL` | DLQ diagnostics | Used by `mvp:dlq:list --queue=communications`. |
 | `MVP_COMMUNICATION_COVER_DISK` | Cover storage | Defaults to the emulated S3 (`s3`) and stays there even when documents move to `real_s3` for Textract: covers are generated assets, not HR documents. |
 | `MVP_COMMUNICATION_COVER_PREFIX` | Cover storage | Object key prefix, defaults to `communications/covers`. |
+| `MVP_COMMUNICATION_PDF_DISK` | Final PDF cache | Disk holding the materialized PDFs. Falls back to `MVP_COMMUNICATION_COVER_DISK`, then to `FILESYSTEM_DISK`: another generated asset, same reasoning as covers. |
+| `MVP_COMMUNICATION_PDF_PREFIX` | Final PDF cache | Object key prefix, defaults to `communications/exports`. Kept separate from covers so the two asset families can be purged independently. |
 | `MVP_COMMUNICATION_TIMEOUT_SECONDS` | Stuck detection | Age after which a processing generation is reported as stuck. |
 | `BEDROCK_MODEL_ID` | Text generation | Real Bedrock access must be granted externally. |
 | `BEDROCK_IMAGE_MODEL_ID` | Cover generation | Defaults to `stability.sd3-5-large-v1:0`. The request payload is derived from the configured model family (Stability SD3/Core, Stability XL, Nova Canvas). Without a reachable model every cover degrades with an explicit warning. |
@@ -80,6 +83,28 @@ ORDER BY count(*) DESC;
 
 `CommunicationCoverGenerationDegraded` fires only above three degradations in thirty minutes, so a single refused prompt does not page anyone.
 
+## Final PDF
+
+`CommunicationPdfService` lays out title, body and cover into the A4 document served by both `preview` and `export`. Every page carries the `Creato da AI Assistant` transparency marker and the NEXUM footer with page numbers, stamped through the dompdf canvas API because dompdf does not render CSS3 margin boxes.
+
+Rendering is the most expensive operation in the API and its result is deterministic, so the PDF is **materialized once** on the storage disk and re-read afterwards:
+
+- the object key is a fingerprint (SHA-1) of title, body, cover status, cover path and cover MIME, stored at `{MVP_COMMUNICATION_PDF_PREFIX}/{id}/{fingerprint}.pdf`;
+- **invalidation is implicit**: change the cover or the text and the fingerprint changes, so a new object is written and the stale one is simply never requested again. No invalidation hook lives in the services that mutate a communication;
+- the same fingerprint is returned as the `ETag`. A client sending a matching `If-None-Match` gets a **304** without dompdf or the storage being touched at all.
+
+The fingerprint cannot see changes to the Blade template, the watermark or the footer. Those are covered by `CommunicationPdfService::RENDER_VERSION`: **bump it in the same commit that changes the layout**, or already-materialized PDFs keep being served with the old one.
+
+The cache is an optimization, never a dependency. If the disk is missing or misconfigured, `Storage::disk()` throws at resolution time — the service catches it, reports it and re-renders on every request, so the export keeps working while degraded. `MvpAppRoutesTest` locks this behaviour in (`the export survives an unavailable PDF cache disk`).
+
+Both routes carry an explicit `throttle:30,1`, tighter than the 60/min group bucket: these are the heaviest responses in the API and originate from a human click, not from a list render.
+
+Purge the materialized copies (they are rebuilt on the next request):
+
+```bash
+docker compose exec app php artisan tinker --execute="Storage::disk(config('mvp.communications.pdf_disk'))->deleteDirectory(config('mvp.communications.pdf_prefix'));"
+```
+
 ## Failure States
 
 | Failure | Observable signal | Operator action |
@@ -90,3 +115,5 @@ ORDER BY count(*) DESC;
 | Cover degraded | `cover_status=failed`, `mvp_communication_covers_failed_total{reason}` | See "Degraded Cover"; no action needed for isolated events. |
 | Cover storage failure | `mvp_communication_cover_storage_failed_total{operation}` | Check bucket, prefix and disk credentials. |
 | Stuck communication | `mvp_communication_stuck_processing_total` | Check worker, SQS queue and Step Functions execution. |
+| PDF cache unavailable | Reported exception from `CommunicationPdfService`, no 5xx to the user | Preview and export still work but re-render every time: check `MVP_COMMUNICATION_PDF_DISK`, bucket and credentials. |
+| Stale PDF layout after a template change | Exported PDF still shows the old layout | `RENDER_VERSION` was not bumped: increment it, or purge the prefix as shown above. |

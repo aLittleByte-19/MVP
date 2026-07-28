@@ -37,12 +37,19 @@ Route::prefix('v1')
             ->middleware('throttle:120,1')
             ->name('communications.cover-image.show');
 
+        // Piu' stretto del bucket di gruppo (60/min): sono le risposte piu'
+        // pesanti dell'API (il PDF completo, copertina inclusa, a ogni hit) e
+        // nascono da un click umano, non da un render di lista. Il costo dompdf
+        // e' gia' limitato dalla copia materializzata e dal 304 su ETag: qui si
+        // limita il traffico, non la CPU.
         Route::get('/communications/{communication}/preview', [CommunicationController::class, 'preview'])
             ->whereNumber('communication')
+            ->middleware('throttle:30,1')
             ->name('communications.preview');
 
         Route::get('/communications/{communication}/export', [CommunicationController::class, 'export'])
             ->whereNumber('communication')
+            ->middleware('throttle:30,1')
             ->name('communications.export');
 
         Route::post('/documents/ocr', [DocumentController::class, 'store'])
