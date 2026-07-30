@@ -26,9 +26,10 @@ Incluso:
 - richiesta di una nuova variante della bozza corrente, che sostituisce testo e copertina mantenendo prompt, tono e stile (UC-6);
 - scarto della bozza corrente con conferma, che la esclude dallo storico attivo mantenendola tracciata come "Scartata" (UC-7);
 - eliminazione definitiva di un elemento dello storico, con conferma (UC-23);
+- valutazione opzionale 1–5 stelle con commento qualitativo opzionale (una sola valutazione per generazione);
 - anteprima del documento finale impaginato, con marcatore di trasparenza "Creato da AI Assistant";
 - esportazione del documento finale in PDF, con lo stesso marcatore di trasparenza;
-- metriche operative di base (contenuti generati, bozze, stato della generazione e delle copertine).
+- metriche operative di base (contenuti generati, bozze, stato della generazione e delle copertine, valutazioni ricevute, media stelle).
 
 Parziale:
 
@@ -38,7 +39,7 @@ Fuori scope MVP:
 
 - modifica manuale persistente di titolo e testo;
 - annullamento modifiche;
-- rating 1–5 con commento, preferiti e relativi feedback;
+- preferiti e relativi feedback oltre alla valutazione 1–5;
 - salvataggio e riuso di una configurazione di prompt etichettata;
 - dashboard analista (rating medio, statistiche di utilizzo, filtri).
 

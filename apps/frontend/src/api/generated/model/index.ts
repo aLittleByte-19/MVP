@@ -24,6 +24,8 @@ export * from './ifNoneMatchParameter';
 export * from './metric';
 export * from './mvpState';
 export * from './notFoundResponse';
+export * from './rateCommunicationRequest';
+export * from './rateCommunicationResponse';
 export * from './startCommunicationGenerationResponse';
 export * from './subDocument';
 export * from './subDocumentReviewStatus';

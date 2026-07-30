@@ -33,6 +33,10 @@ class CommunicationFactory extends Factory
             'workflow_completed_at' => now(),
             'cover_status' => CoverImageStatus::Removed,
             'status' => fake()->randomElement(CommunicationStatus::cases()),
+            'rating' => null,
+            'rating_comment' => null,
+            'rated_at' => null,
+            'rated_by' => null,
         ];
     }
 
@@ -82,6 +86,16 @@ class CommunicationFactory extends Factory
             'cover_image_path' => null,
             'cover_status' => CoverImageStatus::Failed,
             'cover_error' => 'Copertina non disponibile: il modello immagini non ha restituito un risultato.',
+        ]);
+    }
+
+    public function rated(int $rating = 4, ?string $comment = null): static
+    {
+        return $this->state([
+            'rating' => $rating,
+            'rating_comment' => $comment,
+            'rated_at' => now(),
+            'rated_by' => 'mvp-local-user',
         ]);
     }
 }

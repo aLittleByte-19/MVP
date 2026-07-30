@@ -66,6 +66,11 @@ Route::prefix('v1')
             ->middleware('throttle:30,1')
             ->name('communications.export');
 
+        Route::post('/communications/{communication}/rating', [CommunicationController::class, 'rate'])
+            ->whereNumber('communication')
+            ->middleware('throttle:30,1')
+            ->name('communications.rate');
+
         Route::post('/documents/ocr', [DocumentController::class, 'store'])
             ->middleware('throttle:20,1')
             ->name('documents.ocr');

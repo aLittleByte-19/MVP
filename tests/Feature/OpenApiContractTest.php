@@ -177,3 +177,35 @@ test('DELETE /api/v1/documents/{subDocument} rispetta il contratto OpenAPI', fun
         '200',
     );
 });
+
+test('POST /api/v1/communications/{communication}/rating rispetta il contratto OpenAPI', function () {
+    $communication = Communication::factory()->draft()->create();
+
+    $response = $this->postJson("/api/v1/communications/{$communication->id}/rating", [
+        'rating' => 5,
+        'comment' => 'Ottima bozza.',
+    ])->assertOk();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/rating',
+        'post',
+        '200',
+    );
+});
+
+test('POST /api/v1/communications/{communication}/rating con payload invalido rispetta il contratto per il 422', function () {
+    $communication = Communication::factory()->draft()->create();
+
+    $response = $this->postJson("/api/v1/communications/{$communication->id}/rating", [
+        'rating' => 9,
+        'comment' => str_repeat('x', 1001),
+    ])->assertUnprocessable();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/rating',
+        'post',
+        '422',
+    );
+});

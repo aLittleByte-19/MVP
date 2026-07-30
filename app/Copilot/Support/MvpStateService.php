@@ -36,6 +36,8 @@ class MvpStateService
         $baseQuery = Communication::query()->where('tenant_id', $actor->tenantId);
         $total = (clone $baseQuery)->count();
         $drafts = (clone $baseQuery)->where('status', CommunicationStatus::Draft)->count();
+        $rated = (clone $baseQuery)->whereNotNull('rating')->count();
+        $averageRating = (clone $baseQuery)->whereNotNull('rating')->avg('rating');
         // Una bozza scartata (UC-7) resta tracciata (audit, metrica Prometheus per
         // stato) ma non deve piu' comparire nell'area di lavoro dell'operatore:
         // e' li' che l'utente si aspetta di vederla sparire, non solo etichettata.
@@ -49,6 +51,11 @@ class MvpStateService
             'metrics' => [
                 ['value' => $total, 'label' => 'Contenuti generati'],
                 ['value' => $drafts, 'label' => 'Bozze generate'],
+                ['value' => $rated, 'label' => 'Valutazioni ricevute'],
+                [
+                    'value' => $averageRating === null ? '—' : number_format((float) $averageRating, 1, '.', ''),
+                    'label' => 'Media stelle',
+                ],
             ],
             'history' => $history->map(fn ($communication) => $this->communication($communication))->values()->all(),
         ];
@@ -104,6 +111,9 @@ class MvpStateService
             'error' => $communication->error_message,
             'status' => $communication->status->label(),
             'createdAt' => $communication->created_at?->format('d/m/Y H:i'),
+            'rating' => $communication->rating,
+            'ratingComment' => $communication->rating_comment,
+            'ratedAt' => $communication->rated_at?->format('d/m/Y H:i'),
         ];
     }
 

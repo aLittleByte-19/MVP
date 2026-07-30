@@ -12,6 +12,7 @@ use App\Copilot\Communications\Services\CommunicationWorkflowService;
 use App\Copilot\Identity\MvpUser;
 use App\Copilot\Support\MvpStateService;
 use App\Http\Requests\Copilot\GenerateCommunicationRequest;
+use App\Http\Requests\Copilot\RateCommunicationRequest;
 use App\Http\Requests\Copilot\UpdateCommunicationCoverRequest;
 use App\Models\Copilot\Communication;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -426,6 +427,56 @@ class CommunicationController
             'Content-Disposition' => $disposition,
             'ETag' => $etag,
             'Cache-Control' => 'private, max-age=0, must-revalidate',
+        ]);
+    }
+
+    public function rate(
+        RateCommunicationRequest $request,
+        Communication $communication,
+        AuditLogger $audit,
+        MvpStateService $state,
+    ): JsonResponse {
+        $actor = $this->actor($request);
+        $this->assertCommunicationOwnership($communication, $actor);
+
+        if ($communication->rating !== null) {
+            throw ValidationException::withMessages([
+                'rating' => ['La valutazione è già stata registrata per questa bozza.'],
+            ]);
+        }
+
+        $validated = $request->validated();
+        $comment = array_key_exists('comment', $validated)
+            ? (is_string($validated['comment']) ? trim($validated['comment']) : null)
+            : null;
+
+        if ($comment === '') {
+            $comment = null;
+        }
+
+        $communication->update([
+            'rating' => $validated['rating'],
+            'rating_comment' => $comment,
+            'rated_at' => now(),
+            'rated_by' => $actor->id,
+        ]);
+
+        $audit->record(
+            'mvp-communication-rated',
+            $actor,
+            'communication',
+            (string) $communication->id,
+            [
+                'rating' => $communication->rating,
+                'has_comment' => $communication->rating_comment !== null,
+            ],
+            $request,
+        );
+
+        return response()->json([
+            'message' => 'Valutazione registrata con successo.',
+            'communication' => $state->communication($communication->fresh()),
+            'state' => $state->forActor($actor),
         ]);
     }
 

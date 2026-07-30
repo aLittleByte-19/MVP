@@ -35,6 +35,10 @@ use Illuminate\Support\Carbon;
  * @property CoverImageStatus $cover_status
  * @property string|null $cover_error
  * @property CommunicationStatus $status
+ * @property int|null $rating
+ * @property string|null $rating_comment
+ * @property Carbon|null $rated_at
+ * @property string|null $rated_by
  * @property Carbon|null $created_at
  */
 class Communication extends Model
@@ -64,6 +68,10 @@ class Communication extends Model
         'cover_status',
         'cover_error',
         'status',
+        'rating',
+        'rating_comment',
+        'rated_at',
+        'rated_by',
     ];
 
     /**
@@ -80,6 +88,8 @@ class Communication extends Model
             'workflow_completed_at' => 'datetime',
             'workflow_failed_at' => 'datetime',
             'cover_image_size' => 'integer',
+            'rating' => 'integer',
+            'rated_at' => 'datetime',
         ];
     }
 

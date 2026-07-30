@@ -17,7 +17,8 @@ import type {
   CommunicationDraftForm,
   CommunicationGenerationPhase,
   CommunicationGenerationProgress,
-  GeneratedDraft
+  GeneratedDraft,
+  RateDraftPayload
 } from "./assistant.model";
 
 @Component({
@@ -49,10 +50,13 @@ import type {
         [isUpdatingCover]="isUpdatingCover()"
         [isGenerating]="isGenerating()"
         [isDiscarding]="isDiscarding()"
+        [isRating]="isRating()"
+        [rateError]="rateError()"
         (uploadCover)="uploadCover($event)"
         (removeCover)="removeCover()"
         (regenerate)="regenerate()"
         (discard)="discard()"
+        (rate)="rateDraft($event)"
       />
 
       <mvp-section id="assistant-history" title="Storico contenuti">
@@ -128,6 +132,8 @@ export class AssistantPage {
   protected readonly isDiscarding = signal(false);
   protected readonly confirmingDeleteId = signal<number | null>(null);
   protected readonly isDeletingHistoryItem = signal(false);
+  protected readonly isRating = signal(false);
+  protected readonly rateError = signal<string | null>(null);
   protected readonly status = signal("In attesa di istruzioni.");
   protected readonly selectedDraftId = signal<number | null>(null);
   protected readonly latestDraft = signal<GeneratedDraft | null>(null);
@@ -150,6 +156,7 @@ export class AssistantPage {
     this.status.set("Generazione in corso.");
     this.selectedDraftId.set(null);
     this.latestDraft.set(null);
+    this.rateError.set(null);
 
     this.assistant.generate(payload).subscribe({
       next: (progress) => this.handleProgress(progress),
@@ -184,8 +191,36 @@ export class AssistantPage {
     });
   }
 
+  protected rateDraft(payload: RateDraftPayload): void {
+    const draft = this.previewDraft();
+    if (!draft || draft.rating != null) {
+      return;
+    }
+
+    this.isRating.set(true);
+    this.rateError.set(null);
+
+    this.assistant
+      .rate(draft.id, payload)
+      .pipe(finalize(() => this.isRating.set(false)))
+      .subscribe({
+        next: (response) => {
+          const rated = this.toDraft(response.communication);
+          this.latestDraft.set(rated);
+          this.selectedDraftId.set(rated.id);
+          this.status.set(response.message);
+        },
+        error: (error: unknown) => {
+          this.rateError.set(
+            getApiErrorMessage(error, "Valutazione non disponibile. Riprova.")
+          );
+        }
+      });
+  }
+
   protected selectDraft(communicationId: number): void {
     this.selectedDraftId.set(communicationId);
+    this.rateError.set(null);
     this.scrollTo("assistant-review");
   }
 
@@ -336,7 +371,10 @@ export class AssistantPage {
       coverError: communication.coverError ?? undefined,
       previewUrl: communication.previewUrl,
       exportUrl: communication.exportUrl,
-      generationStatus: communication.generationStatus
+      generationStatus: communication.generationStatus,
+      rating: communication.rating ?? null,
+      ratingComment: communication.ratingComment ?? null,
+      ratedAt: communication.ratedAt ?? null
     };
   }
 

@@ -6,6 +6,8 @@ import type {
   CommunicationMutationResponse,
   DeleteDocumentResponse,
   MvpState,
+  RateCommunicationRequest,
+  RateCommunicationResponse,
   StartCommunicationGenerationResponse
 } from "../../../../api/generated/model";
 import { MvpStateStore } from "../../../core/state/mvp-state.store";
@@ -31,11 +33,12 @@ interface GenerationCoverEvent {
 }
 
 /**
- * Generazione assistita di comunicazioni HR. La richiesta viene accettata subito
- * e la pipeline lavora in modo asincrono: il testo arriva per primo, la
- * copertina dopo. Una copertina non disponibile non invalida la comunicazione,
- * viene solo segnalata. Nessun fallback automatico: in caso di errore lo stato
- * viene ricaricato per riflettere la situazione reale.
+ * Generazione assistita di comunicazioni HR e valutazione delle bozze. La
+ * richiesta viene accettata subito e la pipeline lavora in modo asincrono: il
+ * testo arriva per primo, la copertina dopo. Una copertina non disponibile non
+ * invalida la comunicazione, viene solo segnalata. Nessun fallback automatico:
+ * in caso di errore lo stato viene ricaricato per riflettere la situazione
+ * reale. Le risposte aggiornano lo store con lo stato autorevole del backend.
  */
 @Injectable({ providedIn: "root" })
 export class AssistantService {
@@ -157,6 +160,12 @@ export class AssistantService {
   deleteFromHistory(communicationId: number): Observable<DeleteDocumentResponse> {
     return this.api
       .deleteMvpCommunication(communicationId)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  rate(communicationId: number, payload: RateCommunicationRequest): Observable<RateCommunicationResponse> {
+    return this.api
+      .rateMvpCommunication(communicationId, payload)
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 }

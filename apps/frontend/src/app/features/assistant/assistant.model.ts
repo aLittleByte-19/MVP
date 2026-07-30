@@ -19,6 +19,8 @@ export interface CommunicationGenerationProgress {
   communication?: Communication;
 }
 
+export const RATING_COMMENT_MAX_LENGTH = 1000;
+
 export interface GeneratedDraft {
   id: number;
   body: string;
@@ -30,6 +32,14 @@ export interface GeneratedDraft {
   previewUrl?: string;
   exportUrl?: string;
   generationStatus?: string;
+  rating?: number | null;
+  ratingComment?: string | null;
+  ratedAt?: string | null;
+}
+
+export interface RateDraftPayload {
+  rating: number;
+  comment?: string;
 }
 
 export const communicationTones = [
