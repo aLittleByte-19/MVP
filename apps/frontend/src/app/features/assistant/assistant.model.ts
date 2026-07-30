@@ -28,6 +28,7 @@ export interface GeneratedDraft {
   coverStatus: string;
   coverError?: string;
   status: string;
+  statusValue?: string;
   title: string;
   previewUrl?: string;
   exportUrl?: string;

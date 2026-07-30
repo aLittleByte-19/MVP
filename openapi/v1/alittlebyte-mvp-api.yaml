@@ -57,6 +57,31 @@ paths:
         "502":
           $ref: "#/components/responses/UpstreamUnavailable"
   /api/v1/communications/{communication}:
+    put:
+      summary: Update the title and body of a draft communication
+      operationId: updateMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCommunicationRequest"
+      responses:
+        "200":
+          description: Communication draft updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateCommunicationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
     delete:
       summary: Permanently delete a communication from history
       operationId: deleteMvpCommunication
@@ -712,6 +737,37 @@ components:
           maximum: 100
         markAsValidated:
           type: boolean
+        recipientEmail:
+          type: [string, "null"]
+          maxLength: 255
+        fiscalCode:
+          type: [string, "null"]
+          maxLength: 16
+        employeeId:
+          type: [string, "null"]
+          maxLength: 255
+    UpdateCommunicationRequest:
+      type: object
+      required: [title, body]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        body:
+          type: string
+          minLength: 1
+          maxLength: 20000
+    UpdateCommunicationResponse:
+      type: object
+      required: [message, communication, state]
+      properties:
+        message:
+          type: string
+        communication:
+          $ref: "#/components/schemas/Communication"
+        state:
+          $ref: "#/components/schemas/MvpState"
     UpdateSendMessageRequest:
       type: object
       properties:
@@ -761,6 +817,8 @@ components:
         error:
           type: [string, "null"]
         status:
+          type: string
+        statusValue:
           type: string
         createdAt:
           type: [string, "null"]
@@ -831,6 +889,12 @@ components:
           type: array
           items:
             type: string
+        recipientEmail:
+          type: [string, "null"]
+        fiscalCode:
+          type: [string, "null"]
+        employeeId:
+          type: [string, "null"]
     ErrorEnvelope:
       type: object
       required: [error]
@@ -848,5 +912,24 @@ components:
             correlationId:
               type: [string, "null"]
     ValidationErrorEnvelope:
-      allOf:
-        - $ref: "#/components/schemas/ErrorEnvelope"
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId, correlationId, fields]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            requestId:
+              type: [string, "null"]
+            correlationId:
+              type: [string, "null"]
+            fields:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string

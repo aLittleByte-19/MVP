@@ -8,7 +8,9 @@ import type {
   MvpState,
   RateCommunicationRequest,
   RateCommunicationResponse,
-  StartCommunicationGenerationResponse
+  StartCommunicationGenerationResponse,
+  UpdateCommunicationRequest,
+  UpdateCommunicationResponse
 } from "../../../../api/generated/model";
 import { MvpStateStore } from "../../../core/state/mvp-state.store";
 import type { CommunicationDraftForm, CommunicationGenerationProgress } from "../assistant.model";
@@ -166,6 +168,12 @@ export class AssistantService {
   rate(communicationId: number, payload: RateCommunicationRequest): Observable<RateCommunicationResponse> {
     return this.api
       .rateMvpCommunication(communicationId, payload)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  update(communicationId: number, payload: UpdateCommunicationRequest): Observable<UpdateCommunicationResponse> {
+    return this.api
+      .updateMvpCommunication(communicationId, payload)
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 }

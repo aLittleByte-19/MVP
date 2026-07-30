@@ -71,6 +71,10 @@ Route::prefix('v1')
             ->middleware('throttle:30,1')
             ->name('communications.rate');
 
+        Route::put('/communications/{communication}', [CommunicationController::class, 'update'])
+            ->whereNumber('communication')
+            ->name('communications.update');
+
         Route::post('/documents/ocr', [DocumentController::class, 'store'])
             ->middleware('throttle:20,1')
             ->name('documents.ocr');

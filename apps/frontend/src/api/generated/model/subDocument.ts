@@ -47,4 +47,10 @@ export interface SubDocument {
   sendPreviewUrl?: string;
   sendExportUrl?: string;
   previewLines: string[];
+  /** @nullable */
+  recipientEmail?: string | null;
+  /** @nullable */
+  fiscalCode?: string | null;
+  /** @nullable */
+  employeeId?: string | null;
 }

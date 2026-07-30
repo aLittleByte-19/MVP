@@ -30,6 +30,7 @@ export interface Communication {
   /** @nullable */
   error?: string | null;
   status: string;
+  statusValue?: string;
   /** @nullable */
   createdAt?: string | null;
   /**

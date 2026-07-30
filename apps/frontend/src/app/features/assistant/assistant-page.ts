@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@a
 import { LucideTrash2 } from "@lucide/angular";
 import { finalize } from "rxjs";
 import { AssistantService } from "./data/assistant.service";
-import type { Communication } from "../../../api/generated/model";
+import type { Communication, UpdateCommunicationRequest } from "../../../api/generated/model";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { getApiErrorMessage } from "../../core/errors/api-error";
 import { EmptyStateComponent } from "../../shared/components/empty-state/empty-state";
@@ -52,11 +52,14 @@ import type {
         [isDiscarding]="isDiscarding()"
         [isRating]="isRating()"
         [rateError]="rateError()"
+        [isSaving]="isSavingDraft()"
+        [saveError]="saveDraftError()"
         (uploadCover)="uploadCover($event)"
         (removeCover)="removeCover()"
         (regenerate)="regenerate()"
         (discard)="discard()"
         (rate)="rateDraft($event)"
+        (saveRequested)="saveDraft($event)"
       />
 
       <mvp-section id="assistant-history" title="Storico contenuti">
@@ -137,6 +140,8 @@ export class AssistantPage {
   protected readonly status = signal("In attesa di istruzioni.");
   protected readonly selectedDraftId = signal<number | null>(null);
   protected readonly latestDraft = signal<GeneratedDraft | null>(null);
+  protected readonly isSavingDraft = signal(false);
+  protected readonly saveDraftError = signal<string | null>(null);
   protected readonly formatFallback = formatFallback;
   protected readonly previewDraft = computed(() => {
     const selectedId = this.selectedDraftId();
@@ -244,6 +249,24 @@ export class AssistantPage {
         },
         error: (error: unknown) => {
           this.status.set(getApiErrorMessage(error, "Aggiornamento immagine non disponibile."));
+        }
+      });
+  }
+
+  protected saveDraft(event: { communicationId: number; payload: UpdateCommunicationRequest }): void {
+    this.saveDraftError.set(null);
+    this.isSavingDraft.set(true);
+
+    this.assistant
+      .update(event.communicationId, event.payload)
+      .pipe(finalize(() => this.isSavingDraft.set(false)))
+      .subscribe({
+        next: (response) => {
+          this.latestDraft.set(this.toDraft(response.communication));
+          this.selectedDraftId.set(response.communication.id);
+        },
+        error: (error: unknown) => {
+          this.saveDraftError.set(getApiErrorMessage(error, "Salvataggio non disponibile."));
         }
       });
   }
@@ -374,7 +397,8 @@ export class AssistantPage {
       generationStatus: communication.generationStatus,
       rating: communication.rating ?? null,
       ratingComment: communication.ratingComment ?? null,
-      ratedAt: communication.ratedAt ?? null
+      ratedAt: communication.ratedAt ?? null,
+      statusValue: communication.statusValue ?? "draft"
     };
   }
 

@@ -7,12 +7,14 @@ import {
   output,
   signal
 } from "@angular/core";
-import { FormControl, ReactiveFormsModule, Validators } from "@angular/forms";
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
+import { LucidePencil, LucideSave, LucideX } from "@lucide/angular";
 import { EmptyStateComponent } from "../../../shared/components/empty-state/empty-state";
 import { StatusBadgeComponent } from "../../../shared/components/status-badge/status-badge";
+import { ButtonComponent } from "../../../shared/components/button/button";
 import { SectionComponent } from "../../../layout/section/section";
 import { StarRating } from "../../../components/star-rating/star-rating";
-import { ButtonComponent } from "../../../shared/components/button/button";
+import type { UpdateCommunicationRequest } from "../../../../api/generated/model";
 import {
   RATING_COMMENT_MAX_LENGTH,
   type GeneratedDraft,
@@ -25,10 +27,13 @@ import {
   imports: [
     ButtonComponent,
     EmptyStateComponent,
+    LucidePencil,
+    LucideSave,
+    LucideX,
+    ReactiveFormsModule,
     SectionComponent,
-    StatusBadgeComponent,
     StarRating,
-    ReactiveFormsModule
+    StatusBadgeComponent
   ],
   template: `
     <mvp-section id="assistant-review" title="Controlla il contenuto">
@@ -73,14 +78,41 @@ import {
               Rimuovi immagine
             </button>
           </div>
-          <label class="field">
-            <span>Titolo</span>
-            <input type="text" [value]="currentDraft.title" readonly />
-          </label>
-          <label class="field">
-            <span>Corpo</span>
-            <textarea rows="8" [value]="currentDraft.body" readonly></textarea>
-          </label>
+          @if (saveError()) {
+            <p class="errorNote">{{ saveError() }}</p>
+          }
+          <form [formGroup]="form" [class.isEditing]="isEditing()" (ngSubmit)="save(currentDraft.id)">
+            <label class="field">
+              <span>Titolo</span>
+              <input [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" formControlName="title" />
+            </label>
+            <label class="field">
+              <span>Testo</span>
+              <textarea
+                rows="7"
+                [readOnly]="!isEditing()"
+                [attr.aria-readonly]="!isEditing()"
+                formControlName="body"
+              ></textarea>
+            </label>
+            <div class="review-actions">
+              @if (isEditing()) {
+                <button mvpButton variant="secondary" type="button" [disabled]="isSaving()" (click)="cancelEdit(currentDraft)">
+                  <svg lucideX aria-hidden="true"></svg>
+                  Annulla
+                </button>
+                <button mvpButton type="submit" [disabled]="isSaving() || form.invalid">
+                  <svg lucideSave aria-hidden="true"></svg>
+                  {{ isSaving() ? "Salvataggio" : "Salva" }}
+                </button>
+              } @else if (currentDraft.statusValue === "draft") {
+                <button mvpButton variant="secondary" type="button" (click)="startEdit(currentDraft)">
+                  <svg lucidePencil aria-hidden="true"></svg>
+                  Modifica
+                </button>
+              }
+            </div>
+          </form>
           @if (isReadyForPreview(currentDraft)) {
             <div class="preview-block">
               <span class="preview-label">Documento finale</span>
@@ -149,7 +181,7 @@ import {
 
           <div class="footer">
             <mvp-status-badge>{{ currentDraft.status }}</mvp-status-badge>
-            <span>Pronta per la revisione</span>
+            <span>Creato da AI Assistant{{ isEditing() ? "" : " · anteprima in sola lettura" }}</span>
           </div>
           <div class="review-actions">
             @if (!isDiscarded(currentDraft)) {
@@ -206,11 +238,14 @@ export class GeneratedCommunicationPreviewComponent {
   readonly isDiscarding = input<boolean>(false);
   readonly isRating = input(false);
   readonly rateError = input<string | null>(null);
+  readonly isSaving = input<boolean>(false);
+  readonly saveError = input<string | null>(null);
   readonly uploadCover = output<File>();
   readonly removeCover = output<void>();
   readonly regenerate = output<void>();
   readonly discard = output<void>();
   readonly rate = output<RateDraftPayload>();
+  readonly saveRequested = output<{ communicationId: number; payload: UpdateCommunicationRequest }>();
 
   protected readonly commentMaxLength = RATING_COMMENT_MAX_LENGTH;
   protected readonly selectedRating = signal(0);
@@ -230,6 +265,12 @@ export class GeneratedCommunicationPreviewComponent {
   protected readonly commentTooLong = computed(
     () => this.commentLength() > RATING_COMMENT_MAX_LENGTH
   );
+
+  protected readonly isEditing = signal(false);
+  protected readonly form = new FormGroup({
+    title: new FormControl("", { nonNullable: true, validators: [Validators.required, Validators.maxLength(255)] }),
+    body: new FormControl("", { nonNullable: true, validators: [Validators.required, Validators.maxLength(20000)] })
+  });
 
   private readonly syncedDraftId = signal<number | null>(null);
 
@@ -268,6 +309,15 @@ export class GeneratedCommunicationPreviewComponent {
       if (current?.rating != null) {
         this.commentControl.disable({ emitEvent: false });
       }
+    });
+
+    // Quando la bozza mostrata cambia (nuova selezione o aggiornamento che
+    // arriva dallo stream) il form torna in sola lettura sui valori correnti:
+    // una modifica non salvata non deve sopravvivere a una rigenerazione.
+    effect(() => {
+      const currentDraft = this.draft();
+      this.form.setValue({ title: currentDraft?.title ?? "", body: currentDraft?.body ?? "" });
+      this.isEditing.set(false);
     });
   }
 
@@ -329,5 +379,24 @@ export class GeneratedCommunicationPreviewComponent {
 
     this.localError.set(null);
     this.rate.emit(comment ? { rating, comment } : { rating });
+  }
+
+  protected startEdit(currentDraft: GeneratedDraft): void {
+    this.form.setValue({ title: currentDraft.title, body: currentDraft.body });
+    this.isEditing.set(true);
+  }
+
+  protected cancelEdit(currentDraft: GeneratedDraft): void {
+    this.form.setValue({ title: currentDraft.title, body: currentDraft.body });
+    this.isEditing.set(false);
+  }
+
+  protected save(communicationId: number): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    this.saveRequested.emit({ communicationId, payload: this.form.getRawValue() });
   }
 }

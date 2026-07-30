@@ -14,6 +14,7 @@ use App\Copilot\Support\MvpStateService;
 use App\Http\Requests\Copilot\GenerateCommunicationRequest;
 use App\Http\Requests\Copilot\RateCommunicationRequest;
 use App\Http\Requests\Copilot\UpdateCommunicationCoverRequest;
+use App\Http\Requests\Copilot\UpdateCommunicationRequest;
 use App\Models\Copilot\Communication;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
@@ -475,6 +476,43 @@ class CommunicationController
 
         return response()->json([
             'message' => 'Valutazione registrata con successo.',
+            'communication' => $state->communication($communication->fresh()),
+            'state' => $state->forActor($actor),
+        ]);
+    }
+
+    public function update(
+        UpdateCommunicationRequest $request,
+        Communication $communication,
+        AuditLogger $audit,
+        MvpStateService $state,
+    ): JsonResponse {
+        $actor = $this->actor($request);
+        $this->assertCommunicationOwnership($communication, $actor);
+
+        if ($communication->status !== CommunicationStatus::Draft) {
+            throw ValidationException::withMessages([
+                'communication' => ['Solo le bozze in stato draft sono modificabili.'],
+            ]);
+        }
+
+        $validated = $request->validated();
+
+        $communication->update([
+            'generated_title' => $validated['title'],
+            'generated_body' => $validated['body'],
+        ]);
+        $audit->record(
+            'mvp-communication-edited',
+            $actor,
+            'communication',
+            (string) $communication->id,
+            ['fields' => ['title', 'body']],
+            $request,
+        );
+
+        return response()->json([
+            'message' => 'Bozza aggiornata.',
             'communication' => $state->communication($communication->fresh()),
             'state' => $state->forActor($actor),
         ]);

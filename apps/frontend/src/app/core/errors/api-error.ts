@@ -57,6 +57,31 @@ export function extractCorrelationId(error: unknown): string | null {
   return null;
 }
 
+/**
+ * Estrae gli errori di validazione per-campo dall'envelope (`error.fields`,
+ * popolato dal backend da `ValidationException::errors()`), per evidenziare
+ * il campo incriminato invece di mostrare solo un messaggio generico
+ * (UC-55/UC-69: "il sistema segnala il campo errato").
+ */
+export function extractFieldErrors(error: unknown): Record<string, string> | null {
+  if (!(error instanceof HttpErrorResponse)) {
+    return null;
+  }
+
+  const body = error.error as { error?: { fields?: Record<string, string[]> } } | null;
+  const fields = body?.error?.fields;
+
+  if (!fields || typeof fields !== "object") {
+    return null;
+  }
+
+  return Object.fromEntries(
+    Object.entries(fields)
+      .filter(([, messages]) => Array.isArray(messages) && messages.length > 0)
+      .map(([field, messages]) => [field, messages[0]])
+  );
+}
+
 function extractEnvelopeMessage(body: unknown): string | null {
   if (typeof body === "object" && body !== null && "error" in body) {
     const envelope = (body as { error?: { message?: string } }).error;
