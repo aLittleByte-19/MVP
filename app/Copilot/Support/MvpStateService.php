@@ -36,7 +36,14 @@ class MvpStateService
         $baseQuery = Communication::query()->where('tenant_id', $actor->tenantId);
         $total = (clone $baseQuery)->count();
         $drafts = (clone $baseQuery)->where('status', CommunicationStatus::Draft)->count();
-        $history = (clone $baseQuery)->latest()->limit(10)->get();
+        // Una bozza scartata (UC-7) resta tracciata (audit, metrica Prometheus per
+        // stato) ma non deve piu' comparire nell'area di lavoro dell'operatore:
+        // e' li' che l'utente si aspetta di vederla sparire, non solo etichettata.
+        $history = (clone $baseQuery)
+            ->where('status', '!=', CommunicationStatus::Discarded)
+            ->latest()
+            ->limit(10)
+            ->get();
 
         return [
             'metrics' => [

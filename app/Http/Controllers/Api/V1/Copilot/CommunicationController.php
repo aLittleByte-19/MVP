@@ -69,6 +69,95 @@ class CommunicationController
     /**
      * @throws AuthorizationException
      */
+    public function regenerate(
+        Request $request,
+        Communication $communication,
+        CommunicationWorkflowService $workflow,
+    ): JsonResponse {
+        $actor = $this->actor($request);
+        $this->assertCommunicationOwnership($communication, $actor);
+        $this->assertCommunicationCanRegenerate($communication);
+
+        $communication = $workflow->regenerate($communication, $actor, $request);
+
+        return response()->json([
+            'message' => 'Rigenerazione avviata.',
+            'communicationId' => $communication->id,
+            'streamUrl' => route('api.v1.communications.stream', ['communication' => $communication->id], false),
+        ], 202);
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    public function discard(
+        Request $request,
+        Communication $communication,
+        AuditLogger $audit,
+        MvpStateService $state,
+    ): JsonResponse {
+        $actor = $this->actor($request);
+        $this->assertCommunicationOwnership($communication, $actor);
+
+        abort_if($communication->status === CommunicationStatus::Discarded, 422, 'La bozza risulta gia scartata.');
+
+        $communication->update(['status' => CommunicationStatus::Discarded]);
+
+        $audit->record(
+            'mvp-communication-discarded',
+            $actor,
+            'communication',
+            (string) $communication->id,
+            [],
+            $request,
+        );
+
+        return response()->json([
+            'message' => 'Bozza scartata.',
+            'communication' => $state->communication($communication->refresh()),
+            'state' => $state->forActor($actor),
+        ]);
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    public function destroy(
+        Request $request,
+        Communication $communication,
+        AuditLogger $audit,
+        MvpStateService $state,
+    ): JsonResponse {
+        $actor = $this->actor($request);
+        $this->assertCommunicationOwnership($communication, $actor);
+
+        $coverPath = $communication->cover_image_path;
+        $disk = (string) config('mvp.communications.cover_disk', config('filesystems.default', 'local'));
+
+        $communication->delete();
+
+        if ($coverPath) {
+            Storage::disk($disk)->delete($coverPath);
+        }
+
+        $audit->record(
+            'mvp-communication-deleted',
+            $actor,
+            'communication',
+            (string) $communication->id,
+            [],
+            $request,
+        );
+
+        return response()->json([
+            'message' => 'Generazione eliminata dallo storico.',
+            'state' => $state->forActor($actor),
+        ]);
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
     public function stream(Request $request, Communication $communication, MvpStateService $state): StreamedResponse
     {
         $actor = $this->actor($request);
@@ -374,5 +463,22 @@ class CommunicationController
                 'communication' => ['La bozza non è ancora pronta per l\'anteprima/esportazione.'],
             ]);
         }
+    }
+
+    private function assertCommunicationCanRegenerate(Communication $communication): void
+    {
+        abort_if(
+            $communication->status === CommunicationStatus::Discarded,
+            422,
+            'Una bozza scartata non puo essere rigenerata.',
+        );
+        abort_unless(
+            in_array($communication->generation_status, [
+                CommunicationGenerationStatus::Completed,
+                CommunicationGenerationStatus::Failed,
+            ], true),
+            409,
+            'La rigenerazione e disponibile solo a generazione conclusa.',
+        );
     }
 }

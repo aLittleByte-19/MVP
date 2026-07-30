@@ -20,6 +20,7 @@ class CommunicationWorkflowService
         private readonly SfnClient $stepFunctions,
         private readonly AuditLogger $audit,
         private readonly MetricsRecorder $metrics,
+        private readonly CommunicationCoverService $covers,
     ) {}
 
     public function start(Communication $communication, ?MvpUser $actor = null, ?Request $request = null): Communication
@@ -84,6 +85,37 @@ class CommunicationWorkflowService
 
             throw $e;
         }
+    }
+
+    /**
+     * Richiede una nuova variante della bozza corrente: azzera testo e
+     * copertina generati e rilancia la stessa pipeline usata per la
+     * generazione iniziale, sulla stessa riga (nessuna nuova voce di storico).
+     */
+    public function regenerate(Communication $communication, ?MvpUser $actor = null, ?Request $request = null): Communication
+    {
+        $this->covers->discardForRegeneration($communication);
+
+        $communication->update([
+            'generated_title' => null,
+            'generated_body' => null,
+            'image_prompt' => null,
+            'generation_status' => CommunicationGenerationStatus::Pending,
+            'workflow_execution_arn' => null,
+            'error_message' => null,
+        ]);
+
+        $this->audit->record(
+            'mvp-communication-regeneration-requested',
+            $actor,
+            'communication',
+            (string) $communication->id,
+            [],
+            $request,
+            $communication->tenant_id,
+        );
+
+        return $this->start($communication->refresh(), $actor, $request);
     }
 
     /**
