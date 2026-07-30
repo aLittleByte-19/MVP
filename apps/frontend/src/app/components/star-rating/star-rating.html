@@ -1,14 +1,14 @@
 <div class="star-container">
   @for (star of [1, 2, 3, 4, 5]; track star) {
-    <button 
-      type="button" 
-      [disabled]="disabled"
+    <button
+      type="button"
+      [disabled]="disabled()"
       (click)="rate(star)"
-      (mouseenter)="!disabled && (hoverState = star)"
-      (mouseleave)="!disabled && (hoverState = 0)"
+      (mouseenter)="setHover(star)"
+      (mouseleave)="setHover(0)"
       class="star-button"
-      [class.active]="star <= (hoverState || rating)"
-      [class.disabled]="disabled">
+      [class.active]="star <= (hoverState() || rating())"
+      [class.disabled]="disabled()">
       ★
     </button>
   }
