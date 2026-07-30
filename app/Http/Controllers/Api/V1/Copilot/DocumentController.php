@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Copilot;
 
 use App\Copilot\Audit\Services\AuditLogger;
+use App\Copilot\Communications\Enums\SendStatus;
 use App\Copilot\Documents\Enums\ProcessingStatus;
 use App\Copilot\Documents\Enums\ReviewStatus;
 use App\Copilot\Documents\Services\DocumentProcessingService;
@@ -322,13 +323,37 @@ class DocumentController
         ]);
     }
 
-    public function sendExport(Request $request, SubDocument $subDocument, SubDocumentSendMessageService $messages): Response
-    {
+    public function sendExport(
+        Request $request,
+        SubDocument $subDocument,
+        SubDocumentSendMessageService $messages,
+        AuditLogger $audit,
+    ): Response {
+        $actor = $this->actor($request);
+
         if ($subDocument->originalDocument) {
-            $this->authorizeOriginalDocument($subDocument->originalDocument, $this->actor($request));
+            $this->authorizeOriginalDocument($subDocument->originalDocument, $actor);
         }
 
-        return response($messages->renderPdf($subDocument), 200, [
+        $pdf = $messages->renderPdf($subDocument);
+
+        // Il recapito avviene fuori dalla piattaforma: il download del PDF e'
+        // l'ultimo evento osservabile, quindi e' quello che marca l'invio.
+        // Transizione a senso unico: un secondo download non cambia lo stato.
+        if ($subDocument->send_status === SendStatus::Pending) {
+            $subDocument->update(['send_status' => SendStatus::Sent]);
+
+            $audit->record(
+                'mvp-sub-document-send-exported',
+                $actor,
+                'sub_document',
+                (string) $subDocument->id,
+                ['sendStatus' => SendStatus::Sent->value],
+                $request,
+            );
+        }
+
+        return response($pdf, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="'.str_replace('"', '', $messages->filename($subDocument)).'"',
         ]);
@@ -417,7 +442,7 @@ class DocumentController
             'documentType' => 'document_type',
             'description' => 'description',
             'confidenceScore' => 'confidence_score',
-            'recipientEmail' => 'recipient_email', 
+            'recipientEmail' => 'recipient_email',
             'fiscalCode' => 'fiscal_code',
             'employeeId' => 'employee_id',
         ];

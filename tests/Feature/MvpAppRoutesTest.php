@@ -5,6 +5,7 @@ use App\Copilot\Audit\Services\AuditLogger;
 use App\Copilot\Communications\Enums\CommunicationGenerationStatus;
 use App\Copilot\Communications\Enums\CommunicationStatus;
 use App\Copilot\Communications\Enums\CoverImageStatus;
+use App\Copilot\Communications\Enums\SendStatus;
 use App\Copilot\Communications\Services\CommunicationCoverService;
 use App\Copilot\Communications\Services\CommunicationWorkflowService;
 use App\Copilot\Documents\Enums\ReviewStatus;
@@ -783,6 +784,39 @@ test('operator can preview and export the precompiled send message', function ()
     mvpAssertWellFormedPdf($export->getContent());
 });
 
+test('downloading the send message marks the sub-document as sent', function () {
+    $subDocument = SubDocument::factory()->pending()->create();
+    ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
+
+    expect($subDocument->send_status)->toBe(SendStatus::Pending);
+
+    $this->get("/api/v1/documents/{$subDocument->id}/send-export")->assertOk();
+
+    expect($subDocument->refresh()->send_status)->toBe(SendStatus::Sent)
+        ->and(AuditEvent::query()->where('event_type', 'mvp-sub-document-send-exported')->count())->toBe(1);
+});
+
+test('previewing the send message does not mark the sub-document as sent', function () {
+    // Guardare non e' recapitare: solo il download vale come invio.
+    $subDocument = SubDocument::factory()->pending()->create();
+    ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
+
+    $this->get("/api/v1/documents/{$subDocument->id}/send-preview")->assertOk();
+
+    expect($subDocument->refresh()->send_status)->toBe(SendStatus::Pending);
+});
+
+test('a second download does not duplicate the send transition', function () {
+    $subDocument = SubDocument::factory()->pending()->create();
+    ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
+
+    $this->get("/api/v1/documents/{$subDocument->id}/send-export")->assertOk();
+    $this->get("/api/v1/documents/{$subDocument->id}/send-export")->assertOk();
+
+    expect($subDocument->refresh()->send_status)->toBe(SendStatus::Sent)
+        ->and(AuditEvent::query()->where('event_type', 'mvp-sub-document-send-exported')->count())->toBe(1);
+});
+
 test('send-preview and send-export return 404 for a nonexistent sub-document', function () {
     $this->withHeader('Accept', 'application/json')
         ->get('/api/v1/documents/999999/send-preview')
@@ -1143,6 +1177,8 @@ test('preview and export return 404 for a nonexistent communication', function (
     $this->withHeader('Accept', 'application/json')
         ->get('/api/v1/communications/999999/export')
         ->assertNotFound();
+});
+
 test('regenerating a communication replaces text and cover with a new variant', function () {
     config([
         'services.workflow.communications_state_machine_arn' => 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-communication-pipeline',
