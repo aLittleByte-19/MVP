@@ -1,4 +1,4 @@
-import { getDocumentStatus, getReviewStatusTone } from "./status";
+import { getDocumentStatus, getReviewStatusTone, getSendStatusTone } from "./status";
 
 describe("status utilities", () => {
   it("marks errored documents as warning and clean documents as success", () => {
@@ -12,5 +12,10 @@ describe("status utilities", () => {
     expect(getReviewStatusTone("auto_validated")).toBe("info");
     expect(getReviewStatusTone("manually_validated")).toBe("success");
     expect(getReviewStatusTone("unknown")).toBe("neutral");
+  });
+
+  it("maps send status to visual tones used by badges", () => {
+    expect(getSendStatusTone("sent")).toBe("success");
+    expect(getSendStatusTone("pending")).toBe("warning");
   });
 });

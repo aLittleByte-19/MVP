@@ -45,7 +45,7 @@
 
 .table th[data-column="file"],
 .table td[data-column="file"] {
-  width: 26%;
+  width: 18%;
 }
 
 .table th[data-column="date"],
@@ -61,6 +61,11 @@
 .table th[data-column="status"],
 .table td[data-column="status"] {
   width: 15%;
+}
+
+.table th[data-column="send-status"],
+.table td[data-column="send-status"] {
+  width: 8%;
 }
 
 .table th[data-column="actions"],

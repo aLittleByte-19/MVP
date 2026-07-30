@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { SubDocumentReviewStatus } from './subDocumentReviewStatus';
+import type { SubDocumentSendStatus } from './subDocumentSendStatus';
 
 export interface SubDocument {
   id: string;
@@ -38,6 +39,8 @@ export interface SubDocument {
   confidence?: number | null;
   reviewStatus: SubDocumentReviewStatus;
   reviewStatusLabel: string;
+  sendStatus: SubDocumentSendStatus;
+  sendStatusLabel: string;
   /** @nullable */
   error?: string | null;
   previewUrl?: string;

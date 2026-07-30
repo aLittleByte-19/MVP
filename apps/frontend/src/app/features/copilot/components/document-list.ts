@@ -4,7 +4,7 @@ import { ButtonComponent } from "../../../shared/components/button/button";
 import { EmptyStateComponent } from "../../../shared/components/empty-state/empty-state";
 import { StatusBadgeComponent } from "../../../shared/components/status-badge/status-badge";
 import { formatFallback } from "../../../shared/util/formatters";
-import { getReviewStatusTone } from "../../../shared/util/status";
+import { getReviewStatusTone, getSendStatusTone } from "../../../shared/util/status";
 
 @Component({
   selector: "mvp-document-list",
@@ -22,6 +22,7 @@ import { getReviewStatusTone } from "../../../shared/util/status";
               <th scope="col" data-column="date">Data</th>
               <th scope="col" data-column="confidence">Conf.</th>
               <th scope="col" data-column="status">Stato</th>
+              <th scope="col" data-column="send-status">Invio</th>
               <th scope="col" data-column="actions">Azioni</th>
             </tr>
           </thead>
@@ -49,6 +50,11 @@ import { getReviewStatusTone } from "../../../shared/util/status";
                     {{ documentItem.reviewStatusLabel }}
                   </mvp-status-badge>
                 </td>
+                <td data-column="send-status" data-label="Invio">
+                  <mvp-status-badge [tone]="getSendStatusTone(documentItem.sendStatus)">
+                    {{ documentItem.sendStatusLabel }}
+                  </mvp-status-badge>
+                </td>
                 <td data-column="actions" data-label="Azioni">
                   <button
                     mvpButton
@@ -66,7 +72,7 @@ import { getReviewStatusTone } from "../../../shared/util/status";
         </table>
       </div>
     } @else {
-      <mvp-empty-state>I documenti caricati compariranno qui.</mvp-empty-state>
+      <mvp-empty-state>{{ emptyMessage() }}</mvp-empty-state>
     }
   `,
   styleUrls: ["../../../shared/components/data-table/data-table.css", "./document-list.css"]
@@ -74,8 +80,10 @@ import { getReviewStatusTone } from "../../../shared/util/status";
 export class DocumentListComponent {
   readonly documents = input<SubDocument[]>([]);
   readonly selectedDocumentId = input<string | null>(null);
+  readonly emptyMessage = input<string>("I documenti caricati compariranno qui.");
   readonly selectDocument = output<string>();
 
   protected readonly formatFallback = formatFallback;
   protected readonly getReviewStatusTone = getReviewStatusTone;
+  protected readonly getSendStatusTone = getSendStatusTone;
 }

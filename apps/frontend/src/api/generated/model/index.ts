@@ -29,6 +29,7 @@ export * from './rateCommunicationResponse';
 export * from './startCommunicationGenerationResponse';
 export * from './subDocument';
 export * from './subDocumentReviewStatus';
+export * from './subDocumentSendStatus';
 export * from './unauthorizedResponse';
 export * from './updateCommunicationRequest';
 export * from './updateCommunicationResponse';
