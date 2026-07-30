@@ -38,6 +38,16 @@ test('internal metrics endpoint exposes application and http telemetry', functio
         ->assertSee('mvp_readiness_status', false);
 });
 
+test('metrics endpoint exposes send status and rating gauges', function () {
+    $this->get('/internal/metrics')
+        ->assertOk()
+        ->assertSee('mvp_sub_documents_send_total', false)
+        ->assertSee('send_status="pending"', false)
+        ->assertSee('send_status="sent"', false)
+        ->assertSee('mvp_communications_rated_total', false)
+        ->assertSee('mvp_communication_rating_average', false);
+});
+
 test('versioned api exposes existing mvp state contract', function () {
     $this->getJson('/api/v1/state')
         ->assertOk()

@@ -5,6 +5,7 @@ namespace App\Copilot\Observability;
 use App\Copilot\Communications\Enums\CommunicationGenerationStatus;
 use App\Copilot\Communications\Enums\CommunicationStatus;
 use App\Copilot\Communications\Enums\CoverImageStatus;
+use App\Copilot\Communications\Enums\SendStatus;
 use App\Copilot\Documents\Enums\ProcessingStatus;
 use App\Copilot\Documents\Enums\ReviewStatus;
 use App\Models\Copilot\Communication;
@@ -133,6 +134,16 @@ class PrometheusExporter
             $lines[] = $this->line('mvp_sub_documents_review_total', ['review_status' => $status->value], SubDocument::query()->where('review_status', $status)->count());
         }
 
+        // Lo stato di invio coincide con l'avvenuto scaricamento del PDF: il
+        // recapito e' fuori piattaforma, quindi il download e' l'ultimo evento
+        // che possiamo osservare.
+        $lines[] = '# HELP mvp_sub_documents_send_total Sub documents by send status (sent means the PDF was downloaded).';
+        $lines[] = '# TYPE mvp_sub_documents_send_total gauge';
+
+        foreach (SendStatus::cases() as $status) {
+            $lines[] = $this->line('mvp_sub_documents_send_total', ['send_status' => $status->value], SubDocument::query()->where('send_status', $status)->count());
+        }
+
         $lines[] = '# HELP mvp_document_stuck_processing_total Documents processing beyond the configured timeout.';
         $lines[] = '# TYPE mvp_document_stuck_processing_total gauge';
         $lines[] = $this->line('mvp_document_stuck_processing_total', [], OriginalDocument::query()
@@ -155,6 +166,16 @@ class PrometheusExporter
         foreach (CoverImageStatus::cases() as $status) {
             $lines[] = $this->line('mvp_communication_covers_total', ['cover_status' => $status->value], Communication::query()->where('cover_status', $status)->count());
         }
+
+        // Qualita' percepita della generazione: una sola valutazione per bozza,
+        // quindi il conteggio e' anche il numero di bozze valutate.
+        $lines[] = '# HELP mvp_communications_rated_total Communications that received a rating.';
+        $lines[] = '# TYPE mvp_communications_rated_total gauge';
+        $lines[] = $this->line('mvp_communications_rated_total', [], Communication::query()->whereNotNull('rating')->count());
+
+        $lines[] = '# HELP mvp_communication_rating_average Average star rating across rated communications.';
+        $lines[] = '# TYPE mvp_communication_rating_average gauge';
+        $lines[] = $this->line('mvp_communication_rating_average', [], round((float) (Communication::query()->whereNotNull('rating')->avg('rating') ?? 0), 2));
 
         $lines[] = '# HELP mvp_communication_stuck_processing_total Communications generating beyond the configured timeout.';
         $lines[] = '# TYPE mvp_communication_stuck_processing_total gauge';

@@ -512,11 +512,67 @@
       }
     },
     {
+      "type": "table",
+      "title": "Sotto-documenti per stato di invio",
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 8,
+        "h": 9
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (send_status) (mvp_sub_documents_send_total)",
+          "instant": true,
+          "format": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "send_status": "Stato invio",
+              "Value": "Sotto-documenti"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": "",
+            "sort": [
+              {
+                "field": "Sotto-documenti",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
       "type": "row",
       "title": "Log di elaborazione",
       "gridPos": {
         "x": 0,
-        "y": 22,
+        "y": 31,
         "w": 24,
         "h": 1
       }
@@ -530,7 +586,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 23,
+        "y": 32,
         "w": 24,
         "h": 11
       },
