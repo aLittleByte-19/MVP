@@ -14,7 +14,7 @@ Il backend è **Laravel 12 / PHP 8.4** con PostgreSQL e Redis; il frontend è un
 
 L'osservabilità è il tratto più maturo della MVP: metriche golden-signal e di dominio esposte in formato Prometheus, trace OTLP verso Tempo, log dei container verso Loki via Alloy, 15 alert rule, 6 dashboard Grafana provisioned e runbook collegati. La CI (GitHub Actions) copre lint, analisi statica, test backend e frontend, scansione Trivy delle immagini, validazione Terraform e audit di accessibilità axe/pa11y contro lo stack reale.
 
-Il livello di maturità è **alto per una MVP**: confini architetturali chiari, validazione input sistematica, idempotenza nel workflow, audit trail, hardening container e di rete. Non è production-ready per scelta dichiarata di scope: mancano IdP reale, invio email, gestione segreti non-default e ridondanza operativa (dettagli in §17–19).
+Il livello di maturità è **alto per una MVP**: confini architetturali chiari, validazione input sistematica, idempotenza nel workflow, audit trail, hardening container e di rete. Non è production-ready per scelta dichiarata di scope: deploy reale, autenticazione degli utenti e invio delle comunicazioni sono stati esclusi esplicitamente dal committente il 15/07/2026, e restano fuori perimetro anche gestione segreti non-default e ridondanza operativa (dettagli in §17–19). L'obiettivo prioritario indicato dal committente è la **corretta identificazione del destinatario**.
 
 ---
 
@@ -317,13 +317,33 @@ Error handling: retry ASL (2 tentativi, backoff 2x) e `Catch`→`Failed`; `sendT
 
 `GET /api/v1/state` → `MvpStateService::forActor()`: storico comunicazioni, documenti con sotto-documenti e dati estratti, metriche di qualità. Il frontend lo consuma come unica query (`useMvpState`).
 
-### 6.5 Revisione/approvazione comunicazioni (predisposto, non completo)
+### 6.5 Revisione, modifica e valutazione delle bozze (implementato)
 
-Lo stato `approved` esiste a livello di enum, vincolo CHECK in migration e test (`CommunicationApprovalTest` valida la transizione **a livello di model**), ma **non esiste alcun endpoint API** per approvare o scartare: `routes/api.php` espone solo generazione e lettura. Il flusso UI "Revisione" mostra le bozze ma la transizione di stato non è invocabile via API.
+`routes/api.php` espone il ciclo completo sulla bozza: `PUT /api/v1/communications/{communication}`
+per la modifica manuale di titolo e testo (consentita solo in stato `draft`),
+`POST .../regenerate` per una nuova variante, `POST .../discard` per lo scarto,
+`DELETE .../{communication}` per l'eliminazione dallo storico e `POST .../rating` per la
+valutazione 1–5 con commento opzionale, registrabile una sola volta per generazione.
+Ogni mutazione passa da `assertCommunicationOwnership()` e viene registrata nell'audit trail.
+Lo stato `approved` resta a livello di enum senza endpoint dedicato.
 
-### 6.6 Invio comunicazioni / email (assente, predisposizione minima)
+### 6.6 Invio comunicazioni / email (fuori scope, stato reinterpretato come scaricamento)
 
-`sub_documents.send_status` (`pending|sent`) e l'identità SES in Terraform esistono, ma non c'è alcun codice di invio. SES è dichiaratamente fuori scope MVP.
+L'invio dall'interno della piattaforma è escluso dal committente: il recapito avviene tramite
+canali terzi a partire dal PDF esportato. Di conseguenza `sub_documents.send_status`
+(`pending|sent`) **non indica un invio effettuato dal sistema ma l'avvenuto scaricamento del PDF**:
+`DocumentController::sendExport()` porta lo stato da `pending` a `sent` al download, non
+sull'anteprima, con transizione a senso unico e audit event `mvp-sub-document-send-exported`.
+La distribuzione è esposta dalla metrica `mvp_sub_documents_send_total{send_status}`.
+L'identità SES in Terraform resta scaffolding documentato: non c'è né va aggiunto codice di invio.
+
+### 6.6.1 Storico documenti filtrabile (implementato)
+
+`GET /api/v1/documents` (`DocumentController::index`, validato da `ListDocumentsRequest`) restituisce
+i sotto-documenti del solo tenant chiamante, con filtri per nome/cognome/azienda (UC-35), stato di
+invio (UC-36), soglia di confidenza sopra o sotto un valore (UC-37) e mese/anno del documento
+(UC-38), più paginazione. Gli elementi hanno la stessa forma di `state.copilot.documents`: la SPA
+non conosce due rappresentazioni dello stesso oggetto.
 
 ### 6.7 OCR Textract (implementato, disabilitato di default)
 
@@ -339,8 +359,8 @@ Sei tabelle di dominio (`database/migrations/`):
 |---|---|---|
 | `communications` | indici su `status`, `generation_status`, `cover_status`, `workflow_execution_arn`; CHECK su tutti e tre gli stati | `status` è la decisione dell'operatore, `generation_status` il ciclo della pipeline, `cover_status` l'esito della copertina; colonne workflow (arn, started/completed/failed_at, failure_reason), `image_prompt` con la direzione visiva prodotta dal modello testuale e cover (`cover_image_path` sul disco copertine, mime, size, source) |
 | `original_documents` | `(tenant_id, processing_status)`, `workflow_execution_arn`, `textract_job_id` | colonne workflow (arn, started/completed/failed_at, failure_reason), OCR (job id, testo, confidence), `s3_bucket/s3_key` |
-| `sub_documents` | FK cascade su original, indici su FK e `send_status` | range pagine, stato invio |
-| `extracted_data` | FK **unique** cascade su sub_document | 1:1 con sotto-documento; confidence 0–100 |
+| `sub_documents` | FK cascade su original, indici su FK e `send_status` | range pagine; `send_status` = avvenuto **scaricamento** del PDF (vedi §6.6), override manuali del messaggio di invio |
+| `extracted_data` | FK **unique** cascade su sub_document | 1:1 con sotto-documento; confidence 0–100; campi destinatario `recipient_email`, `fiscal_code`, `employee_id` correggibili a mano |
 | `audit_events` | `(tenant_id, event_type)`, `(resource_type, resource_id)`, `created_at` | append-only (nessun `updated_at`), metadata JSON |
 | `workflow_tasks` | `task_token_hash` char(64) **unique**; `(subject_type, subject_id, task_type)`, `(status, task_type)` | tabella unica delle due pipeline, soggetto polimorfico (`original_document`/`communication`), input/output payload JSON, stati pending→running→succeeded/skipped/failed |
 

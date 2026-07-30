@@ -394,7 +394,11 @@ dell'invio reale e della prova di consegna.
 > «Integrazioni e-mail/notify: SES (email), SNS (notifiche push/eventi).»
 > — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
-La MVP predispone l'identità SES in locale come simulazione del servizio; l'invio reale non è implementato.
+La MVP predispone l'identità SES in locale come simulazione del servizio; l'invio reale non è
+implementato ed è stato escluso esplicitamente dal committente il 15/07/2026. Il recapito avviene
+tramite canali terzi a partire dal PDF esportato: di conseguenza `sub_documents.send_status` traccia
+l'avvenuto **scaricamento** del documento, non un invio effettuato dal sistema (vedi
+[`mvp-scope.md`](../mvp-scope.md) e `IMPLEMENTATION_OVERVIEW.md` §6.6).
 
 **ADR correlato:** —
 
