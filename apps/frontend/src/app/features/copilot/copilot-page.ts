@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
 import { debounceTime, distinctUntilChanged, finalize } from "rxjs";
 import {
   SubDocumentSendStatus,
+  type SubDocument,
   type UpdateExtractedDataRequest,
   type UpdateSendMessageRequest
 } from "../../../api/generated/model";
@@ -66,6 +67,10 @@ const MONTHS = [
 
       <mvp-section id="copilot-documents" title="Storico documenti analizzati">
         <span actions>{{ filteredDocuments().length }} record</span>
+
+        @if (documentsError(); as error) {
+          <mvp-error-state [message]="error" />
+        }
 
         <form class="filters" [formGroup]="filterForm" aria-label="Filtra storico documenti">
           <label class="field" for="filter-search">
@@ -219,7 +224,10 @@ export class CopilotPage {
 
   protected readonly activeFilters = signal<DocumentFilters>({});
   protected readonly hasActiveFilters = computed(() => Object.keys(this.activeFilters()).length > 0);
-  protected readonly filteredDocuments = computed(() => this.workflow.getDocuments(this.activeFilters()));
+  protected readonly filteredDocuments = signal<SubDocument[]>([]);
+  protected readonly documentsError = signal<string | null>(null);
+
+  private readonly destroyRef = inject(DestroyRef);
 
   private readonly workflow = inject(DocumentWorkflowService);
 
@@ -239,6 +247,25 @@ export class CopilotPage {
         takeUntilDestroyed()
       )
       .subscribe((value) => this.activeFilters.set(this.toFilters(value)));
+
+    // Una sola sorgente per l'elenco: i filtri e ogni mutazione dello stato
+    // (upload, revisione, eliminazione) provocano una rilettura dal backend.
+    effect(() => {
+      this.store.documents();
+      const filters = this.activeFilters();
+
+      this.workflow
+        .searchDocuments(filters)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (documents) => {
+            this.filteredDocuments.set(documents);
+            this.documentsError.set(null);
+          },
+          error: (error: unknown) =>
+            this.documentsError.set(getApiErrorMessage(error, "Storico documenti non disponibile."))
+        });
+    });
   }
 
   protected resetFilters(): void {

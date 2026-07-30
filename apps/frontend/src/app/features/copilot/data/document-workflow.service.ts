@@ -1,5 +1,5 @@
 import { Injectable, inject } from "@angular/core";
-import { Observable, tap } from "rxjs";
+import { Observable, map, tap } from "rxjs";
 import { AlittlebyteMVPAPIService } from "../../../../api/generated/mvp-api";
 import type {
   DeleteDocumentResponse,
@@ -172,65 +172,21 @@ export class DocumentWorkflowService {
   }
 
   /**
-   * Filtra i documenti gia' caricati nello store: nessuna chiamata di rete,
-   * lo stato e' popolato una sola volta da `/api/v1/state` e tenuto aggiornato
-   * dalle mutazioni/SSE (vedi `MvpStateStore`).
+   * Storico filtrato (UC-35..UC-38): i criteri viaggiano al backend, che resta
+   * l'unica autorita' sui dati. Anche senza filtri la lista arriva da qui,
+   * cosi' la vista ha una sola sorgente invece di due rappresentazioni.
    */
-  getDocuments(filters?: DocumentFilters): SubDocument[] {
-    const documents = this.store.documents();
-
-    if (!filters) {
-      return documents;
-    }
-
-    const search = filters.search?.trim().toLowerCase();
-
-    return documents.filter((document) => {
-      if (search) {
-        const haystack = [document.employee, document.company]
-          .filter((value): value is string => !!value)
-          .join(" ")
-          .toLowerCase();
-
-        if (!haystack.includes(search)) {
-          return false;
-        }
-      }
-
-      if (filters.sendStatus && document.sendStatus !== filters.sendStatus) {
-        return false;
-      }
-
-      if (filters.confidenceThreshold !== undefined) {
-        const confidence = document.confidence ?? 0;
-
-        if (filters.confidenceCriterion === "above") {
-          if (confidence <= filters.confidenceThreshold) {
-            return false;
-          }
-        } else if (confidence >= filters.confidenceThreshold) {
-          return false;
-        }
-      }
-
-      if (filters.month !== undefined || filters.year !== undefined) {
-        if (!document.documentDate) {
-          return false;
-        }
-
-        const [documentYear, documentMonth] = document.documentDate.split("-").map(Number);
-
-        if (filters.year !== undefined && documentYear !== filters.year) {
-          return false;
-        }
-
-        if (filters.month !== undefined && documentMonth !== filters.month) {
-          return false;
-        }
-      }
-
-      return true;
-    });
+  searchDocuments(filters: DocumentFilters): Observable<SubDocument[]> {
+    return this.api
+      .listMvpDocuments({
+        search: filters.search,
+        sendStatus: filters.sendStatus,
+        confidenceThreshold: filters.confidenceThreshold,
+        confidenceCriterion: filters.confidenceCriterion,
+        month: filters.month,
+        year: filters.year
+      })
+      .pipe(map((response) => response.documents));
   }
 
   /**

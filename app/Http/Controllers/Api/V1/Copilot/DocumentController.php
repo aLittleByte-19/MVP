@@ -11,6 +11,7 @@ use App\Copilot\Documents\Services\DocumentWorkflowService;
 use App\Copilot\Documents\Services\SubDocumentSendMessageService;
 use App\Copilot\Identity\MvpUser;
 use App\Copilot\Support\MvpStateService;
+use App\Http\Requests\Copilot\ListDocumentsRequest;
 use App\Http\Requests\Copilot\UpdateExtractedDataRequest;
 use App\Http\Requests\Copilot\UpdateSendMessageRequest;
 use App\Http\Requests\Copilot\UploadDocumentRequest;
@@ -28,6 +29,67 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DocumentController
 {
+    /**
+     * Storico dei sotto-documenti del tenant, filtrabile (UC-35..UC-38).
+     * La forma di ogni elemento e' la stessa di `state.copilot.documents`:
+     * la SPA non deve conoscere due rappresentazioni dello stesso oggetto.
+     */
+    public function index(ListDocumentsRequest $request, MvpStateService $state): JsonResponse
+    {
+        $actor = $this->actor($request);
+        $filters = $request->validated();
+
+        $query = SubDocument::query()
+            ->with(['originalDocument', 'extractedData'])
+            ->whereHas('originalDocument', fn ($documents) => $documents->where('tenant_id', $actor->tenantId));
+
+        // UC-35: ricerca su nome, cognome e azienda dei dati estratti.
+        if ($search = trim((string) ($filters['search'] ?? ''))) {
+            $query->whereHas('extractedData', function ($data) use ($search): void {
+                $like = '%'.$search.'%';
+                $data->where('employee_first_name', 'like', $like)
+                    ->orWhere('employee_last_name', 'like', $like)
+                    ->orWhere('company_name', 'like', $like);
+            });
+        }
+
+        // UC-36: lo stato di invio coincide con l'avvenuto scaricamento del PDF.
+        if ($sendStatus = $filters['sendStatus'] ?? null) {
+            $query->where('send_status', $sendStatus);
+        }
+
+        // UC-37: soglia di confidenza, sopra o sotto il valore indicato.
+        $threshold = $filters['confidenceThreshold'] ?? null;
+        if ($threshold !== null) {
+            $operator = ($filters['confidenceCriterion'] ?? 'below') === 'above' ? '>=' : '<';
+            $query->whereHas(
+                'extractedData',
+                fn ($data) => $data->whereNotNull('confidence_score')->where('confidence_score', $operator, (int) $threshold),
+            );
+        }
+
+        // UC-38: mese e anno del documento, indipendenti fra loro.
+        if (($month = $filters['month'] ?? null) !== null) {
+            $query->whereHas('extractedData', fn ($data) => $data->whereMonth('document_date', (int) $month));
+        }
+
+        if (($year = $filters['year'] ?? null) !== null) {
+            $query->whereHas('extractedData', fn ($data) => $data->whereYear('document_date', (int) $year));
+        }
+
+        $paginator = $query->latest()->paginate(
+            perPage: (int) ($filters['perPage'] ?? 40),
+            page: (int) ($filters['page'] ?? 1),
+        );
+
+        return response()->json([
+            'documents' => collect($paginator->items())->map(fn ($document) => $state->document($document))->values()->all(),
+            'total' => $paginator->total(),
+            'page' => $paginator->currentPage(),
+            'perPage' => $paginator->perPage(),
+        ]);
+    }
+
     public function store(UploadDocumentRequest $request, DocumentProcessingService $documents, DocumentWorkflowService $workflow, AuditLogger $audit): JsonResponse
     {
         $validated = $request->validated();

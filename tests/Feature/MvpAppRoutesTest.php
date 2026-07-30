@@ -784,6 +784,115 @@ test('operator can preview and export the precompiled send message', function ()
     mvpAssertWellFormedPdf($export->getContent());
 });
 
+test('the document index only returns sub-documents of the caller tenant', function () {
+    config(['mvp.identity.mode' => 'trusted_headers']);
+
+    $mine = SubDocument::factory()->create();
+    ExtractedData::factory()->create(['sub_document_id' => $mine->id, 'company_name' => 'Azienda Mia']);
+
+    $foreign = SubDocument::factory()->create();
+    $foreign->originalDocument->update(['tenant_id' => 'another-tenant']);
+    ExtractedData::factory()->create(['sub_document_id' => $foreign->id, 'company_name' => 'Azienda Altrui']);
+
+    $response = $this->withHeaders([
+        'Accept' => 'application/json',
+        'X-Mvp-User-Id' => 'operator-a',
+        'X-Mvp-User-Email' => 'operator-a@example.test',
+        'X-Mvp-Tenant-Id' => 'mvp-local-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
+    ])->getJson('/api/v1/documents');
+
+    $response->assertOk()->assertJsonPath('total', 1);
+    expect($response->json('documents.0.company'))->toBe('Azienda Mia');
+});
+
+test('the document index filters by employee name and company', function () {
+    $target = SubDocument::factory()->create();
+    ExtractedData::factory()->create([
+        'sub_document_id' => $target->id,
+        'employee_last_name' => 'Rossini',
+        'company_name' => 'Acme',
+    ]);
+
+    $other = SubDocument::factory()->create();
+    ExtractedData::factory()->create([
+        'sub_document_id' => $other->id,
+        'employee_last_name' => 'Bianchi',
+        'company_name' => 'Globex',
+    ]);
+
+    $this->getJson('/api/v1/documents?search=Rossini')
+        ->assertOk()
+        ->assertJsonPath('total', 1)
+        ->assertJsonPath('documents.0.id', 'sub-'.$target->id);
+
+    $this->getJson('/api/v1/documents?search=Globex')
+        ->assertOk()
+        ->assertJsonPath('total', 1)
+        ->assertJsonPath('documents.0.id', 'sub-'.$other->id);
+});
+
+test('the document index filters by send status', function () {
+    $sent = SubDocument::factory()->sent()->create();
+    ExtractedData::factory()->create(['sub_document_id' => $sent->id]);
+
+    $pending = SubDocument::factory()->pending()->create();
+    ExtractedData::factory()->create(['sub_document_id' => $pending->id]);
+
+    $this->getJson('/api/v1/documents?sendStatus=sent')
+        ->assertOk()
+        ->assertJsonPath('total', 1)
+        ->assertJsonPath('documents.0.id', 'sub-'.$sent->id);
+});
+
+test('the document index filters by confidence threshold in both directions', function () {
+    $low = SubDocument::factory()->create();
+    ExtractedData::factory()->create(['sub_document_id' => $low->id, 'confidence_score' => 40]);
+
+    $high = SubDocument::factory()->create();
+    ExtractedData::factory()->create(['sub_document_id' => $high->id, 'confidence_score' => 95]);
+
+    $this->getJson('/api/v1/documents?confidenceThreshold=80&confidenceCriterion=below')
+        ->assertOk()
+        ->assertJsonPath('total', 1)
+        ->assertJsonPath('documents.0.id', 'sub-'.$low->id);
+
+    $this->getJson('/api/v1/documents?confidenceThreshold=80&confidenceCriterion=above')
+        ->assertOk()
+        ->assertJsonPath('total', 1)
+        ->assertJsonPath('documents.0.id', 'sub-'.$high->id);
+});
+
+test('the document index filters by month and year of the document date', function () {
+    $target = SubDocument::factory()->create();
+    ExtractedData::factory()->create(['sub_document_id' => $target->id, 'document_date' => '2026-03-15']);
+
+    $other = SubDocument::factory()->create();
+    ExtractedData::factory()->create(['sub_document_id' => $other->id, 'document_date' => '2025-11-02']);
+
+    $this->getJson('/api/v1/documents?year=2026')
+        ->assertOk()
+        ->assertJsonPath('total', 1)
+        ->assertJsonPath('documents.0.id', 'sub-'.$target->id);
+
+    $this->getJson('/api/v1/documents?month=11')
+        ->assertOk()
+        ->assertJsonPath('total', 1)
+        ->assertJsonPath('documents.0.id', 'sub-'.$other->id);
+});
+
+test('the document index rejects out-of-range filters', function () {
+    $this->withHeader('Accept', 'application/json')
+        ->getJson('/api/v1/documents?month=13')
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+
+    $this->withHeader('Accept', 'application/json')
+        ->getJson('/api/v1/documents?confidenceThreshold=500')
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+});
+
 test('downloading the send message marks the sub-document as sent', function () {
     $subDocument = SubDocument::factory()->pending()->create();
     ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);

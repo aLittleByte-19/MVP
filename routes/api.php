@@ -75,6 +75,9 @@ Route::prefix('v1')
             ->whereNumber('communication')
             ->name('communications.update');
 
+        Route::get('/documents', [DocumentController::class, 'index'])
+            ->name('documents.index');
+
         Route::post('/documents/ocr', [DocumentController::class, 'store'])
             ->middleware('throttle:20,1')
             ->name('documents.ocr');
