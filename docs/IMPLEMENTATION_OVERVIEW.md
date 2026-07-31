@@ -38,7 +38,7 @@ L'analisi si basa sullo **stato attuale del codice**: route, controller, service
 | Infrastruttura AWS (emulata) | `infra/localstack/` | Terraform: due coppie SQS+DLQ, S3 documenti, S3 frontend, SSM, Secrets Manager, EventBridge, IAM, due Step Functions, SES identity |
 | State machine | `infra/localstack/state-machines/` | Definizioni ASL delle pipeline documentale e comunicazioni |
 | Osservabilità | `docker/otel-collector/`, `docker/prometheus/`, `docker/grafana/`, `docker/loki/`, `docker/alloy/`, `docker/tempo/`, `docker/alertmanager/` | Collector, scrape, alert rule, dashboard, log shipping |
-| CI | `.github/workflows/ci.yml`, `mirror-images.yml`, `scripts/ci/` | Pipeline unica a 3 job (backend, frontend, stack) su ogni push di ogni branch + mirroring immagini su GHCR |
+| CI | `.github/workflows/ci.yml`, `mirror-images.yml`, `scripts/ci/` | Pipeline composta da 4 job (backend, frontend, coverage diff, stack) su ogni push di ogni branch, con mirroring immagini su GHCR |
 | Test | `tests/` (backend Pest), `apps/frontend/src/**/*.spec.ts` (Jest) | Feature + Unit backend, unit/component test frontend |
 | Audit a11y | `scripts/a11y/axe-playwright.mjs`, `pa11y-runner.mjs` | Audit automatici contro lo stack reale |
 | Operatività | `Makefile`, `docs/runbooks/` | Setup riproducibile, comandi verifica, runbook per alert |
@@ -237,9 +237,9 @@ scrape. Sono gauge, in particolare, le distribuzioni per stato:
 
 ### CI: GitHub Actions
 
-**Dove**: `.github/workflows/ci.yml` (3 job), `mirror-images.yml`, `scripts/ci/`.
-**Pipeline**: `backend` (Composer validate, Pint, Larastan, Pest), `frontend` (lint OpenAPI, generazione client + check committed, ESLint, typecheck, Jest, build Angular, `npm audit --audit-level=high`), `stack` (mirroring/caching immagini, `terraform fmt/validate`, validazione config osservabilità, build immagini dev+prod, **Trivy** `--exit-code 1 --severity HIGH,CRITICAL` su app e nginx, avvio stack completo con LocalStack+Terraform apply, build e upload della SPA Angular su S3 LocalStack, smoke HTTPS via Traefik (SPA servita dall'emulatore CDN locale con fallback deep-link, check 401 sulle dashboard) audit axe e pa11y contro lo stack reale, push condizionale delle immagini su GHCR solo per i non-PR). Concurrency con cancel-in-progress.
-**Valutazione**: copertura larga e realistica (lo smoke testa il sistema integrato, non i mock); il quality gate include sicurezza (Trivy, npm audit) e accessibilità. Gap: niente coverage report; i job non pubblicano artefatti di debug in caso di fallimento smoke.
+**Dove**: `.github/workflows/ci.yml` (4 job), `mirror-images.yml`, `scripts/ci/`.
+**Pipeline**: `backend` (Composer validate, Pint, Larastan, Pest, coverage globale e report Clover e HTML), `frontend` (lint OpenAPI, generazione client con verifica del contenuto committato, ESLint, typecheck, Jest, coverage globale, report LCOV, JSON e HTML, build Angular, `npm audit --audit-level=high`), `coverage-diff` (coverage almeno all'80% sulle linee modificate rispetto a `origin/develop`, con `diff-cover==10.4.1` e report HTML e Markdown), `stack` (mirroring e cache immagini, `terraform fmt/validate`, validazione della configurazione di osservabilità, build immagini di sviluppo e produzione, **Trivy** `--exit-code 1 --severity HIGH,CRITICAL` su app e nginx, avvio stack completo con LocalStack e Terraform, build e upload della SPA Angular su S3 LocalStack, smoke HTTPS via Traefik, audit axe e pa11y contro lo stack reale, pubblicazione condizionale delle immagini su GHCR per i non PR). La concurrency usa `cancel-in-progress`.
+**Valutazione**: copertura larga e realistica, poiché lo smoke testa il sistema integrato e i job applicativi misurano il codice effettivo. Il quality gate include coverage globale, coverage del codice modificato, sicurezza (Trivy, npm audit) e accessibilità. Se lo smoke fallisce, la CI pubblica stato dei container, log Docker Compose e uso del disco come artefatto diagnostico.
 
 ---
 
@@ -471,7 +471,7 @@ Coperte in §5 (Bedrock, Textract) e §6. Punti trasversali:
 Coperto in §5; valutazione sintetica:
 
 - **Solido**: data layer uniforme (servizi Angular + client generato), feedback espliciti (loading con `aria-live`, error, empty), SSE per progress reale dell'elaborazione (`DocumentWorkflowService` con EventSource), design token centralizzati con dark mode, test Jest mirati e audit a11y automatizzati in CI.
-- **Limiti**: l'emulatore CDN locale (Nginx) valida il flusso build → S3 locale → distribuzione edge, ma non copre OAC/invalidation/propagazione edge reali (in produzione: AWS CloudFront); la copertura test frontend resta minima e va ampliata sui componenti visuali e sui flussi SSE end-to-end.
+- **Limiti**: l'emulatore CDN locale (Nginx) valida il flusso build → S3 locale → distribuzione edge, ma non copre OAC, invalidation e propagazione edge reali (in produzione: AWS CloudFront). La coverage frontend supera ampiamente i minimi globali; manca ancora uno smoke SSE completo attraverso il proxy.
 
 ---
 
@@ -482,7 +482,7 @@ Coperto in §5; valutazione sintetica:
 - **Middleware chain**: `mvp.identity` → `mvp.authorize` → `throttle` (60/min lettura, 20/min operazioni costose: generazione AI e upload).
 - **Service layer**: i domini vivono in `app/Mvp/{Ai,Ocr,Documents,Workflow,Identity,Audit,Observability}`; confini netti, dipendenze inject-ate, nessun helper globale.
 - **SSE**: lo stream `documents/{id}/stream` ha timeout esplicito (300s) e eventi tipizzati (`document`, `done`, `error`).
-- **Da rifattorizzare/completare**: endpoint di transizione stato comunicazioni (oggi mancante, §6.5); il throttle è per-IP/attore generico, non differenziato per tenant.
+- **Da rifattorizzare/completare**: il ciclo della bozza comunicazione è esposto dalle rotte di aggiornamento, rigenerazione, scarto ed eliminazione descritte in §6.5. Restano migliorabili il throttle, che non dispone di quote differenziate per tenant, e la verifica completa degli stream SSE attraverso il proxy.
 
 ---
 
@@ -521,11 +521,11 @@ Area più matura della MVP (dettagli §5):
 
 ## 15. CI, test e quality gate
 
-- **Workflow** (`ci.yml`): 3 job descritti in §5, in esecuzione su ogni push di ogni branch. Mirroring immagini su GHCR (`mirror-images.yml` + `scripts/ci/`) per ridurre dipendenza dai registry upstream, con cache archivio immagini tra run.
-- **Test backend**: 160 casi Pest in 12 file; contratto API, route, upload, workflow (incluso handler idempotente), estrazione, storage comunicazioni, parsing Bedrock, elenchi filtrabili con isolamento fra tenant, ciclo di vita della bozza (modifica manuale, rigenerazione, scarto, valutazione) e transizione dello stato di scaricamento. I servizi AWS sono fake-ati nei test.
-- **Test frontend**: Jest su utility di formattazione/stato, correlazione, selettore delle metriche dello store e servizio Assistant (6 spec); da ampliare con component test Angular sui flussi principali.
-- **Quality gate**: Pint (stile), Larastan (statico), Redocly (OpenAPI), check client generato committato, `npm audit` HIGH, Trivy HIGH/CRITICAL bloccante, terraform fmt/validate, promtool/otelcol validate, axe+pa11y bloccanti.
-- **Flussi critici coperti**: generazione comunicazioni e pipeline documentale sì (unit+feature+smoke integrato). **Scoperti**: SSE streaming end-to-end (testato solo indirettamente), comportamento del consumer SQS in errore/reinvio (test sul handler ma non sul loop del command), assenza di coverage report per quantificare.
+- **Workflow** (`ci.yml`): 4 job descritti in §5, in esecuzione su ogni push di ogni branch. Mirroring immagini su GHCR (`mirror-images.yml` + `scripts/ci/`) per ridurre la dipendenza dai registry upstream, con cache dell'archivio immagini tra i run.
+- **Test backend**: 259 casi Pest; contratto API, route, upload, workflow (inclusi idempotenza e fallimenti di avvio), configurazione runtime, estrazione, storage comunicazioni, parsing Bedrock, readiness, elenchi filtrabili con isolamento fra tenant, ciclo di vita della bozza (modifica manuale, rigenerazione, scarto, valutazione) e transizione dello stato di scaricamento. I servizi AWS sono simulati nei test. La misura Xdebug corrente è 85,34% linee e 76,73% branch.
+- **Test frontend**: 302 casi Jest in 32 suite. Oltre a utility, store e service copre la shell, routing, interceptor, pagine Overview/Assistant/Copilot, generazione e anteprima comunicazioni, upload e componenti condivisi. `sub-document-list` raggiunge 99,15% statement, 100% funzioni e 76,62% branch. La misura complessiva corrente è 97,70% statement, 95,97% funzioni e 89,63% branch.
+- **Quality gate**: Pint (stile), Larastan (statico), Redocly (OpenAPI), verifica del client generato committato, minimi coverage globali rigidi senza tolleranza, coverage del codice modificato all'80%, `npm audit` HIGH, Trivy HIGH/CRITICAL bloccante, terraform fmt/validate, promtool/otelcol validate, axe e pa11y bloccanti.
+- **Flussi critici coperti**: generazione comunicazioni e pipeline documentale sì (unit+feature+smoke integrato). **Scoperti**: SSE streaming end-to-end (testato solo indirettamente) e comportamento del consumer SQS in errore/reinvio (test sul handler ma non sul loop del command).
 - Lo smoke CI verifica anche i vincoli di sicurezza introdotti (404 su `/internal/metrics` esterno, 401 sulle dashboard senza credenziali): i controlli di hardening sono regression-tested.
 
 ---
@@ -557,14 +557,14 @@ Area più matura della MVP (dettagli §5):
 |---|---|---|
 | Architettura | **Solido per MVP** | confini netti (edge/app/workflow/telemetria), pattern production-like (callback SFN, config da SSM), segmentazione reti |
 | Backend | **Solido per MVP** | validazione sistematica, service layer pulito, error handling uniforme con correlazione, idempotenza |
-| Frontend | **Adeguato ma migliorabile** | data layer e a11y curati; manca routing/deep-linking, copertura test limitata |
+| Frontend | **Buono, migliorabile nei flussi integrati** | data layer, routing applicativo, a11y e coverage globale curati; restano lo smoke SSE completo e il deep linking granulare alle sottosezioni |
 | Persistenza | **Adeguato** | schema con FK/indici/CHECK coerenti; manca RLS, retention, strategia backup |
 | Storage/file | **Adeguato per MVP** | validazione upload sopra la media; assenti AV/CDR per produzione |
 | Asincronia/workflow | **Solido per MVP** | retry, timeout, DLQ, idempotenza, heartbeat e design concorrenza-safe; manca solo lo scaling effettivo (replica singola) |
 | Integrazioni AI | **Adeguato** | astrazione pulita, parsing difensivo; output LLM senza schema rigido, prompt injection non mitigata |
 | Sicurezza | **Adeguato per MVP, non production-ready** | per design: identità simulata, segreti default; il resto (rete, container, input) è curato |
 | Osservabilità | **Sopra la media, quasi production-like** | golden signals, tracing, log, alert+runbook; mancano SLO e receiver reali |
-| Test e CI | **Adeguato** | gate ampi e realistici; coverage non misurata, alcuni flussi integrati scoperti |
+| Test e CI | **Buono** | gate ampi, coverage globale sopra soglia e gate all'80% sul codice modificato; restano alcuni flussi integrati scoperti |
 | Manutenibilità | **Buona** | contract-first, domini separati, config parametrica, doc operativa |
 | Readiness production | **Non production-ready (per scope dichiarato)** | gap concentrati su identità, segreti, ridondanza, compliance dati |
 
@@ -587,7 +587,6 @@ Area più matura della MVP (dettagli §5):
 | `/internal/metrics` | Gate su header X-Forwarded-Proto | Bypass se topologia cambia |: | Porta/listener dedicato non instradato dall'edge, o mTLS/auth sullo scrape | **P2** |
 | Tracing E2E | Si ferma al task token | Debug cross-componente parziale | OTel context propagation | Propagare traceparent nei messaggi SQS e riprendere lo span nel worker | **P2** |
 | Retention dati/telemetria | Non definita | Crescita storage, esposizione PII prolungata | GDPR / Well-Architected COST | Policy retention per `ocr_text`, prompt, metriche/trace/log | **P2** |
-| Coverage test | Non misurata | Regressioni invisibili nei punti scoperti |: | Coverage report in CI con soglia indicativa | **P3** |
 | Deep linking SPA | Rotte top-level presenti, anchor interni scroll-only | Deep link granulari alle sottosezioni non persistiti nell'URL |: | Sincronizzare anchor/fragment quando utile alla demo | **P3** |
 
 ---
@@ -610,7 +609,7 @@ Area più matura della MVP (dettagli §5):
 9. Propagazione trace context attraverso SQS; contract test runtime sull'OpenAPI.
 
 **Eventuali/futuri**
-10. Invio comunicazioni (SES) se rientra nello scope; router SPA; coverage gate.
+10. Invio comunicazioni (SES) se rientra nello scope; contract test runtime sull'OpenAPI.
 
 ---
 
