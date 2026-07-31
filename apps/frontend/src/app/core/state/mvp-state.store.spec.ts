@@ -1,7 +1,8 @@
 import { Injector } from "@angular/core";
+import { defer, of, throwError } from "rxjs";
 import { AlittlebyteMVPAPIService } from "../../../api/generated/mvp-api";
 import { MvpStateStore } from "./mvp-state.store";
-import type { MvpState } from "../../../api/generated/model";
+import type { MvpState, SubDocument } from "../../../api/generated/model";
 
 function stateWith(assistantMetrics: MvpState["assistant"]["metrics"], copilotMetrics: MvpState["copilot"]["metrics"]): MvpState {
   return {
@@ -10,13 +11,15 @@ function stateWith(assistantMetrics: MvpState["assistant"]["metrics"], copilotMe
   } as MvpState;
 }
 
-describe("MvpStateStore.metric", () => {
+describe("MvpStateStore", () => {
   let store: MvpStateStore;
+  let getMvpState: jest.Mock;
 
   beforeEach(() => {
+    getMvpState = jest.fn();
     const injector = Injector.create({
       providers: [
-        { provide: AlittlebyteMVPAPIService, useValue: {} },
+        { provide: AlittlebyteMVPAPIService, useValue: { getMvpState } },
         { provide: MvpStateStore, useClass: MvpStateStore, deps: [] }
       ]
     });
@@ -46,5 +49,72 @@ describe("MvpStateStore.metric", () => {
     store.setState(stateWith([{ key: "assistant.rating_average", value: "—", label: "Media stelle" }], []));
 
     expect(store.metric("assistant.rating_average")).toBe(0);
+  });
+
+  it("espone collezioni vuote prima del caricamento", () => {
+    expect(store.state()).toBeNull();
+    expect(store.documents()).toEqual([]);
+    expect(store.history()).toEqual([]);
+    expect(store.assistantMetrics()).toEqual([]);
+    expect(store.copilotMetrics()).toEqual([]);
+  });
+
+  it("carica lo stato una sola volta e aggiorna loading ed errore", () => {
+    const state = stateWith([{ key: "assistant.drafts", value: 3, label: "Bozze" }], []);
+    getMvpState.mockReturnValue(of(state));
+
+    store.loadOnce();
+    store.loadOnce();
+
+    expect(getMvpState).toHaveBeenCalledTimes(1);
+    expect(store.state()).toBe(state);
+    expect(store.loading()).toBe(false);
+    expect(store.error()).toBeNull();
+  });
+
+  it("ritenta una volta un errore temporaneo prima di salvare lo stato", () => {
+    const state = stateWith([], []);
+    let subscriptions = 0;
+    getMvpState.mockReturnValue(defer(() => {
+      subscriptions += 1;
+      return subscriptions === 1 ? throwError(() => new Error("temporaneo")) : of(state);
+    }));
+
+    store.reload();
+
+    expect(store.state()).toBe(state);
+    expect(subscriptions).toBe(2);
+    expect(store.loading()).toBe(false);
+    expect(store.error()).toBeNull();
+  });
+
+  it("espone un messaggio e termina il caricamento dopo due errori", () => {
+    getMvpState.mockReturnValue(throwError(() => new Error("servizio non disponibile")));
+
+    store.reload();
+
+    expect(store.state()).toBeNull();
+    expect(store.loading()).toBe(false);
+    expect(store.error()).toBe("servizio non disponibile");
+  });
+
+  it("ignora un aggiornamento documento finche' lo stato non e' disponibile", () => {
+    store.upsertDocument({ id: 1 } as unknown as SubDocument);
+
+    expect(store.state()).toBeNull();
+  });
+
+  it("inserisce un documento in testa e sostituisce quello con lo stesso id", () => {
+    const first = { id: 1, name: "Prima versione" } as unknown as SubDocument;
+    const other = { id: 2, name: "Altro" } as unknown as SubDocument;
+    const updated = { id: 1, name: "Versione aggiornata" } as unknown as SubDocument;
+    const state = stateWith([], []);
+    state.copilot.documents = [first, other];
+    store.setState(state);
+
+    store.upsertDocument(updated);
+
+    expect(store.documents()).toEqual([updated, other]);
+    expect(store.state()?.assistant).toBe(state.assistant);
   });
 });
