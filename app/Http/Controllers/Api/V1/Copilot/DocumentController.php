@@ -3,32 +3,28 @@
 namespace App\Http\Controllers\Api\V1\Copilot;
 
 use App\Copilot\Audit\Services\AuditLogger;
-use App\Copilot\Communications\Enums\SendStatus;
 use App\Copilot\Documents\Enums\ProcessingStatus;
-use App\Copilot\Documents\Enums\ReviewStatus;
 use App\Copilot\Documents\Services\DocumentProcessingService;
 use App\Copilot\Documents\Services\DocumentWorkflowService;
-use App\Copilot\Documents\Services\SubDocumentSendMessageService;
-use App\Copilot\Identity\MvpUser;
 use App\Copilot\Support\MvpStateService;
+use App\Http\Controllers\Api\V1\Copilot\Concerns\AuthorizesDocuments;
+use App\Http\Controllers\Api\V1\Copilot\Concerns\ResolvesActor;
 use App\Http\Requests\Copilot\ListDocumentsRequest;
-use App\Http\Requests\Copilot\UpdateExtractedDataRequest;
-use App\Http\Requests\Copilot\UpdateSendMessageRequest;
 use App\Http\Requests\Copilot\UploadDocumentRequest;
-use App\Models\Copilot\ExtractedData;
 use App\Models\Copilot\OriginalDocument;
 use App\Models\Copilot\SubDocument;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\ValidationException;
-use League\Flysystem\FilesystemException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
+/**
+ * Storico filtrabile, upload, avanzamento SSE ed eliminazione dei sotto-documenti.
+ */
 class DocumentController
 {
+    use AuthorizesDocuments, ResolvesActor;
+
     /**
      * Storico dei sotto-documenti del tenant, filtrabile (UC-35..UC-38).
      * La forma di ogni elemento e' la stessa di `state.copilot.documents`:
@@ -256,269 +252,5 @@ class DocumentController
             'message' => 'Documento eliminato.',
             'state' => $state->forActor($actor),
         ]);
-    }
-
-    public function updateExtractedData(
-        UpdateExtractedDataRequest $request,
-        SubDocument $subDocument,
-        AuditLogger $audit,
-        MvpStateService $state,
-    ): JsonResponse {
-        $actor = $this->actor($request);
-        $this->authorizeSubDocument($subDocument, $actor);
-
-        $validated = $request->validated();
-        $existing = $subDocument->extractedData;
-        $updates = $this->extractedDataUpdates($validated);
-
-        if ($updates !== [] || ! $existing) {
-            ExtractedData::updateOrCreate(
-                ['sub_document_id' => $subDocument->id],
-                $updates,
-            );
-        }
-
-        $reviewStatus = ($validated['markAsValidated'] ?? false)
-            ? ReviewStatus::ManuallyValidated
-            : ReviewStatus::NeedsReview;
-        $subDocument->update([
-            'review_status' => $reviewStatus,
-            'error_message' => null,
-        ]);
-        $audit->record(
-            'mvp-sub-document-extracted-data-corrected',
-            $actor,
-            'sub_document',
-            (string) $subDocument->id,
-            [
-                'changed_fields' => array_keys($updates),
-                'review_status' => $reviewStatus->value,
-            ],
-            $request,
-        );
-
-        return response()->json([
-            'message' => $reviewStatus === ReviewStatus::ManuallyValidated
-                ? 'Dati estratti corretti e validati manualmente.'
-                : 'Dati estratti aggiornati.',
-            'document' => $state->document($subDocument->fresh(['originalDocument', 'extractedData'])),
-            'state' => $state->forActor($actor),
-        ]);
-    }
-
-    public function markReviewed(Request $request, SubDocument $subDocument, AuditLogger $audit, MvpStateService $state): JsonResponse
-    {
-        $actor = $this->actor($request);
-        $this->authorizeSubDocument($subDocument, $actor);
-
-        if (! $subDocument->extractedData) {
-            throw ValidationException::withMessages([
-                'subDocument' => ['Correggi i dati estratti prima di validare manualmente il sotto-documento.'],
-            ]);
-        }
-
-        $subDocument->update([
-            'review_status' => ReviewStatus::ManuallyValidated,
-            'error_message' => null,
-        ]);
-        $audit->record(
-            'mvp-sub-document-manually-validated',
-            $actor,
-            'sub_document',
-            (string) $subDocument->id,
-            ['review_status' => ReviewStatus::ManuallyValidated->value],
-            $request,
-        );
-
-        return response()->json([
-            'message' => 'Sotto-documento validato manualmente.',
-            'document' => $state->document($subDocument->fresh(['originalDocument', 'extractedData'])),
-            'state' => $state->forActor($actor),
-        ]);
-    }
-
-    public function preview(Request $request, SubDocument $subDocument): StreamedResponse
-    {
-        if ($subDocument->originalDocument) {
-            $this->authorizeOriginalDocument($subDocument->originalDocument, $this->actor($request));
-        }
-
-        $disk = Storage::disk(config('mvp.documents.storage_disk', config('filesystems.default', 'local')));
-
-        try {
-            abort_unless($disk->exists($subDocument->file_path), 404);
-        } catch (FilesystemException $exception) {
-            report($exception);
-
-            abort(503, 'Storage documenti non raggiungibile.');
-        }
-
-        $filename = $subDocument->originalDocument?->original_filename ?: 'documento.pdf';
-
-        return response()->stream(function () use ($disk, $subDocument): void {
-            $stream = $disk->readStream($subDocument->file_path);
-
-            if (! is_resource($stream)) {
-                return;
-            }
-
-            try {
-                fpassthru($stream);
-            } finally {
-                fclose($stream);
-            }
-        }, 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.str_replace('"', '', $filename).'"',
-        ]);
-    }
-
-    public function sendPreview(Request $request, SubDocument $subDocument, SubDocumentSendMessageService $messages): Response
-    {
-        if ($subDocument->originalDocument) {
-            $this->authorizeOriginalDocument($subDocument->originalDocument, $this->actor($request));
-        }
-
-        return response($messages->renderPdf($subDocument), 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline',
-        ]);
-    }
-
-    public function sendExport(
-        Request $request,
-        SubDocument $subDocument,
-        SubDocumentSendMessageService $messages,
-        AuditLogger $audit,
-    ): Response {
-        $actor = $this->actor($request);
-
-        if ($subDocument->originalDocument) {
-            $this->authorizeOriginalDocument($subDocument->originalDocument, $actor);
-        }
-
-        $pdf = $messages->renderPdf($subDocument);
-
-        // Il recapito avviene fuori dalla piattaforma: il download del PDF e'
-        // l'ultimo evento osservabile, quindi e' quello che marca l'invio.
-        // Transizione a senso unico: un secondo download non cambia lo stato.
-        if ($subDocument->send_status === SendStatus::Pending) {
-            $subDocument->update(['send_status' => SendStatus::Sent]);
-
-            $audit->record(
-                'mvp-sub-document-send-exported',
-                $actor,
-                'sub_document',
-                (string) $subDocument->id,
-                ['sendStatus' => SendStatus::Sent->value],
-                $request,
-            );
-        }
-
-        return response($pdf, 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="'.str_replace('"', '', $messages->filename($subDocument)).'"',
-        ]);
-    }
-
-    public function updateSendMessage(
-        UpdateSendMessageRequest $request,
-        SubDocument $subDocument,
-        AuditLogger $audit,
-        MvpStateService $state,
-    ): JsonResponse {
-        $actor = $this->actor($request);
-        $this->authorizeSubDocument($subDocument, $actor);
-
-        $validated = $request->validated();
-        $subDocument->update([
-            'send_recipient_override' => array_key_exists('recipient', $validated)
-                ? $validated['recipient']
-                : $subDocument->send_recipient_override,
-            'send_subject_override' => array_key_exists('subject', $validated)
-                ? $validated['subject']
-                : $subDocument->send_subject_override,
-            'send_body_override' => array_key_exists('body', $validated)
-                ? $validated['body']
-                : $subDocument->send_body_override,
-        ]);
-
-        $audit->record(
-            'mvp-sub-document-send-message-corrected',
-            $actor,
-            'sub_document',
-            (string) $subDocument->id,
-            ['fields' => array_keys($validated)],
-            $request,
-        );
-
-        return response()->json([
-            'message' => 'Messaggio di invio aggiornato.',
-            'document' => $state->document($subDocument->fresh()),
-            'state' => $state->forActor($actor),
-        ]);
-    }
-
-    private function actor(Request $request): MvpUser
-    {
-        $actor = $request->user();
-
-        if (! $actor instanceof MvpUser) {
-            throw new \RuntimeException('MVP identity middleware did not provide a structured user.');
-        }
-
-        return $actor;
-    }
-
-    /**
-     * @throws AuthorizationException
-     */
-    private function authorizeOriginalDocument(OriginalDocument $document, MvpUser $actor): void
-    {
-        if ($document->tenant_id !== $actor->tenantId) {
-            throw new AuthorizationException('Documento non autorizzato per il tenant corrente.');
-        }
-    }
-
-    /**
-     * @throws AuthorizationException
-     */
-    private function authorizeSubDocument(SubDocument $subDocument, MvpUser $actor): void
-    {
-        if (! $subDocument->originalDocument || $subDocument->originalDocument->tenant_id !== $actor->tenantId) {
-            throw new AuthorizationException('Documento non autorizzato per il tenant corrente.');
-        }
-    }
-
-    /**
-     * @param  array<string, mixed>  $validated
-     * @return array<string, mixed>
-     */
-    private function extractedDataUpdates(array $validated): array
-    {
-        $map = [
-            'employeeFirstName' => 'employee_first_name',
-            'employeeLastName' => 'employee_last_name',
-            'companyName' => 'company_name',
-            'documentDate' => 'document_date',
-            'documentType' => 'document_type',
-            'description' => 'description',
-            'confidenceScore' => 'confidence_score',
-            'recipientEmail' => 'recipient_email',
-            'fiscalCode' => 'fiscal_code',
-            'employeeId' => 'employee_id',
-        ];
-        $updates = [];
-
-        foreach ($map as $requestKey => $column) {
-            if (! array_key_exists($requestKey, $validated)) {
-                continue;
-            }
-
-            $value = $validated[$requestKey];
-            $updates[$column] = is_string($value) ? trim($value) : $value;
-        }
-
-        return $updates;
     }
 }

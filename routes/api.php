@@ -1,7 +1,14 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Copilot\CommunicationController;
+use App\Http\Controllers\Api\V1\Copilot\CommunicationCoverController;
+use App\Http\Controllers\Api\V1\Copilot\CommunicationExportController;
+use App\Http\Controllers\Api\V1\Copilot\CommunicationRatingController;
+use App\Http\Controllers\Api\V1\Copilot\CommunicationStreamController;
 use App\Http\Controllers\Api\V1\Copilot\DocumentController;
+use App\Http\Controllers\Api\V1\Copilot\DocumentPreviewController;
+use App\Http\Controllers\Api\V1\Copilot\DocumentReviewController;
+use App\Http\Controllers\Api\V1\Copilot\SendMessageController;
 use App\Http\Controllers\Api\V1\Copilot\StateController;
 use Illuminate\Support\Facades\Route;
 
@@ -15,7 +22,7 @@ Route::prefix('v1')
             ->middleware('throttle:20,1')
             ->name('communications.generate');
 
-        Route::get('/communications/{communication}/stream', [CommunicationController::class, 'stream'])
+        Route::get('/communications/{communication}/stream', [CommunicationStreamController::class, 'stream'])
             ->whereNumber('communication')
             ->name('communications.stream');
 
@@ -35,18 +42,18 @@ Route::prefix('v1')
 
         // POST e non PUT: PHP popola $_FILES solo sulle richieste POST, su PUT
         // il body multipart resterebbe grezzo e il file non arriverebbe mai.
-        Route::post('/communications/{communication}/cover-image', [CommunicationController::class, 'updateCoverImage'])
+        Route::post('/communications/{communication}/cover-image', [CommunicationCoverController::class, 'updateCoverImage'])
             ->whereNumber('communication')
             ->middleware('throttle:20,1')
             ->name('communications.cover-image.update');
 
-        Route::delete('/communications/{communication}/cover-image', [CommunicationController::class, 'removeCoverImage'])
+        Route::delete('/communications/{communication}/cover-image', [CommunicationCoverController::class, 'removeCoverImage'])
             ->whereNumber('communication')
             ->name('communications.cover-image.remove');
 
         // Lo storico rende fino a 10 copertine per pagina: il limite di gruppo
         // (60/min) verrebbe consumato da una manciata di visite.
-        Route::get('/communications/{communication}/cover-image', [CommunicationController::class, 'coverImage'])
+        Route::get('/communications/{communication}/cover-image', [CommunicationCoverController::class, 'coverImage'])
             ->whereNumber('communication')
             ->middleware('throttle:120,1')
             ->name('communications.cover-image.show');
@@ -56,17 +63,17 @@ Route::prefix('v1')
         // nascono da un click umano, non da un render di lista. Il costo dompdf
         // e' gia' limitato dalla copia materializzata e dal 304 su ETag: qui si
         // limita il traffico, non la CPU.
-        Route::get('/communications/{communication}/preview', [CommunicationController::class, 'preview'])
+        Route::get('/communications/{communication}/preview', [CommunicationExportController::class, 'preview'])
             ->whereNumber('communication')
             ->middleware('throttle:30,1')
             ->name('communications.preview');
 
-        Route::get('/communications/{communication}/export', [CommunicationController::class, 'export'])
+        Route::get('/communications/{communication}/export', [CommunicationExportController::class, 'export'])
             ->whereNumber('communication')
             ->middleware('throttle:30,1')
             ->name('communications.export');
 
-        Route::post('/communications/{communication}/rating', [CommunicationController::class, 'rate'])
+        Route::post('/communications/{communication}/rating', [CommunicationRatingController::class, 'rate'])
             ->whereNumber('communication')
             ->middleware('throttle:30,1')
             ->name('communications.rate');
@@ -90,27 +97,27 @@ Route::prefix('v1')
             ->whereNumber('subDocument')
             ->name('documents.delete');
 
-        Route::put('/documents/{subDocument}/extracted-data', [DocumentController::class, 'updateExtractedData'])
+        Route::put('/documents/{subDocument}/extracted-data', [DocumentReviewController::class, 'updateExtractedData'])
             ->whereNumber('subDocument')
             ->name('documents.extracted-data.update');
 
-        Route::post('/documents/{subDocument}/review', [DocumentController::class, 'markReviewed'])
+        Route::post('/documents/{subDocument}/review', [DocumentReviewController::class, 'markReviewed'])
             ->whereNumber('subDocument')
             ->name('documents.review');
 
-        Route::get('/documents/{subDocument}/preview', [DocumentController::class, 'preview'])
+        Route::get('/documents/{subDocument}/preview', [DocumentPreviewController::class, 'preview'])
             ->whereNumber('subDocument')
             ->name('documents.preview');
 
-        Route::get('/documents/{subDocument}/send-preview', [DocumentController::class, 'sendPreview'])
+        Route::get('/documents/{subDocument}/send-preview', [SendMessageController::class, 'sendPreview'])
             ->whereNumber('subDocument')
             ->name('documents.send-preview');
 
-        Route::get('/documents/{subDocument}/send-export', [DocumentController::class, 'sendExport'])
+        Route::get('/documents/{subDocument}/send-export', [SendMessageController::class, 'sendExport'])
             ->whereNumber('subDocument')
             ->name('documents.send-export');
 
-        Route::put('/documents/{subDocument}/send-message', [DocumentController::class, 'updateSendMessage'])
+        Route::put('/documents/{subDocument}/send-message', [SendMessageController::class, 'updateSendMessage'])
             ->whereNumber('subDocument')
             ->name('documents.send-message.update');
     });
