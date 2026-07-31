@@ -7,6 +7,8 @@
  */
 
 export interface Metric {
+  /** Identificativo stabile della metrica. La label è testo di presentazione e può cambiare; per selezionare una metrica si usa la key. */
+  key: string;
   value: number | string;
   label: string;
 }

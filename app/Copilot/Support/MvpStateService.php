@@ -48,11 +48,15 @@ class MvpStateService
             ->get();
 
         return [
+            // La `key` e' l'identificativo stabile: la label e' testo di
+            // presentazione e puo' cambiare senza rompere chi seleziona la
+            // metrica (vedi overview-page, che ne mostra solo alcune).
             'metrics' => [
-                ['value' => $total, 'label' => 'Contenuti generati'],
-                ['value' => $drafts, 'label' => 'Bozze generate'],
-                ['value' => $rated, 'label' => 'Valutazioni ricevute'],
+                ['key' => 'assistant.total', 'value' => $total, 'label' => 'Contenuti generati'],
+                ['key' => 'assistant.drafts', 'value' => $drafts, 'label' => 'Bozze generate'],
+                ['key' => 'assistant.rated', 'value' => $rated, 'label' => 'Valutazioni ricevute'],
                 [
+                    'key' => 'assistant.rating_average',
                     'value' => $averageRating === null ? '—' : number_format((float) $averageRating, 1, '.', ''),
                     'label' => 'Media stelle',
                 ],
@@ -76,13 +80,19 @@ class MvpStateService
         $originalCount = OriginalDocument::query()->where('tenant_id', $actor->tenantId)->count();
         $confidenceThreshold = (int) config('services.bedrock.mvp_confidence_threshold', 80);
 
+        $ofTenant = fn ($query) => $query->whereHas('originalDocument', fn ($documents) => $documents->where('tenant_id', $actor->tenantId));
+
         return [
             'metrics' => [
-                ['value' => $originalCount, 'label' => 'Documenti analizzati'],
-                ['value' => SubDocument::query()->whereHas('originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))->count(), 'label' => 'Sotto-documenti rilevati'],
-                ['value' => ExtractedData::query()->whereHas('subDocument.originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))->where('confidence_score', '>=', $confidenceThreshold)->count(), 'label' => 'Campi con confidenza'],
-                ['value' => SubDocument::query()->whereHas('originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))->where('review_status', ReviewStatus::NeedsReview)->count(), 'label' => 'Da verificare'],
-                ['value' => SubDocument::query()->whereHas('originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))->where('review_status', ReviewStatus::Quarantined)->count(), 'label' => 'In quarantena'],
+                ['key' => 'copilot.documents', 'value' => $originalCount, 'label' => 'Documenti analizzati'],
+                ['key' => 'copilot.sub_documents', 'value' => $ofTenant(SubDocument::query())->count(), 'label' => 'Sotto-documenti rilevati'],
+                ['key' => 'copilot.confident_fields', 'value' => ExtractedData::query()->whereHas('subDocument.originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))->where('confidence_score', '>=', $confidenceThreshold)->count(), 'label' => 'Campi con confidenza'],
+                ['key' => 'copilot.needs_review', 'value' => $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)->count(), 'label' => 'Da verificare'],
+                // Pronti = validati, automaticamente o a mano. Non e' il
+                // complemento di "da verificare": la quarantena e' un terzo
+                // stato che non va contato come pronto.
+                ['key' => 'copilot.validated', 'value' => $ofTenant(SubDocument::query())->whereIn('review_status', [ReviewStatus::AutoValidated, ReviewStatus::ManuallyValidated])->count(), 'label' => 'Documenti pronti'],
+                ['key' => 'copilot.quarantined', 'value' => $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::Quarantined)->count(), 'label' => 'In quarantena'],
             ],
             'documents' => $documents->map(fn ($document) => $this->document($document))->values()->all(),
         ];

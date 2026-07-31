@@ -196,9 +196,14 @@ export class CopilotPage {
   protected readonly store = inject(MvpStateStore);
   protected readonly documents = this.store.documents;
   protected readonly selectedDocumentId = signal<string | null>(null);
+  // La selezione si risolve sulla stessa lista che l'utente vede: risolverla
+  // sullo store (finestra da 40 alimentata da /api/v1/state) aprirebbe il
+  // documento sbagliato per ogni risultato filtrato fuori da quella finestra.
   protected readonly selectedDocument = computed(() => {
+    const documents = this.filteredDocuments();
     const selectedId = this.selectedDocumentId();
-    return this.documents().find((documentItem) => documentItem.id === selectedId) ?? this.documents()[0] ?? null;
+
+    return documents.find((documentItem) => documentItem.id === selectedId) ?? documents[0] ?? null;
   });
   protected readonly selectedDocumentIdForList = computed(() => this.selectedDocument()?.id ?? null);
   protected readonly isUploading = signal(false);

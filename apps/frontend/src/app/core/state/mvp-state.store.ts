@@ -29,6 +29,18 @@ export class MvpStateStore {
   readonly assistantMetrics = computed(() => this._state()?.assistant.metrics ?? []);
   readonly copilotMetrics = computed(() => this._state()?.copilot.metrics ?? []);
 
+  /**
+   * Valore di una metrica per chiave stabile. Le metriche sono conteggi
+   * calcolati dal backend sull'intero tenant: vanno lette da qui e non
+   * ricalcolate sugli elenchi, che sono finestre parziali (history 10,
+   * documents 40) e darebbero numeri sbagliati appena i dati crescono.
+   */
+  metric(key: string): number {
+    const found = [...this.assistantMetrics(), ...this.copilotMetrics()].find((entry) => entry.key === key);
+
+    return typeof found?.value === "number" ? found.value : 0;
+  }
+
   /** Carica lo stato una sola volta (al primo montaggio della shell). */
   loadOnce(): void {
     if (this.loadRequested) {

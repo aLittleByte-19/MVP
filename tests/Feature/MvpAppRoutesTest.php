@@ -784,6 +784,39 @@ test('operator can preview and export the precompiled send message', function ()
     mvpAssertWellFormedPdf($export->getContent());
 });
 
+test('state metrics expose stable keys alongside the presentation label', function () {
+    $response = $this->getJson('/api/v1/state')->assertOk();
+
+    $keys = collect($response->json('assistant.metrics'))
+        ->merge($response->json('copilot.metrics'))
+        ->pluck('key');
+
+    expect($keys)->toContain(
+        'assistant.total',
+        'assistant.drafts',
+        'assistant.rated',
+        'assistant.rating_average',
+        'copilot.documents',
+        'copilot.sub_documents',
+        'copilot.needs_review',
+        'copilot.validated',
+        'copilot.quarantined',
+    );
+});
+
+test('the ready documents metric counts validated sub-documents without the quarantined ones', function () {
+    SubDocument::factory()->create(['review_status' => ReviewStatus::AutoValidated]);
+    SubDocument::factory()->create(['review_status' => ReviewStatus::ManuallyValidated]);
+    SubDocument::factory()->create(['review_status' => ReviewStatus::Quarantined]);
+    SubDocument::factory()->create(['review_status' => ReviewStatus::NeedsReview]);
+
+    $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
+
+    expect($metrics['copilot.validated']['value'])->toBe(2)
+        ->and($metrics['copilot.quarantined']['value'])->toBe(1)
+        ->and($metrics['copilot.needs_review']['value'])->toBe(1);
+});
+
 test('the document index only returns sub-documents of the caller tenant', function () {
     config(['mvp.identity.mode' => 'trusted_headers']);
 

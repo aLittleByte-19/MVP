@@ -692,8 +692,11 @@ components:
             $ref: "#/components/schemas/SubDocument"
     Metric:
       type: object
-      required: [value, label]
+      required: [key, value, label]
       properties:
+        key:
+          type: string
+          description: Identificativo stabile della metrica. La label è testo di presentazione e può cambiare; per selezionare una metrica si usa la key.
         value:
           oneOf:
             - type: integer

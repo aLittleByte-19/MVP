@@ -63,7 +63,7 @@ import { formatFallback } from "../../shared/util/formatters";
 
       <mvp-section id="overview-priorities" title="Priorita essenziali">
         <div class="priorityGrid">
-          <mvp-metric-card label="Bozze generate" [value]="communications().length" />
+          <mvp-metric-card label="Bozze generate" [value]="generatedDrafts()" />
           <mvp-metric-card label="Documenti da verificare" [value]="documentsToReview()" />
           <mvp-metric-card label="Documenti pronti" [value]="readyDocuments()" />
         </div>
@@ -119,13 +119,12 @@ import { formatFallback } from "../../shared/util/formatters";
 export class OverviewPage {
   protected readonly store = inject(MvpStateStore);
   protected readonly communications = this.store.history;
-  protected readonly documents = this.store.documents;
-  protected readonly documentsToReview = computed(
-    () => this.documents().filter((documentItem) => documentItem.error).length
-  );
-  protected readonly readyDocuments = computed(
-    () => this.documents().filter((documentItem) => !documentItem.error).length
-  );
+  // Conteggi sull'intero tenant, non sulle finestre di elenco: `history` si
+  // ferma a 10 e `documents` a 40, quindi ricalcolarli qui darebbe numeri
+  // silenziosamente sbagliati appena i dati superano quelle soglie.
+  protected readonly generatedDrafts = computed(() => this.store.metric("assistant.drafts"));
+  protected readonly documentsToReview = computed(() => this.store.metric("copilot.needs_review"));
+  protected readonly readyDocuments = computed(() => this.store.metric("copilot.validated"));
   protected readonly formatFallback = formatFallback;
 
   private readonly router = inject(Router);
