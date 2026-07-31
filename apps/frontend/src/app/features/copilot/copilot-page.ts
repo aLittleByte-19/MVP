@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
+import { ReactiveFormsModule } from "@angular/forms";
 import { debounceTime, distinctUntilChanged, finalize } from "rxjs";
 import {
   SubDocumentSendStatus,
@@ -16,10 +16,10 @@ import { MetricsPanelComponent } from "../../shared/components/metrics-panel/met
 import { SectionComponent } from "../../layout/section/section";
 import {
   DocumentWorkflowService,
-  type ConfidenceCriterion,
   type DocumentFilters,
   type DocumentUploadPhase
 } from "./data/document-workflow.service";
+import { createDocumentFilterForm, toDocumentFilters } from "./data/document-filters";
 import { DocumentListComponent } from "./components/document-list";
 import { DocumentUploadPanelComponent } from "./components/document-upload-panel";
 import { SubDocumentListComponent } from "./components/sub-document-list";
@@ -218,17 +218,7 @@ export class CopilotPage {
   protected readonly months = MONTHS;
   protected readonly sendStatuses = SubDocumentSendStatus;
 
-  protected readonly filterForm = new FormGroup({
-    search: new FormControl("", { nonNullable: true }),
-    sendStatus: new FormControl("", { nonNullable: true }),
-    confidenceCriterion: new FormControl("below", { nonNullable: true }),
-    // Gli `input[type=number]` sono gestiti da NumberValueAccessor, che scrive
-    // nel controllo un `number` (o `null` se vuoto), non una stringa: tiparli
-    // come stringa fa esplodere qualunque operazione testuale sul valore.
-    confidenceThreshold: new FormControl<number | null>(null),
-    month: new FormControl("", { nonNullable: true }),
-    year: new FormControl<number | null>(null)
-  });
+  protected readonly filterForm = createDocumentFilterForm();
 
   protected readonly activeFilters = signal<DocumentFilters>({});
   protected readonly hasActiveFilters = computed(() => Object.keys(this.activeFilters()).length > 0);
@@ -254,7 +244,7 @@ export class CopilotPage {
         ),
         takeUntilDestroyed()
       )
-      .subscribe((value) => this.activeFilters.set(this.toFilters(value)));
+      .subscribe((value) => this.activeFilters.set(toDocumentFilters(value)));
 
     // Una sola sorgente per l'elenco: i filtri e ogni mutazione dello stato
     // (upload, revisione, eliminazione) provocano una rilettura dal backend.
@@ -280,41 +270,6 @@ export class CopilotPage {
     this.filterForm.reset();
   }
 
-  private toFilters(value: Partial<{
-    search: string;
-    sendStatus: string;
-    confidenceCriterion: string;
-    confidenceThreshold: number | null;
-    month: string;
-    year: number | null;
-  }>): DocumentFilters {
-    const filters: DocumentFilters = {};
-
-    if (value.search?.trim()) {
-      filters.search = value.search.trim();
-    }
-
-    if (value.sendStatus) {
-      filters.sendStatus = value.sendStatus as SubDocumentSendStatus;
-    }
-
-    const threshold = value.confidenceThreshold;
-    if (typeof threshold === "number" && Number.isFinite(threshold)) {
-      filters.confidenceThreshold = threshold;
-      filters.confidenceCriterion = (value.confidenceCriterion || "below") as ConfidenceCriterion;
-    }
-
-    if (value.month) {
-      filters.month = Number(value.month);
-    }
-
-    const year = value.year;
-    if (typeof year === "number" && Number.isFinite(year)) {
-      filters.year = year;
-    }
-
-    return filters;
-  }
 
   protected selectDocument(documentId: string | null): void {
     this.selectedDocumentId.set(documentId);
