@@ -37,9 +37,9 @@ Alloy.
 
 ## Implementation evidence
 
-- Correlazione: `app/Http/Middleware/CorrelateRequests.php`; audit: `app/Copilot/Audit/Services/AuditLogger.php`
+- Correlazione: `app/Http/Middleware/CorrelateRequests.php`; audit: `app/Mvp/Audit/Services/AuditLogger.php`
   e migrazione `audit_events` (append-only).
-- Metriche: `app/Copilot/Observability/MetricsRecorder.php`, `PrometheusExporter.php`, endpoint
+- Metriche: `app/Mvp/Observability/MetricsRecorder.php`, `PrometheusExporter.php`, endpoint
   `/internal/metrics`.
 - Config osservabilità: `docker/otel-collector/`, `docker/prometheus/{prometheus.yml,rules/}`,
   `docker/tempo/`, `docker/loki/`, `docker/alloy/`, `docker/grafana/` (5 dashboard, 10 alert rule).

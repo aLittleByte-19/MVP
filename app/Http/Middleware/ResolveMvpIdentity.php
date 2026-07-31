@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Copilot\Identity\MvpUser;
+use App\Mvp\Identity\MvpUser;
 use Closure;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\Request;

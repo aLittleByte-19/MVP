@@ -37,7 +37,7 @@ le azioni non disponibili per UX, ma non deve mai essere la fonte di verità per
 ## Implementation evidence
 
 - Middleware: `app/Http/Middleware/ResolveMvpIdentity.php` (modalità `local`/`trusted_headers`),
-  `app/Copilot/Identity/MvpUser.php`.
+  `app/Mvp/Identity/MvpUser.php`.
 - Autorizzazione: `app/Http/Middleware/AuthorizeMvpAccess.php` (ruoli `mvp-operator`/`mvp-admin`,
   tenant check) e check nei controller.
 - Configurazione identità in `infra/localstack/main.tf` (`MVP_IDENTITY_MODE`, `MVP_LOCAL_*`).

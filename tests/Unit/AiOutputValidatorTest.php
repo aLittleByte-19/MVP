@@ -1,7 +1,7 @@
 <?php
 
-use App\Copilot\Ai\AiOutputValidator;
-use App\Exceptions\Copilot\InvalidAiOutputException;
+use App\Exceptions\InvalidAiOutputException;
+use App\Mvp\Ai\AiOutputValidator;
 
 test('extract fields validator accepts a complete normalized payload', function () {
     $result = app(AiOutputValidator::class)->validateExtractFields([

@@ -2,19 +2,19 @@
 
 namespace App\Providers;
 
-use App\Copilot\Ai\AiOutputValidator;
-use App\Copilot\Ai\BedrockService;
-use App\Copilot\Audit\Services\AuditLogger;
-use App\Copilot\Communications\Services\CommunicationWorkflowTaskHandler;
-use App\Copilot\Documents\Services\DocumentProcessingService;
-use App\Copilot\Documents\Services\DocumentWorkflowTaskHandler;
-use App\Copilot\Observability\MetricsRecorder;
-use App\Copilot\Ocr\Services\TextractService;
-use App\Copilot\Workflow\Services\WorkflowTaskHeartbeat;
-use App\Copilot\Workflow\Services\WorkflowTaskRegistry;
-use App\Copilot\Workflow\Support\WorkflowContext;
-use App\Models\Copilot\Communication;
-use App\Models\Copilot\OriginalDocument;
+use App\Models\Communication;
+use App\Models\OriginalDocument;
+use App\Mvp\Ai\AiOutputValidator;
+use App\Mvp\Ai\BedrockService;
+use App\Mvp\Audit\Services\AuditLogger;
+use App\Mvp\Communications\Services\CommunicationWorkflowTaskHandler;
+use App\Mvp\Documents\Services\DocumentProcessingService;
+use App\Mvp\Documents\Services\DocumentWorkflowTaskHandler;
+use App\Mvp\Observability\MetricsRecorder;
+use App\Mvp\Ocr\Services\TextractService;
+use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
+use App\Mvp\Workflow\Services\WorkflowTaskRegistry;
+use App\Mvp\Workflow\Support\WorkflowContext;
 use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\Sfn\SfnClient;
 use Aws\Sqs\SqsClient;

@@ -163,7 +163,7 @@ La MVP è la simulazione locale di S3+KMS tramite LocalStack; Lifecycle e Object
 ## 8. Gestione segreti (Secrets Manager + SSM Parameter Store)
 
 **Scelta nella MVP:** caricamento runtime di parametri e segreti da SSM e Secrets Manager
-([`app/Copilot/Support/RuntimeConfigurationLoader.php`](../../app/Copilot/Support/RuntimeConfigurationLoader.php):
+([`app/Mvp/Support/RuntimeConfigurationLoader.php`](../../app/Mvp/Support/RuntimeConfigurationLoader.php):
 `SsmClient`, `SecretsManagerClient`), provisionati via Terraform
 ([`infra/localstack/main.tf`](../../infra/localstack/main.tf): `aws_secretsmanager_secret.app_runtime`,
 `aws_ssm_parameter.app_runtime`). Tenere i segreti fuori dal codice e dalle immagini, caricandoli
@@ -240,14 +240,14 @@ con tono e stile parametrizzati. I due contenuti sono step distinti di una pipel
 il testo è la comunicazione e un suo fallimento fallisce la generazione, mentre una copertina non
 disponibile viene segnalata e lascia la bozza utilizzabile. La copertina è sostituibile e
 rimovibile manualmente dall'operatore
-([`app/Copilot/Communications/Services/CommunicationCoverService.php`](../../app/Copilot/Communications/Services/CommunicationCoverService.php)).
+([`app/Mvp/Communications/Services/CommunicationCoverService.php`](../../app/Mvp/Communications/Services/CommunicationCoverService.php)).
 Il backend resta il punto di controllo attorno al modello: valida lo schema della risposta,
 persiste il risultato come bozza e ne traccia generazione e qualità. L'AI produce il contenuto,
 l'applicazione mantiene responsabilità su validazione, stato e tracciabilità.
 
 A generazione completata, titolo, corpo e copertina vengono impaginati nel documento finale, con
 anteprima ed esportazione in PDF
-([`app/Copilot/Communications/Services/CommunicationPdfService.php`](../../app/Copilot/Communications/Services/CommunicationPdfService.php)).
+([`app/Mvp/Communications/Services/CommunicationPdfService.php`](../../app/Mvp/Communications/Services/CommunicationPdfService.php)).
 Ogni pagina porta il marcatore `Creato da AI Assistant`: la provenienza AI del contenuto resta
 leggibile anche quando il PDF esce dall'applicativo e circola per conto proprio, che è il momento in
 cui l'informazione andrebbe altrimenti persa.

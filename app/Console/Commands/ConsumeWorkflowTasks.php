@@ -2,10 +2,10 @@
 
 namespace App\Console\Commands;
 
-use App\Copilot\Observability\MetricsRecorder;
-use App\Copilot\Workflow\Services\WorkflowTaskHeartbeat;
-use App\Copilot\Workflow\Services\WorkflowTaskRunner;
-use App\Copilot\Workflow\Support\WorkflowContext;
+use App\Mvp\Observability\MetricsRecorder;
+use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
+use App\Mvp\Workflow\Services\WorkflowTaskRunner;
+use App\Mvp\Workflow\Support\WorkflowContext;
 use Aws\Exception\AwsException;
 use Aws\Sfn\SfnClient;
 use Aws\Sqs\SqsClient;

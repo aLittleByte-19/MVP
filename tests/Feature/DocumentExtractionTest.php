@@ -1,11 +1,11 @@
 <?php
 
-use App\Copilot\Ai\BedrockService;
-use App\Copilot\Documents\Enums\ReviewStatus;
-use App\Copilot\Documents\Services\DocumentProcessingService;
-use App\Exceptions\Copilot\InvalidAiOutputException;
-use App\Models\Copilot\ExtractedData;
-use App\Models\Copilot\SubDocument;
+use App\Exceptions\InvalidAiOutputException;
+use App\Models\ExtractedData;
+use App\Models\SubDocument;
+use App\Mvp\Ai\BedrockService;
+use App\Mvp\Documents\Enums\ReviewStatus;
+use App\Mvp\Documents\Services\DocumentProcessingService;
 
 test('extractFields returns all expected keys on success', function () {
     $this->mock(BedrockService::class, function ($mock) {

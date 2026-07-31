@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\System;
 
-use App\Copilot\Observability\PrometheusExporter;
+use App\Mvp\Observability\PrometheusExporter;
 use Illuminate\Http\Response;
 
 class InternalMetricsController

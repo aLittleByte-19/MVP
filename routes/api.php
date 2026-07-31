@@ -1,15 +1,15 @@
 <?php
 
-use App\Http\Controllers\Api\V1\Copilot\CommunicationController;
-use App\Http\Controllers\Api\V1\Copilot\CommunicationCoverController;
-use App\Http\Controllers\Api\V1\Copilot\CommunicationExportController;
-use App\Http\Controllers\Api\V1\Copilot\CommunicationRatingController;
-use App\Http\Controllers\Api\V1\Copilot\CommunicationStreamController;
-use App\Http\Controllers\Api\V1\Copilot\DocumentController;
-use App\Http\Controllers\Api\V1\Copilot\DocumentPreviewController;
-use App\Http\Controllers\Api\V1\Copilot\DocumentReviewController;
-use App\Http\Controllers\Api\V1\Copilot\SendMessageController;
-use App\Http\Controllers\Api\V1\Copilot\StateController;
+use App\Http\Controllers\Api\V1\CommunicationController;
+use App\Http\Controllers\Api\V1\CommunicationCoverController;
+use App\Http\Controllers\Api\V1\CommunicationExportController;
+use App\Http\Controllers\Api\V1\CommunicationRatingController;
+use App\Http\Controllers\Api\V1\CommunicationStreamController;
+use App\Http\Controllers\Api\V1\DocumentController;
+use App\Http\Controllers\Api\V1\DocumentPreviewController;
+use App\Http\Controllers\Api\V1\DocumentReviewController;
+use App\Http\Controllers\Api\V1\SendMessageController;
+use App\Http\Controllers\Api\V1\StateController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')

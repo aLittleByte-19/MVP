@@ -1,7 +1,7 @@
 <?php
 
-use App\Copilot\Communications\Enums\CommunicationStatus;
-use App\Models\Copilot\Communication;
+use App\Models\Communication;
+use App\Mvp\Communications\Enums\CommunicationStatus;
 
 test('approved is a valid communication status', function () {
     $communication = Communication::factory()->draft()->create();

@@ -1,13 +1,13 @@
 <?php
 
-use App\Copilot\Audit\Services\AuditLogger;
-use App\Copilot\Documents\Enums\ProcessingStatus;
-use App\Copilot\Documents\Services\DocumentWorkflowService;
-use App\Copilot\Observability\MetricsRecorder;
-use App\Copilot\Workflow\Services\WorkflowTaskRunner;
-use App\Models\Copilot\AuditEvent;
-use App\Models\Copilot\OriginalDocument;
-use App\Models\Copilot\WorkflowTask;
+use App\Models\AuditEvent;
+use App\Models\OriginalDocument;
+use App\Models\WorkflowTask;
+use App\Mvp\Audit\Services\AuditLogger;
+use App\Mvp\Documents\Enums\ProcessingStatus;
+use App\Mvp\Documents\Services\DocumentWorkflowService;
+use App\Mvp\Observability\MetricsRecorder;
+use App\Mvp\Workflow\Services\WorkflowTaskRunner;
 use Aws\Result;
 use Aws\Sfn\SfnClient;
 

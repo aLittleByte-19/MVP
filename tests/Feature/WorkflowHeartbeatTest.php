@@ -1,9 +1,9 @@
 <?php
 
-use App\Copilot\Documents\Enums\ProcessingStatus;
-use App\Copilot\Observability\MetricsRecorder;
-use App\Copilot\Workflow\Services\WorkflowTaskHeartbeat;
-use App\Models\Copilot\OriginalDocument;
+use App\Models\OriginalDocument;
+use App\Mvp\Documents\Enums\ProcessingStatus;
+use App\Mvp\Observability\MetricsRecorder;
+use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
 use Aws\Command;
 use Aws\Exception\AwsException;
 use Aws\Result;

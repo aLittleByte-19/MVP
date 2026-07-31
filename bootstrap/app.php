@@ -3,12 +3,12 @@
 use App\Console\Commands\ConsumeWorkflowTasks;
 use App\Console\Commands\ListDlqMessages;
 use App\Console\Commands\ResetMvpData;
-use App\Copilot\Support\RuntimeConfigurationLoader;
-use App\Exceptions\Copilot\AiServiceException;
+use App\Exceptions\AiServiceException;
 use App\Http\Middleware\AuthorizeMvpAccess;
 use App\Http\Middleware\CorrelateRequests;
 use App\Http\Middleware\RecordHttpMetrics;
 use App\Http\Middleware\ResolveMvpIdentity;
+use App\Mvp\Support\RuntimeConfigurationLoader;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;

@@ -1,11 +1,11 @@
 <?php
 
-use App\Copilot\Communications\Services\CommunicationWorkflowService;
-use App\Copilot\Documents\Services\DocumentWorkflowService;
-use App\Models\Copilot\Communication;
-use App\Models\Copilot\ExtractedData;
-use App\Models\Copilot\OriginalDocument;
-use App\Models\Copilot\SubDocument;
+use App\Models\Communication;
+use App\Models\ExtractedData;
+use App\Models\OriginalDocument;
+use App\Models\SubDocument;
+use App\Mvp\Communications\Services\CommunicationWorkflowService;
+use App\Mvp\Documents\Services\DocumentWorkflowService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use setasign\Fpdi\Fpdi;

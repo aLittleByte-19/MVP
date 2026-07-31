@@ -35,7 +35,7 @@ backlog e la propria DLQ.
 
 Claim atomico, deduplica sul token, heartbeat e callback vivono in `WorkflowTaskRunner`, condiviso da
 entrambe le pipeline tramite un registry di handler per task type; la tabella `workflow_tasks` è
-polimorfica sul soggetto. `app/Copilot/Workflow` contiene solo l'infrastruttura comune: i servizi di
+polimorfica sul soggetto. `app/Mvp/Workflow` contiene solo l'infrastruttura comune: i servizi di
 un flusso stanno nella cartella del flusso.
 
 Le copertine sono scritte su un disco proprio (`MVP_COMMUNICATION_COVER_DISK`, l'S3 emulato per default) sotto `MVP_COMMUNICATION_COVER_PREFIX` e servite da
@@ -92,11 +92,11 @@ dall'ADR 0005 — l'output non è un dato sostitutivo, è lo stesso identico doc
 - ASL: `infra/localstack/state-machines/communication-pipeline.asl.json`.
 - Infrastruttura: `infra/localstack/main.tf` (`aws_sqs_queue.communications` + DLQ, state machine,
   IAM, regola EventBridge dedicata), servizio `queue-communications` in `docker-compose.yml`.
-- Orchestrazione comune: `app/Copilot/Workflow/Contracts/WorkflowTaskHandler.php`,
-  `app/Copilot/Workflow/Services/WorkflowTaskRegistry.php`, `WorkflowTaskRunner.php`,
-  `app/Copilot/Workflow/Support/WorkflowContext.php`, migrazione `workflow_tasks`.
-- Dominio: `app/Copilot/Communications/Services/` (workflow service, task handler, cover service),
-  `app/Http/Controllers/Api/V1/Copilot/CommunicationController.php`.
+- Orchestrazione comune: `app/Mvp/Workflow/Contracts/WorkflowTaskHandler.php`,
+  `app/Mvp/Workflow/Services/WorkflowTaskRegistry.php`, `WorkflowTaskRunner.php`,
+  `app/Mvp/Workflow/Support/WorkflowContext.php`, migrazione `workflow_tasks`.
+- Dominio: `app/Mvp/Communications/Services/` (workflow service, task handler, cover service),
+  `app/Http/Controllers/Api/V1/CommunicationController.php`.
 - Osservabilità: `docker/grafana/dashboards/communication-pipeline.json`,
   `docker/prometheus/rules/communication-alerts.yml`.
 

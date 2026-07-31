@@ -1,8 +1,8 @@
 <?php
 
-use App\Http\Requests\Copilot\RateCommunicationRequest;
-use App\Models\Copilot\AuditEvent;
-use App\Models\Copilot\Communication;
+use App\Http\Requests\RateCommunicationRequest;
+use App\Models\AuditEvent;
+use App\Models\Communication;
 use Tests\Support\OpenApiSpec;
 
 test('POST /api/v1/communications/{id}/rating stores score and optional comment', function () {

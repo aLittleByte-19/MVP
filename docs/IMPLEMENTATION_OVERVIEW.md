@@ -29,7 +29,7 @@ L'analisi si basa sullo **stato attuale del codice**: route, controller, service
 | Area | Path | Responsabilità |
 |---|---|---|
 | Backend applicativo | `app/` | Controller HTTP, middleware, model, console command |
-| Domini MVP | `app/Copilot/` | Service layer per dominio: `Ai/` (Bedrock), `Ocr/` (Textract), `Documents/` (Co-Pilot, elaborazione e orchestrazione), `Communications/` (AI Assistant, copertine e orchestrazione), `Workflow/` (infrastruttura di orchestrazione comune), `Identity/`, `Audit/`, `Observability/`, `Support/` |
+| Domini MVP | `app/Mvp/` | Service layer per dominio: `Ai/` (Bedrock), `Ocr/` (Textract), `Documents/` (Co-Pilot, elaborazione e orchestrazione), `Communications/` (AI Assistant, copertine e orchestrazione), `Workflow/` (infrastruttura di orchestrazione comune), `Identity/`, `Audit/`, `Observability/`, `Support/` |
 | Route | `routes/api.php`, `routes/web.php` | API v1 + endpoint di sistema |
 | Schema dati | `database/migrations/` | 6 tabelle di dominio + indici/FK |
 | Frontend SPA | `apps/frontend/` | Angular + TypeScript, client API Angular generato |
@@ -111,7 +111,7 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 **Dove**: `composer.json`, `app/`, `bootstrap/app.php`, `docker/php/Dockerfile` (`FROM php:8.4-fpm-bookworm`).
 **Ruolo**: API REST stateless, validazione (FormRequest), ORM Eloquent, console worker, exception mapping centralizzato (`bootstrap/app.php:64-149` — ogni errore esce come JSON con `code`, `message`, `requestId`, `correlationId`).
 **Motivazione**: framework maturo con primitive pronte per validazione, queue, storage astratto (flysystem) e testing; coerente con lo stack del team.
-**Valutazione**: buona separazione controller→service (i controller orchestrano, la logica vive in `app/Copilot/*`); error handling uniforme; niente logica nei model oltre a cast/relazioni.
+**Valutazione**: buona separazione controller→service (i controller orchestrano, la logica vive in `app/Mvp/*`); error handling uniforme; niente logica nei model oltre a cast/relazioni.
 **Best practice**: la struttura segue le convenzioni Laravel ufficiali; il mapping degli errori con correlation ID è in linea con le raccomandazioni API di OWASP ASVS (V7, error handling senza leak di dettagli interni).
 
 ### PostgreSQL 16
@@ -166,21 +166,21 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 
 ### AWS Bedrock (LLM)
 
-**Dove**: `app/Copilot/Ai/BedrockService.php` (due client `BedrockRuntimeClient` costruiti in `AppServiceProvider` con timeout 300s: uno per i modelli testo, uno per quelli immagine, che sono serviti in region diverse), config in `config/services.php` (`model_id`, `image_model_id`, `region`, `image_region`, `endpoint`, credenziali AWS reali opzionali; default `amazon.nova-lite-v1:0` e `stability.sd3-5-large-v1:0` da `docker-compose.yml`).
+**Dove**: `app/Mvp/Ai/BedrockService.php` (due client `BedrockRuntimeClient` costruiti in `AppServiceProvider` con timeout 300s: uno per i modelli testo, uno per quelli immagine, che sono serviti in region diverse), config in `config/services.php` (`model_id`, `image_model_id`, `region`, `image_region`, `endpoint`, credenziali AWS reali opzionali; default `amazon.nova-lite-v1:0` e `stability.sd3-5-large-v1:0` da `docker-compose.yml`).
 **Ruolo**: quattro operazioni — `generateCommunication()` (JSON `{title, body, imagePrompt}` da prompt+tono+stile: lo stesso modello scrive anche la direzione visiva della copertina, avendo davanti il testo appena generato), `generateCommunicationImageWithMeta()` (copertina via `invokeModel`, con payload derivato dalla famiglia del modello configurato — Stability SD3/Core, Stability XL, Nova Canvas), `splitDocument()` (segmenti per destinatario dal testo OCR), `extractFields()` (campi strutturati dal testo OCR; la confidenza effettiva è calcolata a valle su leggibilità OCR e completezza dei campi). Le operazioni testuali usano Converse, la generazione immagini `invokeModel`.
 **Valutazione**: ogni risposta è trattata come input non attendibile — parsing difensivo (estrazione JSON da fence markdown con fallback regex) seguito da validazione contro JSON Schema in `AiOutputValidator` (`resources/schemas/ai/`) più le regole semantiche che uno schema non esprime; errori AWS mappati su `AiServiceException` → 502 con messaggio user-friendly, metriche di fallimento dedicate (`BedrockFailureRateHigh` alert). Sugli errori immagine la classificazione distingue i casi permanenti (accesso negato, modello non attivo, credenziali) da quelli ritentabili, evitando tentativi certi di fallire.
 **Gap**: nessuna mitigazione esplicita di prompt injection veicolata dal contenuto del PDF; nessun circuit breaker (solo retry SDK).
 
 ### AWS Textract (OCR, opzionale)
 
-**Dove**: `app/Copilot/Ocr/Services/TextractService.php`, flag `TEXTRACT_ENABLED` (`config/services.php`).
+**Dove**: `app/Mvp/Ocr/Services/TextractService.php`, flag `TEXTRACT_ENABLED` (`config/services.php`).
 **Ruolo**: OCR asincrono (`startDocumentTextDetection` + polling con timeout configurabile), confidence media, testo salvato su `original_documents.ocr_text` e per pagina su `original_documents.ocr_pages` (usato da split ed estrazione).
 **Dettaglio rilevante**: guard architetturale in `DocumentWorkflowService::start()` — se Textract è abilitato ma il disco documenti non è `real_s3`, il workflow rifiuta di partire con errore esplicito (Textract reale non può leggere il bucket LocalStack). È un esempio concreto di fail-fast su configurazioni incoerenti.
 **Stato**: implementato ma **disabilitato di default** (`TEXTRACT_ENABLED=false`); con flag off il task ritorna `enabled=false` e la pipeline prosegue.
 
 ### AWS Step Functions + SQS (workflow asincrono)
 
-**Dove**: `infra/localstack/state-machines/` (document e communication pipeline), `infra/localstack/main.tf` (state machine, code + DLQ per dominio, IAM role/policy, EventBridge), `app/Copilot/Workflow/` (runner, registry, heartbeat, contesto di correlazione), `app/Copilot/Documents/Services/DocumentWorkflowService.php` e `DocumentWorkflowTaskHandler.php`, `app/Copilot/Communications/Services/CommunicationWorkflowService.php` e `CommunicationWorkflowTaskHandler.php`, `app/Console/Commands/ConsumeWorkflowTasks.php`.
+**Dove**: `infra/localstack/state-machines/` (document e communication pipeline), `infra/localstack/main.tf` (state machine, code + DLQ per dominio, IAM role/policy, EventBridge), `app/Mvp/Workflow/` (runner, registry, heartbeat, contesto di correlazione), `app/Mvp/Documents/Services/DocumentWorkflowService.php` e `DocumentWorkflowTaskHandler.php`, `app/Mvp/Communications/Services/CommunicationWorkflowService.php` e `CommunicationWorkflowTaskHandler.php`, `app/Console/Commands/ConsumeWorkflowTasks.php`.
 **Ruolo**: la state machine usa il **callback pattern** (`arn:aws:states:::sqs:sendMessage.waitForTaskToken`): ogni stato pubblica su SQS un messaggio con task token e tipo (`textract.ocr`, `bedrock.extract`, `persist.results`, `dispatch.domain_event`); il worker Laravel esegue e risponde con `sendTaskSuccess/Failure`. Retry dichiarativi nello ASL (2 tentativi, backoff 2x), timeout per stato (420s Textract, 720s Bedrock), `Catch` → stato `Failed`.
 **Motivazione**: separa lo stato del workflow dall'esecutore; i task pesanti (LLM, OCR) escono dal ciclo HTTP; la DLQ cattura i messaggi non processabili.
 **Valutazione**: **idempotenza reale** — `workflow_tasks.task_token_hash` (SHA-256, unique) deduplica i re-delivery SQS e un task già `succeeded/skipped` ritorna il risultato cached senza rieseguire. **Heartbeat implementato**: l'ASL dichiara `HeartbeatSeconds` per ogni task (180s Textract, 240s Bedrock, 90s persist/dispatch) e il worker invia `SendTaskHeartbeat` tramite `WorkflowTaskHeartbeat` durante il polling Textract e tra i segmenti Bedrock (`TextractService`, `DocumentProcessingService`); un heartbeat rifiutato degrada a no-op senza abortire il task di business. È il punto più sofisticato del backend.
@@ -195,7 +195,7 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 
 ### SSM Parameter Store + Secrets Manager (config runtime)
 
-**Dove**: `app/Copilot/Support/RuntimeConfigurationLoader.php`, agganciato in `bootstrap/app.php:25` **prima** del caricamento env di Laravel; bootstrap minimo via `CONFIG_*` env (`docker-compose.yml`, anchor `x-backend-environment`).
+**Dove**: `app/Mvp/Support/RuntimeConfigurationLoader.php`, agganciato in `bootstrap/app.php:25` **prima** del caricamento env di Laravel; bootstrap minimo via `CONFIG_*` env (`docker-compose.yml`, anchor `x-backend-environment`).
 **Ruolo**: con `CONFIG_SOURCE=aws` la configurazione applicativa (APP_KEY, credenziali DB/Redis, code, bucket, model id…) viene letta da `getParametersByPath` (con decryption) + `getSecretValue`, popolata in `$_ENV` e **cachata su file con fingerprint** (`bootstrap/cache/runtime-config.php`) per non chiamare AWS a ogni richiesta PHP-FPM. Chiavi obbligatorie asserite a bootstrap (fail-fast).
 **Motivazione**: implementa il principio [Twelve-Factor config](https://12factor.net/config) e simula il pattern di produzione (nessun segreto applicativo nel filesystem dell'immagine); i container ricevono solo le credenziali di bootstrap.
 **Valutazione**: design production-like raro in una MVP. Gap: la cache su file non ha invalidazione runtime (serve riavvio o cancellazione cache per rotazione segreti).
@@ -210,7 +210,7 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 
 ### Metriche applicative custom
 
-**Dove**: `app/Copilot/Observability/MetricsRecorder.php` + `PrometheusExporter.php`, endpoint `/internal/metrics`, volume compose `observability-metrics` condiviso tra `app` e `queue`.
+**Dove**: `app/Mvp/Observability/MetricsRecorder.php` + `PrometheusExporter.php`, endpoint `/internal/metrics`, volume compose `observability-metrics` condiviso tra `app` e `queue`.
 **Ruolo**: counter e histogram HTTP (bucket espliciti 5ms→10s) e counter di dominio (`textract_jobs_*`, `stepfunctions_executions_*`, `sqs_messages_*`) persistiti su JSON con file locking; il volume condiviso fa sì che le metriche registrate dal worker raggiungano l'exporter scrappato via nginx.
 **Valutazione**: soluzione pragmatica e funzionante senza dipendenze aggiuntive. Limite tecnico: il file JSON con lock è un single-writer bottleneck e non scala oltre un host; la soluzione canonica in produzione è un sidecar/exporter dedicato o push OTLP delle metriche di dominio.
 
@@ -436,7 +436,7 @@ Coperto in §5; valutazione sintetica:
 - **Stile**: REST pragmatico sotto `/api/v1` con naming coerente e versioning nel path; risposte JSON uniformi; errori con `code` macchina-leggibile + `requestId`/`correlationId` (correlazione propagata dal middleware `CorrelateRequests`).
 - **Validazione**: sempre via FormRequest, whitelist chiuse per valori enumerabili.
 - **Middleware chain**: `mvp.identity` → `mvp.authorize` → `throttle` (60/min lettura, 20/min operazioni costose: generazione AI e upload).
-- **Service layer**: i domini vivono in `app/Copilot/{Ai,Ocr,Documents,Workflow,Identity,Audit,Observability}` — confini netti, dipendenze inject-ate, nessun helper globale.
+- **Service layer**: i domini vivono in `app/Mvp/{Ai,Ocr,Documents,Workflow,Identity,Audit,Observability}` — confini netti, dipendenze inject-ate, nessun helper globale.
 - **SSE**: lo stream `documents/{id}/stream` ha timeout esplicito (300s) e eventi tipizzati (`document`, `done`, `error`).
 - **Da rifattorizzare/completare**: endpoint di transizione stato comunicazioni (oggi mancante, §6.5); il throttle è per-IP/attore generico, non differenziato per tenant.
 

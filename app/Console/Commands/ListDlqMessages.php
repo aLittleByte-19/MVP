@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Copilot\Observability\MetricsRecorder;
+use App\Mvp\Observability\MetricsRecorder;
 use Aws\Sqs\SqsClient;
 use Illuminate\Console\Command;
 

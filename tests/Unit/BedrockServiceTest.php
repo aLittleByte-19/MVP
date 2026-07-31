@@ -1,9 +1,9 @@
 <?php
 
-use App\Copilot\Ai\AiOutputValidator;
-use App\Copilot\Ai\BedrockService;
-use App\Copilot\Observability\MetricsRecorder;
-use App\Copilot\Workflow\Services\WorkflowTaskHeartbeat;
+use App\Mvp\Ai\AiOutputValidator;
+use App\Mvp\Ai\BedrockService;
+use App\Mvp\Observability\MetricsRecorder;
+use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
 use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\Command;
 use Aws\Exception\AwsException;
