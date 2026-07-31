@@ -38,7 +38,7 @@ L'analisi si basa sullo **stato attuale del codice**: route, controller, service
 | Infrastruttura AWS (emulata) | `infra/localstack/` | Terraform: due coppie SQS+DLQ, S3 documenti, S3 frontend, SSM, Secrets Manager, EventBridge, IAM, due Step Functions, SES identity |
 | State machine | `infra/localstack/state-machines/` | Definizioni ASL delle pipeline documentale e comunicazioni |
 | Osservabilità | `docker/otel-collector/`, `docker/prometheus/`, `docker/grafana/`, `docker/loki/`, `docker/alloy/`, `docker/tempo/`, `docker/alertmanager/` | Collector, scrape, alert rule, dashboard, log shipping |
-| CI | `.github/workflows/ci.yml`, `mirror-images.yml`, `scripts/ci/` | Pipeline unica a 3 job (backend, frontend, stack) + mirroring immagini su GHCR |
+| CI | `.github/workflows/ci.yml`, `mirror-images.yml`, `scripts/ci/` | Pipeline unica a 3 job (backend, frontend, stack) su ogni push di ogni branch + mirroring immagini su GHCR |
 | Test | `tests/` (backend Pest), `apps/frontend/src/**/*.spec.ts` (Jest) | Feature + Unit backend, unit/component test frontend |
 | Audit a11y | `scripts/a11y/axe-playwright.mjs`, `pa11y-runner.mjs` | Audit automatici contro lo stack reale |
 | Operatività | `Makefile`, `docs/runbooks/` | Setup riproducibile, comandi verifica, runbook per alert |
@@ -521,7 +521,7 @@ Area più matura della MVP (dettagli §5):
 
 ## 15. CI, test e quality gate
 
-- **Workflow** (`ci.yml`): 3 job descritti in §5. Mirroring immagini su GHCR (`mirror-images.yml` + `scripts/ci/`) per ridurre dipendenza dai registry upstream, con cache archivio immagini tra run.
+- **Workflow** (`ci.yml`): 3 job descritti in §5, in esecuzione su ogni push di ogni branch. Mirroring immagini su GHCR (`mirror-images.yml` + `scripts/ci/`) per ridurre dipendenza dai registry upstream, con cache archivio immagini tra run.
 - **Test backend**: 160 casi Pest in 12 file; contratto API, route, upload, workflow (incluso handler idempotente), estrazione, storage comunicazioni, parsing Bedrock, elenchi filtrabili con isolamento fra tenant, ciclo di vita della bozza (modifica manuale, rigenerazione, scarto, valutazione) e transizione dello stato di scaricamento. I servizi AWS sono fake-ati nei test.
 - **Test frontend**: Jest su utility di formattazione/stato, correlazione, selettore delle metriche dello store e servizio Assistant (6 spec); da ampliare con component test Angular sui flussi principali.
 - **Quality gate**: Pint (stile), Larastan (statico), Redocly (OpenAPI), check client generato committato, `npm audit` HIGH, Trivy HIGH/CRITICAL bloccante, terraform fmt/validate, promtool/otelcol validate, axe+pa11y bloccanti.

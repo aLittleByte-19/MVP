@@ -10,12 +10,13 @@ name: CI
 # usa anche la cache di Actions (zero pull a cache hit). Vedi
 # scripts/ci/resolve-images.sh e .github/workflows/mirror-images.yml.
 
+# La CI gira su ogni push di ogni branch, non solo su develop/main e in PR:
+# chi lavora su un branch di feature vede i test rossi mentre sta sviluppando,
+# invece di scoprirli quando il branch e' gia' da mergiare.
 on:
   push:
     branches:
-      - develop
-      - main
-      - migrate/react_angular
+      - "**"
     tags:
       - "v*"
   pull_request:

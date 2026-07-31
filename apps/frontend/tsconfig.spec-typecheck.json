@@ -1,0 +1,19 @@
+// Typecheck delle suite di test.
+//
+// Serve un file separato da tsconfig.spec.json perche' quello, per far girare
+// Jest, usa "module": "CommonJS" e "moduleResolution": "node", combinazione che
+// non risolve i sottopercorsi tipizzati di Angular (@angular/core/testing).
+// Qui si eredita la risoluzione "bundler" della configurazione base e non si
+// emette nulla: l'obiettivo e' solo far fallire la build quando una spec
+// referenzia campi o tipi che non esistono, cosa che Jest da solo non vede
+// perche' traspila senza controllo dei tipi.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "esModuleInterop": true,
+    "types": ["jest", "node"]
+  },
+  "files": ["src/setup-jest.ts"],
+  "include": ["src/**/*.spec.ts", "src/**/*.d.ts"]
+}

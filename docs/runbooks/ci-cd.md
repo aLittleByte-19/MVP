@@ -3,10 +3,17 @@
 ## Current CI
 
 Ordinary CI runs without enterprise IAM credentials. It is a single pipeline,
-`.github/workflows/ci.yml`, with three parallel jobs through Docker Compose:
+`.github/workflows/ci.yml`.
+
+It runs on every push to every branch, on every pull request, on `v*` tags and
+on manual dispatch. Running on feature branches too is deliberate: whoever is
+working on a branch sees the suites go red while they are still developing,
+instead of discovering it when the branch is already up for merge.
+
+The pipeline has three parallel jobs through Docker Compose:
 
 - **backend**: builds the app image and runs the PHP checks: Composer manifest validation, Pint (format), Larastan/PHPStan (static analysis) and Pest (tests).
-- **frontend**: runs the Angular SPA suite on the Node tool image: OpenAPI contract lint, generated client drift check, ESLint, typecheck, Jest tests, production build, and a production-only `npm audit` at HIGH.
+- **frontend**: runs the Angular SPA suite on the Node tool image: OpenAPI contract lint, generated client drift check, ESLint, typecheck, Jest tests, production build, and a production-only `npm audit` at HIGH. The typecheck covers the test suites as well as the app (`tsconfig.spec-typecheck.json`): Jest transpiles specs without checking types, so without this step a test could reference fields that do not exist on the generated API model and still pass.
 - **stack** (static infrastructure/observability checks (Terraform `fmt`/`init`/`validate`, OTel Collector and Prometheus config), production image build, Trivy scan (`vuln,secret,config` at HIGH/CRITICAL), LocalStack Terraform apply, Angular SPA build and upload to the LocalStack S3 bucket, HTTPS smoke of the served stack (SPA served via the local CDN emulator) a separate Nginx: with deep-link fallback, `/api`/`/health`/`/ready`, blocked surfaces, observability dashboards behind basic auth), accessibility (axe/Pa11y plus an enforced-CSP smoke), and conditional publish of the two custom images (`mvp-app`, `mvp-nginx`) to GHCR.
 
 Supporting workflows:
