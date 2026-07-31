@@ -36,7 +36,7 @@
   left: -40%;
   width: 40%;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
-  animation: mvpUploadSweep 1.4s ease-in-out infinite;
+  animation: mvpProgressSweep 1.4s ease-in-out infinite;
 }
 
 .progress.isDone .fill {
@@ -47,7 +47,7 @@
   background: var(--mvp-danger);
 }
 
-@keyframes mvpUploadSweep {
+@keyframes mvpProgressSweep {
   from {
     left: -40%;
   }

@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, input, output } from "@angular/core";
+import { GenerationProgressComponent } from "./generation-progress";
+import type { CommunicationGenerationPhase } from "../assistant.model";
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
 import { LucideSend } from "@lucide/angular";
 import { ButtonComponent } from "../../../shared/components/button/button";
@@ -20,6 +22,7 @@ import type {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ButtonComponent,
+    GenerationProgressComponent,
     LucideSend,
     ReactiveFormsModule,
     SectionComponent,
@@ -47,6 +50,9 @@ import type {
           <span>{{ isGenerating() ? "Generazione" : "Genera bozza" }}</span>
         </button>
       </form>
+      @if (phase() !== null && phase() !== "idle") {
+        <mvp-generation-progress [phase]="phase()" />
+      }
       <p class="status" aria-live="polite">{{ status() }}</p>
     </mvp-section>
   `,
@@ -55,6 +61,7 @@ import type {
 export class CommunicationGeneratorPanelComponent {
   readonly isGenerating = input.required<boolean>();
   readonly status = input.required<string>();
+  readonly phase = input.required<CommunicationGenerationPhase | "idle" | null>();
   readonly generate = output<CommunicationDraftForm>();
 
   protected readonly tones = communicationTones;

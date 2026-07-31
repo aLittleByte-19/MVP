@@ -47,6 +47,7 @@ import type {
       <mvp-communication-generator-panel
         [isGenerating]="isGenerating()"
         [status]="status()"
+        [phase]="phase()"
         (generate)="generate($event)"
       />
       <mvp-generated-communication-preview
