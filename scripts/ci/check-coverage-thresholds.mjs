@@ -43,20 +43,22 @@ function readFrontendReport(path) {
 
 function readBackendReport(path) {
   const report = readFileSync(resolve(root, path), "utf8");
-  const metrics = [...report.matchAll(/<metrics\s+([^>]+)\/>/g)];
-  const project = metrics[metrics.length - 1];
+  const coverage = report.match(/<coverage\s+([^>]+)>/);
 
-  if (!project) {
-    throw new Error(`Metriche Clover non trovate in ${path}`);
+  if (!coverage) {
+    throw new Error(`Elemento <coverage> non trovato in ${path}`);
   }
 
   const attributes = Object.fromEntries(
-    [...project[1].matchAll(/([a-z]+)="([0-9]+)"/g)].map((match) => [match[1], Number(match[2])])
+    [...coverage[1].matchAll(/([a-z-]+)="([^"]*)"/g)].map((match) => [match[1], Number(match[2])])
   );
 
+  // I branch sono valorizzati solo con la path coverage attiva: senza, il totale
+  // resta 0, la percentuale diventa NaN e il controllo fallisce invece di passare
+  // su una metrica non misurata.
   return {
-    lines: percentage(attributes.coveredstatements, attributes.statements),
-    branches: percentage(attributes.coveredconditionals, attributes.conditionals)
+    lines: percentage(attributes["lines-covered"], attributes["lines-valid"]),
+    branches: percentage(attributes["branches-covered"], attributes["branches-valid"])
   };
 }
 

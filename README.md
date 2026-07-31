@@ -89,11 +89,11 @@ Questa impostazione rende visibili latency, traffico, errori, saturazione, stato
 
 La pipeline CI verifica la qualità della repository attraverso controlli backend, frontend, infrastrutturali e di sicurezza.
 
-Il backend viene controllato con formattazione, analisi statica, test automatici e coverage globale. Il frontend viene verificato tramite typecheck, test, coverage globale, build e generazione del client API. Un job dedicato richiede almeno l'80% di coverage sulle linee nuove o modificate rispetto a `origin/develop`. Lo stack locale viene validato attraverso Terraform, configurazioni di osservabilità, build delle immagini, scansione Trivy, smoke test e audit di accessibilità con axe e pa11y.
+Il backend viene controllato con formattazione, analisi statica, test automatici e coverage globale. Il frontend viene verificato tramite typecheck, test, coverage globale, build e generazione del client API. Un job dedicato richiede almeno l'80% di coverage sulle linee nuove o modificate rispetto a `origin/develop`, misurato separatamente per backend e frontend. Lo stack locale viene validato attraverso Terraform, configurazioni di osservabilità, build delle immagini, scansione Trivy, smoke test e audit di accessibilità con axe e pa11y.
 
-La CI agisce come quality gate del progetto: ogni modifica significativa deve mantenere coerenti codice applicativo, contratto API, infrastruttura locale e comportamento osservabile dello stack. I minimi globali sono definiti in `coverage-thresholds.json` e non prevedono tolleranze.
+La CI agisce come quality gate del progetto: ogni modifica significativa deve mantenere coerenti codice applicativo, contratto API, infrastruttura locale e comportamento osservabile dello stack. I minimi globali e quello sul codice modificato sono definiti in `coverage-thresholds.json` e non prevedono tolleranze.
 
-I job pubblicano report coverage HTML, dati Clover e LCOV e un riepilogo del codice modificato in HTML e Markdown. Se lo smoke dello stack fallisce, la CI conserva anche lo stato dei container, i log Docker Compose e l'uso del disco per 14 giorni.
+I job pubblicano report coverage HTML, dati Cobertura e LCOV e un riepilogo del codice modificato in HTML e Markdown, uno per stack. Se lo smoke dello stack fallisce, la CI conserva anche lo stato dei container, i log Docker Compose e l'uso del disco per 14 giorni.
 
 ## Setup locale
 

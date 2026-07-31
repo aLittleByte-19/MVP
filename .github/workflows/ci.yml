@@ -112,19 +112,25 @@ jobs:
           --display-warnings
           --coverage
           --path-coverage
-          --coverage-clover coverage/clover.xml
+          --coverage-cobertura coverage/cobertura.xml
           --coverage-html coverage/html
-          --min=80
 
+      # Il report esce con i path assoluti del container: senza questa riscrittura
+      # diff-cover non aggancia nessun file e il gate sul diff passerebbe a vuoto.
+      - name: Normalize backend coverage paths
+        run: node scripts/ci/normalize-cobertura-paths.mjs coverage/cobertura.xml /var/www/html
+
+      # Unico gate sui minimi globali del backend: Pest non usa piu' --min, che
+      # ripeteva la stessa soglia sulla stessa metrica ignorando i branch.
       - name: Check backend coverage thresholds
-        run: node scripts/ci/check-coverage-thresholds.mjs backend coverage/clover.xml
+        run: node scripts/ci/check-coverage-thresholds.mjs backend coverage/cobertura.xml
 
       - name: Upload backend coverage data
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
-          path: coverage/clover.xml
+          path: coverage/cobertura.xml
           if-no-files-found: warn
           retention-days: 1
 
@@ -235,15 +241,33 @@ jobs:
       - name: Install diff-cover
         run: python -m pip install diff-cover==10.4.1
 
+      # diff-cover non accetta XML e LCov nella stessa invocazione, quindi i due
+      # stack vengono misurati separatamente. Ogni report descrive solo i propri
+      # file: le righe modificate dell'altro stack non risultano misurate e
+      # restano fuori dal conteggio, senza sovrapposizioni ne' doppi conteggi.
+      # Un commit che tocca un solo stack lascia l'altra invocazione a zero righe
+      # misurate, che per diff-cover e' un esito positivo.
       - name: Check changed-line coverage
-        run: >
-          diff-cover
-          coverage/backend/clover.xml
-          coverage/frontend/lcov.info
-          --compare-branch=origin/develop
-          --format=html:coverage/diff-coverage.html,markdown:coverage/diff-coverage.md
-          --show-uncovered
-          --fail-under=80
+        run: |
+          minimum="$(jq -er '.diff.lines' coverage-thresholds.json)"
+          status=0
+
+          check() {
+            local report="$1" stack="$2"
+
+            echo "::group::Coverage del codice modificato: ${stack} (minimo ${minimum}%)"
+            diff-cover "$report" \
+              --compare-branch=origin/develop \
+              --format="html:coverage/diff-coverage-${stack}.html,markdown:coverage/diff-coverage-${stack}.md" \
+              --show-uncovered \
+              --fail-under="$minimum" || status=1
+            echo "::endgroup::"
+          }
+
+          check coverage/backend/cobertura.xml backend
+          check coverage/frontend/lcov.info frontend
+
+          exit "$status"
 
       - name: Upload changed-line coverage
         if: always()
@@ -251,8 +275,10 @@ jobs:
         with:
           name: changed-line-coverage
           path: |
-            coverage/diff-coverage.html
-            coverage/diff-coverage.md
+            coverage/diff-coverage-backend.html
+            coverage/diff-coverage-backend.md
+            coverage/diff-coverage-frontend.html
+            coverage/diff-coverage-frontend.md
           if-no-files-found: warn
           retention-days: 7
 
