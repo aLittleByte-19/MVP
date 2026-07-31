@@ -14,7 +14,7 @@ Il backend è **Laravel 12 / PHP 8.4** con PostgreSQL e Redis; il frontend è un
 
 L'osservabilità è il tratto più maturo della MVP: metriche golden-signal e di dominio esposte in formato Prometheus, trace OTLP verso Tempo, log dei container verso Loki via Alloy, 15 alert rule, 6 dashboard Grafana provisioned e runbook collegati. La CI (GitHub Actions) copre lint, analisi statica, test backend e frontend, scansione Trivy delle immagini, validazione Terraform e audit di accessibilità axe/pa11y contro lo stack reale.
 
-Il livello di maturità è **alto per una MVP**: confini architetturali chiari, validazione input sistematica, idempotenza nel workflow, audit trail, hardening container e di rete. Non è production-ready per scelta dichiarata di scope: deploy reale, autenticazione degli utenti e invio delle comunicazioni sono stati esclusi esplicitamente dal committente il 15/07/2026, e restano fuori perimetro anche gestione segreti non-default e ridondanza operativa (dettagli in §17–19). L'obiettivo prioritario indicato dal committente è la **corretta identificazione del destinatario**.
+Il livello di maturità è **alto per una MVP**: confini architetturali chiari, validazione input sistematica, idempotenza nel workflow, audit trail, hardening container e di rete. Non è production-ready per scelta dichiarata di scope: deploy reale, autenticazione degli utenti e invio delle comunicazioni sono stati esclusi esplicitamente dal committente il 15/07/2026, e restano fuori perimetro anche gestione segreti non-default e ridondanza operativa (dettagli in §17-19). L'obiettivo prioritario indicato dal committente è la **corretta identificazione del destinatario**.
 
 ---
 
@@ -109,7 +109,7 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 ### Laravel 12 / PHP 8.4 (backend)
 
 **Dove**: `composer.json`, `app/`, `bootstrap/app.php`, `docker/php/Dockerfile` (`FROM php:8.4-fpm-bookworm`).
-**Ruolo**: API REST stateless, validazione (FormRequest), ORM Eloquent, console worker, exception mapping centralizzato (`bootstrap/app.php:64-149` — ogni errore esce come JSON con `code`, `message`, `requestId`, `correlationId`).
+**Ruolo**: API REST stateless, validazione (FormRequest), ORM Eloquent, console worker, exception mapping centralizzato (`bootstrap/app.php:64-149`; ogni errore esce come JSON con `code`, `message`, `requestId`, `correlationId`).
 **Motivazione**: framework maturo con primitive pronte per validazione, queue, storage astratto (flysystem) e testing; coerente con lo stack del team.
 **Valutazione**: buona separazione controller→service (i controller orchestrano, la logica vive in `app/Mvp/*`); error handling uniforme; niente logica nei model oltre a cast/relazioni.
 **Best practice**: la struttura segue le convenzioni Laravel ufficiali; il mapping degli errori con correlation ID è in linea con le raccomandazioni API di OWASP ASVS (V7, error handling senza leak di dettagli interni).
@@ -118,7 +118,7 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 
 **Dove**: `docker-compose.yml` (servizio `postgres`, `postgres:16-alpine`), `config/database.php:91`, `database/migrations/`.
 **Ruolo**: persistenza di comunicazioni, documenti, sotto-documenti, dati estratti, audit trail e task di workflow.
-**Motivazione**: vincoli CHECK sugli stati, JSON nativo per payload e metadata, FK con cascade — tutte feature usate realmente nelle migration.
+**Motivazione**: vincoli CHECK sugli stati, JSON nativo per payload e metadata, FK con cascade; tutte feature usate realmente nelle migration.
 **Valutazione**: schema con indici mirati (es. `(tenant_id, processing_status)` su `original_documents`), FK `cascadeOnDelete` su `sub_documents`/`extracted_data`, unique su `task_token_hash`. Nessuna porta host esposta. Limite: multi-tenancy solo applicativa (vedi §7).
 
 ### Redis 7
@@ -126,7 +126,7 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 **Dove**: `docker-compose.yml` (servizio `redis`), `config/database.php:161-189`, `config/cache.php`.
 **Ruolo**: cache, sessioni e contatori di rate limiting.
 **Motivazione**: i throttle per-route (`routes/api.php`) richiedono uno store condiviso tra i processi PHP-FPM.
-**Valutazione**: hardening sopra la media per una MVP — `requirepass`, `maxmemory 256mb` con policy `volatile-lru` scelta consapevolmente (il commento nel compose spiega che `allkeys-lru` azzererebbe i rate limit evictando chiavi senza TTL), healthcheck autenticato via `REDISCLI_AUTH` senza password in argv, nessuna porta host.
+**Valutazione**: hardening sopra la media per una MVP; `requirepass`, `maxmemory 256mb` con policy `volatile-lru` scelta consapevolmente (il commento nel compose spiega che `allkeys-lru` azzererebbe i rate limit evictando chiavi senza TTL), healthcheck autenticato via `REDISCLI_AUTH` senza password in argv, nessuna porta host.
 
 ### Angular + TypeScript (frontend)
 
@@ -138,7 +138,7 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 ### OpenAPI 3.1 + Orval (contratto API)
 
 **Dove**: `openapi/v1/alittlebyte-mvp-api.yaml`, `apps/frontend/orval.config.ts`, output in `src/api/generated/`.
-**Ruolo**: contract-first — il servizio Angular/HttpClient e i model TypeScript del frontend sono generati dal contratto; la CI lo lint-a con Redocly e **fallisce se il client generato non è committato** (`ci.yml`, step "Check generated client is committed").
+**Ruolo**: contract-first; il servizio Angular/HttpClient e i model TypeScript del frontend sono generati dal contratto; la CI lo lint-a con Redocly e **fallisce se il client generato non è committato** (`ci.yml`, step "Check generated client is committed").
 **Motivazione**: elimina la deriva tra backend e frontend sui tipi delle risposte.
 **Valutazione**: ottima scelta per manutenibilità; l'accesso API passa da servizi Angular (`AssistantService`, `DocumentWorkflowService`, `MvpStateStore`) che usano il servizio Orval generato. Gap: il contratto non è validato a runtime contro le risposte reali del backend (nessun contract test automatico lato Laravel oltre a `HealthAndApiContractTest`).
 
@@ -152,7 +152,7 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 ### Nginx 1.27 (static + fastcgi)
 
 **Dove**: `docker/nginx/Dockerfile` (multi-stage: build SPA con node:22 → runtime `nginx:1.27-alpine`, `USER nginx`), `docker/nginx/default.conf`.
-**Ruolo**: nel flusso default è il proxy applicativo — inoltra `/api/` e gli endpoint di sistema a PHP-FPM e applica i security header (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Content-Security-Policy). L'immagine include anche la SPA Angular buildata e può servirla in modalità standard con fallback `try_files ... /index.html`, percorso alternativo all'emulatore CDN locale (`edge-cdn`), che invece è l'origine default della SPA da S3 LocalStack.
+**Ruolo**: nel flusso default è il proxy applicativo; inoltra `/api/` e gli endpoint di sistema a PHP-FPM e applica i security header (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Content-Security-Policy). L'immagine include anche la SPA Angular buildata e può servirla in modalità standard con fallback `try_files ... /index.html`, percorso alternativo all'emulatore CDN locale (`edge-cdn`), che invece è l'origine default della SPA da S3 LocalStack.
 **Dettaglio rilevante**: `/internal/metrics` non è servito dal listener edge `:8080` usato da Traefik; ritorna 404 dall'esterno. Lo scrape passa dal listener interno `nginx:8081/internal/metrics`, raggiungibile solo sulle reti Docker interne. La CI verifica sia il 404 esterno sia la raggiungibilità interna.
 **Gap**: la CSP è locale e mirata alla SPA attuale; eventuali nuovi asset remoti o embedding esterni richiedono aggiornamento esplicito della policy.
 
@@ -167,15 +167,15 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 ### AWS Bedrock (LLM)
 
 **Dove**: `app/Mvp/Ai/BedrockService.php` (due client `BedrockRuntimeClient` costruiti in `AppServiceProvider` con timeout 300s: uno per i modelli testo, uno per quelli immagine, che sono serviti in region diverse), config in `config/services.php` (`model_id`, `image_model_id`, `region`, `image_region`, `endpoint`, credenziali AWS reali opzionali; default `amazon.nova-lite-v1:0` e `stability.sd3-5-large-v1:0` da `docker-compose.yml`).
-**Ruolo**: quattro operazioni — `generateCommunication()` (JSON `{title, body, imagePrompt}` da prompt+tono+stile: lo stesso modello scrive anche la direzione visiva della copertina, avendo davanti il testo appena generato), `generateCommunicationImageWithMeta()` (copertina via `invokeModel`, con payload derivato dalla famiglia del modello configurato — Stability SD3/Core, Stability XL, Nova Canvas), `splitDocument()` (segmenti per destinatario dal testo OCR), `extractFields()` (campi strutturati dal testo OCR; la confidenza effettiva è calcolata a valle su leggibilità OCR e completezza dei campi). Le operazioni testuali usano Converse, la generazione immagini `invokeModel`.
-**Valutazione**: ogni risposta è trattata come input non attendibile — parsing difensivo (estrazione JSON da fence markdown con fallback regex) seguito da validazione contro JSON Schema in `AiOutputValidator` (`resources/schemas/ai/`) più le regole semantiche che uno schema non esprime; errori AWS mappati su `AiServiceException` → 502 con messaggio user-friendly, metriche di fallimento dedicate (`BedrockFailureRateHigh` alert). Sugli errori immagine la classificazione distingue i casi permanenti (accesso negato, modello non attivo, credenziali) da quelli ritentabili, evitando tentativi certi di fallire.
+**Ruolo**: quattro operazioni (`generateCommunication()` (JSON `{title, body, imagePrompt}` da prompt+tono+stile: lo stesso modello scrive anche la direzione visiva della copertina, avendo davanti il testo appena generato), `generateCommunicationImageWithMeta()` (copertina via `invokeModel`, con payload derivato dalla famiglia del modello configurato) Stability SD3/Core, Stability XL, Nova Canvas), `splitDocument()` (segmenti per destinatario dal testo OCR), `extractFields()` (campi strutturati dal testo OCR; la confidenza effettiva è calcolata a valle su leggibilità OCR e completezza dei campi). Le operazioni testuali usano Converse, la generazione immagini `invokeModel`.
+**Valutazione**: ogni risposta è trattata come input non attendibile; parsing difensivo (estrazione JSON da fence markdown con fallback regex) seguito da validazione contro JSON Schema in `AiOutputValidator` (`resources/schemas/ai/`) più le regole semantiche che uno schema non esprime; errori AWS mappati su `AiServiceException` → 502 con messaggio user-friendly, metriche di fallimento dedicate (`BedrockFailureRateHigh` alert). Sugli errori immagine la classificazione distingue i casi permanenti (accesso negato, modello non attivo, credenziali) da quelli ritentabili, evitando tentativi certi di fallire.
 **Gap**: nessuna mitigazione esplicita di prompt injection veicolata dal contenuto del PDF; nessun circuit breaker (solo retry SDK).
 
 ### AWS Textract (OCR, opzionale)
 
 **Dove**: `app/Mvp/Ocr/Services/TextractService.php`, flag `TEXTRACT_ENABLED` (`config/services.php`).
 **Ruolo**: OCR asincrono (`startDocumentTextDetection` + polling con timeout configurabile), confidence media, testo salvato su `original_documents.ocr_text` e per pagina su `original_documents.ocr_pages` (usato da split ed estrazione).
-**Dettaglio rilevante**: guard architetturale in `DocumentWorkflowService::start()` — se Textract è abilitato ma il disco documenti non è `real_s3`, il workflow rifiuta di partire con errore esplicito (Textract reale non può leggere il bucket LocalStack). È un esempio concreto di fail-fast su configurazioni incoerenti.
+**Dettaglio rilevante**: guard architetturale in `DocumentWorkflowService::start()`; se Textract è abilitato ma il disco documenti non è `real_s3`, il workflow rifiuta di partire con errore esplicito (Textract reale non può leggere il bucket LocalStack). È un esempio concreto di fail-fast su configurazioni incoerenti.
 **Stato**: implementato ma **disabilitato di default** (`TEXTRACT_ENABLED=false`); con flag off il task ritorna `enabled=false` e la pipeline prosegue.
 
 ### AWS Step Functions + SQS (workflow asincrono)
@@ -183,15 +183,15 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 **Dove**: `infra/localstack/state-machines/` (document e communication pipeline), `infra/localstack/main.tf` (state machine, code + DLQ per dominio, IAM role/policy, EventBridge), `app/Mvp/Workflow/` (runner, registry, heartbeat, contesto di correlazione), `app/Mvp/Documents/Services/DocumentWorkflowService.php` e `DocumentWorkflowTaskHandler.php`, `app/Mvp/Communications/Services/CommunicationWorkflowService.php` e `CommunicationWorkflowTaskHandler.php`, `app/Console/Commands/ConsumeWorkflowTasks.php`.
 **Ruolo**: la state machine usa il **callback pattern** (`arn:aws:states:::sqs:sendMessage.waitForTaskToken`): ogni stato pubblica su SQS un messaggio con task token e tipo (`textract.ocr`, `bedrock.extract`, `persist.results`, `dispatch.domain_event`); il worker Laravel esegue e risponde con `sendTaskSuccess/Failure`. Retry dichiarativi nello ASL (2 tentativi, backoff 2x), timeout per stato (420s Textract, 720s Bedrock), `Catch` → stato `Failed`.
 **Motivazione**: separa lo stato del workflow dall'esecutore; i task pesanti (LLM, OCR) escono dal ciclo HTTP; la DLQ cattura i messaggi non processabili.
-**Valutazione**: **idempotenza reale** — `workflow_tasks.task_token_hash` (SHA-256, unique) deduplica i re-delivery SQS e un task già `succeeded/skipped` ritorna il risultato cached senza rieseguire. **Heartbeat implementato**: l'ASL dichiara `HeartbeatSeconds` per ogni task (180s Textract, 240s Bedrock, 90s persist/dispatch) e il worker invia `SendTaskHeartbeat` tramite `WorkflowTaskHeartbeat` durante il polling Textract e tra i segmenti Bedrock (`TextractService`, `DocumentProcessingService`); un heartbeat rifiutato degrada a no-op senza abortire il task di business. È il punto più sofisticato del backend.
+**Valutazione**: **idempotenza reale**; `workflow_tasks.task_token_hash` (SHA-256, unique) deduplica i re-delivery SQS e un task già `succeeded/skipped` ritorna il risultato cached senza rieseguire. **Heartbeat implementato**: l'ASL dichiara `HeartbeatSeconds` per ogni task (180s Textract, 240s Bedrock, 90s persist/dispatch) e il worker invia `SendTaskHeartbeat` tramite `WorkflowTaskHeartbeat` durante il polling Textract e tra i segmenti Bedrock (`TextractService`, `DocumentProcessingService`); un heartbeat rifiutato degrada a no-op senza abortire il task di business. È il punto più sofisticato del backend.
 **Gap vs best practice AWS** ([Step Functions best practices](https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html)): in compose gira una sola replica del worker (`restart: unless-stopped`), anche se il design è già concorrenza-safe (claim atomico via `task_token_hash` + `MVP_WORKFLOW_CLAIM_TTL_SECONDS`, `visibility_timeout_seconds` SQS 900s > timeout ASL massimo 720s); in LocalStack il comportamento di SFN non è identico ad AWS (Express vs Standard, quota, exactly-once non garantito).
 
 ### LocalStack 4.5 + Terraform 1.10
 
 **Dove**: `docker-compose.yml` (servizio `localstack`, servizi emulati: `s3,sqs,stepfunctions,ssm,secretsmanager,events,ses,iam,sts,logs`), `infra/localstack/*.tf`.
 **Ruolo**: emula AWS in locale; Terraform provisiona S3 (con SSE-KMS e public access block), SQS+DLQ, SSM parameter, secret JSON, EventBridge bus+rule (predisposti per gli eventi terminali della pipeline ma non esercitati: l'app non pubblica eventi), IAM role per SFN, identità SES.
-**Motivazione**: l'app parla con AWS vero o emulato **senza cambiare codice** — cambiano solo endpoint e credenziali. Il provisioning è codificato, ripetibile e validato in CI (`terraform fmt -check`, `init`, `validate`).
-**Valutazione**: buona fedeltà al deployment reale (KMS, public access block, IAM, bus EventBridge e identità SES sono configurati ma non applicati/esercitati a runtime: LocalStack non valuta le policy IAM e l'app non pubblica eventi né invia email); lo stato Terraform è locale e committato (`terraform.tfstate` nel repo — accettabile solo perché contiene risorse fake).
+**Motivazione**: l'app parla con AWS vero o emulato **senza cambiare codice**; cambiano solo endpoint e credenziali. Il provisioning è codificato, ripetibile e validato in CI (`terraform fmt -check`, `init`, `validate`).
+**Valutazione**: buona fedeltà al deployment reale (KMS, public access block, IAM, bus EventBridge e identità SES sono configurati ma non applicati/esercitati a runtime: LocalStack non valuta le policy IAM e l'app non pubblica eventi né invia email); lo stato Terraform è locale e committato (`terraform.tfstate` nel repo; accettabile solo perché contiene risorse fake).
 
 ### SSM Parameter Store + Secrets Manager (config runtime)
 
@@ -203,8 +203,8 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 ### OpenTelemetry Collector + Prometheus + Tempo + Loki + Alloy + Grafana + Alertmanager
 
 **Dove**: `docker/otel-collector/config.yml`, `docker/prometheus/{prometheus.yml,rules/}`, `docker/tempo/`, `docker/loki/`, `docker/alloy/config.alloy`, `docker/grafana/{provisioning,dashboards}/`, `docker/alertmanager/`.
-**Ruolo e flusso**: il collector è l'**unico punto di raccolta** — riceve OTLP (gRPC/HTTP) da app e worker, scrappa `/internal/metrics` via nginx e le metriche Traefik `:9100`, e re-espone tutto su `:9464` dove Prometheus fa un solo scrape. Trace → Tempo (OTLP), log applicativi → Loki (ingestion OTLP nativa di Loki 3.x); Alloy raccoglie i log dei container (filtrati per label compose project) e li spedisce a Loki. Grafana ha datasource provisioned da file (Prometheus/Tempo/Loki, non editabili) e 6 dashboard versionate: `api-golden-signals`, `document-pipeline`, `communication-pipeline`, `ai-ocr-quality`, `queues-and-dlq`, `logs-and-errors`.
-**Alerting**: 10 regole in 4 file (`docker/prometheus/rules/`): `WorkerDown`, `DocumentStuckInProcessing`, `StepFunctionExecutionFailed`, `TextractFailureRateHigh`, `BedrockFailureRateHigh`, `TargetDown`, `APIHighErrorRate`, `APIHighLatencyP95`, `QueueBacklogHigh`, `DLQNotEmpty` — ognuna rimanda a un runbook in `docs/runbooks/`.
+**Ruolo e flusso**: il collector è l'**unico punto di raccolta**; riceve OTLP (gRPC/HTTP) da app e worker, scrappa `/internal/metrics` via nginx e le metriche Traefik `:9100`, e re-espone tutto su `:9464` dove Prometheus fa un solo scrape. Trace → Tempo (OTLP), log applicativi → Loki (ingestion OTLP nativa di Loki 3.x); Alloy raccoglie i log dei container (filtrati per label compose project) e li spedisce a Loki. Grafana ha datasource provisioned da file (Prometheus/Tempo/Loki, non editabili) e 6 dashboard versionate: `api-golden-signals`, `document-pipeline`, `communication-pipeline`, `ai-ocr-quality`, `queues-and-dlq`, `logs-and-errors`.
+**Alerting**: 10 regole in 4 file (`docker/prometheus/rules/`): `WorkerDown`, `DocumentStuckInProcessing`, `StepFunctionExecutionFailed`, `TextractFailureRateHigh`, `BedrockFailureRateHigh`, `TargetDown`, `APIHighErrorRate`, `APIHighLatencyP95`, `QueueBacklogHigh`, `DLQNotEmpty`; ognuna rimanda a un runbook in `docs/runbooks/`.
 **Motivazione**: copre i [quattro golden signal SRE](https://sre.google/sre-book/monitoring-distributed-systems/) (latency, traffic, errors, saturation) più le metriche di dominio della pipeline.
 **Valutazione**: architettura corretta (un solo collettore, processori `memory_limiter`+`batch`, config validate in CI con `promtool` e `otelcol validate` via `make observability-config`). Gap: niente retention/SLO formalizzati; Alertmanager senza receiver reali (routing demo).
 
@@ -219,10 +219,10 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 **Dove**: `docker-compose.yml`, `docker/php/Dockerfile`, `docker/php/security.ini`, `docker/nginx/Dockerfile`.
 **Punti verificati**: utenti non-root (`USER www-data` PHP, `USER nginx`); `apt-get upgrade`/`apk upgrade` ad ogni build; `security.ini` con `expose_php=Off`, `display_errors=Off`, `allow_url_fopen/include=Off`, cookie di sessione `httponly+secure+samesite=Strict`, `disable_functions` (exec, system, shell_exec…); immagini base da mirror ECR public per evitare rate limit Docker Hub; healthcheck su tutti i servizi critici; `tls-tool` con `network_mode: none` (genera solo file).
 
-### CI — GitHub Actions
+### CI: GitHub Actions
 
 **Dove**: `.github/workflows/ci.yml` (3 job), `mirror-images.yml`, `scripts/ci/`.
-**Pipeline**: `backend` (Composer validate, Pint, Larastan, Pest), `frontend` (lint OpenAPI, generazione client + check committed, ESLint, typecheck, Jest, build Angular, `npm audit --audit-level=high`), `stack` (mirroring/caching immagini, `terraform fmt/validate`, validazione config osservabilità, build immagini dev+prod, **Trivy** `--exit-code 1 --severity HIGH,CRITICAL` su app e nginx, avvio stack completo con LocalStack+Terraform apply, build e upload della SPA Angular su S3 LocalStack, smoke HTTPS via Traefik — SPA servita dall'emulatore CDN locale con fallback deep-link, check 401 sulle dashboard — audit axe e pa11y contro lo stack reale, push condizionale delle immagini su GHCR solo per i non-PR). Concurrency con cancel-in-progress.
+**Pipeline**: `backend` (Composer validate, Pint, Larastan, Pest), `frontend` (lint OpenAPI, generazione client + check committed, ESLint, typecheck, Jest, build Angular, `npm audit --audit-level=high`), `stack` (mirroring/caching immagini, `terraform fmt/validate`, validazione config osservabilità, build immagini dev+prod, **Trivy** `--exit-code 1 --severity HIGH,CRITICAL` su app e nginx, avvio stack completo con LocalStack+Terraform apply, build e upload della SPA Angular su S3 LocalStack, smoke HTTPS via Traefik (SPA servita dall'emulatore CDN locale con fallback deep-link, check 401 sulle dashboard) audit axe e pa11y contro lo stack reale, push condizionale delle immagini su GHCR solo per i non-PR). Concurrency con cancel-in-progress.
 **Valutazione**: copertura larga e realistica (lo smoke testa il sistema integrato, non i mock); il quality gate include sicurezza (Trivy, npm audit) e accessibilità. Gap: niente coverage report; i job non pubblicano artefatti di debug in caso di fallimento smoke.
 
 ---
@@ -263,7 +263,7 @@ sequenceDiagram
 ```
 
 1. `POST /api/v1/communications` (throttle 20/min) → middleware `mvp.identity` (risolve `MvpUser` da config locale o trusted header) e `mvp.authorize` (tenant + ruolo `mvp-operator|mvp-admin`).
-2. `GenerateCommunicationRequest` valida `prompt` (12–5000 char), `tone` e `style` su whitelist chiuse.
+2. `GenerateCommunicationRequest` valida `prompt` (12-5000 char), `tone` e `style` su whitelist chiuse.
 3. `CommunicationController::store()` persiste la `Communication` con `generation_status=pending` e stato `Draft`, registra l'audit event `mvp-communication-generation-requested` e avvia l'esecuzione con `CommunicationWorkflowService::start()`.
 4. Risposta **202** con `communicationId` e `streamUrl` relativo; la SPA apre l'`EventSource`.
 5. `communication.generate_text` chiama Bedrock e persiste titolo, corpo e `image_prompt` (audit `mvp-communication-generated`). Lo stesso modello testuale scrive la direzione visiva della copertina avendo davanti il testo appena generato, quindi l'immagine segue la comunicazione reale e non il solo prompt dell'operatore. Un fallimento qui porta `generation_status=failed`: il testo è la comunicazione.
@@ -271,7 +271,7 @@ sequenceDiagram
 7. `communication.finalize` porta `generation_status=completed`, chiude una copertina rimasta pendente e registra `communication_workflow_completed_total`.
 8. Frontend: `AssistantService` popola la bozza per gradi (evento `text`, poi `cover`) e sul `done` rimpiazza lo store con lo stato autorevole.
 9. A generazione completata, `CommunicationPdfService` impagina titolo, corpo e copertina nel PDF finale servito da `GET /communications/{communication}/preview` (inline) e `GET .../export` (attachment), entrambi con throttle 30/min. Ogni pagina porta il marcatore di trasparenza `Creato da AI Assistant` e il piè di pagina NEXUM con numerazione, stampati via canvas dompdf perché i margin-box CSS3 non sono renderizzati. Le due rotte rispondono **422** se la comunicazione non è `completed` o è stata scartata.
-10. Il PDF è deterministico a parità di contenuto, quindi viene materializzato una volta sul disco (`MVP_COMMUNICATION_PDF_DISK`) sotto `communications/exports/{id}/{fingerprint}.pdf`, dove il fingerprint è l'impronta di titolo, corpo e stato/path/MIME della copertina. L'invalidazione è implicita — cambia il contenuto, cambia l'impronta, nasce un oggetto nuovo — e lo stesso valore fa da `ETag`, così un reload risponde **304** senza toccare né dompdf né lo storage. La cache è best-effort: un disco irraggiungibile fa rigenerare e viene segnalato, non produce un 5xx. Le modifiche al template non entrano nell'impronta: le copre `RENDER_VERSION`, da incrementare nello stesso commit che cambia il layout.
+10. Il PDF è deterministico a parità di contenuto, quindi viene materializzato una volta sul disco (`MVP_COMMUNICATION_PDF_DISK`) sotto `communications/exports/{id}/{fingerprint}.pdf`, dove il fingerprint è l'impronta di titolo, corpo e stato/path/MIME della copertina. L'invalidazione è implicita (cambia il contenuto, cambia l'impronta, nasce un oggetto nuovo) e lo stesso valore fa da `ETag`, così un reload risponde **304** senza toccare né dompdf né lo storage. La cache è best-effort: un disco irraggiungibile fa rigenerare e viene segnalato, non produce un 5xx. Le modifiche al template non entrano nell'impronta: le copre `RENDER_VERSION`, da incrementare nello stesso commit che cambia il layout.
 
 **Test**: `MvpAppRoutesTest` (accettazione 202, pipeline completa, copertina degradata, fallimento testo, correlation id negli audit, PDF materializzato e riusato, 304 su ETag, invalidazione al cambio copertina, degrado con disco assente), `CommunicationCoverStorageTest` equivalenti sulle rotte cover, `BedrockServiceTest` (parsing testo e immagini), `OpenApiContractTest`.
 
@@ -323,7 +323,7 @@ Error handling: retry ASL (2 tentativi, backoff 2x) e `Catch`→`Failed`; `sendT
 per la modifica manuale di titolo e testo (consentita solo in stato `draft`),
 `POST .../regenerate` per una nuova variante, `POST .../discard` per lo scarto,
 `DELETE .../{communication}` per l'eliminazione dallo storico e `POST .../rating` per la
-valutazione 1–5 con commento opzionale, registrabile una sola volta per generazione.
+valutazione 1-5 con commento opzionale, registrabile una sola volta per generazione.
 Ogni mutazione passa da `assertCommunicationOwnership()` e viene registrata nell'audit trail.
 Lo stato `approved` resta **predisposizione deliberata e documentata**, come l'identità SES:
 esiste nell'enum `CommunicationStatus` e nel vincolo CHECK della migrazione, ma nessun codice lo
@@ -364,7 +364,7 @@ Sei tabelle di dominio (`database/migrations/`):
 | `communications` | indici su `status`, `generation_status`, `cover_status`, `workflow_execution_arn`; CHECK su tutti e tre gli stati | `status` è la decisione dell'operatore, `generation_status` il ciclo della pipeline, `cover_status` l'esito della copertina; colonne workflow (arn, started/completed/failed_at, failure_reason), `image_prompt` con la direzione visiva prodotta dal modello testuale e cover (`cover_image_path` sul disco copertine, mime, size, source) |
 | `original_documents` | `(tenant_id, processing_status)`, `workflow_execution_arn`, `textract_job_id` | colonne workflow (arn, started/completed/failed_at, failure_reason), OCR (job id, testo, confidence), `s3_bucket/s3_key` |
 | `sub_documents` | FK cascade su original, indici su FK e `send_status` | range pagine; `send_status` = avvenuto **scaricamento** del PDF (vedi §6.6), override manuali del messaggio di invio |
-| `extracted_data` | FK **unique** cascade su sub_document | 1:1 con sotto-documento; confidence 0–100; campi destinatario `recipient_email`, `fiscal_code`, `employee_id` correggibili a mano |
+| `extracted_data` | FK **unique** cascade su sub_document | 1:1 con sotto-documento; confidence 0-100; campi destinatario `recipient_email`, `fiscal_code`, `employee_id` correggibili a mano |
 | `audit_events` | `(tenant_id, event_type)`, `(resource_type, resource_id)`, `created_at` | append-only (nessun `updated_at`), metadata JSON |
 | `workflow_tasks` | `task_token_hash` char(64) **unique**; `(subject_type, subject_id, task_type)`, `(status, task_type)` | tabella unica delle due pipeline, soggetto polimorfico (`original_document`/`communication`), input/output payload JSON, stati pending→running→succeeded/skipped/failed |
 
@@ -382,13 +382,13 @@ Gli stati applicativi sono enum PHP con cast Eloquent (`ProcessingStatus`, `Send
 
 **Acquisizione**: upload multipart `POST /documents/ocr`. `UploadDocumentRequest` valida: MIME `application/pdf` (validazione Laravel basata su fileinfo, quindi sul contenuto e non solo sull'estensione), dimensione massima da config (`mvp.document_limits.max_upload_mb`, default 20MB), numero massimo pagine (50) **leggendo realmente il PDF con Fpdi** (che funge anche da verifica strutturale del formato), check anti path-traversal sul filename, limiti Textract se abilitato.
 
-**Storage**: dischi flysystem configurabili (`MVP_DOCUMENT_DISK`: `local`, `s3` LocalStack, `real_s3`); path generati server-side (`documents/originals/...`, split: `documents/sub/{original_id}_{slug}_{range}_{uuid}.pdf` — il nome utente non finisce mai nel path). Nel DB si salva solo il path disk-relative; bucket S3 con SSE-KMS e public access block da Terraform.
+**Storage**: dischi flysystem configurabili (`MVP_DOCUMENT_DISK`: `local`, `s3` LocalStack, `real_s3`); path generati server-side (`documents/originals/...`, split: `documents/sub/{original_id}_{slug}_{range}_{uuid}.pdf`; il nome utente non finisce mai nel path). Nel DB si salva solo il path disk-relative; bucket S3 con SSE-KMS e public access block da Terraform.
 
 **Fruizione**: preview via `Storage::readStream` con `Content-Disposition: inline` e autorizzazione tenant; nessun URL firmato (i file non sono mai raggiungibili direttamente).
 
-**Asset derivati delle comunicazioni**: copertine (`MVP_COMMUNICATION_COVER_DISK` sotto `communications/covers/`) e PDF finali materializzati (`MVP_COMMUNICATION_PDF_DISK` sotto `communications/exports/`) stanno su disco a oggetti separato da quello documentale — sono generati dall'applicazione, non documenti HR, e non seguono i documenti su `real_s3` quando serve Textract. I due prefissi sono distinti così da poter svuotare i PDF, che sono pura cache ricostruibile, senza toccare le copertine, che invece non lo sono.
+**Asset derivati delle comunicazioni**: copertine (`MVP_COMMUNICATION_COVER_DISK` sotto `communications/covers/`) e PDF finali materializzati (`MVP_COMMUNICATION_PDF_DISK` sotto `communications/exports/`) stanno su disco a oggetti separato da quello documentale; sono generati dall'applicazione, non documenti HR, e non seguono i documenti su `real_s3` quando serve Textract. I due prefissi sono distinti così da poter svuotare i PDF, che sono pura cache ricostruibile, senza toccare le copertine, che invece non lo sono.
 
-**Confronto con [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)**: presenti validazione contenuto+estensione, limite dimensione, nomi generati server-side, storage fuori dal webroot — il grosso delle raccomandazioni. Mancano per un contesto reale: scansione antivirus/sandbox, CDR per neutralizzare JavaScript/azioni embedded nei PDF (OWASP la raccomanda esplicitamente per i formati PDF), e rate limiting dedicato sull'upload oltre al throttle generico. Rischio residuo concreto: un PDF malevolo viene comunque inoltrato a Textract, archiviato su S3 e ri-servito in preview ad altri operatori (a Bedrock arriva solo il testo OCR estratto, non il PDF).
+**Confronto con [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)**: presenti validazione contenuto+estensione, limite dimensione, nomi generati server-side, storage fuori dal webroot; il grosso delle raccomandazioni. Mancano per un contesto reale: scansione antivirus/sandbox, CDR per neutralizzare JavaScript/azioni embedded nei PDF (OWASP la raccomanda esplicitamente per i formati PDF), e rate limiting dedicato sull'upload oltre al throttle generico. Rischio residuo concreto: un PDF malevolo viene comunque inoltrato a Textract, archiviato su S3 e ri-servito in preview ad altri operatori (a Bedrock arriva solo il testo OCR estratto, non il PDF).
 
 ---
 
@@ -411,7 +411,7 @@ Due pipeline gemelle, documentale (§6.2) e comunicazioni (§6.1), con code e DL
 | Scaling worker | ⚠️ | in compose gira una replica per pipeline (`make workers` le scala entrambe), nessun autoscaling |
 | Osservabilità job | ✅ | counter sqs/stepfunctions + dashboard `queues-and-dlq`, `document-pipeline`, `communication-pipeline` |
 
-In produzione servirebbero: più repliche del worker con visibilità SQS calibrata (il design è già concorrenza-safe, manca solo lo scaling effettivo) e una policy di redrive dalla DLQ. L'heartbeat per i task lunghi — raccomandazione esplicita [AWS](https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html) — è già implementato.
+In produzione servirebbero: più repliche del worker con visibilità SQS calibrata (il design è già concorrenza-safe, manca solo lo scaling effettivo) e una policy di redrive dalla DLQ. L'heartbeat per i task lunghi (raccomandazione esplicita [AWS](https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html)) è già implementato.
 
 ---
 
@@ -420,7 +420,7 @@ In produzione servirebbero: più repliche del worker con visibilità SQS calibra
 Coperte in §5 (Bedrock, Textract) e §6. Punti trasversali:
 
 - **Astrazione**: i client AWS sono costruiti centralmente in `AppServiceProvider` con endpoint/credenziali da config → lo switch LocalStack/AWS reale è solo configurativo. Le credenziali "reali" (`AWS_REAL_*`, `TF_VAR_real_*`) sono separate da quelle fake di LocalStack.
-- **Niente mock nel codice di produzione**: la "simulazione" sta nell'infrastruttura (LocalStack), non in branch condizionali applicativi — scelta che mantiene il codice identico tra demo e produzione. L'unico flag comportamentale è `TEXTRACT_ENABLED`.
+- **Niente mock nel codice di produzione**: la "simulazione" sta nell'infrastruttura (LocalStack), non in branch condizionali applicativi; scelta che mantiene il codice identico tra demo e produzione. L'unico flag comportamentale è `TEXTRACT_ENABLED`.
 - **Privacy**: i PDF (potenzialmente con dati personali di dipendenti) transitano verso Textract e l'object storage, e il relativo testo OCR verso Bedrock; non c'è anonimizzazione né data-retention policy. In MVP con dati finti va bene; in produzione richiede DPA/regione EU e una policy di retention su `ocr_text` ed `extracted_data`.
 - **Error handling**: eccezioni AWS → log strutturato + 502 con messaggio amichevole; mai stack trace al client.
 
@@ -440,7 +440,7 @@ Coperto in §5; valutazione sintetica:
 - **Stile**: REST pragmatico sotto `/api/v1` con naming coerente e versioning nel path; risposte JSON uniformi; errori con `code` macchina-leggibile + `requestId`/`correlationId` (correlazione propagata dal middleware `CorrelateRequests`).
 - **Validazione**: sempre via FormRequest, whitelist chiuse per valori enumerabili.
 - **Middleware chain**: `mvp.identity` → `mvp.authorize` → `throttle` (60/min lettura, 20/min operazioni costose: generazione AI e upload).
-- **Service layer**: i domini vivono in `app/Mvp/{Ai,Ocr,Documents,Workflow,Identity,Audit,Observability}` — confini netti, dipendenze inject-ate, nessun helper globale.
+- **Service layer**: i domini vivono in `app/Mvp/{Ai,Ocr,Documents,Workflow,Identity,Audit,Observability}`; confini netti, dipendenze inject-ate, nessun helper globale.
 - **SSE**: lo stream `documents/{id}/stream` ha timeout esplicito (300s) e eventi tipizzati (`document`, `done`, `error`).
 - **Da rifattorizzare/completare**: endpoint di transizione stato comunicazioni (oggi mancante, §6.5); il throttle è per-IP/attore generico, non differenziato per tenant.
 
@@ -474,7 +474,7 @@ Rischi OWASP applicabili più rilevanti per il passaggio a produzione: A01 Broke
 
 Area più matura della MVP (dettagli §5):
 
-- **Implementato**: golden signals + metriche dominio; tracing OTLP→Tempo; log container (Alloy) e applicativi (OTLP→Loki) correlabili per servizio; 6 dashboard provisioned; 15 alert con runbook dedicati (`docs/runbooks/`); healthcheck applicativi `/health` e `/ready` (quest'ultimo verifica config, DB, Redis, SQS e ritorna 503 su fallimento — readiness reale, non liveness mascherata); healthcheck Docker su tutti i servizi; `make observability-config` valida le config; smoke CI sull'intero stack.
+- **Implementato**: golden signals + metriche dominio; tracing OTLP→Tempo; log container (Alloy) e applicativi (OTLP→Loki) correlabili per servizio; 6 dashboard provisioned; 15 alert con runbook dedicati (`docs/runbooks/`); healthcheck applicativi `/health` e `/ready` (quest'ultimo verifica config, DB, Redis, SQS e ritorna 503 su fallimento; readiness reale, non liveness mascherata); healthcheck Docker su tutti i servizi; `make observability-config` valida le config; smoke CI sull'intero stack.
 - **Mancante per production-like**: SLO/error budget formalizzati (gli alert su latenza/errori sono soglie statiche, non burn-rate); receiver Alertmanager reali (PagerDuty/Slack); retention dichiarate per Prometheus/Tempo/Loki; dashboard di capacity (saturazione DB/Redis oltre ai segnali HTTP); tracing distribuito fino a SQS/SFN (il trace context non attraversa il task token).
 
 ---
@@ -482,8 +482,8 @@ Area più matura della MVP (dettagli §5):
 ## 15. CI, test e quality gate
 
 - **Workflow** (`ci.yml`): 3 job descritti in §5. Mirroring immagini su GHCR (`mirror-images.yml` + `scripts/ci/`) per ridurre dipendenza dai registry upstream, con cache archivio immagini tra run.
-- **Test backend**: 72 casi Pest in 11 file — contratto API, route, upload, workflow (incluso handler idempotente), estrazione, storage comunicazioni, parsing Bedrock. I servizi AWS sono fake-ati nei test.
-- **Test frontend**: Jest su utility di formattazione/stato e correlazione frontend; da ampliare con component test Angular sui flussi principali.
+- **Test backend**: 160 casi Pest in 12 file; contratto API, route, upload, workflow (incluso handler idempotente), estrazione, storage comunicazioni, parsing Bedrock, elenchi filtrabili con isolamento fra tenant, ciclo di vita della bozza (modifica manuale, rigenerazione, scarto, valutazione) e transizione dello stato di scaricamento. I servizi AWS sono fake-ati nei test.
+- **Test frontend**: Jest su utility di formattazione/stato, correlazione, selettore delle metriche dello store e servizio Assistant (6 spec); da ampliare con component test Angular sui flussi principali.
 - **Quality gate**: Pint (stile), Larastan (statico), Redocly (OpenAPI), check client generato committato, `npm audit` HIGH, Trivy HIGH/CRITICAL bloccante, terraform fmt/validate, promtool/otelcol validate, axe+pa11y bloccanti.
 - **Flussi critici coperti**: generazione comunicazioni e pipeline documentale sì (unit+feature+smoke integrato). **Scoperti**: SSE streaming end-to-end (testato solo indirettamente), comportamento del consumer SQS in errore/reinvio (test sul handler ma non sul loop del command), assenza di coverage report per quantificare.
 - Lo smoke CI verifica anche i vincoli di sicurezza introdotti (404 su `/internal/metrics` esterno, 401 sulle dashboard senza credenziali): i controlli di hardening sono regression-tested.
@@ -539,16 +539,16 @@ Area più matura della MVP (dettagli §5):
 | Upload | No AV/CDR sui PDF | Malware distribuito via preview ad altri utenti | [OWASP File Upload CS](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html) | Scansione AV (es. ClamAV/servizio gestito) + CDR prima della persistenza | **P0** |
 | Worker | Replica singola (design concorrenza-safe, heartbeat presente) | Throughput limitato; nessuna ridondanza su crash dell'unica replica | [SFN best practices](https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html) | ≥2 repliche del worker con visibilità SQS calibrata; procedura di redrive DLQ documentata | **P1** |
 | Backup dati | Assente | Perdita dati non recuperabile | Well-Architected REL | RDS/PITR o backup schedulati + restore testato | **P0** (in prod) |
-| Dashboard interne | Basic auth statica | Credenziali condivise, no audit accessi | — | OIDC/forward-auth o accesso solo via VPN; già discusso nei runbook | **P1** |
+| Dashboard interne | Basic auth statica | Credenziali condivise, no audit accessi |: | OIDC/forward-auth o accesso solo via VPN; già discusso nei runbook | **P1** |
 | CSP | Restrittiva ma statica (`map` nginx) | Nuovi asset/embedding richiedono aggiornamento manuale della policy | OWASP A05 | Gestione centralizzata della CSP e nonce/hash per script dinamici se introdotti | **P3** |
 | Multi-tenancy DB | Solo filtri applicativi | Bug applicativo = leak cross-tenant | PostgreSQL RLS | Row-Level Security con `tenant_id` come policy | **P1** |
-| Output LLM | Normalizzazione, no schema | Dati estratti malformati persistiti | — | Validazione JSON-Schema della risposta + quarantena sotto soglia confidence | **P2** |
+| Output LLM | Normalizzazione, no schema | Dati estratti malformati persistiti |: | Validazione JSON-Schema della risposta + quarantena sotto soglia confidence | **P2** |
 | SLO/alerting | Soglie statiche, receiver demo | Alert fatigue / nessuna notifica reale | [Google SRE](https://sre.google/sre-book/monitoring-distributed-systems/) | SLO + multi-window burn rate; receiver PagerDuty/Slack | **P2** |
-| `/internal/metrics` | Gate su header X-Forwarded-Proto | Bypass se topologia cambia | — | Porta/listener dedicato non instradato dall'edge, o mTLS/auth sullo scrape | **P2** |
+| `/internal/metrics` | Gate su header X-Forwarded-Proto | Bypass se topologia cambia |: | Porta/listener dedicato non instradato dall'edge, o mTLS/auth sullo scrape | **P2** |
 | Tracing E2E | Si ferma al task token | Debug cross-componente parziale | OTel context propagation | Propagare traceparent nei messaggi SQS e riprendere lo span nel worker | **P2** |
 | Retention dati/telemetria | Non definita | Crescita storage, esposizione PII prolungata | GDPR / Well-Architected COST | Policy retention per `ocr_text`, prompt, metriche/trace/log | **P2** |
-| Coverage test | Non misurata | Regressioni invisibili nei punti scoperti | — | Coverage report in CI con soglia indicativa | **P3** |
-| Deep linking SPA | Rotte top-level presenti, anchor interni scroll-only | Deep link granulari alle sottosezioni non persistiti nell'URL | — | Sincronizzare anchor/fragment quando utile alla demo | **P3** |
+| Coverage test | Non misurata | Regressioni invisibili nei punti scoperti |: | Coverage report in CI con soglia indicativa | **P3** |
+| Deep linking SPA | Rotte top-level presenti, anchor interni scroll-only | Deep link granulari alle sottosezioni non persistiti nell'URL |: | Sincronizzare anchor/fragment quando utile alla demo | **P3** |
 
 ---
 
@@ -578,18 +578,18 @@ Area più matura della MVP (dettagli §5):
 
 L'applicativo dimostra bene tre cose: una **pipeline documentale AI asincrona** progettata con i pattern giusti (callback con task token, idempotenza, DLQ, fail-fast configurativo), un'**osservabilità da sistema adulto** (golden signals, tracing, log correlati, alert con runbook) e una **disciplina di engineering** non scontata in una MVP (contract-first, CI con gate di sicurezza e accessibilità, infrastruttura come codice, hardening di rete e container).
 
-Le scelte tecniche sono coerenti con l'obiettivo: LocalStack e l'identità simulata permettono di esercitare il codice di produzione senza dipendere da AWS o da un IdP, e i punti in cui la MVP "finge" sono confinati nell'infrastruttura, non sparsi nel codice applicativo — il che rende il riadattamento a un contesto reale un lavoro di configurazione e completamento, non di riscrittura.
+Le scelte tecniche sono coerenti con l'obiettivo: LocalStack e l'identità simulata permettono di esercitare il codice di produzione senza dipendere da AWS o da un IdP, e i punti in cui la MVP "finge" sono confinati nell'infrastruttura, non sparsi nel codice applicativo; il che rende il riadattamento a un contesto reale un lavoro di configurazione e completamento, non di riscrittura.
 
 I limiti accettabili per una MVP sono dichiarati e localizzati: identità fittizia, segreti di comodo, worker a replica singola, approvazione comunicazioni incompleta, nessun invio email. Gli stessi limiti sarebbero inaccettabili in produzione, insieme ad AV sull'upload, backup, RLS e SLO: è la lista P0/P1 della tabella in §18.
 
-Il percorso più sensato è quello della roadmap in §19: prima chiudere identità e segreti (i due gap che invalidano ogni altra garanzia di sicurezza), poi robustezza operativa del workflow e dei dati, infine il ri-targeting dell'infrastruttura su AWS reale — che l'architettura attuale è già predisposta ad accogliere.
+Il percorso più sensato è quello della roadmap in §19: prima chiudere identità e segreti (i due gap che invalidano ogni altra garanzia di sicurezza), poi robustezza operativa del workflow e dei dati, infine il ri-targeting dell'infrastruttura su AWS reale; che l'architettura attuale è già predisposta ad accogliere.
 
 ---
 
 ### Fonti esterne consultate
 
-- [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html) — validazione upload, raccomandazione CDR per PDF.
-- [AWS Step Functions — Best practices](https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html) e [Service integration patterns](https://docs.aws.amazon.com/step-functions/latest/dg/connect-to-resource.html) — callback pattern, heartbeat timeout, workflow Standard.
-- [Google SRE Book — Monitoring Distributed Systems](https://sre.google/sre-book/monitoring-distributed-systems/) — golden signals, alerting.
-- [The Twelve-Factor App — Config](https://12factor.net/config) — configurazione via ambiente/secret store.
-- OWASP ASVS (https://owasp.org/www-project-application-security-verification-standard/) — riferimenti per identità, error handling, access control.
+- [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html): validazione upload, raccomandazione CDR per PDF.
+- [AWS Step Functions (Best practices](https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html) e [Service integration patterns](https://docs.aws.amazon.com/step-functions/latest/dg/connect-to-resource.html)) callback pattern, heartbeat timeout, workflow Standard.
+- [Google SRE Book (Monitoring Distributed Systems](https://sre.google/sre-book/monitoring-distributed-systems/)) golden signals, alerting.
+- [The Twelve-Factor App (Config](https://12factor.net/config)) configurazione via ambiente/secret store.
+- OWASP ASVS (https://owasp.org/www-project-application-security-verification-standard/): riferimenti per identità, error handling, access control.

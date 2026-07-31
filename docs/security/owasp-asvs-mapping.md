@@ -23,6 +23,6 @@ per le evidenze implementative di dettaglio [`../IMPLEMENTATION_OVERVIEW.md`](..
 ## Riferimenti
 
 - OWASP ASVS: https://owasp.org/www-project-application-security-verification-standard/
-- OWASP Top 10 A09 — Security Logging and Monitoring Failures: https://owasp.org/Top10/2021/A09_2021-Security_Logging_and_Monitoring_Failures/
+- OWASP Top 10 A09: Security Logging and Monitoring Failures: https://owasp.org/Top10/2021/A09_2021-Security_Logging_and_Monitoring_Failures/
 - OWASP API Security Top 10 (2023): https://owasp.org/API-Security/editions/2023/en/0x00-header/
 - OWASP File Upload Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html

@@ -1,4 +1,4 @@
-# ADR 0007 — Confine di autenticazione/autorizzazione
+# ADR 0007: Confine di autenticazione/autorizzazione
 
 Status: Accepted, implemented baseline
 Date: 2026-06-08
@@ -45,7 +45,7 @@ le azioni non disponibili per UX, ma non deve mai essere la fonte di verità per
 ## References
 
 - OWASP ASVS: https://owasp.org/www-project-application-security-verification-standard/
-- GitHub Actions — AWS OIDC per le credenziali CI future: https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
+- GitHub Actions: AWS OIDC per le credenziali CI future: https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
 
 ## Related documents
 

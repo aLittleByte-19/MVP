@@ -1,6 +1,6 @@
-# ADR 0001 — Frontend come SPA
+# ADR 0001: Frontend come SPA
 
-Status: Superseded by [0008 — Frontend Angular e serving statico LocalStack](0008-angular-frontend-static-serving.md)
+Status: Superseded by [0008; Frontend Angular e serving statico LocalStack](0008-angular-frontend-static-serving.md)
 Date: 2026-06-08
 
 > Historical ADR. This records the original frontend decision; the active frontend decision is ADR 0008.

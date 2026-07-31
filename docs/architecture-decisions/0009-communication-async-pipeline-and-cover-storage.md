@@ -1,4 +1,4 @@
-# ADR 0009 — Pipeline asincrona delle comunicazioni e copertine su storage a oggetti
+# ADR 0009: Pipeline asincrona delle comunicazioni e copertine su storage a oggetti
 
 Status: Accepted, implemented
 Date: 2026-07-27
@@ -8,8 +8,8 @@ Date: 2026-07-27
 La generazione di una comunicazione HR richiede due chiamate AI: il testo (pochi secondi) e
 l'immagine di copertina (10-15 secondi, con picchi superiori). Sono latenze incompatibili con il
 ciclo HTTP: `php-fpm` interrompe l'esecuzione dopo 30 secondi e la risposta resterebbe appesa per
-tutta la durata. Le due chiamate hanno inoltre criticità diverse — senza testo non esiste una
-comunicazione, senza copertina esiste eccome — e vanno trattate di conseguenza.
+tutta la durata. Le due chiamate hanno inoltre criticità diverse: senza testo non esiste una
+comunicazione, senza copertina esiste eccome: e vanno trattate di conseguenza.
 
 La copertina è un binario di qualche centinaio di kilobyte: va su storage a oggetti, non nel record
 applicativo, che viene serializzato nello stato restituito da nove endpoint. È però un asset generato
@@ -54,7 +54,7 @@ lettura da storage quando il client ha già il documento.
 
 Questa cache è un'ottimizzazione, non una dipendenza: se il disco non è raggiungibile il PDF viene
 rigenerato a ogni richiesta e l'errore finisce in `report()`. Non è un fallback nel senso vietato
-dall'ADR 0005 — l'output non è un dato sostitutivo, è lo stesso identico documento.
+dall'ADR 0005: l'output non è un dato sostitutivo, è lo stesso identico documento.
 
 ## Consequences
 
@@ -102,9 +102,9 @@ dall'ADR 0005 — l'output non è un dato sostitutivo, è lo stesso identico doc
 
 ## References
 
-- AWS Step Functions — callback con task token: https://docs.aws.amazon.com/step-functions/latest/dg/connect-to-resource.html
-- AWS Well-Architected — Reliability Pillar (bulkhead e isolamento dei guasti): https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html
-- Amazon Bedrock — modelli immagine: https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html
+- AWS Step Functions: callback con task token: https://docs.aws.amazon.com/step-functions/latest/dg/connect-to-resource.html
+- AWS Well-Architected: Reliability Pillar (bulkhead e isolamento dei guasti): https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html
+- Amazon Bedrock: modelli immagine: https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html
 
 ## Related documents
 

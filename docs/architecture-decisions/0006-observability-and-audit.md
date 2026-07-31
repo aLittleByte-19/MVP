@@ -1,4 +1,4 @@
-# ADR 0006 — Osservabilità e audit trail
+# ADR 0006: Osservabilità e audit trail
 
 Status: Accepted, implemented baseline
 Date: 2026-06-08
@@ -47,7 +47,7 @@ Alloy.
 
 ## References
 
-- Google SRE — Monitoring Distributed Systems: https://sre.google/sre-book/monitoring-distributed-systems/
+- Google SRE: Monitoring Distributed Systems: https://sre.google/sre-book/monitoring-distributed-systems/
 - OpenTelemetry docs: https://opentelemetry.io/docs/
 - OpenTelemetry logs: https://opentelemetry.io/docs/specs/otel/logs/
 

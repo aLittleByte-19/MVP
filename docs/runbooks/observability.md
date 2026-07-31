@@ -67,12 +67,12 @@ Monolog application logs are JSON with `level_name`; infrastructure containers u
 
 Dashboard JSON lives in `docker/grafana/dashboards`:
 
-- `api-golden-signals.json` — request rate, error rate, p95/p99 latency, a per-endpoint golden-signals table and a saturation row (edge open connections, pipeline backlog, collector memory) covering all four golden signals.
-- `document-pipeline.json` — document status, pipeline steps (SQS), Step Functions failures and a pipeline error log panel.
-- `communication-pipeline.json` — generation status, cover status, communication pipeline steps (SQS), Step Functions executions, cover outcome rate and a worker error log panel.
-- `queues-and-dlq.json` — SQS throughput, DLQ, dependency readiness and worker logs.
-- `ai-ocr-quality.json` — Textract confidence/duration, failures by error code, communications by status and OCR error logs.
-- `logs-and-errors.json` — error counts and rates per service plus raw log panels per service.
+- `api-golden-signals.json`: request rate, error rate, p95/p99 latency, a per-endpoint golden-signals table and a saturation row (edge open connections, pipeline backlog, collector memory) covering all four golden signals.
+- `document-pipeline.json`: document status, pipeline steps (SQS), Step Functions failures and a pipeline error log panel.
+- `communication-pipeline.json`: generation status, cover status, communication pipeline steps (SQS), Step Functions executions, cover outcome rate and a worker error log panel.
+- `queues-and-dlq.json`: SQS throughput, DLQ, dependency readiness and worker logs.
+- `ai-ocr-quality.json`: Textract confidence/duration, failures by error code, communications by status and OCR error logs.
+- `logs-and-errors.json`: error counts and rates per service plus raw log panels per service.
 
 Datasource provisioning (Prometheus, Tempo, Loki) lives in `docker/grafana/provisioning`.
 

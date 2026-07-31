@@ -95,7 +95,7 @@ Rendering is the most expensive operation in the API and its result is determini
 
 The fingerprint cannot see changes to the Blade template, the watermark or the footer. Those are covered by `CommunicationPdfService::RENDER_VERSION`: **bump it in the same commit that changes the layout**, or already-materialized PDFs keep being served with the old one.
 
-The cache is an optimization, never a dependency. If the disk is missing or misconfigured, `Storage::disk()` throws at resolution time — the service catches it, reports it and re-renders on every request, so the export keeps working while degraded. `MvpAppRoutesTest` locks this behaviour in (`the export survives an unavailable PDF cache disk`).
+The cache is an optimization, never a dependency. If the disk is missing or misconfigured, `Storage::disk()` throws at resolution time: the service catches it, reports it and re-renders on every request, so the export keeps working while degraded. `MvpAppRoutesTest` locks this behaviour in (`the export survives an unavailable PDF cache disk`).
 
 Both routes carry an explicit `throttle:30,1`, tighter than the 60/min group bucket: these are the heaviest responses in the API and originate from a human click, not from a list render.
 

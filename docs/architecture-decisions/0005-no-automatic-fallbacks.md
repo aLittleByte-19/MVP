@@ -1,4 +1,4 @@
-# ADR 0005 — Nessun fallback automatico dei servizi AI
+# ADR 0005: Nessun fallback automatico dei servizi AI
 
 Status: Accepted, implemented
 Date: 2026-06-08
@@ -50,7 +50,7 @@ vive nell'infrastruttura (LocalStack), non in branch condizionali del codice app
 
 ## References
 
-- AWS Well-Architected — reliability pillar: https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html
+- AWS Well-Architected: reliability pillar: https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html
 - OWASP ASVS: https://owasp.org/www-project-application-security-verification-standard/
 
 ## Related documents

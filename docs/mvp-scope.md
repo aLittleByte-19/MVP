@@ -37,7 +37,7 @@ Incluso:
 - scarto della bozza corrente con conferma, che la esclude dallo storico attivo mantenendola
   tracciata come "Scartata" (UC-7);
 - eliminazione definitiva di un elemento dello storico, con conferma (UC-23);
-- valutazione 1–5 stelle con commento qualitativo opzionale, una sola per generazione;
+- valutazione 1-5 stelle con commento qualitativo opzionale, una sola per generazione;
 - anteprima del documento finale impaginato, con marcatore di trasparenza "Creato da AI Assistant";
 - esportazione del documento finale in PDF, con lo stesso marcatore di trasparenza;
 - metriche operative (contenuti generati, bozze, stato della generazione e delle copertine,

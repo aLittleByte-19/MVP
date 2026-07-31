@@ -14,14 +14,14 @@ e delle sue conseguenze.
 Ogni ADR segue la struttura [Michael Nygard](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions),
 estesa con alcuni campi per la tracciabilità verso la codebase:
 
-- **Status** — `Proposed` · `Accepted` · `Superseded` · `Deprecated` (con eventuale `implemented`/`implemented baseline`)
-- **Date** — data della decisione
-- **Context** — forze in gioco e vincoli al momento della decisione
-- **Decision** — la scelta adottata
-- **Consequences** — effetti positivi e negativi che ne derivano
-- **Alternatives considered** — le opzioni realistiche valutate e perché scartate
-- **Implementation evidence** — dove la decisione si vede nella codebase (path)
-- **Related documents** — ADR e documenti correlati che approfondiscono il tema
+- **Status**: `Proposed` · `Accepted` · `Superseded` · `Deprecated` (con eventuale `implemented`/`implemented baseline`)
+- **Date**: data della decisione
+- **Context**: forze in gioco e vincoli al momento della decisione
+- **Decision**: la scelta adottata
+- **Consequences**: effetti positivi e negativi che ne derivano
+- **Alternatives considered**: le opzioni realistiche valutate e perché scartate
+- **Implementation evidence**: dove la decisione si vede nella codebase (path)
+- **Related documents**: ADR e documenti correlati che approfondiscono il tema
 
 Gli ADR sono immutabili: una decisione che cambia non si riscrive, si **supera** con un nuovo
 ADR che referenzia il precedente. La numerazione è progressiva e a quattro cifre

@@ -20,6 +20,6 @@ per il perimetro funzionale [`../mvp-scope.md`](../mvp-scope.md).
 ## Riferimenti
 
 - AWS Well-Architected Framework: https://docs.aws.amazon.com/wellarchitected/latest/framework/the-pillars-of-the-framework.html
-- AWS Step Functions — Best practices: https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html
+- AWS Step Functions: Best practices: https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html
 - OpenTelemetry Collector: https://opentelemetry.io/docs/collector/
-- Google SRE — Monitoring Distributed Systems: https://sre.google/sre-book/monitoring-distributed-systems/
+- Google SRE: Monitoring Distributed Systems: https://sre.google/sre-book/monitoring-distributed-systems/

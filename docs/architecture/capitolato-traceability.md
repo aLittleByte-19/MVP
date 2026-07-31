@@ -2,8 +2,8 @@
 
 Questo documento raccoglie le scelte tecnologiche e architetturali della MVP e, per ciascuna,
 il razionale ingegneristico che la motiva insieme al riscontro che trova nel Capitolato C5
-(`[NEXUM] BRD-FASE02-2025`, v. 12). Le scelte nascono da criteri di progettazione —
-semplicità, sicurezza, riproducibilità, osservabilità, disaccoppiamento — e si è verificato
+(`[NEXUM] BRD-FASE02-2025`, v. 12). Le scelte nascono da criteri di progettazione -
+semplicità, sicurezza, riproducibilità, osservabilità, disaccoppiamento: e si è verificato
 che siano coerenti con i requisiti e i vincoli espressi dal Capitolato, qui citato verbatim
 con indicazione della sezione di provenienza. Gli ADR in
 [`docs/architecture-decisions/`](../architecture-decisions/) restano il razionale di dettaglio
@@ -27,11 +27,11 @@ ipotizzato restando nel perimetro consentito.
 
 **Riscontro nel Capitolato:**
 > «Utilizzo esclusivo di tecnologie open source o academic-friendly (o approvate dal team Eggon).»
-> — Capitolato C5, sezione «Vincoli»
+> Fonte: Capitolato C5, sezione «Vincoli»
 
 La voce di stack ipotizzata resta indicativa e non vincolante:
 > «Ruby on Rails (API-first) su ECS Fargate (service stateless in più task), dietro Application Load Balancer (ALB) con AWS WAF.»
-> — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
+> Fonte: Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
 **ADR correlato:** [0002 - Laravel API JSON](../architecture-decisions/0002-laravel-api-json.md)
 
@@ -46,15 +46,15 @@ superfici applicative distinte in fase di prototipo.
 
 **Riscontro nel Capitolato:**
 > «Utilizzo esclusivo di tecnologie open source o academic-friendly (o approvate dal team Eggon).»
-> — Capitolato C5, sezione «Vincoli»
+> Fonte: Capitolato C5, sezione «Vincoli»
 
 Il requisito di doppia superficie (dashboard/PWA) resta pienamente soddisfacibile:
 > «Le funzionalità dovranno essere disponibili, a seconda dei destinatari, sulla dashboard o sulla PWA.»
-> — Capitolato C5, sezione «Requisiti di Business»
+> Fonte: Capitolato C5, sezione «Requisiti di Business»
 
 Le voci di stack ipotizzate restano indicative:
 > «Dashboard amministrativa (Angular): build statico su S3; distribuzione via CloudFront (cache, HTTPS, geodistribuzione).»
-> — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
+> Fonte: Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
 **ADR correlato:** [0008 - Frontend Angular e serving statico LocalStack](../architecture-decisions/0008-angular-frontend-static-serving.md)
 
@@ -70,10 +70,10 @@ ecosistema esistente.
 
 **Riscontro nel Capitolato:**
 > «Ogni modulo dovrà essere integrabile o compatibile con l'infrastruttura di NEXUM (backend, frontend, database, architettura)»
-> — Capitolato C5, sezione «Requisiti di Business»
+> Fonte: Capitolato C5, sezione «Requisiti di Business»
 
 > «Ogni team avrà accesso alla documentazione e alle API NEXUM.»
-> — Capitolato C5, sezione «Assunzioni del Progetto»
+> Fonte: Capitolato C5, sezione «Assunzioni del Progetto»
 
 **ADR correlato:** [0002 - Laravel API JSON](../architecture-decisions/0002-laravel-api-json.md)
 
@@ -91,11 +91,11 @@ worker queue di Laravel, coerente con la scelta di backend (§1).
 
 **Riscontro nel Capitolato:**
 > «Background jobs: Sidekiq su service Fargate dedicato + SQS come coda.»
-> — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
+> Fonte: Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
 Coerente con il requisito prestazionale:
 > «In modo generale, l'applicazione dovrà risultare fluida e utilizzabile e tutte le operazioni "time consuming" dovranno essere delegate a sistemi batch.»
-> — Capitolato C5, sezione «Requisiti di Prestazione»
+> Fonte: Capitolato C5, sezione «Requisiti di Prestazione»
 
 **ADR correlato:** [0003 - SQS Instead Of Redis Queue](../architecture-decisions/0003-sqs-instead-of-redis-queue.md)
 
@@ -111,7 +111,7 @@ mantiene le responsabilità separate e prevedibili.
 
 **Riscontro nel Capitolato:**
 > «Cache/sessioni: ElastiCache for Redis.»
-> — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
+> Fonte: Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
 In locale Redis è eseguito come servizio container, simulazione locale di ElastiCache for Redis.
 
@@ -129,11 +129,11 @@ estratti che devono restare consistenti e interrogabili.
 
 **Riscontro nel Capitolato:**
 > «Database: Amazon RDS for PostgreSQL (Multi-AZ, snapshot automatici).»
-> — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
+> Fonte: Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
 La MVP ne è la simulazione locale: stesso motore PostgreSQL, senza Multi-AZ/snapshot gestiti di RDS.
 
-**ADR correlato:** —
+**ADR correlato:** -
 
 ---
 
@@ -149,10 +149,10 @@ un requisito.
 
 **Riscontro nel Capitolato:**
 > «Storage documenti: S3 (bucket separati per "uploads" e "processed"), S3 Lifecycle per tiering/retention, S3 Object Lock opzionale (legal hold).»
-> — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
+> Fonte: Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
 > «Sicurezza dati: KMS per chiavi gestite (S3, RDS, Secrets).»
-> — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
+> Fonte: Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
 La MVP è la simulazione locale di S3+KMS tramite LocalStack; Lifecycle e Object Lock non sono attivati.
 
@@ -172,7 +172,7 @@ audit.
 
 **Riscontro nel Capitolato:**
 > «Segreti: Secrets Manager (credenziali DB, API keys, JWT secrets).»
-> — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
+> Fonte: Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
 La MVP è la simulazione locale di Secrets Manager/SSM tramite LocalStack.
 
@@ -183,9 +183,9 @@ La MVP è la simulazione locale di Secrets Manager/SSM tramite LocalStack.
 ## 9. Autenticazione/autorizzazione (identità simulata, JWT, RBAC/ABAC server-side)
 
 **Scelta nella MVP:** nessun IdP reale; middleware di identità che inietta claim equivalenti
-a OIDC/SAML (id, email, tenant, ruoli) — modalità locale o trusted-header
+a OIDC/SAML (id, email, tenant, ruoli): modalità locale o trusted-header
 ([`app/Http/Middleware/ResolveMvpIdentity.php`](../../app/Http/Middleware/ResolveMvpIdentity.php))
-— e autorizzazione RBAC/ABAC server-side
+Fonte: e autorizzazione RBAC/ABAC server-side
 ([`app/Http/Middleware/AuthorizeMvpAccess.php`](../../app/Http/Middleware/AuthorizeMvpAccess.php)).
 L'autorizzazione applicata lato server è l'unica fonte di verità affidabile sugli accessi;
 simulare l'identità dietro un confine ben definito permette di sviluppare e testare l'authz
@@ -193,11 +193,11 @@ senza accoppiare la MVP a uno specifico IdP.
 
 **Riscontro nel Capitolato:**
 > «Identity/Access: Amazon Cognito (pool utenti/identity) oppure identity provider esterno; token JWT verso Rails.»
-> — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
+> Fonte: Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
 Il modello dei ruoli adottato coincide con quello descritto:
 > «Definizione ruoli (Admin CdL, Editor, Viewer, Auditor).»
-> — Capitolato C5, sezione «Ambito Funzionale → AI Co-Pilot, UC-9: Gestione ruoli, permessi e policy»
+> Fonte: Capitolato C5, sezione «Ambito Funzionale → AI Co-Pilot, UC-9: Gestione ruoli, permessi e policy»
 
 La MVP simula in locale l'avvenuta autenticazione di un IdP corporate e implementa
 l'autorizzazione lato Laravel; il token JWT verso il backend è modellato dal middleware di identità.
@@ -218,11 +218,11 @@ OpenTelemetry mantiene il confine vendor-neutral verso qualsiasi backend futuro.
 
 **Riscontro nel Capitolato:**
 > «CloudWatch Logs/Metrics/Alarms, X-Ray (tracing).»
-> — Capitolato C5, sezione «Vincoli tecnico tecnologici → Observability & Ops»
+> Fonte: Capitolato C5, sezione «Vincoli tecnico tecnologici → Observability & Ops»
 
 L'audit trail riflette il flusso di tracciabilità documentale richiesto:
 > «Visualizzazione audit trail: upload → riconoscimento → split → mapping → invio → lettura.»
-> — Capitolato C5, sezione «Ambito Funzionale → AI Co-Pilot, UC-8: Ricerca, audit e conservazione»
+> Fonte: Capitolato C5, sezione «Ambito Funzionale → AI Co-Pilot, UC-8: Ricerca, audit e conservazione»
 
 La MVP usa lo stack OTel/Prometheus/Tempo/Grafana (vendor-neutral, open source) come
 equivalente locale di CloudWatch/X-Ray.
@@ -254,10 +254,10 @@ cui l'informazione andrebbe altrimenti persa.
 
 **Riscontro nel Capitolato:**
 > «AI Assistant Generativo, dovrà permettere agli utenti della dashboard di creare in autonomia contenuti accattivanti con titolo, descrizione e immagine di copertina attraverso l'uso di AI generativa adeguando tono e stile della comunicazione a quello aziendale (formale, informale, ecc..)»
-> — Capitolato C5, sezione «Requisiti di Business»
+> Fonte: Capitolato C5, sezione «Requisiti di Business»
 
 > «Il sistema invia la richiesta al motore AI.»
-> — Capitolato C5, sezione «Ambito Funzionale → AI Assistant Generativo, UC-1: Creazione di un nuovo contenuto tramite prompt»
+> Fonte: Capitolato C5, sezione «Ambito Funzionale → AI Assistant Generativo, UC-1: Creazione di un nuovo contenuto tramite prompt»
 
 Nota: il Capitolato prescrive l'uso di un «motore AI» generativo ma non nomina uno specifico
 servizio cloud; la scelta di Amazon Bedrock è interna alla MVP (vedi elenco finale).
@@ -277,14 +277,14 @@ umana quando l'affidabilità è bassa: la base per garantire qualità su documen
 
 **Riscontro nel Capitolato:**
 > «AI Co-Pilot per Consulenti del Lavoro in grado di riconoscere la tipologia di documenti caricati (cedolini, comunicazioni, documenti da firmare, ecc..) e i destinatari, direttamente dal documento e consegnarli ai destinatari anche in modo massivo.»
-> — Capitolato C5, sezione «Requisiti di Business»
+> Fonte: Capitolato C5, sezione «Requisiti di Business»
 
 > «Il sistema esegue OCR/Parsing e normalizza il testo.»
-> — Capitolato C5, sezione «Ambito Funzionale → AI Co-Pilot, UC-2: Riconoscimento documento (classificazione + OCR)»
+> Fonte: Capitolato C5, sezione «Ambito Funzionale → AI Co-Pilot, UC-2: Riconoscimento documento (classificazione + OCR)»
 
 La soglia di confidenza adottata è allineata al criterio di accettazione:
 > «AI Co-Pilot: confidenza media OCR ≥ 90%, mapping CF ≥ 99%.»
-> — Capitolato C5, sezione «Criteri di Accettazione»
+> Fonte: Capitolato C5, sezione «Criteri di Accettazione»
 
 Nota: come per §11, lo specifico servizio (Bedrock/Textract) è scelta interna alla MVP; il
 Capitolato prescrive la funzione OCR ma non il vendor.
@@ -303,12 +303,12 @@ di accettare ciecamente l'output del modello.
 
 **Riscontro nel Capitolato:**
 > «2a. Bassa confidenza (< soglia) → richiede conferma/riclassificazione manuale.»
-> — Capitolato C5, sezione «Ambito Funzionale → AI Co-Pilot, UC-2: Riconoscimento documento (classificazione + OCR)»
+> Fonte: Capitolato C5, sezione «Ambito Funzionale → AI Co-Pilot, UC-2: Riconoscimento documento (classificazione + OCR)»
 
 > «La UI mostra warning (tipo, destinatario, metadati) con cause/suggerimenti.»
-> — Capitolato C5, sezione «Ambito Funzionale → AI Co-Pilot, UC-5: Revisione e correzione (Human-in-the-Loop)»
+> Fonte: Capitolato C5, sezione «Ambito Funzionale → AI Co-Pilot, UC-5: Revisione e correzione (Human-in-the-Loop)»
 
-**ADR correlato:** —
+**ADR correlato:** -
 
 ---
 
@@ -323,7 +323,7 @@ così che l'errore sia evidente e gestibile anziché propagato a valle.
 
 **Riscontro nel Capitolato:**
 > «Caching locale e fallback open-source.»
-> — Capitolato C5, sezione «Rischi e Mitigazioni» (mitigazione del rischio «Dipendenza da API esterne (LLM, OCR)»)
+> Fonte: Capitolato C5, sezione «Rischi e Mitigazioni» (mitigazione del rischio «Dipendenza da API esterne (LLM, OCR)»)
 
 Il Capitolato cita il fallback open-source come *mitigazione* di un rischio, non come obbligo:
 la MVP ne condivide l'obiettivo (non dipendere ciecamente dal servizio esterno) ma sceglie di
@@ -344,12 +344,12 @@ mantiene parità con AWS e abbatte i tempi di onboarding e di iterazione.
 
 **Riscontro nel Capitolato:**
 > «Eggon fornirà un ambiente di test e credenziali di sviluppo.»
-> — Capitolato C5, sezione «Assunzioni del Progetto»
+> Fonte: Capitolato C5, sezione «Assunzioni del Progetto»
 
 L'intera sezione «Componenti & servizi AWS» del Capitolato definisce i servizi target; la MVP
 ne fornisce l'emulazione locale ripetibile (LocalStack), nello spirito di:
 > «Integrazione complessa con NEXUM Core» → «API documentate e sandbox condivisa»
-> — Capitolato C5, sezione «Rischi e Mitigazioni»
+> Fonte: Capitolato C5, sezione «Rischi e Mitigazioni»
 
 **ADR correlato:** [0004 - LocalStack And Terraform](../architecture-decisions/0004-localstack-terraform.md)
 
@@ -367,10 +367,10 @@ di igiene di base che riducono il rischio a prescindere dall'ambiente.
 
 **Riscontro nel Capitolato:**
 > «Security Groups a "minimo privilegio".»
-> — Capitolato C5, sezione «Vincoli tecnico tecnologici → Rete & Sicurezza»
+> Fonte: Capitolato C5, sezione «Vincoli tecnico tecnologici → Rete & Sicurezza»
 
 > «WAF + AWS Shield su ALB/CloudFront.»
-> — Capitolato C5, sezione «Vincoli tecnico tecnologici → Rete & Sicurezza»
+> Fonte: Capitolato C5, sezione «Vincoli tecnico tecnologici → Rete & Sicurezza»
 
 La MVP modella in locale il principio di minimo privilegio e il perimetro edge; WAF/Shield e
 ALB/CloudFront gestiti non sono replicati (equivalenti locali Traefik/Nginx).
@@ -389,10 +389,10 @@ dell'invio reale e della prova di consegna.
 
 **Riscontro nel Capitolato:**
 > «I canali di invio supportati includono NEXUM App e e-mail ordinaria.»
-> — Capitolato C5, sezione «Vincoli»
+> Fonte: Capitolato C5, sezione «Vincoli»
 
 > «Integrazioni e-mail/notify: SES (email), SNS (notifiche push/eventi).»
-> — Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
+> Fonte: Capitolato C5, sezione «Vincoli tecnico tecnologici → Componenti & servizi AWS»
 
 La MVP predispone l'identità SES in locale come simulazione del servizio; l'invio reale non è
 implementato ed è stato escluso esplicitamente dal committente il 15/07/2026. Il recapito avviene
@@ -400,7 +400,7 @@ tramite canali terzi a partire dal PDF esportato: di conseguenza `sub_documents.
 l'avvenuto **scaricamento** del documento, non un invio effettuato dal sistema (vedi
 [`mvp-scope.md`](../mvp-scope.md) e `IMPLEMENTATION_OVERVIEW.md` §6.6).
 
-**ADR correlato:** —
+**ADR correlato:** -
 
 ---
 

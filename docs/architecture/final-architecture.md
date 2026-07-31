@@ -11,12 +11,12 @@ verso AWS reale, e i principi di qualità che trovano riscontro nel codice.
 Sorgente editabile: [`diagrams/final-architecture.drawio`](diagrams/final-architecture.drawio)
 (draw.io / diagrams.net, loghi ufficiali incorporati); versione vettoriale in
 [`final-architecture.drawio.svg`](diagrams/final-architecture.drawio.svg). Le aree colorate
-distinguono i piani logici — Frontend, Client/Edge, Applicazione, Config, Dati, Infra locale,
-Orchestrazione (LocalStack), AWS reale, Osservabilità e CI/Qualità — mentre lo stile delle
+distinguono i piani logici: Frontend, Client/Edge, Applicazione, Config, Dati, Infra locale,
+Orchestrazione (LocalStack), AWS reale, Osservabilità e CI/Qualità: mentre lo stile delle
 frecce distingue i flussi (vedi legenda nel diagramma): sincrono, workflow asincrono,
 errore/DLQ, telemetria, provisioning/infra/CI, build frontend ed encryption. Il diagramma
 include anche il legame di control-plane **IAM → Step Functions** (execution role,
-least-privilege documentata — non applicata da LocalStack in locale) e il registry **GHCR**
+least-privilege documentata: non applicata da LocalStack in locale) e il registry **GHCR**
 nella pipeline CI (mirror delle immagini base e pubblicazione delle immagini buildate). Gli
 export PNG/SVG vanno rigenerati da draw.io dopo ogni modifica (`drawio -x -f png -s 1.6 -b 24 ...`).
 
@@ -50,7 +50,7 @@ LocalStack`: `make frontend-s3-local-deploy` carica `apps/frontend/dist` nel buc
 servizio `edge-cdn` è un **secondo Nginx** che emula in locale il **ruolo di una
 CDN/edge** (non Amazon CloudFront): serve gli asset statici e inoltra `/api/`, `/health` e
 `/ready` all'Nginx applicativo/Laravel. È un container separato dall'Nginx applicativo di
-proposito — quest'ultimo è un'immagine di produzione (buildata, scansionata, pubblicata) e non
+proposito: quest'ultimo è un'immagine di produzione (buildata, scansionata, pubblicata) e non
 deve conoscere LocalStack, mentre il serving da S3 emulato resta confinato in uno scaffolding
 solo-locale; la separazione riflette anche la topologia reale CDN → origin. L'Nginx applicativo
 resta il proxy verso PHP-FPM e il percorso interno di compatibilità (include la build SPA), ma
@@ -93,11 +93,11 @@ I test e la CI standard non chiamano S3, Textract o Bedrock reali.
 
 | Principio di riferimento | Implementazione concreta |
 | --- | --- |
-| AWS Well-Architected — operational excellence | Avvio ripetibile via Docker/Terraform, endpoint `/health` e `/ready`, target `make verify*`. |
-| AWS Well-Architected — reliability | Retry/catch espliciti in Step Functions, heartbeat per task, DLQ SQS, tabella di workflow idempotente. |
-| AWS Well-Architected — security | Nessuna UI di amministrazione runtime, nessun segreto reale committato, header di sicurezza e CSP in nginx, matrice IAM a privilegio minimo documentata. |
+| AWS Well-Architected: operational excellence | Avvio ripetibile via Docker/Terraform, endpoint `/health` e `/ready`, target `make verify*`. |
+| AWS Well-Architected: reliability | Retry/catch espliciti in Step Functions, heartbeat per task, DLQ SQS, tabella di workflow idempotente. |
+| AWS Well-Architected: security | Nessuna UI di amministrazione runtime, nessun segreto reale committato, header di sicurezza e CSP in nginx, matrice IAM a privilegio minimo documentata. |
 | Baseline OWASP ASVS/API | Validazione upload server-side, controlli di ownership per tenant, rate limit, confine di autenticazione strutturato. |
-| Google SRE — monitoring | Metriche API golden-signal, metriche di entrambe le pipeline, alert code/DLQ per dominio con runbook. |
+| Google SRE: monitoring | Metriche API golden-signal, metriche di entrambe le pipeline, alert code/DLQ per dominio con runbook. |
 | Modello OpenTelemetry | Il Collector riceve OTLP ed esporta metriche verso Prometheus e trace verso Tempo. |
 | Logging centralizzato | Grafana Alloy invia i log di ogni container a Loki, correlati in Grafana con metriche e trace. |
 
@@ -105,7 +105,7 @@ I test e la CI standard non chiamano S3, Textract o Bedrock reali.
 
 - AWS Well-Architected Framework: https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html
 - OWASP ASVS: https://owasp.org/www-project-application-security-verification-standard/
-- Google SRE — Monitoring Distributed Systems: https://sre.google/sre-book/monitoring-distributed-systems/
+- Google SRE: Monitoring Distributed Systems: https://sre.google/sre-book/monitoring-distributed-systems/
 - OpenTelemetry Collector: https://opentelemetry.io/docs/collector/
 - Prometheus alerting: https://prometheus.io/docs/alerting/latest/overview/
 - Grafana provisioning: https://grafana.com/docs/grafana/latest/administration/provisioning/
