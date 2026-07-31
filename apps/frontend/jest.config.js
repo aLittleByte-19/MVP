@@ -19,7 +19,7 @@ module.exports = {
     "!src/main.ts",
     "!src/environments/**"
   ],
-  coverageReporters: ["text", "json-summary", ["lcov", { projectRoot: "../.." }], "clover"],
+  coverageReporters: ["text", "json-summary", ["lcov", { projectRoot: "../.." }]],
   // Jest applica i minimi rigidi definiti nella fonte condivisa. Lo script
   // scripts/ci/check-coverage-thresholds.mjs verifica gli stessi valori sui
   // report aggregati prodotti dalla CI.

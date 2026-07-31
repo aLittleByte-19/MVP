@@ -115,6 +115,13 @@ jobs:
           --coverage-cobertura coverage/cobertura.xml
           --coverage-html coverage/html
 
+      # Pest scrive i report come www-data del container: il runner li legge ma
+      # non puo' riscriverli, e la normalizzazione in place fallirebbe. Si riprende
+      # la proprieta' invece di derivare un secondo file, cosi' il Cobertura resta
+      # l'unica fonte del dato di coverage del backend.
+      - name: Take ownership of backend coverage reports
+        run: sudo chown -R "$(id -u):$(id -g)" coverage
+
       # Il report esce con i path assoluti del container: senza questa riscrittura
       # diff-cover non aggancia nessun file e il gate sul diff passerebbe a vuoto.
       - name: Normalize backend coverage paths
