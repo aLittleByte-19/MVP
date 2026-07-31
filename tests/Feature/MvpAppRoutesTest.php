@@ -201,6 +201,36 @@ test('the communication pipeline generates the text and stores the cover', funct
     Storage::disk('s3')->assertExists($communication->cover_image_path);
 });
 
+// Tono e stile sono le uniche leve di direzione dell'AI Assistant: se il task
+// smettesse di inoltrarli, la generazione continuerebbe a funzionare ma
+// ignorerebbe le scelte dell'utente, e nessun altro test se ne accorgerebbe.
+test('the text generation forwards prompt, tone and style to bedrock', function () {
+    $communication = Communication::factory()->processing()->create([
+        'prompt' => 'Comunicazione interna sulla nuova area documentale.',
+        'tone' => 'Chiaro e diretto',
+        'style' => 'Testo informativo',
+    ]);
+
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('generateCommunication')
+            ->once()
+            ->with(
+                'Comunicazione interna sulla nuova area documentale.',
+                'Chiaro e diretto',
+                'Testo informativo',
+            )
+            ->andReturn([
+                'title' => 'Titolo reale',
+                'body' => 'Corpo reale',
+                'image_prompt' => 'Direzione visiva',
+            ]);
+    });
+
+    mvpRunCommunicationTask($communication, 'communication.generate_text');
+
+    expect($communication->refresh()->generated_body)->toBe('Corpo reale');
+});
+
 test('a failed cover leaves the communication completed with a warning', function () {
     $communication = Communication::factory()->processing()->create([
         'generated_title' => 'Titolo',
