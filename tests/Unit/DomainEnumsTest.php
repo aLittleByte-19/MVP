@@ -1,5 +1,6 @@
 <?php
 
+use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Enums\CoverImageSource;
 use App\Mvp\Communications\Enums\CoverImageStatus;
 use App\Mvp\Communications\Enums\SendStatus;
@@ -15,6 +16,7 @@ use App\Mvp\Documents\Enums\ReviewStatus;
 $enums = [
     'CoverImageSource' => CoverImageSource::class,
     'CoverImageStatus' => CoverImageStatus::class,
+    'CommunicationGenerationStatus' => CommunicationGenerationStatus::class,
     'SendStatus' => SendStatus::class,
     'ProcessingStatus' => ProcessingStatus::class,
     'ReviewStatus' => ReviewStatus::class,
@@ -23,6 +25,7 @@ $enums = [
 /** Gli enum che espongono anche un colore (CoverImageSource non ne ha). */
 $colouredEnums = [
     'CoverImageStatus' => CoverImageStatus::class,
+    'CommunicationGenerationStatus' => CommunicationGenerationStatus::class,
     'SendStatus' => SendStatus::class,
     'ProcessingStatus' => ProcessingStatus::class,
     'ReviewStatus' => ReviewStatus::class,
@@ -67,6 +70,8 @@ test('enum values match the strings persisted in the database', function () {
         ->toBe(['pending', 'processing', 'ready', 'failed', 'removed'])
         ->and(array_map(fn ($case) => $case->value, CoverImageSource::cases()))
         ->toBe(['ai', 'manual'])
+        ->and(array_map(fn ($case) => $case->value, CommunicationGenerationStatus::cases()))
+        ->toBe(['pending', 'processing', 'completed', 'failed'])
         // "sent" qui vuol dire scaricata: la comunicazione convertita in PDF e
         // scaricata si considera consegnata, l'invio interno resta fuori scope.
         ->and(array_map(fn ($case) => $case->value, SendStatus::cases()))
