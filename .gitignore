@@ -70,3 +70,7 @@ Homestead.yaml
 /docker/traefik/certs/*.key
 /reports/
 /backups/
+
+# Report di code coverage: artefatti di esecuzione, si rigenerano dai test
+/coverage/
+/apps/frontend/coverage/
