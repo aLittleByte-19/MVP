@@ -29,6 +29,10 @@ RUN apt-get update \
         zip \
     && pecl install redis \
     && docker-php-ext-enable redis \
+    && if [ "$COMPOSER_INSTALL_DEV" = "true" ]; then \
+        pecl install xdebug; \
+        docker-php-ext-enable xdebug; \
+    fi \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

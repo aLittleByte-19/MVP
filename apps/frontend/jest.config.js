@@ -1,4 +1,6 @@
 /** @type {import('jest').Config} */
+const { frontend: coverageThresholds } = require("../../coverage-thresholds.json");
+
 module.exports = {
   preset: "jest-preset-angular",
   setupFilesAfterEnv: ["<rootDir>/src/setup-jest.ts"],
@@ -17,6 +19,17 @@ module.exports = {
     "!src/main.ts",
     "!src/environments/**"
   ],
+  coverageReporters: ["text", "json-summary", ["lcov", { projectRoot: "../.." }], "clover"],
+  // Jest applica i minimi rigidi definiti nella fonte condivisa. Lo script
+  // scripts/ci/check-coverage-thresholds.mjs verifica gli stessi valori sui
+  // report aggregati prodotti dalla CI.
+  coverageThreshold: {
+    global: {
+      statements: coverageThresholds.statements,
+      functions: coverageThresholds.functions,
+      branches: coverageThresholds.branches
+    }
+  },
   moduleNameMapper: {
     "^src/(.*)$": "<rootDir>/src/$1"
   },

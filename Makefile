@@ -1,4 +1,4 @@
-.PHONY: help test pint node-install frontend-build frontend-lint frontend-test frontend-typecheck frontend-audit frontend-a11y frontend-s3-local-provision frontend-s3-local-upload frontend-s3-local-deploy edge-cdn-local-url frontend-serving-local-test openapi-generate openapi-validate observability-config observability-up local-tls trusted-local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke reset-all workers backup-local restore-local
+.PHONY: help test backend-coverage pint node-install frontend-build frontend-lint frontend-test frontend-coverage frontend-typecheck frontend-audit frontend-a11y frontend-s3-local-provision frontend-s3-local-upload frontend-s3-local-deploy edge-cdn-local-url frontend-serving-local-test openapi-generate openapi-validate observability-config observability-up local-tls trusted-local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke reset-all workers backup-local restore-local
 
 # Colori per l'output
 BLUE  := \033[34m
@@ -32,10 +32,12 @@ TEST_ENV := -e CONFIG_SOURCE=env \
 help:
 	@echo "$(BLUE)Comandi disponibili:$(RESET)"
 	@echo "  $(BLUE)make test$(RESET)      Esegue la suite di test (Pest)"
+	@echo "  $(BLUE)make backend-coverage$(RESET) Misura linee e branch backend con Xdebug"
 	@echo "  $(BLUE)make pint$(RESET)      Esegue Laravel Pint in modalita' check"
 	@echo "  $(BLUE)make frontend-build$(RESET) Compila la SPA Angular"
 	@echo "  $(BLUE)make frontend-lint$(RESET)  Esegue ESLint sul frontend Angular"
 	@echo "  $(BLUE)make frontend-test$(RESET)  Esegue i test frontend"
+	@echo "  $(BLUE)make frontend-coverage$(RESET) Misura statement, funzioni e branch frontend"
 	@echo "  $(BLUE)make frontend-typecheck$(RESET) Esegue typecheck TypeScript"
 	@echo "  $(BLUE)make frontend-audit$(RESET) Audit npm production dependencies"
 	@echo "  $(BLUE)make frontend-a11y$(RESET)  Esegue axe e Pa11y sullo stack HTTPS locale"
@@ -104,6 +106,11 @@ test:
 	docker compose build app
 	docker compose run --rm --no-deps $(TEST_ENV) app php artisan test
 
+backend-coverage:
+	docker compose build app
+	docker compose run --rm --no-deps -v "$(CURDIR)/coverage:/var/www/html/coverage" -e XDEBUG_MODE=coverage $(TEST_ENV) app php -d memory_limit=1G vendor/bin/pest --coverage --path-coverage --coverage-clover coverage/clover.xml --min=80
+	$(NODE) node scripts/ci/check-coverage-thresholds.mjs backend coverage/clover.xml
+
 node-install:
 	$(NODE) npm ci --ignore-scripts
 
@@ -116,6 +123,10 @@ frontend-lint: node-install
 
 frontend-test: openapi-generate
 	$(NODE) npm run frontend:test
+
+frontend-coverage:
+	$(NODE) sh -lc 'cd apps/frontend && npx jest --coverage --runInBand'
+	$(NODE) node scripts/ci/check-coverage-thresholds.mjs frontend apps/frontend/coverage/coverage-summary.json
 
 frontend-typecheck: openapi-generate
 	$(NODE) npm run frontend:typecheck
