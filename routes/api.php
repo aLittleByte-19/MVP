@@ -18,6 +18,9 @@ Route::prefix('v1')
     ->group(function () {
         Route::get('/state', StateController::class)->name('state');
 
+        Route::get('/communications', [CommunicationController::class, 'index'])
+            ->name('communications.index');
+
         Route::post('/communications', [CommunicationController::class, 'store'])
             ->middleware('throttle:20,1')
             ->name('communications.generate');

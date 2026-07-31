@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
 import { LucideTrash2 } from "@lucide/angular";
@@ -67,6 +67,10 @@ import type {
       />
 
       <mvp-section id="assistant-history" title="Storico contenuti">
+        @if (historyError(); as error) {
+          <mvp-error-state [message]="error" />
+        }
+
         <span actions>{{ filteredCommunications().length }} record</span>
 
         <form class="filters" [formGroup]="filterForm" aria-label="Filtra storico comunicazioni">
@@ -246,11 +250,11 @@ export class AssistantPage {
   protected readonly hasActiveFilters = computed(
     () => Object.keys(this.activeFilters()).length > 0
   );
-  protected readonly filteredCommunications = computed(() =>
-    this.assistant.getFilteredCommunications(this.activeFilters())
-  );
+  protected readonly filteredCommunications = signal<Communication[]>([]);
+  protected readonly historyError = signal<string | null>(null);
 
   private readonly assistant = inject(AssistantService);
+  private readonly destroyRef = inject(DestroyRef);
 
   constructor() {
     this.filterForm.valueChanges
@@ -266,6 +270,25 @@ export class AssistantPage {
         takeUntilDestroyed()
       )
       .subscribe((value) => this.activeFilters.set(value));
+
+    // Una sola sorgente per lo storico: i filtri e ogni mutazione dello stato
+    // (generazione, scarto, eliminazione, valutazione) rileggono dal backend.
+    effect(() => {
+      this.store.history();
+      const filters = this.activeFilters();
+
+      this.assistant
+        .searchCommunications(filters)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (communications) => {
+            this.filteredCommunications.set(communications);
+            this.historyError.set(null);
+          },
+          error: (error: unknown) =>
+            this.historyError.set(getApiErrorMessage(error, "Storico comunicazioni non disponibile."))
+        });
+    });
   }
 
   protected generate(payload: CommunicationDraftForm): void {

@@ -1,5 +1,5 @@
 import { Injectable, inject } from "@angular/core";
-import { Observable, tap } from "rxjs";
+import { Observable, map, tap } from "rxjs";
 import { AlittlebyteMVPAPIService } from "../../../../api/generated/mvp-api";
 import type {
   Communication,
@@ -186,49 +186,21 @@ export class AssistantService {
   }
 
   /**
-   * Lo storico e' interamente caricato via `getMvpState` (chiamata generata
-   * automaticamente, popolata in MvpStateStore): il backend non espone un
-   * endpoint di filtro dedicato, quindi i criteri puliti vengono applicati
-   * alle comunicazioni gia' recuperate.
+   * Storico filtrato (UC-15..UC-18): i criteri viaggiano al backend, che resta
+   * l'unica autorita' sui dati. Le bozze scartate restano escluse, come nello
+   * storico di `state.assistant.history`.
    */
-  getFilteredCommunications(filters: CommunicationFilters): Communication[] {
-    const cleaned = this.cleanFilters(filters);
-    return this.store.history().filter((communication) => this.matchesFilters(communication, cleaned));
+  searchCommunications(filters: CommunicationFilters): Observable<Communication[]> {
+    return this.api
+      .listMvpCommunications({
+        keyword: filters.keyword ?? undefined,
+        tone: filters.tone ?? undefined,
+        style: filters.style ?? undefined,
+        date: filters.date ?? undefined
+      })
+      .pipe(map((response) => response.items));
   }
 
-  private cleanFilters(filters: CommunicationFilters): CommunicationFilters {
-    const cleaned: CommunicationFilters = {};
-
-    (Object.keys(filters) as (keyof CommunicationFilters)[]).forEach((key) => {
-      const value = filters[key];
-
-      if (typeof value === "string" && value.trim() !== "") {
-        cleaned[key] = value.trim();
-      }
-    });
-
-    return cleaned;
-  }
-
-  private matchesFilters(communication: Communication, filters: CommunicationFilters): boolean {
-    if (filters.keyword && !communication.prompt.toLowerCase().includes(filters.keyword.toLowerCase())) {
-      return false;
-    }
-
-    if (filters.tone && communication.tone !== filters.tone) {
-      return false;
-    }
-
-    if (filters.style && communication.style !== filters.style) {
-      return false;
-    }
-
-    if (filters.date && !(communication.createdAt ?? "").startsWith(filters.date)) {
-      return false;
-    }
-
-    return true;
-  }
 }
 
 function progressPhase(progress: GenerationProgressEvent): CommunicationGenerationProgress["phase"] {

@@ -186,7 +186,7 @@ export class DocumentWorkflowService {
         month: filters.month,
         year: filters.year
       })
-      .pipe(map((response) => response.documents));
+      .pipe(map((response) => response.items));
   }
 
   /**

@@ -29,7 +29,9 @@ import type {
   CommunicationMutationResponse,
   DeleteDocumentResponse,
   GenerateCommunicationRequest,
+  ListCommunicationsResponse,
   ListDocumentsResponse,
+  ListMvpCommunicationsParams,
   ListMvpDocumentsParams,
   MvpState,
   RateCommunicationRequest,
@@ -190,6 +192,42 @@ export class AlittlebyteMVPAPIService {
         ...(options as Omit<NonNullable<typeof options>, 'observe'>),
         observe: 'body',
       }
+    );
+  }
+
+/**
+ * @summary List the tenant communication drafts, optionally filtered
+ */
+ listMvpCommunications<TData = ListCommunicationsResponse>(params?: ListMvpCommunicationsParams, options?: HttpClientBodyOptions): Observable<TData>;
+ listMvpCommunications<TData = ListCommunicationsResponse>(params?: ListMvpCommunicationsParams, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ listMvpCommunications<TData = ListCommunicationsResponse>(params?: ListMvpCommunicationsParams, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  listMvpCommunications<TData = ListCommunicationsResponse>(
+    params?: ListMvpCommunicationsParams, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
+    const filteredParams = filterParams({...params, ...options?.params}, new Set<string>([]));
+
+    if (options?.observe === 'events') {
+      return this.http.get<TData>(
+      `/api/v1/communications`,{
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',
+        params: filteredParams,}
+    );
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.get<TData>(
+      `/api/v1/communications`,{
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',
+        params: filteredParams,}
+    );
+    }
+
+    return this.http.get<TData>(
+      `/api/v1/communications`,{
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',
+        params: filteredParams,}
     );
   }
 

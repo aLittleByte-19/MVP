@@ -5,10 +5,10 @@
  * Versioned JSON contract consumed by the Angular SPA.
  * OpenAPI spec version: 1.0.0
  */
-import type { SubDocument } from './subDocument';
+import type { Communication } from './communication';
 
-export interface ListDocumentsResponse {
-  items: SubDocument[];
+export interface ListCommunicationsResponse {
+  items: Communication[];
   total: number;
   page: number;
   perPage: number;

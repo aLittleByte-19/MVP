@@ -79,7 +79,7 @@ class DocumentController
         );
 
         return response()->json([
-            'documents' => collect($paginator->items())->map(fn ($document) => $state->document($document))->values()->all(),
+            'items' => collect($paginator->items())->map(fn ($document) => $state->document($document))->values()->all(),
             'total' => $paginator->total(),
             'page' => $paginator->currentPage(),
             'perPage' => $paginator->perPage(),

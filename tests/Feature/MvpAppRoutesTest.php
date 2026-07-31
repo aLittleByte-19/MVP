@@ -784,6 +784,77 @@ test('operator can preview and export the precompiled send message', function ()
     mvpAssertWellFormedPdf($export->getContent());
 });
 
+test('the communication index excludes discarded drafts, like the history', function () {
+    Communication::factory()->draft()->create();
+    Communication::factory()->discarded()->create();
+
+    $response = $this->getJson('/api/v1/communications')->assertOk();
+
+    expect($response->json('total'))->toBe(1);
+});
+
+test('the communication index filters by keyword, tone and style', function () {
+    $target = Communication::factory()->draft()->create([
+        'prompt' => 'Comunicazione sulla nuova area documentale',
+        'tone' => 'Chiaro e diretto',
+        'style' => 'Testo informativo',
+    ]);
+    Communication::factory()->draft()->create([
+        'prompt' => 'Avviso ferie estive',
+        'tone' => 'Più istituzionale',
+        'style' => 'Comunicato',
+    ]);
+
+    $this->getJson('/api/v1/communications?keyword=documentale')
+        ->assertOk()
+        ->assertJsonPath('total', 1)
+        ->assertJsonPath('items.0.id', $target->id);
+
+    $this->getJson('/api/v1/communications?tone='.urlencode('Chiaro e diretto'))
+        ->assertOk()
+        ->assertJsonPath('total', 1)
+        ->assertJsonPath('items.0.id', $target->id);
+
+    $this->getJson('/api/v1/communications?style='.urlencode('Comunicato'))
+        ->assertOk()
+        ->assertJsonPath('total', 1);
+});
+
+test('the communication index filters by creation day', function () {
+    $old = Communication::factory()->draft()->create();
+    $old->forceFill(['created_at' => '2025-03-04 10:00:00'])->save();
+    Communication::factory()->draft()->create();
+
+    $this->getJson('/api/v1/communications?date=2025-03-04')
+        ->assertOk()
+        ->assertJsonPath('total', 1)
+        ->assertJsonPath('items.0.id', $old->id);
+});
+
+test('the communication index only returns drafts of the caller tenant', function () {
+    config(['mvp.identity.mode' => 'trusted_headers']);
+
+    Communication::factory()->draft()->create(['tenant_id' => 'mvp-local-tenant']);
+    Communication::factory()->draft()->create(['tenant_id' => 'another-tenant']);
+
+    $this->withHeaders([
+        'Accept' => 'application/json',
+        'X-Mvp-User-Id' => 'operator-a',
+        'X-Mvp-User-Email' => 'operator-a@example.test',
+        'X-Mvp-Tenant-Id' => 'mvp-local-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
+    ])->getJson('/api/v1/communications')
+        ->assertOk()
+        ->assertJsonPath('total', 1);
+});
+
+test('the communication index rejects a malformed date filter', function () {
+    $this->withHeader('Accept', 'application/json')
+        ->getJson('/api/v1/communications?date=04-03-2025')
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+});
+
 test('state metrics expose stable keys alongside the presentation label', function () {
     $response = $this->getJson('/api/v1/state')->assertOk();
 
@@ -836,7 +907,7 @@ test('the document index only returns sub-documents of the caller tenant', funct
     ])->getJson('/api/v1/documents');
 
     $response->assertOk()->assertJsonPath('total', 1);
-    expect($response->json('documents.0.companyName'))->toBe('Azienda Mia');
+    expect($response->json('items.0.companyName'))->toBe('Azienda Mia');
 });
 
 test('the document index filters by employee name and company', function () {
@@ -857,12 +928,12 @@ test('the document index filters by employee name and company', function () {
     $this->getJson('/api/v1/documents?search=Rossini')
         ->assertOk()
         ->assertJsonPath('total', 1)
-        ->assertJsonPath('documents.0.id', 'sub-'.$target->id);
+        ->assertJsonPath('items.0.id', 'sub-'.$target->id);
 
     $this->getJson('/api/v1/documents?search=Globex')
         ->assertOk()
         ->assertJsonPath('total', 1)
-        ->assertJsonPath('documents.0.id', 'sub-'.$other->id);
+        ->assertJsonPath('items.0.id', 'sub-'.$other->id);
 });
 
 test('the document index filters by send status', function () {
@@ -875,7 +946,7 @@ test('the document index filters by send status', function () {
     $this->getJson('/api/v1/documents?sendStatus=sent')
         ->assertOk()
         ->assertJsonPath('total', 1)
-        ->assertJsonPath('documents.0.id', 'sub-'.$sent->id);
+        ->assertJsonPath('items.0.id', 'sub-'.$sent->id);
 });
 
 test('the document index filters by confidence threshold in both directions', function () {
@@ -888,12 +959,12 @@ test('the document index filters by confidence threshold in both directions', fu
     $this->getJson('/api/v1/documents?confidenceThreshold=80&confidenceCriterion=below')
         ->assertOk()
         ->assertJsonPath('total', 1)
-        ->assertJsonPath('documents.0.id', 'sub-'.$low->id);
+        ->assertJsonPath('items.0.id', 'sub-'.$low->id);
 
     $this->getJson('/api/v1/documents?confidenceThreshold=80&confidenceCriterion=above')
         ->assertOk()
         ->assertJsonPath('total', 1)
-        ->assertJsonPath('documents.0.id', 'sub-'.$high->id);
+        ->assertJsonPath('items.0.id', 'sub-'.$high->id);
 });
 
 test('the document index filters by month and year of the document date', function () {
@@ -906,12 +977,12 @@ test('the document index filters by month and year of the document date', functi
     $this->getJson('/api/v1/documents?year=2026')
         ->assertOk()
         ->assertJsonPath('total', 1)
-        ->assertJsonPath('documents.0.id', 'sub-'.$target->id);
+        ->assertJsonPath('items.0.id', 'sub-'.$target->id);
 
     $this->getJson('/api/v1/documents?month=11')
         ->assertOk()
         ->assertJsonPath('total', 1)
-        ->assertJsonPath('documents.0.id', 'sub-'.$other->id);
+        ->assertJsonPath('items.0.id', 'sub-'.$other->id);
 });
 
 test('the document index rejects out-of-range filters', function () {

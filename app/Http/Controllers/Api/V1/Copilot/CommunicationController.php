@@ -11,6 +11,7 @@ use App\Copilot\Support\MvpStateService;
 use App\Http\Controllers\Api\V1\Copilot\Concerns\AuthorizesCommunications;
 use App\Http\Controllers\Api\V1\Copilot\Concerns\ResolvesActor;
 use App\Http\Requests\Copilot\GenerateCommunicationRequest;
+use App\Http\Requests\Copilot\ListCommunicationsRequest;
 use App\Http\Requests\Copilot\UpdateCommunicationRequest;
 use App\Models\Copilot\Communication;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -25,6 +26,47 @@ use Illuminate\Validation\ValidationException;
 class CommunicationController
 {
     use AuthorizesCommunications, ResolvesActor;
+
+    /**
+     * Storico delle bozze del tenant, filtrabile (UC-15..UC-18). Come lo
+     * storico esposto in `state.assistant.history`, esclude le bozze scartate:
+     * restano tracciate ma fuori dall'area di lavoro dell'operatore.
+     */
+    public function index(ListCommunicationsRequest $request, MvpStateService $state): JsonResponse
+    {
+        $actor = $this->actor($request);
+        $filters = $request->validated();
+
+        $query = Communication::query()
+            ->where('tenant_id', $actor->tenantId)
+            ->where('status', '!=', CommunicationStatus::Discarded);
+
+        if ($keyword = trim((string) ($filters['keyword'] ?? ''))) {
+            $query->where('prompt', 'like', '%'.$keyword.'%');
+        }
+
+        foreach (['tone', 'style'] as $exact) {
+            if ($value = trim((string) ($filters[$exact] ?? ''))) {
+                $query->where($exact, $value);
+            }
+        }
+
+        if ($date = $filters['date'] ?? null) {
+            $query->whereDate('created_at', $date);
+        }
+
+        $paginator = $query->latest()->paginate(
+            perPage: (int) ($filters['perPage'] ?? 10),
+            page: (int) ($filters['page'] ?? 1),
+        );
+
+        return response()->json([
+            'items' => collect($paginator->items())->map(fn ($communication) => $state->communication($communication))->values()->all(),
+            'total' => $paginator->total(),
+            'page' => $paginator->currentPage(),
+            'perPage' => $paginator->perPage(),
+        ]);
+    }
 
     public function store(
         GenerateCommunicationRequest $request,
