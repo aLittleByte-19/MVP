@@ -28,7 +28,7 @@ L'analisi si basa sullo **stato attuale del codice**: route, controller, service
 
 | Area | Path | Responsabilità |
 |---|---|---|
-| Backend applicativo | `app/` | Controller HTTP, middleware, model, console command |
+| Backend applicativo | `app/` | Controller HTTP divisi per area in `Http/Controllers/Api/V1/` (bozze, stream, copertine, export, rating; documenti, revisione, anteprima, messaggio di invio) con le guardie condivise su attore e tenant in `Http/Controllers/Api/V1/Concerns/`; middleware, model, console command |
 | Domini MVP | `app/Mvp/` | Service layer per dominio: `Ai/` (Bedrock), `Ocr/` (Textract), `Documents/` (Co-Pilot, elaborazione e orchestrazione), `Communications/` (AI Assistant, copertine e orchestrazione), `Workflow/` (infrastruttura di orchestrazione comune), `Identity/`, `Audit/`, `Observability/`, `Support/` |
 | Route | `routes/api.php`, `routes/web.php` | API v1 + endpoint di sistema |
 | Schema dati | `database/migrations/` | 6 tabelle di dominio + indici/FK |
@@ -325,14 +325,18 @@ per la modifica manuale di titolo e testo (consentita solo in stato `draft`),
 `DELETE .../{communication}` per l'eliminazione dallo storico e `POST .../rating` per la
 valutazione 1–5 con commento opzionale, registrabile una sola volta per generazione.
 Ogni mutazione passa da `assertCommunicationOwnership()` e viene registrata nell'audit trail.
-Lo stato `approved` resta a livello di enum senza endpoint dedicato.
+Lo stato `approved` resta **predisposizione deliberata e documentata**, come l'identità SES:
+esiste nell'enum `CommunicationStatus` e nel vincolo CHECK della migrazione, ma nessun codice lo
+assegna e non c'è endpoint per la transizione. Il perimetro non prevede un flusso di
+approvazione (vedi [`mvp-scope.md`](mvp-scope.md)): non è codice dimenticato e non va "completato"
+senza una decisione di scope.
 
 ### 6.6 Invio comunicazioni / email (fuori scope, stato reinterpretato come scaricamento)
 
 L'invio dall'interno della piattaforma è escluso dal committente: il recapito avviene tramite
 canali terzi a partire dal PDF esportato. Di conseguenza `sub_documents.send_status`
 (`pending|sent`) **non indica un invio effettuato dal sistema ma l'avvenuto scaricamento del PDF**:
-`DocumentController::sendExport()` porta lo stato da `pending` a `sent` al download, non
+`SendMessageController::sendExport()` porta lo stato da `pending` a `sent` al download, non
 sull'anteprima, con transizione a senso unico e audit event `mvp-sub-document-send-exported`.
 La distribuzione è esposta dalla metrica `mvp_sub_documents_send_total{send_status}`.
 L'identità SES in Terraform resta scaffolding documentato: non c'è né va aggiunto codice di invio.

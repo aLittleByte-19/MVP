@@ -784,6 +784,79 @@ test('operator can preview and export the precompiled send message', function ()
     mvpAssertWellFormedPdf($export->getContent());
 });
 
+test('operator can edit title and body of a draft communication', function () {
+    $communication = Communication::factory()->draft()->create([
+        'generated_title' => 'Titolo originale',
+        'generated_body' => 'Corpo originale',
+    ]);
+
+    $this->putJson("/api/v1/communications/{$communication->id}", [
+        'title' => 'Titolo corretto a mano',
+        'body' => 'Corpo corretto a mano',
+    ])
+        ->assertOk()
+        ->assertJsonPath('message', 'Bozza aggiornata.')
+        ->assertJsonPath('communication.title', 'Titolo corretto a mano');
+
+    expect($communication->refresh()->generated_title)->toBe('Titolo corretto a mano')
+        ->and($communication->generated_body)->toBe('Corpo corretto a mano')
+        ->and(AuditEvent::query()->where('event_type', 'mvp-communication-edited')->count())->toBe(1);
+});
+
+test('editing is rejected once the draft is no longer in draft state', function () {
+    // La modifica manuale vale finche' la bozza e' in lavorazione: una volta
+    // scartata resta tracciata ma non piu' modificabile.
+    $communication = Communication::factory()->discarded()->create();
+
+    $this->withHeader('Accept', 'application/json')
+        ->putJson("/api/v1/communications/{$communication->id}", [
+            'title' => 'Titolo',
+            'body' => 'Corpo',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+});
+
+test('editing validates the length of title and body', function () {
+    $communication = Communication::factory()->draft()->create();
+
+    $this->withHeader('Accept', 'application/json')
+        ->putJson("/api/v1/communications/{$communication->id}", [
+            'title' => str_repeat('a', 256),
+            'body' => 'Corpo valido',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+
+    $this->withHeader('Accept', 'application/json')
+        ->putJson("/api/v1/communications/{$communication->id}", [
+            'title' => 'Titolo valido',
+            'body' => '',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+});
+
+test('editing rejects cross tenant access', function () {
+    config(['mvp.identity.mode' => 'trusted_headers']);
+    $communication = Communication::factory()->draft()->create();
+
+    $this->withHeaders([
+        'Accept' => 'application/json',
+        'X-Mvp-User-Id' => 'operator-b',
+        'X-Mvp-User-Email' => 'operator-b@example.test',
+        'X-Mvp-Tenant-Id' => 'another-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
+    ])->putJson("/api/v1/communications/{$communication->id}", [
+        'title' => 'Titolo',
+        'body' => 'Corpo',
+    ])
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
+
+    expect($communication->refresh()->generated_title)->not->toBe('Titolo');
+});
+
 test('the communication index excludes discarded drafts, like the history', function () {
     Communication::factory()->draft()->create();
     Communication::factory()->discarded()->create();

@@ -50,7 +50,11 @@ In corso:
 
 Fuori scope MVP:
 
-- dashboard analista dedicata (statistiche di utilizzo aggregate oltre alle metriche operative).
+- dashboard analista dedicata (statistiche di utilizzo aggregate oltre alle metriche operative);
+- flusso di approvazione della bozza. Lo stato `approved` esiste nell'enum `CommunicationStatus`
+  e nel vincolo CHECK in migrazione come **predisposizione documentata**, sullo stesso modello
+  dell'identità SES: non ha endpoint, interfaccia né transizione, e non va scambiato per un ramo
+  dimenticato. Il ciclo previsto oggi è bozza → modifica/rigenerazione → scarto o esportazione.
 
 La generazione usa il servizio AI configurato. Errori di configurazione, credenziali o modello
 vengono esposti come errori applicativi, senza contenuti sostitutivi. Il testo e la copertina hanno
