@@ -21,18 +21,12 @@ export interface SubDocument {
   /** @nullable */
   companyName?: string | null;
   /** @nullable */
-  company?: string | null;
-  /** @nullable */
   file?: string | null;
   /** @nullable */
   documentDate?: string | null;
-  /** @nullable */
-  date?: string | null;
   pages?: number;
   /** @nullable */
   documentType?: string | null;
-  /** @nullable */
-  type?: string | null;
   /** @nullable */
   description?: string | null;
   /** @nullable */

@@ -939,20 +939,14 @@ components:
           type: [string, "null"]
         companyName:
           type: [string, "null"]
-        company:
-          type: [string, "null"]
         file:
           type: [string, "null"]
         documentDate:
           type: [string, "null"]
           format: date
-        date:
-          type: [string, "null"]
         pages:
           type: integer
         documentType:
-          type: [string, "null"]
-        type:
           type: [string, "null"]
         description:
           type: [string, "null"]

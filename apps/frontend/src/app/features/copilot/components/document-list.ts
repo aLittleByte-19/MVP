@@ -3,7 +3,7 @@ import type { SubDocument } from "../../../../api/generated/model";
 import { ButtonComponent } from "../../../shared/components/button/button";
 import { EmptyStateComponent } from "../../../shared/components/empty-state/empty-state";
 import { StatusBadgeComponent } from "../../../shared/components/status-badge/status-badge";
-import { formatFallback } from "../../../shared/util/formatters";
+import { formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
 import { getReviewStatusTone, getSendStatusTone } from "../../../shared/util/status";
 
 @Component({
@@ -32,15 +32,15 @@ import { getReviewStatusTone, getSendStatusTone } from "../../../shared/util/sta
                 <td data-column="recipient" data-label="Destinatario">
                   <span class="recipient">
                     <strong>{{ formatFallback(documentItem.employee, "Destinatario rilevato") }}</strong>
-                    <small>{{ formatFallback(documentItem.company) }}</small>
+                    <small>{{ formatFallback(documentItem.companyName) }}</small>
                   </span>
                 </td>
                 <td data-column="document" data-label="Documento">
-                  {{ formatFallback(documentItem.title || documentItem.type, "Documento") }}
+                  {{ formatFallback(documentItem.title || documentItem.documentType, "Documento") }}
                 </td>
                 <td data-column="file" data-label="File">{{ formatFallback(documentItem.file) }}</td>
                 <td data-column="date" data-label="Data">
-                  <span class="date">{{ formatFallback(documentItem.date) }}</span>
+                  <span class="date">{{ formatDateForDisplay(documentItem.documentDate) }}</span>
                 </td>
                 <td data-column="confidence" data-label="Conf.">
                   {{ formatFallback(documentItem.confidence, "Da verificare") }}
@@ -84,6 +84,7 @@ export class DocumentListComponent {
   readonly selectDocument = output<string>();
 
   protected readonly formatFallback = formatFallback;
+  protected readonly formatDateForDisplay = formatDateForDisplay;
   protected readonly getReviewStatusTone = getReviewStatusTone;
   protected readonly getSendStatusTone = getSendStatusTone;
 }

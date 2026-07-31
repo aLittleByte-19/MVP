@@ -836,7 +836,7 @@ test('the document index only returns sub-documents of the caller tenant', funct
     ])->getJson('/api/v1/documents');
 
     $response->assertOk()->assertJsonPath('total', 1);
-    expect($response->json('documents.0.company'))->toBe('Azienda Mia');
+    expect($response->json('documents.0.companyName'))->toBe('Azienda Mia');
 });
 
 test('the document index filters by employee name and company', function () {

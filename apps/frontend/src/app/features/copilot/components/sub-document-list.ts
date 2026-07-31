@@ -177,7 +177,7 @@ const emptySendMessageForm: SendMessageFormState = {
                   } @else {
                     <input
                       id="document-type-field"
-                      [value]="formatFallback(document.documentType ?? document.type)"
+                      [value]="formatFallback(document.documentType)"
                       readOnly
                       disabled
                       tabindex="-1"
@@ -376,7 +376,7 @@ export class SubDocumentListComponent {
   // documento ha gia' un valore fuori enum, lo si aggiunge come opzione extra
   // cosi' la select lo mostra selezionato invece di apparire vuota.
   protected readonly documentTypeOptions = computed<string[]>(() => {
-    const current = this.documentItem()?.documentType ?? this.documentItem()?.type ?? "";
+    const current = this.documentItem()?.documentType ?? "";
     return current && !this.isPredefinedDocumentType(current)
       ? [current, ...DOCUMENT_TYPE_OPTIONS]
       : [...DOCUMENT_TYPE_OPTIONS];
@@ -519,7 +519,7 @@ export class SubDocumentListComponent {
   }
 
   protected documentDateDisplay(document: SubDocument): string {
-    return formatDateForDisplay(document.documentDate ?? document.date);
+    return formatDateForDisplay(document.documentDate);
   }
 
   protected saveReview(): void {
@@ -576,9 +576,9 @@ function toReviewForm(documentItem: SubDocument | null): ReviewFormState {
     employeeName: compactEmployeeName(documentItem),
     employeeFirstName: documentItem.employeeFirstName ?? "",
     employeeLastName: documentItem.employeeLastName ?? "",
-    companyName: documentItem.companyName ?? documentItem.company ?? "",
+    companyName: documentItem.companyName ?? "",
     documentDate: documentItem.documentDate ?? "",
-    documentType: documentItem.documentType ?? documentItem.type ?? "",
+    documentType: documentItem.documentType ?? "",
     description: documentItem.description ?? "",
     recipientEmail: documentItem.recipientEmail ?? "",
     fiscalCode: documentItem.fiscalCode ?? "",

@@ -178,16 +178,15 @@ class MvpStateService
             'employeeLastName' => $data?->employee_last_name,
             'employee' => $employee !== '' ? $employee : null,
             'companyName' => $data?->company_name,
-            'company' => $data?->company_name,
             'recipientEmail' => $data?->recipient_email,
             'fiscalCode' => $data?->fiscal_code,
             'employeeId' => $data?->employee_id,
             'file' => $original?->original_filename,
+            // Data in ISO: la formattazione per la lettura e' presentazione e
+            // vive nel frontend (`formatDateForDisplay`).
             'documentDate' => $data?->document_date?->format('Y-m-d'),
-            'date' => $data?->document_date?->format('d/m/Y'),
             'pages' => $pages,
             'documentType' => $data?->document_type,
-            'type' => $data?->document_type,
             'description' => $data?->description,
             'confidence' => $confidence,
             'reviewStatus' => $subDocument->review_status->value,
