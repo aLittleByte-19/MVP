@@ -212,6 +212,22 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 
 **Dove**: `app/Mvp/Observability/MetricsRecorder.php` + `PrometheusExporter.php`, endpoint `/internal/metrics`, volume compose `observability-metrics` condiviso tra `app` e `queue`.
 **Ruolo**: counter e histogram HTTP (bucket espliciti 5ms→10s) e counter di dominio (`textract_jobs_*`, `stepfunctions_executions_*`, `sqs_messages_*`) persistiti su JSON con file locking; il volume condiviso fa sì che le metriche registrate dal worker raggiungano l'exporter scrappato via nginx.
+
+Le due sorgenti sono distinte e non vanno confuse: `MetricsRecorder` accumula **counter di eventi**
+su file, mentre `PrometheusExporter` calcola **gauge di stato** interrogando il database a ogni
+scrape. Sono gauge, in particolare, le distribuzioni per stato:
+
+| Gauge | Label | Cosa misura |
+|---|---|---|
+| `mvp_original_documents_total`, `mvp_sub_documents_total` | `status` / `state` | volumi della pipeline documentale |
+| `mvp_sub_documents_review_total` | `review_status` | partizione completa per stato di revisione |
+| `mvp_sub_documents_send_total` | `send_status` | avvenuto **scaricamento** del PDF (vedi §6.6) |
+| `mvp_communications_total`, `mvp_communications_generation_total` | `status` / `generation_status` | decisione sulla bozza e stato della pipeline |
+| `mvp_communication_covers_total` | `cover_status` | esito delle copertine |
+| `mvp_communications_rated_total` | nessuna | bozze che hanno ricevuto una valutazione |
+| `mvp_communication_rating_average` | nessuna | media delle stelle sulle bozze valutate |
+| `mvp_document_stuck_processing_total`, `mvp_communication_stuck_processing_total` | nessuna | elaborazioni oltre il timeout configurato |
+| `mvp_readiness_status`, `mvp_app_info` | nessuna | readiness e identificazione del build |
 **Valutazione**: soluzione pragmatica e funzionante senza dipendenze aggiuntive. Limite tecnico: il file JSON con lock è un single-writer bottleneck e non scala oltre un host; la soluzione canonica in produzione è un sidecar/exporter dedicato o push OTLP delle metriche di dominio.
 
 ### Docker Compose + hardening container
@@ -315,7 +331,31 @@ Error handling: retry ASL (2 tentativi, backoff 2x) e `Catch`→`Failed`; `sendT
 
 ### 6.4 Stato attore e storici (implementato)
 
-`GET /api/v1/state` → `MvpStateService::forActor()`: storico comunicazioni, documenti con sotto-documenti e dati estratti, metriche di qualità. Il frontend lo consuma come unica query (`useMvpState`).
+`GET /api/v1/state` → `MvpStateService::forActor()`: metriche di qualità, storico comunicazioni e
+documenti con sotto-documenti e dati estratti. Il frontend lo carica una volta sola in
+`MvpStateStore` (`loadOnce()`) e lo tiene aggiornato con le risposte delle mutazioni e con gli
+eventi SSE.
+
+Gli **elenchi filtrabili** non passano da qui: le sorgenti delle due liste sono
+`GET /api/v1/communications` e `GET /api/v1/documents` (vedi §6.4.1). Gli array
+`assistant.history` e `copilot.documents` esposti dallo stato restano finestre limitate (10 e 40
+elementi) usate per il contesto immediato, non per conteggi né per risolvere una selezione. Per i
+totali esistono le metriche, ciascuna con una `key` stabile (`assistant.drafts`,
+`copilot.needs_review`, `copilot.validated`, e così via) che il frontend usa al posto della label,
+che è solo testo di presentazione.
+
+### 6.4.1 Elenchi filtrabili (implementato)
+
+Due endpoint simmetrici, entrambi con scoping sul tenant, validazione via Form Request, paginazione
+e la stessa forma di risposta `{items, total, page, perPage}`:
+
+| Endpoint | Controller | Filtri |
+|---|---|---|
+| `GET /api/v1/communications` | `CommunicationController::index` (`ListCommunicationsRequest`) | parola chiave sul prompt, tono, stile, giorno di creazione (UC-15..UC-18). Esclude le bozze scartate, come lo storico |
+| `GET /api/v1/documents` | `DocumentController::index` (`ListDocumentsRequest`) | nome/cognome/azienda, stato di invio, soglia di confidenza sopra o sotto, mese e anno (UC-35..UC-38) |
+
+Gli elementi hanno la stessa forma degli oggetti esposti nello stato: la SPA non conosce due
+rappresentazioni dello stesso dato.
 
 ### 6.5 Revisione, modifica e valutazione delle bozze (implementato)
 

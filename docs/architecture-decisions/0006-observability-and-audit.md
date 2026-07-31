@@ -42,7 +42,7 @@ Alloy.
 - Metriche: `app/Mvp/Observability/MetricsRecorder.php`, `PrometheusExporter.php`, endpoint
   `/internal/metrics`.
 - Config osservabilità: `docker/otel-collector/`, `docker/prometheus/{prometheus.yml,rules/}`,
-  `docker/tempo/`, `docker/loki/`, `docker/alloy/`, `docker/grafana/` (5 dashboard, 10 alert rule).
+  `docker/tempo/`, `docker/loki/`, `docker/alloy/`, `docker/grafana/` (6 dashboard, 15 alert rule).
 - Validazione config in CI: `make observability-config` (`promtool`, `otelcol validate`).
 
 ## References
