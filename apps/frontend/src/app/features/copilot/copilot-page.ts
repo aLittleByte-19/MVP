@@ -222,9 +222,12 @@ export class CopilotPage {
     search: new FormControl("", { nonNullable: true }),
     sendStatus: new FormControl("", { nonNullable: true }),
     confidenceCriterion: new FormControl("below", { nonNullable: true }),
-    confidenceThreshold: new FormControl("", { nonNullable: true }),
+    // Gli `input[type=number]` sono gestiti da NumberValueAccessor, che scrive
+    // nel controllo un `number` (o `null` se vuoto), non una stringa: tiparli
+    // come stringa fa esplodere qualunque operazione testuale sul valore.
+    confidenceThreshold: new FormControl<number | null>(null),
     month: new FormControl("", { nonNullable: true }),
-    year: new FormControl("", { nonNullable: true })
+    year: new FormControl<number | null>(null)
   });
 
   protected readonly activeFilters = signal<DocumentFilters>({});
@@ -281,9 +284,9 @@ export class CopilotPage {
     search: string;
     sendStatus: string;
     confidenceCriterion: string;
-    confidenceThreshold: string;
+    confidenceThreshold: number | null;
     month: string;
-    year: string;
+    year: number | null;
   }>): DocumentFilters {
     const filters: DocumentFilters = {};
 
@@ -295,25 +298,19 @@ export class CopilotPage {
       filters.sendStatus = value.sendStatus as SubDocumentSendStatus;
     }
 
-    if (value.confidenceThreshold?.trim()) {
-      const threshold = Number(value.confidenceThreshold);
-
-      if (!Number.isNaN(threshold)) {
-        filters.confidenceThreshold = threshold;
-        filters.confidenceCriterion = (value.confidenceCriterion || "below") as ConfidenceCriterion;
-      }
+    const threshold = value.confidenceThreshold;
+    if (typeof threshold === "number" && Number.isFinite(threshold)) {
+      filters.confidenceThreshold = threshold;
+      filters.confidenceCriterion = (value.confidenceCriterion || "below") as ConfidenceCriterion;
     }
 
     if (value.month) {
       filters.month = Number(value.month);
     }
 
-    if (value.year?.trim()) {
-      const year = Number(value.year);
-
-      if (!Number.isNaN(year)) {
-        filters.year = year;
-      }
+    const year = value.year;
+    if (typeof year === "number" && Number.isFinite(year)) {
+      filters.year = year;
     }
 
     return filters;
