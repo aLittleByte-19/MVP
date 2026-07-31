@@ -108,6 +108,8 @@ test:
 
 backend-coverage:
 	docker compose build app
+	mkdir -p coverage
+	chmod 0777 coverage
 	docker compose run --rm --no-deps -v "$(CURDIR)/coverage:/var/www/html/coverage" -e XDEBUG_MODE=coverage $(TEST_ENV) app php -d memory_limit=1G vendor/bin/pest --coverage --path-coverage --coverage-clover coverage/clover.xml --min=80
 	$(NODE) node scripts/ci/check-coverage-thresholds.mjs backend coverage/clover.xml
 
