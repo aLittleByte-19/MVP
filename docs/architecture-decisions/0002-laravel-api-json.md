@@ -1,4 +1,4 @@
-# ADR 0002 — Backend Laravel come API JSON
+# ADR 0002: Backend Laravel come API JSON
 
 Status: Accepted, implemented
 Date: 2026-06-08

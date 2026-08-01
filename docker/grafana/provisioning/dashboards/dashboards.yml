@@ -1,9 +1,9 @@
 apiVersion: 1
 
 providers:
-  - name: alittlebyte-poc
+  - name: alittlebyte-mvp
     orgId: 1
-    folder: Alittlebyte PoC
+    folder: Alittlebyte MVP
     type: file
     disableDeletion: false
     editable: false

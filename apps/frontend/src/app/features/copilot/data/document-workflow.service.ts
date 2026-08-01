@@ -1,14 +1,16 @@
 import { Injectable, inject } from "@angular/core";
-import { Observable, tap } from "rxjs";
-import { AlittlebytePoCAPIService } from "../../../../api/generated/poc-api";
+import { Observable, map, tap } from "rxjs";
+import { AlittlebyteMVPAPIService } from "../../../../api/generated/mvp-api";
 import type {
   DeleteDocumentResponse,
-  PocState,
+  MvpState,
   SubDocument,
+  SubDocumentSendStatus,
   UpdateExtractedDataRequest,
+  UpdateSendMessageRequest,
   UpdateSubDocumentReviewResponse
 } from "../../../../api/generated/model";
-import { PocStateStore } from "../../../core/state/poc-state.store";
+import { MvpStateStore } from "../../../core/state/mvp-state.store";
 import { getSubDocumentNumericId } from "../../../shared/util/formatters";
 
 /** Stato dell'anteprima PDF di un sotto-documento. */
@@ -44,6 +46,23 @@ interface ProcessingProgressEvent {
   subDocuments: number;
 }
 
+/** Criterio di confronto per il filtro di confidenza (UC-37). */
+export type ConfidenceCriterion = "above" | "below";
+
+/** Criteri di filtro per l'elenco documenti mostrato nel Co-Pilot (UC-35..UC-38). */
+export interface DocumentFilters {
+  /** Ricerca testuale su nome/cognome dipendente e azienda (UC-35). */
+  search?: string;
+  /** Stato di invio: "sent" (Inviato) o "pending" (Non inviato) (UC-36). */
+  sendStatus?: SubDocumentSendStatus;
+  /** Soglia di confidenza e criterio di confronto rispetto alla soglia (UC-37). */
+  confidenceThreshold?: number;
+  confidenceCriterion?: ConfidenceCriterion;
+  /** Mese (1-12) e anno del documento (UC-38). */
+  month?: number;
+  year?: number;
+}
+
 /**
  * Pipeline documentale del Co-Pilot: upload con elaborazione asincrona via SSE,
  * revisione/validazione dei dati estratti, eliminazione e verifica anteprima.
@@ -51,8 +70,8 @@ interface ProcessingProgressEvent {
  */
 @Injectable({ providedIn: "root" })
 export class DocumentWorkflowService {
-  private readonly api = inject(AlittlebytePoCAPIService);
-  private readonly store = inject(PocStateStore);
+  private readonly api = inject(AlittlebyteMVPAPIService);
+  private readonly store = inject(MvpStateStore);
 
   /**
    * Carica il documento e segue lo stream di elaborazione (Server-Sent Events).
@@ -66,7 +85,7 @@ export class DocumentWorkflowService {
     return new Observable<DocumentUploadProgress>((observer) => {
       let eventSource: EventSource | null = null;
 
-      const subscription = this.api.uploadPocDocument({ document: file }).subscribe({
+      const subscription = this.api.uploadMvpDocument({ document: file }).subscribe({
         next: (response) => {
           observer.next({ status: response.message, phase: "queued" });
 
@@ -91,7 +110,7 @@ export class DocumentWorkflowService {
           });
 
           eventSource.addEventListener("done", (event) => {
-            const payload = JSON.parse((event as MessageEvent).data) as { state?: PocState };
+            const payload = JSON.parse((event as MessageEvent).data) as { state?: MvpState };
 
             if (payload.state) {
               this.store.setState(payload.state);
@@ -124,7 +143,7 @@ export class DocumentWorkflowService {
 
   deleteSubDocument(documentId: string): Observable<DeleteDocumentResponse> {
     return this.api
-      .deletePocSubDocument(getSubDocumentNumericId(documentId))
+      .deleteMvpSubDocument(getSubDocumentNumericId(documentId))
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 
@@ -133,14 +152,41 @@ export class DocumentWorkflowService {
     payload: UpdateExtractedDataRequest
   ): Observable<UpdateSubDocumentReviewResponse> {
     return this.api
-      .updatePocSubDocumentExtractedData(getSubDocumentNumericId(documentId), payload)
+      .updateMvpSubDocumentExtractedData(getSubDocumentNumericId(documentId), payload)
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 
   markReviewed(documentId: string): Observable<UpdateSubDocumentReviewResponse> {
     return this.api
-      .reviewPocSubDocument(getSubDocumentNumericId(documentId))
+      .reviewMvpSubDocument(getSubDocumentNumericId(documentId))
       .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  saveSendMessage(
+    documentId: string,
+    payload: UpdateSendMessageRequest
+  ): Observable<UpdateSubDocumentReviewResponse> {
+    return this.api
+      .updateMvpSubDocumentSendMessage(getSubDocumentNumericId(documentId), payload)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  /**
+   * Storico filtrato (UC-35..UC-38): i criteri viaggiano al backend, che resta
+   * l'unica autorita' sui dati. Anche senza filtri la lista arriva da qui,
+   * cosi' la vista ha una sola sorgente invece di due rappresentazioni.
+   */
+  searchDocuments(filters: DocumentFilters): Observable<SubDocument[]> {
+    return this.api
+      .listMvpDocuments({
+        search: filters.search,
+        sendStatus: filters.sendStatus,
+        confidenceThreshold: filters.confidenceThreshold,
+        confidenceCriterion: filters.confidenceCriterion,
+        month: filters.month,
+        year: filters.year
+      })
+      .pipe(map((response) => response.items));
   }
 
   /**

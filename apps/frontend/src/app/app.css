@@ -5,8 +5,8 @@
 
 .themeToggle {
   position: fixed;
-  top: var(--poc-space-6);
-  right: var(--poc-space-6);
+  top: var(--mvp-space-6);
+  right: var(--mvp-space-6);
   z-index: 50;
   display: inline-flex;
   align-items: center;
@@ -15,11 +15,11 @@
   min-width: 72px;
   min-height: 38px;
   padding: 4px;
-  border: 1px solid var(--poc-border);
+  border: 1px solid var(--mvp-border);
   border-radius: 999px;
-  background: var(--poc-surface);
-  color: var(--poc-muted);
-  box-shadow: var(--poc-shadow);
+  background: var(--mvp-surface);
+  color: var(--mvp-muted);
+  box-shadow: var(--mvp-shadow);
 }
 
 .themeToggle::before {
@@ -28,12 +28,12 @@
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: var(--poc-primary);
+  background: var(--mvp-primary);
   content: "";
   transition: transform 160ms ease;
 }
 
-:host-context([data-poc-theme="dark"]) .themeToggle::before {
+:host-context([data-mvp-theme="dark"]) .themeToggle::before {
   transform: translateX(32px);
 }
 
@@ -45,13 +45,13 @@
 }
 
 .themeToggle svg + svg {
-  color: var(--poc-muted);
+  color: var(--mvp-muted);
 }
 
-:host-context([data-poc-theme="dark"]) .themeToggle svg {
-  color: var(--poc-muted);
+:host-context([data-mvp-theme="dark"]) .themeToggle svg {
+  color: var(--mvp-muted);
 }
 
-:host-context([data-poc-theme="dark"]) .themeToggle svg + svg {
+:host-context([data-mvp-theme="dark"]) .themeToggle svg + svg {
   color: #ffffff;
 }

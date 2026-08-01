@@ -1,6 +1,6 @@
-# ADR 0001 — Frontend come SPA
+# ADR 0001: Frontend come SPA
 
-Status: Superseded by [0008 — Frontend Angular e serving statico LocalStack](0008-angular-frontend-static-serving.md)
+Status: Superseded by [0008; Frontend Angular e serving statico LocalStack](0008-angular-frontend-static-serving.md)
 Date: 2026-06-08
 
 > Historical ADR. This records the original frontend decision; the active frontend decision is ADR 0008.
@@ -15,7 +15,7 @@ lato server.
 ## Decision
 
 Mantenere il frontend iniziale in `apps/frontend`. Generare il client TypeScript da
-`openapi/v1/alittlebyte-poc-api.yaml` tramite Orval, usare TanStack Query per lo stato server,
+`openapi/v1/alittlebyte-mvp-api.yaml` tramite Orval, usare TanStack Query per lo stato server,
 React Hook Form per la gestione dei form, Vitest per i component test e controlli axe/Pa11y in
 container per una validazione di accessibilita' rappresentativa.
 

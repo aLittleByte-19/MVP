@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Copilot\Observability\MetricsRecorder;
+use App\Mvp\Observability\MetricsRecorder;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;

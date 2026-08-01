@@ -1,11 +1,11 @@
-.PHONY: help test pint node-install frontend-build frontend-lint frontend-test frontend-typecheck frontend-audit frontend-a11y frontend-s3-local-provision frontend-s3-local-upload frontend-s3-local-deploy edge-cdn-local-url frontend-serving-local-test openapi-generate openapi-validate observability-config observability-up local-tls trusted-local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke reset-all workers backup-local restore-local
+.PHONY: help test backend-coverage pint node-install frontend-build frontend-lint frontend-test frontend-coverage frontend-typecheck frontend-audit frontend-a11y frontend-s3-local-provision frontend-s3-local-upload frontend-s3-local-deploy edge-cdn-local-url frontend-serving-local-test openapi-generate openapi-validate observability-config observability-up local-tls trusted-local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke reset-all workers backup-local restore-local
 
 # Colori per l'output
 BLUE  := \033[34m
 RESET := \033[0m
 LOCALSTACK_ENDPOINT_INTERNAL ?= http://localstack:4566
 FRONTEND_DIST ?= apps/frontend/dist
-FRONTEND_STATIC_BUCKET ?= poc-frontend-static-local
+FRONTEND_STATIC_BUCKET ?= mvp-frontend-static-local
 EDGE_CDN_LOCAL_URL ?= https://localhost:8443
 # -T: niente pseudo-TTY per i tool non interattivi. Senza, "docker compose run"
 # mette il terminale in raw mode e, se il run si blocca (es. glitch del daemon),
@@ -32,10 +32,12 @@ TEST_ENV := -e CONFIG_SOURCE=env \
 help:
 	@echo "$(BLUE)Comandi disponibili:$(RESET)"
 	@echo "  $(BLUE)make test$(RESET)      Esegue la suite di test (Pest)"
+	@echo "  $(BLUE)make backend-coverage$(RESET) Misura linee e branch backend con Xdebug"
 	@echo "  $(BLUE)make pint$(RESET)      Esegue Laravel Pint in modalita' check"
 	@echo "  $(BLUE)make frontend-build$(RESET) Compila la SPA Angular"
 	@echo "  $(BLUE)make frontend-lint$(RESET)  Esegue ESLint sul frontend Angular"
 	@echo "  $(BLUE)make frontend-test$(RESET)  Esegue i test frontend"
+	@echo "  $(BLUE)make frontend-coverage$(RESET) Misura statement, funzioni e branch frontend"
 	@echo "  $(BLUE)make frontend-typecheck$(RESET) Esegue typecheck TypeScript"
 	@echo "  $(BLUE)make frontend-audit$(RESET) Audit npm production dependencies"
 	@echo "  $(BLUE)make frontend-a11y$(RESET)  Esegue axe e Pa11y sullo stack HTTPS locale"
@@ -104,6 +106,14 @@ test:
 	docker compose build app
 	docker compose run --rm --no-deps $(TEST_ENV) app php artisan test
 
+backend-coverage:
+	docker compose build app
+	mkdir -p coverage
+	chmod 0777 coverage
+	docker compose run --rm --no-deps -v "$(CURDIR)/coverage:/var/www/html/coverage" -e XDEBUG_MODE=coverage $(TEST_ENV) app php -d memory_limit=1G vendor/bin/pest --coverage --path-coverage --coverage-cobertura coverage/cobertura.xml
+	$(NODE) node scripts/ci/normalize-cobertura-paths.mjs coverage/cobertura.xml /var/www/html
+	$(NODE) node scripts/ci/check-coverage-thresholds.mjs backend coverage/cobertura.xml
+
 node-install:
 	$(NODE) npm ci --ignore-scripts
 
@@ -116,6 +126,10 @@ frontend-lint: node-install
 
 frontend-test: openapi-generate
 	$(NODE) npm run frontend:test
+
+frontend-coverage:
+	$(NODE) sh -lc 'cd apps/frontend && npx jest --coverage --runInBand'
+	$(NODE) node scripts/ci/check-coverage-thresholds.mjs frontend apps/frontend/coverage/coverage-summary.json
 
 frontend-typecheck: openapi-generate
 	$(NODE) npm run frontend:typecheck
@@ -137,17 +151,17 @@ edge-cdn-local-url:
 	@printf "\n"
 
 frontend-serving-local-test: frontend-s3-local-deploy
-	@if [ ! -f docker/traefik/certs/poc-local.test.crt ] || [ ! -f docker/traefik/certs/poc-local.test.key ]; then $(MAKE) local-tls; fi
+	@if [ ! -f docker/traefik/certs/mvp-local.test.crt ] || [ ! -f docker/traefik/certs/mvp-local.test.key ]; then $(MAKE) local-tls; fi
 	docker compose up -d --wait --force-recreate edge-cdn traefik
 	@url="$(EDGE_CDN_LOCAL_URL)"; \
 	echo "$(BLUE)Testing $$url$(RESET)"; \
-	curl -kfsS "$$url" | grep -q "<poc-root"
+	curl -kfsS "$$url" | grep -q "<mvp-root"
 
 frontend-audit: node-install
 	$(NODE) npm audit --omit=dev --audit-level=high
 
 frontend-a11y: frontend-s3-local-deploy
-	@if [ ! -f docker/traefik/certs/poc-local.test.crt ] || [ ! -f docker/traefik/certs/poc-local.test.key ]; then $(MAKE) local-tls; fi
+	@if [ ! -f docker/traefik/certs/mvp-local.test.crt ] || [ ! -f docker/traefik/certs/mvp-local.test.key ]; then $(MAKE) local-tls; fi
 	docker compose up -d --wait --force-recreate app nginx edge-cdn traefik
 	$(FRONTEND_AUDIT) node scripts/a11y/csp-smoke.mjs https://traefik:8443
 	$(FRONTEND_AUDIT) node scripts/a11y/axe-playwright.mjs https://traefik:8443
@@ -157,7 +171,7 @@ openapi-generate: node-install
 	$(NODE) npm run openapi:generate
 
 openapi-validate: node-install
-	$(NODE) npx --yes @redocly/cli@latest lint openapi/v1/alittlebyte-poc-api.yaml
+	$(NODE) npx --yes @redocly/cli@latest lint openapi/v1/alittlebyte-mvp-api.yaml
 
 observability-config:
 	docker compose run --rm --no-deps otel-collector validate --config=/etc/otelcol-contrib/config.yml
@@ -171,19 +185,19 @@ pint:
 	docker compose run --rm --no-deps app php vendor/bin/pint --test
 
 local-tls:
-	$(TLS_TOOL) scripts/tls/generate-local-cert.sh docker/traefik/certs/poc-local.test.crt docker/traefik/certs/poc-local.test.key
+	$(TLS_TOOL) scripts/tls/generate-local-cert.sh docker/traefik/certs/mvp-local.test.crt docker/traefik/certs/mvp-local.test.key
 
 trusted-local-tls:
-	scripts/tls/generate-trusted-local-cert.sh docker/traefik/certs/poc-local.test.crt docker/traefik/certs/poc-local.test.key
+	scripts/tls/generate-trusted-local-cert.sh docker/traefik/certs/mvp-local.test.crt docker/traefik/certs/mvp-local.test.key
 
 fresh:
 	docker compose --profile release run --rm migrate php artisan migrate:fresh --seed --force
-	docker compose run --rm app php artisan poc:reset-data --force
+	docker compose run --rm app php artisan mvp:reset-data --force
 	docker compose up -d redis
 	docker compose exec -T redis redis-cli FLUSHALL
 
 logs:
-	docker compose logs -f app queue nginx edge-cdn localstack
+	docker compose logs -f app queue queue-communications nginx edge-cdn localstack
 
 sh:
 	docker compose run --rm app sh
@@ -191,18 +205,18 @@ sh:
 restart:
 	docker compose restart
 
-# Scala i worker della pipeline documentale (default 2): il servizio queue non
-# ha container_name fisso e l'idempotenza dei task e' garantita da
+# Scala i worker delle due pipeline (default 2 ciascuna): i servizi queue non
+# hanno container_name fisso e l'idempotenza dei task e' garantita da
 # task_token_hash + claim atomico, quindi piu' repliche sono sicure.
 WORKERS ?= 2
 workers:
-	docker compose up -d --no-recreate --scale queue=$(WORKERS) queue
+	docker compose up -d --no-recreate --scale queue=$(WORKERS) --scale queue-communications=$(WORKERS) queue queue-communications
 
 # --clean --if-exists: il dump droppa e ricrea gli oggetti, cosi' il restore
 # funziona anche su un database gia' migrato senza errori di oggetti duplicati.
 backup-local:
 	@mkdir -p backups/local
-	docker compose exec -T postgres sh -lc 'pg_dump --clean --if-exists -U "$$POSTGRES_USER" "$$POSTGRES_DB"' > backups/local/poc-$$(date +%Y%m%d-%H%M%S).sql
+	docker compose exec -T postgres sh -lc 'pg_dump --clean --if-exists -U "$$POSTGRES_USER" "$$POSTGRES_DB"' > backups/local/mvp-$$(date +%Y%m%d-%H%M%S).sql
 	@echo "$(BLUE)Backup creato in backups/local.$(RESET)"
 
 restore-local:
@@ -211,14 +225,14 @@ restore-local:
 	docker compose exec -T postgres sh -lc 'psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" "$$POSTGRES_DB"' < "$(BACKUP)"
 
 setup:
-	@if [ ! -f docker/traefik/certs/poc-local.test.crt ] || [ ! -f docker/traefik/certs/poc-local.test.key ]; then $(MAKE) local-tls; else echo "$(BLUE)Certificato TLS locale gia' presente.$(RESET)"; fi
+	@if [ ! -f docker/traefik/certs/mvp-local.test.crt ] || [ ! -f docker/traefik/certs/mvp-local.test.key ]; then $(MAKE) local-tls; else echo "$(BLUE)Certificato TLS locale gia' presente.$(RESET)"; fi
 	docker compose --profile release build
 	docker compose up -d postgres redis localstack
 	$(MAKE) infra-apply
 	$(MAKE) frontend-build
 	$(MAKE) frontend-s3-local-upload
 	$(MAKE) release
-	docker compose up -d app nginx queue traefik otel-collector prometheus tempo alertmanager grafana loki alloy
+	docker compose up -d app nginx queue queue-communications traefik otel-collector prometheus tempo alertmanager grafana loki alloy
 	@echo "$(BLUE)L'ambiente è stato configurato ed è in fase di avvio.$(RESET)"
 	@echo "$(BLUE)Endpoint locale: https://localhost:8443$(RESET)"
 	@echo "$(BLUE)Grafana: https://grafana.localhost:8443$(RESET)"
@@ -247,13 +261,13 @@ infra-destroy: infra-init
 # aggiornato le credenziali AWS_REAL_*) e ricrea app e queue per ricaricare la
 # configurazione runtime caricata dal bootstrap Laravel.
 refresh-runtime: infra-apply
-	docker compose up -d --no-deps --force-recreate app queue
-	@echo "$(BLUE)Runtime aggiornato: SSM/Secrets riscritti, app e queue ricreati.$(RESET)"
+	docker compose up -d --no-deps --force-recreate app queue queue-communications
+	@echo "$(BLUE)Runtime aggiornato: SSM/Secrets riscritti, app e worker ricreati.$(RESET)"
 
-# Reset TOTALE della PoC: ferma lo stack, elimina tutti i volumi locali
+# Reset TOTALE della MVP: ferma lo stack, elimina tutti i volumi locali
 # (PostgreSQL, Redis, LocalStack, osservabilita'), svuota il prefisso del
 # bucket S3 reale se configurato nel .env e riparte da zero con make setup.
-# Distruttivo per design (e' una PoC): FORCE=1 salta la conferma interattiva.
+# Distruttivo per design (e' una MVP): FORCE=1 salta la conferma interattiva.
 reset-all:
 	@if [ "$(FORCE)" != "1" ]; then \
 		printf "Verranno eliminati TUTTI i dati locali e gli oggetti del bucket S3 reale. Continuare? [y/N] "; \
@@ -277,7 +291,7 @@ reset-all:
 	fi
 	docker compose --profile tools --profile release down --volumes --remove-orphans
 	$(MAKE) setup
-	@echo "$(BLUE)PoC ripartita da zero: dati locali e remoti azzerati.$(RESET)"
+	@echo "$(BLUE)MVP ripartita da zero: dati locali e remoti azzerati.$(RESET)"
 
 # Legge i valori dal .env (gestendo i commenti inline) anziche' dalla shell:
 # docker compose carica .env da solo, ma make no, quindi li estraiamo qui.

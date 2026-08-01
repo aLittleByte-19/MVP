@@ -25,7 +25,7 @@ Endpoint:
 - Health: https://localhost:8443/health
 - Readiness: https://localhost:8443/ready
 - Grafana: https://grafana.localhost:8443 (login Grafana)
-- Prometheus: https://prometheus.localhost:8443 (basic auth `poc` / `poc-obs-local-password`)
+- Prometheus: https://prometheus.localhost:8443 (basic auth `mvp` / `mvp-obs-local-password`)
 - Alertmanager: https://alertmanager.localhost:8443 (basic auth)
 - Tempo: https://tempo.localhost:8443 (basic auth)
 - LocalStack edge: http://localhost:4566 (bind solo 127.0.0.1)
@@ -48,7 +48,7 @@ docker compose restart traefik
 ```
 
 Il target esegue `mkcert -install`, crea un certificato valido per
-`localhost`, `poc.localhost`, `*.localhost`, `127.0.0.1` e `::1`, e lo scrive
+`localhost`, `mvp.localhost`, `*.localhost`, `127.0.0.1` e `::1`, e lo scrive
 negli stessi file montati da Traefik. Non viene eseguito dentro Docker perche'
 deve aggiornare il trust store della macchina locale.
 
@@ -70,8 +70,8 @@ Il servizio `terraform` usa l'endpoint interno `http://localstack:4566` e crea S
 
 I container applicativi ricevono solo parametri bootstrap `CONFIG_*`. I valori runtime sono caricati da:
 
-- SSM Parameter Store: `/poc/app`
-- Secrets Manager: `/poc/app/runtime`
+- SSM Parameter Store: `/mvp/app`
+- Secrets Manager: `/mvp/app/runtime`
 
 Se una chiave obbligatoria manca, il bootstrap Laravel fallisce. Questa scelta evita configurazioni implicite e rende visibili errori di provisioning.
 
@@ -101,7 +101,7 @@ make reset-all          # chiede conferma
 make reset-all FORCE=1  # senza conferma
 ```
 
-Elimina tutti i volumi locali (PostgreSQL, Redis, LocalStack, osservabilita'), svuota il prefisso del bucket S3 reale se `AWS_REAL_S3_BUCKET` e' configurato nel `.env`, e riesegue `make setup` da zero. E' distruttivo per design: pensato per riportare la PoC allo stato iniziale.
+Elimina tutti i volumi locali (PostgreSQL, Redis, LocalStack, osservabilita'), svuota il prefisso del bucket S3 reale se `AWS_REAL_S3_BUCKET` e' configurato nel `.env`, e riesegue `make setup` da zero. E' distruttivo per design: pensato per riportare la MVP allo stato iniziale.
 
 ## Checks
 
@@ -124,7 +124,7 @@ La suite imposta `CONFIG_SOURCE=env` per restare indipendente da LocalStack. I t
 La configurazione locale standard usa LocalStack S3 e `TEXTRACT_ENABLED=false`. Per validare il percorso critico con S3/Textract reali, impostare esplicitamente:
 
 ```bash
-POC_DOCUMENT_DISK=real_s3
+MVP_DOCUMENT_DISK=real_s3
 AWS_REAL_REGION=...
 AWS_REAL_S3_BUCKET=...
 AWS_REAL_S3_PREFIX=documents/
@@ -138,4 +138,15 @@ Dopo ogni modifica al `.env`, applicare i nuovi valori a SSM/Secrets e ricaricar
 make refresh-runtime
 ```
 
-Le credenziali `AWS_REAL_*` sono condivise da S3, Textract e Bedrock e non vanno salvate in repository. Bedrock richiede `BEDROCK_REGION` e `BEDROCK_MODEL_ID` con accesso gia' abilitato nell'account.
+Le credenziali `AWS_REAL_*` sono condivise da S3, Textract e Bedrock e non vanno salvate in repository. Bedrock richiede `BEDROCK_REGION` e `BEDROCK_MODEL_ID` con accesso gia' abilitato nell'account. Per le copertine dell'Assistant imposta `BEDROCK_IMAGE_MODEL_ID` su un modello supportato nel tuo account (default `stability.sd3-5-large-v1:0`; alternative `stability.stable-image-core-v1:0` o `amazon.nova-canvas-v1:0`) e `BEDROCK_IMAGE_REGION` sulla region che lo serve (default `us-west-2`). I modelli immagine sono attivi in region diverse da quelli testo, quindi le copertine usano un client Bedrock dedicato: `BEDROCK_REGION` resta la region del modello testo. Il payload della richiesta viene scelto dal modello configurato, quindi cambiare famiglia non richiede modifiche al codice. Senza modello immagini la generazione del testo funziona normalmente e ogni copertina risulta degradata con motivo esplicito: e' il comportamento atteso, non un errore.
+
+## Worker delle pipeline
+
+Lo stack avvia un worker per pipeline: `queue` consuma la coda documentale, `queue-communications` quella delle comunicazioni. `make workers WORKERS=n` scala entrambi.
+
+```bash
+docker compose logs -f queue-communications
+docker compose exec app php artisan mvp:dlq:list --queue=communications
+```
+
+`COMMUNICATION_PIPELINE_STATE_MACHINE_ARN` e `COMMUNICATION_PIPELINE_TASK_QUEUE_URL` sono chiavi runtime obbligatorie: dopo un aggiornamento del codice che le introduce, esegui `make refresh-runtime` prima di avviare lo stack, altrimenti il boot si interrompe con l'elenco delle chiavi mancanti.

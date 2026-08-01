@@ -1,42 +1,402 @@
-import { ChangeDetectionStrategy, Component, computed, input } from "@angular/core";
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  input,
+  output,
+  signal
+} from "@angular/core";
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
+import { LucidePencil, LucideSave, LucideX } from "@lucide/angular";
 import { EmptyStateComponent } from "../../../shared/components/empty-state/empty-state";
 import { StatusBadgeComponent } from "../../../shared/components/status-badge/status-badge";
+import { ButtonComponent } from "../../../shared/components/button/button";
 import { SectionComponent } from "../../../layout/section/section";
-import type { GeneratedDraft } from "../assistant.model";
+import { StarRating } from "../../../components/star-rating/star-rating";
+import type { UpdateCommunicationRequest } from "../../../../api/generated/model";
+import {
+  RATING_COMMENT_MAX_LENGTH,
+  type GeneratedDraft,
+  type RateDraftPayload
+} from "../assistant.model";
 
 @Component({
-  selector: "poc-generated-communication-preview",
+  selector: "mvp-generated-communication-preview",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [EmptyStateComponent, SectionComponent, StatusBadgeComponent],
+  imports: [
+    ButtonComponent,
+    EmptyStateComponent,
+    LucidePencil,
+    LucideSave,
+    LucideX,
+    ReactiveFormsModule,
+    SectionComponent,
+    StarRating,
+    StatusBadgeComponent
+  ],
   template: `
-    <poc-section id="assistant-review" title="Controlla il contenuto">
+    <mvp-section id="assistant-review" title="Controlla il contenuto">
       <span actions class="meta">{{ bodyLength() }} caratteri</span>
       @if (draft(); as currentDraft) {
         <article class="draft">
-          <div class="cover">
-            <span>Bozza generata</span>
+          @if (hasCover(currentDraft)) {
+            <img
+              class="preview-image"
+              [src]="currentDraft.coverImageUrl"
+              [alt]="'Immagine di copertina della bozza: ' + currentDraft.title"
+            />
+          } @else if (isCoverPending(currentDraft)) {
+            <mvp-empty-state>Generazione copertina in corso.</mvp-empty-state>
+          } @else {
+            <mvp-empty-state>Nessuna copertina per questa bozza.</mvp-empty-state>
+          }
+
+          @if (currentDraft.coverStatus === "failed" && currentDraft.coverError) {
+            <p class="warning" role="status">{{ currentDraft.coverError }}</p>
+          }
+
+          <div class="cover-actions">
+            <input
+              #coverInput
+              class="cover-input"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              [disabled]="isUpdatingCover()"
+              (change)="onCoverSelected($event)"
+            />
+            <button mvpButton type="button" variant="secondary" [disabled]="isUpdatingCover()" (click)="coverInput.click()">
+              Cambia immagine
+            </button>
+            <button
+              mvpButton
+              type="button"
+              variant="secondary"
+              [disabled]="isUpdatingCover() || !hasCover(currentDraft)"
+              (click)="removeCover.emit()"
+            >
+              Rimuovi immagine
+            </button>
           </div>
-          <label class="field">
-            <span>Titolo</span>
-            <input readOnly [value]="currentDraft.title" />
-          </label>
-          <label class="field">
-            <span>Testo</span>
-            <textarea readOnly rows="7" [value]="currentDraft.body"></textarea>
-          </label>
+          @if (saveError()) {
+            <p class="errorNote">{{ saveError() }}</p>
+          }
+          <form [formGroup]="form" [class.isEditing]="isEditing()" (ngSubmit)="save(currentDraft.id)">
+            <label class="field">
+              <span>Titolo</span>
+              <input [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" formControlName="title" />
+            </label>
+            <label class="field">
+              <span>Testo</span>
+              <textarea
+                rows="7"
+                [readOnly]="!isEditing()"
+                [attr.aria-readonly]="!isEditing()"
+                formControlName="body"
+              ></textarea>
+            </label>
+            <div class="review-actions">
+              @if (isEditing()) {
+                <button mvpButton variant="secondary" type="button" [disabled]="isSaving()" (click)="cancelEdit(currentDraft)">
+                  <svg lucideX aria-hidden="true"></svg>
+                  Annulla
+                </button>
+                <button mvpButton type="submit" [disabled]="isSaving() || form.invalid">
+                  <svg lucideSave aria-hidden="true"></svg>
+                  {{ isSaving() ? "Salvataggio" : "Salva" }}
+                </button>
+              } @else if (currentDraft.statusValue === "draft") {
+                <button mvpButton variant="secondary" type="button" (click)="startEdit(currentDraft)">
+                  <svg lucidePencil aria-hidden="true"></svg>
+                  Modifica
+                </button>
+              }
+            </div>
+          </form>
+          @if (isReadyForPreview(currentDraft)) {
+            <div class="preview-block">
+              <span class="preview-label">Documento finale</span>
+              <div class="preview-actions">
+                <a class="previewLink" [href]="currentDraft.previewUrl" target="_blank" rel="noreferrer">
+                  Apri anteprima
+                </a>
+                <a class="previewLink downloadLink" [href]="currentDraft.exportUrl">Scarica PDF</a>
+              </div>
+            </div>
+          }
+
+          <div class="rating-section">
+            <span class="rating-label">Valuta questa bozza</span>
+            <mvp-star-rating
+              [rating]="displayRating()"
+              [disabled]="hasRated() || isRating()"
+              (rated)="onStarsSelected($event)"
+            ></mvp-star-rating>
+
+            @if (!hasRated()) {
+              <label class="field comment-field">
+                <span>Commento qualitativo (opzionale)</span>
+                <textarea
+                  rows="3"
+                  [formControl]="commentControl"
+                  placeholder="Aggiungi un commento alla valutazione"
+                ></textarea>
+                <span class="comment-meta" [class.isInvalid]="commentTooLong()">
+                  {{ commentLength() }} / {{ commentMaxLength }}
+                </span>
+              </label>
+
+              @if (commentTooLong()) {
+                <p class="rating-error" role="alert">
+                  Il commento supera la lunghezza massima consentita ({{ commentMaxLength }} caratteri).
+                </p>
+              }
+
+              @if (localError(); as error) {
+                <p class="rating-error" role="alert">{{ error }}</p>
+              }
+
+              @if (rateError(); as error) {
+                <p class="rating-error" role="alert">{{ error }}</p>
+              }
+
+              <button
+                mvpButton
+                type="button"
+                [disabled]="isRating() || !selectedRating() || commentTooLong()"
+                (click)="submitRating()"
+              >
+                {{ isRating() ? "Invio in corso…" : "Invia valutazione" }}
+              </button>
+            } @else {
+              @if (currentDraft.ratingComment) {
+                <p class="saved-comment">
+                  <span>Commento</span>
+                  {{ currentDraft.ratingComment }}
+                </p>
+              }
+              <p class="rating-success">Valutazione registrata con successo.</p>
+            }
+          </div>
+
           <div class="footer">
-            <poc-status-badge>{{ currentDraft.status }}</poc-status-badge>
-            <span>Creato da AI Assistant · anteprima in sola lettura</span>
+            <mvp-status-badge>{{ currentDraft.status }}</mvp-status-badge>
+            <span>Creato da AI Assistant{{ isEditing() ? "" : " · anteprima in sola lettura" }}</span>
+          </div>
+          <div class="review-actions">
+            @if (!isDiscarded(currentDraft)) {
+              <button
+                mvpButton
+                type="button"
+                variant="secondary"
+                [disabled]="isGenerating() || isDiscarding()"
+                (click)="regenerate.emit()"
+              >
+                Rigenera bozza
+              </button>
+              @if (isConfirmingDiscard()) {
+                <p class="warning" role="status">
+                  Sei sicuro di voler scartare questa bozza? Non sara' piu' modificabile ne' rigenerabile.
+                </p>
+                <button mvpButton type="button" [disabled]="isDiscarding()" (click)="discard.emit()">
+                  Conferma eliminazione
+                </button>
+                <button
+                  mvpButton
+                  type="button"
+                  variant="secondary"
+                  [disabled]="isDiscarding()"
+                  (click)="isConfirmingDiscard.set(false)"
+                >
+                  Annulla
+                </button>
+              } @else {
+                <button
+                  mvpButton
+                  type="button"
+                  variant="secondary"
+                  [disabled]="isGenerating() || isDiscarding()"
+                  (click)="isConfirmingDiscard.set(true)"
+                >
+                  Scarta bozza
+                </button>
+              }
+            }
           </div>
         </article>
       } @else {
-        <poc-empty-state>La bozza generata apparira qui.</poc-empty-state>
+        <mvp-empty-state>La bozza generata apparira qui.</mvp-empty-state>
       }
-    </poc-section>
+    </mvp-section>
   `,
   styleUrl: "./generated-communication-preview.css"
 })
 export class GeneratedCommunicationPreviewComponent {
   readonly draft = input<GeneratedDraft | null>(null);
+  readonly isUpdatingCover = input<boolean>(false);
+  readonly isGenerating = input<boolean>(false);
+  readonly isDiscarding = input<boolean>(false);
+  readonly isRating = input(false);
+  readonly rateError = input<string | null>(null);
+  readonly isSaving = input<boolean>(false);
+  readonly saveError = input<string | null>(null);
+  readonly uploadCover = output<File>();
+  readonly removeCover = output<void>();
+  readonly regenerate = output<void>();
+  readonly discard = output<void>();
+  readonly rate = output<RateDraftPayload>();
+  readonly saveRequested = output<{ communicationId: number; payload: UpdateCommunicationRequest }>();
+
+  protected readonly commentMaxLength = RATING_COMMENT_MAX_LENGTH;
+  protected readonly selectedRating = signal(0);
+  protected readonly localError = signal<string | null>(null);
+  protected readonly commentControl = new FormControl("", {
+    nonNullable: true,
+    validators: [Validators.maxLength(RATING_COMMENT_MAX_LENGTH)]
+  });
+
   protected readonly bodyLength = computed(() => this.draft()?.body.length ?? 0);
+  protected readonly isConfirmingDiscard = signal(false);
+  protected readonly hasRated = computed(() => this.draft()?.rating != null);
+  protected readonly displayRating = computed(
+    () => this.draft()?.rating ?? this.selectedRating()
+  );
+  protected readonly commentLength = signal(0);
+  protected readonly commentTooLong = computed(
+    () => this.commentLength() > RATING_COMMENT_MAX_LENGTH
+  );
+
+  protected readonly isEditing = signal(false);
+  protected readonly form = new FormGroup({
+    title: new FormControl("", { nonNullable: true, validators: [Validators.required, Validators.maxLength(255)] }),
+    body: new FormControl("", { nonNullable: true, validators: [Validators.required, Validators.maxLength(20000)] })
+  });
+
+  private readonly syncedDraftId = signal<number | null>(null);
+
+  constructor() {
+    this.commentControl.valueChanges.subscribe((value) => {
+      this.commentLength.set(value.length);
+      if (value.length <= RATING_COMMENT_MAX_LENGTH) {
+        this.localError.set(null);
+      }
+    });
+
+    // Il passo di conferma e' locale alla bozza mostrata: qualunque
+    // cambiamento della bozza in anteprima (nuova selezione, aggiornamento
+    // durante una rigenerazione, ecc.) non deve lasciarlo aperto.
+    effect(() => {
+      this.draft();
+      this.isConfirmingDiscard.set(false);
+    });
+
+    effect(() => {
+      const current = this.draft();
+      const draftId = current?.id ?? null;
+      const alreadySynced = this.syncedDraftId() === draftId && draftId !== null;
+      const ratingChanged =
+        alreadySynced && current?.rating != null && this.selectedRating() !== current.rating;
+
+      if (alreadySynced && !ratingChanged) {
+        return;
+      }
+
+      this.syncedDraftId.set(draftId);
+      this.selectedRating.set(current?.rating ?? 0);
+      this.localError.set(null);
+      this.commentControl.setValue(current?.ratingComment ?? "", { emitEvent: true });
+      this.commentControl.enable({ emitEvent: false });
+      if (current?.rating != null) {
+        this.commentControl.disable({ emitEvent: false });
+      }
+    });
+
+    // Quando la bozza mostrata cambia (nuova selezione o aggiornamento che
+    // arriva dallo stream) il form torna in sola lettura sui valori correnti:
+    // una modifica non salvata non deve sopravvivere a una rigenerazione.
+    effect(() => {
+      const currentDraft = this.draft();
+      this.form.setValue({ title: currentDraft?.title ?? "", body: currentDraft?.body ?? "" });
+      this.isEditing.set(false);
+    });
+  }
+
+  protected isDiscarded(draft: GeneratedDraft): boolean {
+    return draft.status === "Scartata";
+  }
+
+  protected isReadyForPreview(draft: GeneratedDraft): boolean {
+    return draft.generationStatus === "completed" && draft.status !== "Scartata" && Boolean(draft.previewUrl);
+  }
+
+  protected hasCover(draft: GeneratedDraft): boolean {
+    return Boolean(draft.coverImageUrl && draft.coverImageUrl.trim() !== "");
+  }
+
+  protected isCoverPending(draft: GeneratedDraft): boolean {
+    return draft.coverStatus === "pending" || draft.coverStatus === "processing";
+  }
+
+  protected onCoverSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.item(0);
+
+    if (!file) {
+      return;
+    }
+
+    this.uploadCover.emit(file);
+    input.value = "";
+  }
+
+  protected onStarsSelected(stars: number): void {
+    if (this.hasRated() || this.isRating()) {
+      return;
+    }
+
+    this.selectedRating.set(stars);
+    this.localError.set(null);
+  }
+
+  protected submitRating(): void {
+    if (this.hasRated() || this.isRating()) {
+      return;
+    }
+
+    const rating = this.selectedRating();
+    if (rating < 1 || rating > 5) {
+      this.localError.set("Seleziona un punteggio da 1 a 5 stelle.");
+      return;
+    }
+
+    const comment = this.commentControl.value.trim();
+    if (comment.length > RATING_COMMENT_MAX_LENGTH) {
+      this.localError.set(
+        `Il commento supera la lunghezza massima consentita (${RATING_COMMENT_MAX_LENGTH} caratteri).`
+      );
+      return;
+    }
+
+    this.localError.set(null);
+    this.rate.emit(comment ? { rating, comment } : { rating });
+  }
+
+  protected startEdit(currentDraft: GeneratedDraft): void {
+    this.form.setValue({ title: currentDraft.title, body: currentDraft.body });
+    this.isEditing.set(true);
+  }
+
+  protected cancelEdit(currentDraft: GeneratedDraft): void {
+    this.form.setValue({ title: currentDraft.title, body: currentDraft.body });
+    this.isEditing.set(false);
+  }
+
+  protected save(communicationId: number): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    this.saveRequested.emit({ communicationId, payload: this.form.getRawValue() });
+  }
 }

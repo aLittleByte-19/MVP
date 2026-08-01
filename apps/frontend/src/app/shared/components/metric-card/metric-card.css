@@ -1,20 +1,20 @@
 .card {
   display: grid;
   gap: 6px;
-  padding: var(--poc-space-4);
-  border: 1px solid var(--poc-border-soft);
-  border-radius: var(--poc-radius);
-  background: var(--poc-surface-muted);
+  padding: var(--mvp-space-4);
+  border: 1px solid var(--mvp-border-soft);
+  border-radius: var(--mvp-radius);
+  background: var(--mvp-surface-muted);
 }
 
 .value {
-  color: var(--poc-primary-deep);
+  color: var(--mvp-primary-deep);
   font-size: 1.28rem;
   font-weight: 800;
 }
 
 .label {
-  color: var(--poc-muted);
+  color: var(--mvp-muted);
 }
 
 :host {

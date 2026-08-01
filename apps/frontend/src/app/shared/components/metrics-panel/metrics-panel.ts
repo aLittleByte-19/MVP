@@ -5,20 +5,20 @@ import { LoadingStateComponent } from "../loading-state/loading-state";
 import { MetricCardComponent } from "../metric-card/metric-card";
 
 @Component({
-  selector: "poc-metrics-panel",
+  selector: "mvp-metrics-panel",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [EmptyStateComponent, LoadingStateComponent, MetricCardComponent],
   template: `
     @if (isLoading()) {
-      <poc-loading-state label="Caricamento metriche." />
+      <mvp-loading-state label="Caricamento metriche." />
     } @else if (metrics().length) {
       <div class="grid">
         @for (metric of metrics(); track metric.label) {
-          <poc-metric-card [label]="metric.label" [value]="metric.value" />
+          <mvp-metric-card [label]="metric.label" [value]="metric.value" />
         }
       </div>
     } @else {
-      <poc-empty-state>Nessuna metrica disponibile.</poc-empty-state>
+      <mvp-empty-state>Nessuna metrica disponibile.</mvp-empty-state>
     }
   `,
   styleUrl: "./metrics-panel.css"

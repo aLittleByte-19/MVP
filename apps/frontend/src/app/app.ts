@@ -12,16 +12,16 @@ import { auditTime, filter, fromEvent } from "rxjs";
 import { LucideArrowUp, LucideMoon, LucideSun } from "@lucide/angular";
 import { ButtonComponent } from "./shared/components/button/button";
 import {
-  isPocView,
-  pocNavGroups,
-  pocViewTitles,
-  type PocView
+  isMvpView,
+  mvpNavGroups,
+  mvpViewTitles,
+  type MvpView
 } from "./core/navigation/app-views";
-import { PocStateStore } from "./core/state/poc-state.store";
+import { MvpStateStore } from "./core/state/mvp-state.store";
 import { ThemeService } from "./core/theme/theme.service";
 
 @Component({
-  selector: "poc-root",
+  selector: "mvp-root",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ButtonComponent, LucideArrowUp, LucideMoon, LucideSun, RouterOutlet],
   template: `
@@ -64,7 +64,7 @@ import { ThemeService } from "./core/theme/theme.service";
       </aside>
 
       <div class="workspace">
-        <header class="header" id="poc-topbar">
+        <header class="header" id="mvp-topbar">
           <div>
             <p class="eyebrow">NEXUM</p>
             <h1>{{ title() }}</h1>
@@ -86,7 +86,7 @@ import { ThemeService } from "./core/theme/theme.service";
         </main>
 
         <button
-          pocButton
+          mvpButton
           class="backToTop"
           [class.isVisible]="showBackToTop()"
           variant="icon"
@@ -107,15 +107,15 @@ import { ThemeService } from "./core/theme/theme.service";
   ]
 })
 export class AppComponent {
-  protected readonly navGroups = pocNavGroups;
-  protected readonly activeView = signal<PocView>("overview");
+  protected readonly navGroups = mvpNavGroups;
+  protected readonly activeView = signal<MvpView>("overview");
   protected readonly activeChildId = signal<string | null>(null);
   /** Il pulsante "torna su" compare solo dopo aver scrollato la pagina. */
   protected readonly showBackToTop = signal(false);
-  protected readonly title = computed(() => pocViewTitles[this.activeView()]);
+  protected readonly title = computed(() => mvpViewTitles[this.activeView()]);
   protected readonly theme = inject(ThemeService);
   private readonly router = inject(Router);
-  private readonly store = inject(PocStateStore);
+  private readonly store = inject(MvpStateStore);
   private readonly activeChildIds = computed(
     () =>
       this.navGroups
@@ -182,12 +182,12 @@ export class AppComponent {
     });
   }
 
-  protected navigate(view: PocView, targetId?: string): void {
-    void this.router.navigate([view]).then(() => this.scrollTo(targetId ?? "poc-topbar"));
+  protected navigate(view: MvpView, targetId?: string): void {
+    void this.router.navigate([view]).then(() => this.scrollTo(targetId ?? "mvp-topbar"));
   }
 
   protected scrollToTop(): void {
-    this.scrollTo("poc-topbar");
+    this.scrollTo("mvp-topbar");
   }
 
   private updateBackToTopVisibility(): void {
@@ -196,7 +196,7 @@ export class AppComponent {
 
   private syncActiveView(url: string): void {
     const firstSegment = url.split("?")[0]?.split("#")[0]?.split("/").filter(Boolean)[0];
-    this.activeView.set(isPocView(firstSegment) ? firstSegment : "overview");
+    this.activeView.set(isMvpView(firstSegment) ? firstSegment : "overview");
   }
 
   private scrollTo(elementId: string): void {

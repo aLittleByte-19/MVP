@@ -2,7 +2,7 @@ global:
   resolve_timeout: 5m
 
 route:
-  receiver: poc-local-demo
+  receiver: mvp-local-demo
   group_by:
     - alertname
     - service_namespace
@@ -12,9 +12,9 @@ route:
 
 receivers:
   # Local demo receiver. External push notifiers (email/SES, Slack) are out of the
-  # PoC scope, so fired alerts are inspected via the Alertmanager UI (:9093) rather
+  # MVP scope, so fired alerts are inspected via the Alertmanager UI (:9093) rather
   # than delivered. Wire a real integration by uncommenting and configuring below.
-  - name: poc-local-demo
+  - name: mvp-local-demo
     # webhook_configs:
     #   - url: http://alert-sink:9000/webhook
     #     send_resolved: true

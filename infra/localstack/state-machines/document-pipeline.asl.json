@@ -1,5 +1,5 @@
 {
-  "Comment": "LocalStack Step Functions model for the Alittlebyte PoC document pipeline using SQS callback task tokens.",
+  "Comment": "LocalStack Step Functions model for the Alittlebyte MVP document pipeline using SQS callback task tokens.",
   "StartAt": "ValidateDocument",
   "States": {
     "ValidateDocument": {

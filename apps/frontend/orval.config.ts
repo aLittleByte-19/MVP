@@ -1,12 +1,12 @@
 import { defineConfig } from "orval";
 
 export default defineConfig({
-  pocApi: {
-    input: "../../openapi/v1/alittlebyte-poc-api.yaml",
+  mvpApi: {
+    input: "../../openapi/v1/alittlebyte-mvp-api.yaml",
     output: {
       mode: "single",
       client: "angular",
-      target: "src/api/generated/poc-api.ts",
+      target: "src/api/generated/mvp-api.ts",
       schemas: "src/api/generated/model",
       clean: true
     }

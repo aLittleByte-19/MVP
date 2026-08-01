@@ -1,4 +1,4 @@
-# ADR 0006 — Osservabilità e audit trail
+# ADR 0006: Osservabilità e audit trail
 
 Status: Accepted, implemented baseline
 Date: 2026-06-08
@@ -37,17 +37,17 @@ Alloy.
 
 ## Implementation evidence
 
-- Correlazione: `app/Http/Middleware/CorrelateRequests.php`; audit: `app/Copilot/Audit/Services/AuditLogger.php`
+- Correlazione: `app/Http/Middleware/CorrelateRequests.php`; audit: `app/Mvp/Audit/Services/AuditLogger.php`
   e migrazione `audit_events` (append-only).
-- Metriche: `app/Copilot/Observability/MetricsRecorder.php`, `PrometheusExporter.php`, endpoint
+- Metriche: `app/Mvp/Observability/MetricsRecorder.php`, `PrometheusExporter.php`, endpoint
   `/internal/metrics`.
 - Config osservabilità: `docker/otel-collector/`, `docker/prometheus/{prometheus.yml,rules/}`,
-  `docker/tempo/`, `docker/loki/`, `docker/alloy/`, `docker/grafana/` (5 dashboard, 10 alert rule).
+  `docker/tempo/`, `docker/loki/`, `docker/alloy/`, `docker/grafana/` (6 dashboard, 15 alert rule).
 - Validazione config in CI: `make observability-config` (`promtool`, `otelcol validate`).
 
 ## References
 
-- Google SRE — Monitoring Distributed Systems: https://sre.google/sre-book/monitoring-distributed-systems/
+- Google SRE: Monitoring Distributed Systems: https://sre.google/sre-book/monitoring-distributed-systems/
 - OpenTelemetry docs: https://opentelemetry.io/docs/
 - OpenTelemetry logs: https://opentelemetry.io/docs/specs/otel/logs/
 

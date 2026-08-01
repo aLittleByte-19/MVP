@@ -2,10 +2,10 @@ import { ChangeDetectionStrategy, Component, input } from "@angular/core";
 import { AlertComponent } from "../alert/alert";
 
 @Component({
-  selector: "poc-error-state",
+  selector: "mvp-error-state",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [AlertComponent],
-  template: `<poc-alert [title]="title()">{{ message() }}</poc-alert>`
+  template: `<mvp-alert [title]="title()">{{ message() }}</mvp-alert>`
 })
 export class ErrorStateComponent {
   readonly message = input.required<string>();

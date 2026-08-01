@@ -14,7 +14,7 @@
 
 No host ports: the UIs are reachable only through Traefik on the internal
 `observability` network. Default basic auth credentials live in
-`docker/traefik/usersfile` (`poc` / `poc-obs-local-password`, local only).
+`docker/traefik/usersfile` (`mvp` / `mvp-obs-local-password`, local only).
 Browsers resolve `*.localhost` natively; for `curl` add
 `--resolve prometheus.localhost:8443:127.0.0.1` (or `/etc/hosts` entries).
 
@@ -47,7 +47,7 @@ make observability-up
 
 ## Logs Flow
 
-1. Grafana Alloy discovers the project's containers through the Docker socket (`com.docker.compose.project=poc`).
+1. Grafana Alloy discovers the project's containers through the Docker socket (`com.docker.compose.project=mvp`).
 2. Alloy reads each container's log stream and ships it to Loki, labelling lines with `service`, `container` and `project`.
 3. Application logs sent over OTLP reach the OTel Collector, which forwards them to Loki's native OTLP ingestion endpoint (`loki:3100/otlp`).
 4. Loki stores logs on a local filesystem volume with a 7-day retention.
@@ -56,9 +56,9 @@ make observability-up
 Useful LogQL queries:
 
 ```logql
-{project="poc", service="queue"}
-{project="poc", service=~"queue|app"} |~ "(?i)level_name.{0,6}(error|critical|emergency)"
-{project="poc"} |~ "(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))" != "No such container"
+{project="mvp", service="queue"}
+{project="mvp", service=~"queue|queue-communications|app"} |~ "(?i)level_name.{0,6}(error|critical|emergency)"
+{project="mvp"} |~ "(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))" != "No such container"
 ```
 
 Monolog application logs are JSON with `level_name`; infrastructure containers use logfmt with `level=`. The error filters above match both. The `!= "No such container"` clause drops Alloy's transient errors emitted while containers are being recreated.
@@ -67,11 +67,12 @@ Monolog application logs are JSON with `level_name`; infrastructure containers u
 
 Dashboard JSON lives in `docker/grafana/dashboards`:
 
-- `api-golden-signals.json` — request rate, error rate, p95/p99 latency, a per-endpoint golden-signals table and a saturation row (edge open connections, pipeline backlog, collector memory) covering all four golden signals.
-- `document-pipeline.json` — document status, pipeline steps (SQS), Step Functions failures and a pipeline error log panel.
-- `queues-and-dlq.json` — SQS throughput, DLQ, dependency readiness and worker logs.
-- `ai-ocr-quality.json` — Textract confidence/duration, failures by error code, communications by status and OCR error logs.
-- `logs-and-errors.json` — error counts and rates per service plus raw log panels per service.
+- `api-golden-signals.json`: request rate, error rate, p95/p99 latency, a per-endpoint golden-signals table and a saturation row (edge open connections, pipeline backlog, collector memory) covering all four golden signals.
+- `document-pipeline.json`: document status, sub-documents by send status (the PDF was downloaded, see `mvp-scope.md`), pipeline steps (SQS), Step Functions failures and a pipeline error log panel.
+- `communication-pipeline.json`: generation status, cover status, communication pipeline steps (SQS), Step Functions executions, cover outcome rate, rated drafts and average star rating, plus a worker error log panel.
+- `queues-and-dlq.json`: SQS throughput, DLQ, dependency readiness and worker logs.
+- `ai-ocr-quality.json`: Textract confidence/duration, failures by error code, communications by status and OCR error logs.
+- `logs-and-errors.json`: error counts and rates per service plus raw log panels per service.
 
 Datasource provisioning (Prometheus, Tempo, Loki) lives in `docker/grafana/provisioning`.
 
@@ -82,8 +83,9 @@ Rules live in `docker/prometheus/rules`:
 - `api-alerts.yml`
 - `pipeline-alerts.yml`
 - `queue-alerts.yml`
+- `communication-alerts.yml`
 - `ai-alerts.yml`
 
-Every alert carries a `runbook` annotation linking to the relevant runbook in `docs/runbooks/`. `DLQNotEmpty` is `critical` (terminal failure path); the remaining alerts are `warning` except `TargetDown` (`critical`).
+Every alert carries a `runbook` annotation linking to the relevant runbook in `docs/runbooks/`. The DLQ alerts (`DLQNotEmpty`, `CommunicationDLQNotEmpty`) and `CommunicationCoverStorageFailing` are `critical` (terminal failure paths); the remaining alerts are `warning` except `TargetDown` (`critical`). `CommunicationCoverGenerationDegraded` fires above three degradations in thirty minutes: a degraded cover is an expected outcome and a single event is not actionable.
 
 The local Alertmanager receiver is intentionally a demo receiver. Do not configure real email, Slack or paging secrets in this repository.

@@ -2,7 +2,7 @@
 
 This directory contains the versioned JSON API contract consumed by the Angular SPA.
 
-The canonical file is `alittlebyte-poc-api.yaml`.
+The canonical file is `alittlebyte-mvp-api.yaml`.
 
 Regenerate the TypeScript client with:
 

@@ -12,8 +12,8 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--poc-surface-page);
-  color: var(--poc-text);
+  background: var(--mvp-surface-page);
+  color: var(--mvp-text);
   font-family: "Avenir Next", "Segoe UI", Arial, sans-serif;
 }
 
@@ -39,10 +39,10 @@ a {
 }
 
 :focus-visible {
-  outline: 3px solid var(--poc-focus);
+  outline: 3px solid var(--mvp-focus);
   outline-offset: 2px;
 }
 
-#poc-root {
+#mvp-root {
   min-height: 100vh;
 }

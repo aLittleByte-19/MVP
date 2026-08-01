@@ -1,9 +1,9 @@
 <?php
 
-use App\Copilot\Ai\BedrockService;
-use App\Copilot\Documents\Enums\ProcessingStatus;
-use App\Models\Copilot\OriginalDocument;
-use App\Models\Copilot\SubDocument;
+use App\Models\OriginalDocument;
+use App\Models\SubDocument;
+use App\Mvp\Ai\BedrockService;
+use App\Mvp\Documents\Enums\ProcessingStatus;
 
 test('uploading a pdf creates an original document with pending status', function () {
     $originalDocument = OriginalDocument::create([

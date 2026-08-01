@@ -3,14 +3,14 @@
 return [
     'service' => [
         'namespace' => env('OTEL_SERVICE_NAMESPACE', 'alittlebyte'),
-        'name' => env('OTEL_SERVICE_NAME', 'poc-document-pipeline'),
-        'version' => env('POC_RELEASE_VERSION', 'local'),
+        'name' => env('OTEL_SERVICE_NAME', 'mvp-document-pipeline'),
+        'version' => env('MVP_RELEASE_VERSION', 'local'),
         'environment' => env('OTEL_DEPLOYMENT_ENVIRONMENT', env('APP_ENV', 'local')),
     ],
 
     'metrics' => [
-        'enabled' => (bool) env('POC_METRICS_ENABLED', true),
-        'storage_path' => env('POC_METRICS_STORAGE_PATH', 'app/private/observability/metrics.json'),
+        'enabled' => (bool) env('MVP_METRICS_ENABLED', true),
+        'storage_path' => env('MVP_METRICS_STORAGE_PATH', 'app/private/observability/metrics.json'),
         'http_duration_buckets' => [
             0.005,
             0.01,
