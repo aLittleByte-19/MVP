@@ -1,11 +1,46 @@
-import type { GenerateCommunicationRequest } from "../../../api/generated/model";
+import type { Communication, GenerateCommunicationRequest } from "../../../api/generated/model";
 
 export type CommunicationDraftForm = GenerateCommunicationRequest;
 
-export interface GeneratedDraft {
-  body: string;
+/** Fase della pipeline di generazione, usata per etichette e stato dei controlli. */
+export type CommunicationGenerationPhase =
+  | "queued"
+  | "generating-text"
+  | "generating-cover"
+  | "completed"
+  | "failed";
+
+export interface CommunicationGenerationProgress {
   status: string;
+  phase: CommunicationGenerationPhase;
+  communicationId: number;
+  text?: { title: string | null; body: string | null };
+  cover?: { coverImageUrl: string | null; coverStatus: string; coverError: string | null };
+  communication?: Communication;
+}
+
+export const RATING_COMMENT_MAX_LENGTH = 1000;
+
+export interface GeneratedDraft {
+  id: number;
+  body: string;
+  coverImageUrl?: string;
+  coverStatus: string;
+  coverError?: string;
+  status: string;
+  statusValue?: string;
   title: string;
+  previewUrl?: string;
+  exportUrl?: string;
+  generationStatus?: string;
+  rating?: number | null;
+  ratingComment?: string | null;
+  ratedAt?: string | null;
+}
+
+export interface RateDraftPayload {
+  rating: number;
+  comment?: string;
 }
 
 export const communicationTones = [

@@ -1,0 +1,14 @@
+{
+  "backend": {
+    "lines": 80,
+    "branches": 70
+  },
+  "frontend": {
+    "statements": 80,
+    "functions": 80,
+    "branches": 70
+  },
+  "diff": {
+    "lines": 80
+  }
+}

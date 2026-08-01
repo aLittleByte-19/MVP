@@ -25,7 +25,7 @@ mkcert \
   -cert-file "$CERT_PATH" \
   -key-file "$KEY_PATH" \
   localhost \
-  poc.localhost \
+  mvp.localhost \
   "*.localhost" \
   127.0.0.1 \
   ::1

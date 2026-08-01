@@ -1,13 +1,14 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "alittlebyte/poc-document-pipeline",
+    "name": "alittlebyte/mvp-document-pipeline",
     "type": "project",
-    "description": "Alittlebyte PoC document processing application.",
+    "description": "Alittlebyte MVP document processing application.",
     "keywords": ["laravel", "aws", "document-processing"],
     "license": "MIT",
     "require": {
         "php": "^8.4",
         "aws/aws-sdk-php": "^3.380",
+        "dompdf/dompdf": "^3.1",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.32",
@@ -44,10 +45,10 @@
         "setup": [
             "composer install",
             "@php artisan migrate --force",
-            "@php artisan poc:reset-data --force"
+            "@php artisan mvp:reset-data --force"
         ],
-        "poc:reset-data": [
-            "@php artisan poc:reset-data --force"
+        "mvp:reset-data": [
+            "@php artisan mvp:reset-data --force"
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",

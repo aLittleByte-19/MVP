@@ -1,5 +1,5 @@
 {
-  "uid": "poc-ai-ocr-quality",
+  "uid": "mvp-ai-ocr-quality",
   "title": "AI and OCR Quality",
   "tags": [
     "alittlebyte",
@@ -72,7 +72,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(poc_textract_confidence_sum) / clamp_min(sum(poc_textract_confidence_count), 1)",
+          "expr": "sum(mvp_textract_confidence_sum) / clamp_min(sum(mvp_textract_confidence_count), 1)",
           "instant": true,
           "legendFormat": "confidenza",
           "datasource": {
@@ -116,7 +116,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(poc_textract_duration_seconds_sum) / clamp_min(sum(poc_textract_duration_seconds_count), 1)",
+          "expr": "sum(mvp_textract_duration_seconds_sum) / clamp_min(sum(mvp_textract_duration_seconds_count), 1)",
           "instant": true,
           "legendFormat": "durata",
           "datasource": {
@@ -171,7 +171,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(poc_textract_jobs_failed_total)",
+          "expr": "sum(mvp_textract_jobs_failed_total)",
           "instant": true,
           "legendFormat": "falliti",
           "datasource": {
@@ -226,7 +226,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(poc_sub_documents_total{state=\"failed\"})",
+          "expr": "sum(mvp_sub_documents_total{state=\"failed\"})",
           "instant": true,
           "legendFormat": "estrazioni fallite",
           "datasource": {
@@ -256,7 +256,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(poc_textract_jobs_started_total)",
+          "expr": "sum(mvp_textract_jobs_started_total)",
           "instant": true,
           "format": "table",
           "datasource": {
@@ -266,7 +266,7 @@
         },
         {
           "refId": "B",
-          "expr": "sum(poc_textract_jobs_completed_total)",
+          "expr": "sum(mvp_textract_jobs_completed_total)",
           "instant": true,
           "format": "table",
           "datasource": {
@@ -276,7 +276,7 @@
         },
         {
           "refId": "C",
-          "expr": "sum(poc_textract_jobs_failed_total)",
+          "expr": "sum(mvp_textract_jobs_failed_total)",
           "instant": true,
           "format": "table",
           "datasource": {
@@ -286,7 +286,7 @@
         },
         {
           "refId": "D",
-          "expr": "sum(poc_textract_jobs_skipped_total)",
+          "expr": "sum(mvp_textract_jobs_skipped_total)",
           "instant": true,
           "format": "table",
           "datasource": {
@@ -371,7 +371,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (error) (poc_textract_jobs_failed_total)",
+          "expr": "sum by (error) (mvp_textract_jobs_failed_total)",
           "instant": true,
           "format": "table",
           "datasource": {
@@ -427,7 +427,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (reason) (poc_textract_jobs_skipped_total)",
+          "expr": "sum by (reason) (mvp_textract_jobs_skipped_total)",
           "instant": true,
           "format": "table",
           "datasource": {
@@ -476,7 +476,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(poc_textract_jobs_started_total[5m]))",
+          "expr": "sum(rate(mvp_textract_jobs_started_total[5m]))",
           "legendFormat": "avviati",
           "datasource": {
             "type": "prometheus",
@@ -485,7 +485,7 @@
         },
         {
           "refId": "B",
-          "expr": "sum(rate(poc_textract_jobs_completed_total[5m]))",
+          "expr": "sum(rate(mvp_textract_jobs_completed_total[5m]))",
           "legendFormat": "completati",
           "datasource": {
             "type": "prometheus",
@@ -494,7 +494,7 @@
         },
         {
           "refId": "C",
-          "expr": "sum(rate(poc_textract_jobs_failed_total[5m]))",
+          "expr": "sum(rate(mvp_textract_jobs_failed_total[5m]))",
           "legendFormat": "falliti",
           "datasource": {
             "type": "prometheus",
@@ -523,7 +523,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status) (poc_communications_total)",
+          "expr": "sum by (status) (mvp_communications_total)",
           "instant": true,
           "format": "table",
           "datasource": {
@@ -601,7 +601,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{project=\"poc\", service=\"queue\"} |~ \"(?i)level_name.{0,6}(error|critical)\" |~ \"(?i)textract|bedrock|extract|ocr|workflow\"",
+          "expr": "{project=\"mvp\", service=\"queue\"} |~ \"(?i)level_name.{0,6}(error|critical)\" |~ \"(?i)textract|bedrock|extract|ocr|workflow\"",
           "maxLines": 200
         }
       ]

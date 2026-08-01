@@ -1,5 +1,5 @@
 import type { Routes } from "@angular/router";
-import type { PocView } from "./core/navigation/app-views";
+import type { MvpView } from "./core/navigation/app-views";
 
 /**
  * Le tre viste applicative (Overview, Assistant, Co-Pilot) diventano rotte di
@@ -12,19 +12,19 @@ export const routes: Routes = [
   {
     path: "overview",
     title: "NEXUM - Overview",
-    data: { view: "overview" satisfies PocView },
+    data: { view: "overview" satisfies MvpView },
     loadComponent: () => import("./features/overview/overview-page").then((m) => m.OverviewPage)
   },
   {
     path: "assistant",
     title: "NEXUM - AI Assistant",
-    data: { view: "assistant" satisfies PocView },
+    data: { view: "assistant" satisfies MvpView },
     loadComponent: () => import("./features/assistant/assistant-page").then((m) => m.AssistantPage)
   },
   {
     path: "copilot",
     title: "NEXUM - Copilot CdL",
-    data: { view: "copilot" satisfies PocView },
+    data: { view: "copilot" satisfies MvpView },
     loadComponent: () => import("./features/copilot/copilot-page").then((m) => m.CopilotPage)
   },
   { path: "**", redirectTo: "overview" }

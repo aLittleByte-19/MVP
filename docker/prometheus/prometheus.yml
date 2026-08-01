@@ -20,12 +20,12 @@ alerting:
 # proprio exporter Prometheus :9464. Prometheus scrappa quindi solo il collector:
 # un unico punto di raccolta sia per le metriche scrape sia per quelle OTLP push.
 scrape_configs:
-  - job_name: poc-otel-collector-exporter
+  - job_name: mvp-otel-collector-exporter
     static_configs:
       - targets:
           - otel-collector:9464
 
-  - job_name: poc-prometheus
+  - job_name: mvp-prometheus
     static_configs:
       - targets:
           - prometheus:9090

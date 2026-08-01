@@ -2,11 +2,11 @@ http:
   # L'entrypoint web (8080) redirige globalmente su websecure (traefik.yml),
   # quindi i router ascoltano solo su websecure.
   routers:
-    poc-nginx:
-      rule: Host(`localhost`) || Host(`poc.localhost`) || Host(`traefik`)
+    mvp-nginx:
+      rule: Host(`localhost`) || Host(`mvp.localhost`) || Host(`traefik`)
       entryPoints:
         - websecure
-      service: poc-edge-cdn
+      service: mvp-edge-cdn
       tls: {}
 
     # Dashboard di osservabilità: nessuna porta host, si entra solo da qui.
@@ -49,7 +49,7 @@ http:
         usersFile: /etc/traefik/usersfile
 
   services:
-    poc-edge-cdn:
+    mvp-edge-cdn:
       loadBalancer:
         passHostHeader: true
         servers:

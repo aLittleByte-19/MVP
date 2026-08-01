@@ -21,14 +21,14 @@
 
 .hero p {
   max-width: 820px;
-  color: var(--poc-muted);
+  color: var(--mvp-muted);
   font-size: 1.05rem;
   line-height: 1.5;
 }
 
 .eyebrow {
-  color: var(--poc-primary-deep);
-  font-size: var(--poc-font-xs);
+  color: var(--mvp-primary-deep);
+  font-size: var(--mvp-font-xs);
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -36,12 +36,12 @@
 .buttonRow {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--poc-space-3);
+  gap: var(--mvp-space-3);
 }
 
 .flowList {
   display: grid;
-  gap: var(--poc-space-3);
+  gap: var(--mvp-space-3);
   padding: 0;
   margin: 0;
   list-style: none;
@@ -49,11 +49,11 @@
 
 .flowList li {
   display: grid;
-  gap: var(--poc-space-2);
-  padding: var(--poc-space-4);
-  border: 1px solid var(--poc-border);
-  border-radius: var(--poc-radius);
-  background: var(--poc-surface-muted);
+  gap: var(--mvp-space-2);
+  padding: var(--mvp-space-4);
+  border: 1px solid var(--mvp-border);
+  border-radius: var(--mvp-radius);
+  background: var(--mvp-surface-muted);
 }
 
 .flowList strong {
@@ -61,20 +61,20 @@
 }
 
 .flowList span {
-  color: var(--poc-muted);
+  color: var(--mvp-muted);
   line-height: 1.45;
 }
 
 .priorityGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--poc-space-3);
+  gap: var(--mvp-space-3);
 }
 
 .overviewGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--poc-space-3);
+  gap: var(--mvp-space-3);
   /* Ogni gruppo prende l'altezza del proprio contenuto: senza questo, la colonna
      piu' corta (AI Assistant) verrebbe stirata fino al gemello piu' alto
      (Co-Pilot), allungando le card e creando vuoti verticali. */
@@ -83,14 +83,14 @@
 
 .metricGroup {
   display: grid;
-  gap: var(--poc-space-3);
+  gap: var(--mvp-space-3);
   /* Difesa aggiuntiva: tiene il contenuto compatto in alto anche se il gruppo
      dovesse essere stirato in un layout diverso. */
   align-content: start;
-  padding: var(--poc-space-3);
-  border: 1px solid var(--poc-border);
-  border-radius: var(--poc-radius);
-  background: var(--poc-surface-muted);
+  padding: var(--mvp-space-3);
+  border: 1px solid var(--mvp-border);
+  border-radius: var(--mvp-radius);
+  background: var(--mvp-surface-muted);
 }
 
 .metricGroup h3 {
@@ -104,7 +104,7 @@
   }
 
   .hero {
-    padding: var(--poc-space-5);
+    padding: var(--mvp-space-5);
   }
 }
 

@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, input } from "@angular/core";
 
 @Component({
-  selector: "poc-alert",
+  selector: "mvp-alert",
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="alert" role="alert" aria-live="polite">

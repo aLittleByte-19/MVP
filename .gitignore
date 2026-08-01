@@ -21,6 +21,7 @@ Thumbs.db
 /node_modules/
 /apps/*/node_modules/
 /apps/*/dist/
+/apps/*/.angular/
 /apps/*/tsconfig.tsbuildinfo
 /public/build
 /public/fonts-manifest.dev.json
@@ -44,7 +45,7 @@ Thumbs.db
 !/storage/framework/testing/.gitignore
 /storage/app/tmp/
 /storage/app/public/documents
-/storage/framework/poc-setup-complete
+/storage/framework/mvp-setup-complete
 /storage/pail
 __pycache__/
 *.py[cod]
@@ -69,3 +70,7 @@ Homestead.yaml
 /docker/traefik/certs/*.key
 /reports/
 /backups/
+
+# Report di code coverage: artefatti di esecuzione, si rigenerano dai test
+/coverage/
+/apps/frontend/coverage/

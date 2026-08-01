@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from "@angular/co
 import { type FormControl, ReactiveFormsModule } from "@angular/forms";
 
 @Component({
-  selector: "poc-textarea-field",
+  selector: "mvp-textarea-field",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ReactiveFormsModule],
   template: `

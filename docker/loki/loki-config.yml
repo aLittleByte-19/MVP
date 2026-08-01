@@ -1,4 +1,4 @@
-# Single-binary Loki for the local PoC log stack (filesystem storage).
+# Single-binary Loki for the local MVP log stack (filesystem storage).
 auth_enabled: false
 
 server:

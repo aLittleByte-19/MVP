@@ -1,5 +1,5 @@
 {
-  "uid": "poc-queues-and-dlq",
+  "uid": "mvp-queues-and-dlq",
   "title": "Queues and DLQ",
   "tags": [
     "alittlebyte",
@@ -65,7 +65,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(poc_dlq_messages_total)",
+          "expr": "sum(mvp_dlq_messages_total)",
           "instant": true,
           "legendFormat": "dlq",
           "datasource": {
@@ -108,7 +108,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(poc_sqs_messages_received_total)",
+          "expr": "sum(mvp_sqs_messages_received_total)",
           "instant": true,
           "legendFormat": "ricevuti",
           "datasource": {
@@ -163,7 +163,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(poc_sqs_messages_failed_total)",
+          "expr": "sum(mvp_sqs_messages_failed_total)",
           "instant": true,
           "legendFormat": "falliti",
           "datasource": {
@@ -228,7 +228,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (task_type) (poc_sqs_messages_received_total)",
+          "expr": "sum by (task_type) (mvp_sqs_messages_received_total)",
           "instant": true,
           "format": "table",
           "datasource": {
@@ -238,7 +238,7 @@
         },
         {
           "refId": "B",
-          "expr": "sum by (task_type) (poc_sqs_messages_failed_total)",
+          "expr": "sum by (task_type) (mvp_sqs_messages_failed_total)",
           "instant": true,
           "format": "table",
           "datasource": {
@@ -304,7 +304,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (task_type) (rate(poc_sqs_messages_received_total[5m]))",
+          "expr": "sum by (task_type) (rate(mvp_sqs_messages_received_total[5m]))",
           "legendFormat": "ricevuti {{task_type}}",
           "datasource": {
             "type": "prometheus",
@@ -313,7 +313,7 @@
         },
         {
           "refId": "B",
-          "expr": "sum by (task_type) (rate(poc_sqs_messages_failed_total[5m]))",
+          "expr": "sum by (task_type) (rate(mvp_sqs_messages_failed_total[5m]))",
           "legendFormat": "falliti {{task_type}}",
           "datasource": {
             "type": "prometheus",
@@ -368,7 +368,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (check) (poc_readiness_status)",
+          "expr": "max by (check) (mvp_readiness_status)",
           "instant": true,
           "format": "table",
           "datasource": {
@@ -426,7 +426,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(poc_document_workflow_completed_total[5m]))",
+          "expr": "sum(rate(mvp_document_workflow_completed_total[5m]))",
           "legendFormat": "completati/s",
           "datasource": {
             "type": "prometheus",
@@ -477,7 +477,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{project=\"poc\", service=\"queue\"}",
+          "expr": "{project=\"mvp\", service=\"queue\"}",
           "maxLines": 200
         }
       ]

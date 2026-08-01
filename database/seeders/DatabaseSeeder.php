@@ -11,6 +11,6 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
-        // No default seeding required for public PoC.
+        // No default seeding required for public MVP.
     }
 }

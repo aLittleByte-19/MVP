@@ -1,0 +1,149 @@
+{
+  "Comment": "LocalStack Step Functions model for the Alittlebyte MVP communication pipeline (text generation plus degradable cover) using SQS callback task tokens.",
+  "StartAt": "ValidateInput",
+  "States": {
+    "ValidateInput": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.metadata.valid",
+          "BooleanEquals": false,
+          "Next": "Failed"
+        }
+      ],
+      "Default": "GenerateText"
+    },
+    "GenerateText": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+      "TimeoutSeconds": 180,
+      "HeartbeatSeconds": 60,
+      "ResultPath": "$.last_task",
+      "Parameters": {
+        "QueueUrl.$": "$.task_queue_url",
+        "MessageBody": {
+          "taskToken.$": "$$.Task.Token",
+          "taskType": "communication.generate_text",
+          "communicationId.$": "$.communication_id",
+          "tenantId.$": "$.tenant_id",
+          "correlationId.$": "$.correlation_id",
+          "requestId.$": "$.request_id",
+          "taskQueueUrl.$": "$.task_queue_url"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["WorkflowTaskFailed", "States.TaskFailed", "States.Timeout"],
+          "IntervalSeconds": 5,
+          "BackoffRate": 2,
+          "MaxAttempts": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.failure",
+          "Next": "Failed"
+        }
+      ],
+      "Next": "ValidateGeneratedText"
+    },
+    "ValidateGeneratedText": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.last_task.task_result.status",
+          "StringEquals": "failed",
+          "Next": "Failed"
+        }
+      ],
+      "Default": "GenerateCover"
+    },
+    "GenerateCover": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+      "TimeoutSeconds": 300,
+      "HeartbeatSeconds": 90,
+      "ResultPath": "$.last_task",
+      "Parameters": {
+        "QueueUrl.$": "$.task_queue_url",
+        "MessageBody": {
+          "taskToken.$": "$$.Task.Token",
+          "taskType": "communication.generate_cover",
+          "communicationId.$": "$.communication_id",
+          "tenantId.$": "$.tenant_id",
+          "correlationId.$": "$.correlation_id",
+          "requestId.$": "$.request_id",
+          "taskQueueUrl.$": "$.task_queue_url"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["WorkflowTaskFailed", "States.TaskFailed", "States.Timeout"],
+          "IntervalSeconds": 10,
+          "BackoffRate": 2,
+          "MaxAttempts": 1
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.cover_failure",
+          "Next": "MarkCoverDegraded"
+        }
+      ],
+      "Next": "FinalizeCommunication"
+    },
+    "MarkCoverDegraded": {
+      "Type": "Pass",
+      "Result": {
+        "degraded": true
+      },
+      "ResultPath": "$.cover",
+      "Next": "FinalizeCommunication"
+    },
+    "FinalizeCommunication": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+      "TimeoutSeconds": 120,
+      "HeartbeatSeconds": 90,
+      "ResultPath": "$.last_task",
+      "Parameters": {
+        "QueueUrl.$": "$.task_queue_url",
+        "MessageBody": {
+          "taskToken.$": "$$.Task.Token",
+          "taskType": "communication.finalize",
+          "communicationId.$": "$.communication_id",
+          "tenantId.$": "$.tenant_id",
+          "correlationId.$": "$.correlation_id",
+          "requestId.$": "$.request_id",
+          "taskQueueUrl.$": "$.task_queue_url"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["WorkflowTaskFailed", "States.TaskFailed", "States.Timeout"],
+          "IntervalSeconds": 5,
+          "BackoffRate": 2,
+          "MaxAttempts": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.failure",
+          "Next": "Failed"
+        }
+      ],
+      "Next": "Completed"
+    },
+    "Completed": {
+      "Type": "Succeed"
+    },
+    "Failed": {
+      "Type": "Fail",
+      "Error": "CommunicationPipelineFailed",
+      "Cause": "The communication pipeline entered an explicit failure path."
+    }
+  }
+}

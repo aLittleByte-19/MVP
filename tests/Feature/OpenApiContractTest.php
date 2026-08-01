@@ -1,10 +1,11 @@
 <?php
 
-use App\Copilot\Ai\BedrockService;
-use App\Copilot\Workflow\Services\DocumentWorkflowService;
-use App\Models\Copilot\ExtractedData;
-use App\Models\Copilot\OriginalDocument;
-use App\Models\Copilot\SubDocument;
+use App\Models\Communication;
+use App\Models\ExtractedData;
+use App\Models\OriginalDocument;
+use App\Models\SubDocument;
+use App\Mvp\Communications\Services\CommunicationWorkflowService;
+use App\Mvp\Documents\Services\DocumentWorkflowService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use setasign\Fpdi\Fpdi;
@@ -30,7 +31,7 @@ test('GET /api/v1/state rispetta il contratto OpenAPI', function () {
 });
 
 test('GET /api/v1/state senza identita valida rispetta il contratto per il 401', function () {
-    config(['poc.identity.mode' => 'trusted-headers']);
+    config(['mvp.identity.mode' => 'trusted-headers']);
 
     $response = $this->getJson('/api/v1/state')->assertUnauthorized();
 
@@ -38,7 +39,7 @@ test('GET /api/v1/state senza identita valida rispetta il contratto per il 401',
 });
 
 test('GET /api/v1/state senza ruolo abilitato rispetta il contratto per il 403', function () {
-    config(['poc.identity.local.roles' => ['ruolo-non-abilitato']]);
+    config(['mvp.identity.local.roles' => ['ruolo-non-abilitato']]);
 
     $response = $this->getJson('/api/v1/state')->assertForbidden();
 
@@ -46,19 +47,19 @@ test('GET /api/v1/state senza ruolo abilitato rispetta il contratto per il 403',
 });
 
 test('POST /api/v1/communications rispetta il contratto OpenAPI', function () {
-    $this->mock(BedrockService::class, function ($mock) {
-        $mock->shouldReceive('generateCommunication')
-            ->once()
-            ->andReturn(['title' => 'Aggiornamento orari', 'body' => 'Testo della comunicazione generata.']);
-    });
+    $workflow = Mockery::mock(CommunicationWorkflowService::class);
+    $workflow->shouldReceive('start')
+        ->once()
+        ->andReturnUsing(fn (Communication $communication) => $communication);
+    app()->instance(CommunicationWorkflowService::class, $workflow);
 
     $response = $this->postJson('/api/v1/communications', [
         'prompt' => 'Comunica i nuovi orari di apertura degli uffici',
         'tone' => 'Chiaro e diretto',
         'style' => 'Testo informativo',
-    ])->assertCreated();
+    ])->assertAccepted();
 
-    OpenApiSpec::assertResponseMatchesContract($response->json(), '/api/v1/communications', 'post', '201');
+    OpenApiSpec::assertResponseMatchesContract($response->json(), '/api/v1/communications', 'post', '202');
 });
 
 test('POST /api/v1/communications con payload invalido rispetta il contratto per il 422', function () {
@@ -69,6 +70,41 @@ test('POST /api/v1/communications con payload invalido rispetta il contratto per
     // requestId e correlationId sono valorizzati dal middleware di correlazione
     expect($response->json('error.requestId'))->toBeString()
         ->and($response->json('error.correlationId'))->toBeString();
+});
+
+test('POST /api/v1/communications/{communication}/cover-image rispetta il contratto OpenAPI', function () {
+    Storage::fake('s3');
+    config(['mvp.communications.cover_disk' => 's3']);
+
+    $communication = Communication::factory()->draft()->create();
+
+    $response = $this->withHeader('Accept', 'application/json')
+        ->post("/api/v1/communications/{$communication->id}/cover-image", [
+            'image' => UploadedFile::fake()->image('contract-cover.png', 1280, 720),
+        ])->assertOk();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/cover-image',
+        'post',
+        '200',
+    );
+});
+
+test('DELETE /api/v1/communications/{communication}/cover-image rispetta il contratto OpenAPI', function () {
+    Storage::fake('s3');
+    config(['mvp.communications.cover_disk' => 's3']);
+
+    $communication = Communication::factory()->draft()->coverReady()->create();
+
+    $response = $this->deleteJson("/api/v1/communications/{$communication->id}/cover-image")->assertOk();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/cover-image',
+        'delete',
+        '200',
+    );
 });
 
 test('POST /api/v1/documents/ocr rispetta il contratto OpenAPI', function () {
@@ -139,5 +175,37 @@ test('DELETE /api/v1/documents/{subDocument} rispetta il contratto OpenAPI', fun
         '/api/v1/documents/{subDocument}',
         'delete',
         '200',
+    );
+});
+
+test('POST /api/v1/communications/{communication}/rating rispetta il contratto OpenAPI', function () {
+    $communication = Communication::factory()->draft()->create();
+
+    $response = $this->postJson("/api/v1/communications/{$communication->id}/rating", [
+        'rating' => 5,
+        'comment' => 'Ottima bozza.',
+    ])->assertOk();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/rating',
+        'post',
+        '200',
+    );
+});
+
+test('POST /api/v1/communications/{communication}/rating con payload invalido rispetta il contratto per il 422', function () {
+    $communication = Communication::factory()->draft()->create();
+
+    $response = $this->postJson("/api/v1/communications/{$communication->id}/rating", [
+        'rating' => 9,
+        'comment' => str_repeat('x', 1001),
+    ])->assertUnprocessable();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/rating',
+        'post',
+        '422',
     );
 });

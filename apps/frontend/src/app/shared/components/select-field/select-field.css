@@ -1,22 +1,22 @@
 .field {
   display: grid;
-  gap: var(--poc-space-2);
-  color: var(--poc-text);
+  gap: var(--mvp-space-2);
+  color: var(--mvp-text);
   font-weight: 700;
 }
 
 .field span {
-  font-size: var(--poc-font-sm);
+  font-size: var(--mvp-font-sm);
 }
 
 .field select {
   width: 100%;
   min-height: 42px;
-  padding: 0 var(--poc-space-3);
-  border: 1px solid var(--poc-border-strong);
-  border-radius: var(--poc-radius);
-  background: var(--poc-surface-muted);
-  color: var(--poc-text);
+  padding: 0 var(--mvp-space-3);
+  border: 1px solid var(--mvp-border-strong);
+  border-radius: var(--mvp-radius);
+  background: var(--mvp-surface-muted);
+  color: var(--mvp-text);
 }
 
 :host {

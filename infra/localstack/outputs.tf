@@ -6,6 +6,14 @@ output "documents_dlq_url" {
   value = aws_sqs_queue.documents_dlq.url
 }
 
+output "communications_queue_url" {
+  value = aws_sqs_queue.communications.url
+}
+
+output "communications_dlq_url" {
+  value = aws_sqs_queue.communications_dlq.url
+}
+
 output "documents_bucket" {
   value = aws_s3_bucket.documents.bucket
 }
@@ -23,11 +31,15 @@ output "edge_cdn_local_url" {
 }
 
 output "event_bus_name" {
-  value = aws_cloudwatch_event_bus.poc.name
+  value = aws_cloudwatch_event_bus.mvp.name
 }
 
 output "state_machine_arn" {
   value = aws_sfn_state_machine.document_pipeline.arn
+}
+
+output "communication_state_machine_arn" {
+  value = aws_sfn_state_machine.communication_pipeline.arn
 }
 
 output "runtime_ssm_path" {

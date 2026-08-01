@@ -1,12 +1,13 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from "@angular/core";
-import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
 import { DomSanitizer, type SafeResourceUrl } from "@angular/platform-browser";
 import { LucideCheckCircle2, LucidePencil, LucideSave, LucideTrash2, LucideX } from "@lucide/angular";
-import type { SubDocument, UpdateExtractedDataRequest } from "../../../../api/generated/model";
+import type { SubDocument, UpdateExtractedDataRequest, UpdateSendMessageRequest } from "../../../../api/generated/model";
 import { ButtonComponent } from "../../../shared/components/button/button";
 import { EmptyStateComponent } from "../../../shared/components/empty-state/empty-state";
 import { SectionComponent } from "../../../layout/section/section";
-import { formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
+import { capitalizeFirst, formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
+import { DOCUMENT_TYPE_OPTIONS, codiceFiscaleValidator } from "../../../shared/util/document-field-validators";
 import { DocumentWorkflowService, type DocumentPreviewStatus } from "../data/document-workflow.service";
 import { DocumentStatusTimelineComponent } from "./document-status-timeline";
 
@@ -18,6 +19,9 @@ interface ReviewFormState {
   documentDate: string;
   documentType: string;
   description: string;
+  recipientEmail: string;
+  fiscalCode: string;
+  employeeId: string;
 }
 
 const emptyReviewForm: ReviewFormState = {
@@ -27,11 +31,26 @@ const emptyReviewForm: ReviewFormState = {
   companyName: "",
   documentDate: "",
   documentType: "",
-  description: ""
+  description: "",
+  recipientEmail: "",
+  fiscalCode: "",
+  employeeId: ""
+};
+
+interface SendMessageFormState {
+  recipient: string;
+  subject: string;
+  body: string;
+}
+
+const emptySendMessageForm: SendMessageFormState = {
+  recipient: "",
+  subject: "",
+  body: ""
 };
 
 @Component({
-  selector: "poc-sub-document-list",
+  selector: "mvp-sub-document-list",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ButtonComponent,
@@ -47,10 +66,10 @@ const emptyReviewForm: ReviewFormState = {
   ],
   template: `
     @if (documentItem(); as document) {
-      <poc-section [title]="document.title || 'Verifica documento'">
+      <mvp-section [title]="document.title || 'Verifica documento'">
         <button
           actions
-          pocButton
+          mvpButton
           variant="icon"
           type="button"
           aria-label="Elimina documento"
@@ -60,7 +79,7 @@ const emptyReviewForm: ReviewFormState = {
           <svg lucideTrash2 aria-hidden="true"></svg>
         </button>
 
-        <poc-document-status-timeline [documentItem]="document" />
+        <mvp-document-status-timeline [documentItem]="document" />
 
         <div class="detailGrid">
           <article class="preview">
@@ -117,7 +136,7 @@ const emptyReviewForm: ReviewFormState = {
               [class.confidenceLow]="document.confidence !== null && document.confidence !== undefined && document.confidence < 80"
               [class.statusAuto]="document.reviewStatus === 'auto_validated'"
               [class.statusManual]="document.reviewStatus === 'manually_validated'"
-              (ngSubmit)="saveReview(false)"
+              (ngSubmit)="saveReview()"
             >
               <div class="inspectorGrid">
                 <label class="field editableField">
@@ -144,9 +163,26 @@ const emptyReviewForm: ReviewFormState = {
                   <span>Numero pagine</span>
                   <input [value]="formatFallback(document.pages)" readOnly disabled tabindex="-1" />
                 </label>
-                <label class="field editableField">
+                <label class="field editableField" for="document-type-field">
                   <span>Tipologia documento</span>
-                  <input formControlName="documentType" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
+                  @if (isEditing()) {
+                    <select id="document-type-field" formControlName="documentType">
+                      <option value="">Seleziona...</option>
+                      @for (option of documentTypeOptions(); track option) {
+                        <option [value]="option">
+                          {{ isPredefinedDocumentType(option) ? capitalizeFirst(option) : option }}
+                        </option>
+                      }
+                    </select>
+                  } @else {
+                    <input
+                      id="document-type-field"
+                      [value]="formatFallback(document.documentType)"
+                      readOnly
+                      disabled
+                      tabindex="-1"
+                    />
+                  }
                 </label>
                 <label class="field lockedField">
                   <span>Confidenza</span>
@@ -165,12 +201,42 @@ const emptyReviewForm: ReviewFormState = {
                     [attr.aria-readonly]="!isEditing()"
                   ></textarea>
                 </label>
+                <label class="field editableField">
+                  <span>Email destinatario</span>
+                  <input
+                    formControlName="recipientEmail"
+                    [readOnly]="!isEditing()"
+                    [attr.aria-readonly]="!isEditing()"
+                    [class.invalid]="fieldError('recipientEmail')"
+                  />
+                  @if (fieldError("recipientEmail"); as message) {
+                    <span class="fieldError">{{ message }}</span>
+                  }
+                </label>
+
+                <label class="field editableField">
+                  <span>Codice Fiscale</span>
+                  <input
+                    formControlName="fiscalCode"
+                    [readOnly]="!isEditing()"
+                    [attr.aria-readonly]="!isEditing()"
+                    [class.invalid]="fieldError('fiscalCode')"
+                  />
+                  @if (fieldError("fiscalCode"); as message) {
+                    <span class="fieldError">{{ message }}</span>
+                  }
+                </label>
+
+                <label class="field editableField">
+                  <span>Matricola dipendente</span>
+                  <input formControlName="employeeId" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
+                </label>
               </div>
 
               <div class="reviewActions">
                 @if (isEditing()) {
                   <button
-                    pocButton
+                    mvpButton
                     variant="secondary"
                     type="button"
                     [disabled]="isSavingReview()"
@@ -179,17 +245,13 @@ const emptyReviewForm: ReviewFormState = {
                     <svg lucideX aria-hidden="true"></svg>
                     Annulla
                   </button>
-                  <button pocButton variant="secondary" type="submit" [disabled]="isSavingReview()">
+                  <button mvpButton type="submit" [disabled]="isSavingReview()">
                     <svg lucideSave aria-hidden="true"></svg>
-                    Salva correzioni
-                  </button>
-                  <button pocButton type="button" [disabled]="isSavingReview()" (click)="saveReview(true)">
-                    <svg lucideCheckCircle2 aria-hidden="true"></svg>
-                    Salva e valida
+                    {{ isSavingReview() ? "Salvataggio" : "Salva" }}
                   </button>
                 } @else {
                   <button
-                    pocButton
+                    mvpButton
                     variant="secondary"
                     type="button"
                     [disabled]="isSavingReview()"
@@ -199,7 +261,7 @@ const emptyReviewForm: ReviewFormState = {
                     Modifica
                   </button>
                   <button
-                    pocButton
+                    mvpButton
                     type="button"
                     [disabled]="isSavingReview()"
                     (click)="markReviewed.emit(document.id)"
@@ -207,16 +269,90 @@ const emptyReviewForm: ReviewFormState = {
                     <svg lucideCheckCircle2 aria-hidden="true"></svg>
                     Conferma dati correnti
                   </button>
+                  <button mvpButton variant="secondary" type="button" (click)="isSendOpen.set(true)">
+                    Invia
+                  </button>
                 }
               </div>
             </form>
+
+            @if (isSendOpen()) {
+              <form
+                [formGroup]="sendForm"
+                class="sendSection"
+                [class.isEditing]="isSendEditing()"
+                (ngSubmit)="saveSendMessage(document)"
+              >
+                <div class="inspectorHeading">
+                  <p class="eyebrow">Messaggio di invio</p>
+                  <button mvpButton variant="icon" type="button" aria-label="Chiudi" (click)="isSendOpen.set(false)">
+                    <svg lucideX aria-hidden="true"></svg>
+                  </button>
+                </div>
+                @if (sendMessageError()) {
+                  <p class="errorNote">{{ sendMessageError() }}</p>
+                }
+                <label class="field editableField">
+                  <span>Destinatario</span>
+                  <input
+                    formControlName="recipient"
+                    [readOnly]="!isSendEditing()"
+                    [attr.aria-readonly]="!isSendEditing()"
+                  />
+                </label>
+                <label class="field editableField">
+                  <span>Oggetto</span>
+                  <input
+                    formControlName="subject"
+                    [readOnly]="!isSendEditing()"
+                    [attr.aria-readonly]="!isSendEditing()"
+                  />
+                </label>
+                <label class="field editableField">
+                  <span>Testo</span>
+                  <textarea
+                    rows="6"
+                    formControlName="body"
+                    [readOnly]="!isSendEditing()"
+                    [attr.aria-readonly]="!isSendEditing()"
+                  ></textarea>
+                </label>
+                <div class="previewActions">
+                  @if (isSendEditing()) {
+                    <button
+                      mvpButton
+                      variant="secondary"
+                      type="button"
+                      [disabled]="isSavingSendMessage()"
+                      (click)="cancelSendMessageEdit(document)"
+                    >
+                      <svg lucideX aria-hidden="true"></svg>
+                      Annulla
+                    </button>
+                    <button mvpButton variant="secondary" type="submit" [disabled]="isSavingSendMessage()">
+                      <svg lucideSave aria-hidden="true"></svg>
+                      Salva
+                    </button>
+                  } @else {
+                    <button mvpButton variant="secondary" type="button" (click)="isSendEditing.set(true)">
+                      <svg lucidePencil aria-hidden="true"></svg>
+                      Modifica
+                    </button>
+                    <a class="previewLink" [href]="document.sendPreviewUrl" target="_blank" rel="noreferrer">
+                      Apri anteprima
+                    </a>
+                    <a class="previewLink downloadLink" [href]="document.sendExportUrl">Scarica PDF</a>
+                  }
+                </div>
+              </form>
+            }
           </article>
         </div>
-      </poc-section>
+      </mvp-section>
     } @else {
-      <poc-section title="Verifica documento">
-        <poc-empty-state>Seleziona un documento dallo storico per visualizzare il dettaglio.</poc-empty-state>
-      </poc-section>
+      <mvp-section title="Verifica documento">
+        <mvp-empty-state>Seleziona un documento dallo storico per visualizzare il dettaglio.</mvp-empty-state>
+      </mvp-section>
     }
   `,
   styleUrl: "./sub-document-list.css"
@@ -226,12 +362,28 @@ export class SubDocumentListComponent {
   readonly isDeleting = input.required<boolean>();
   readonly isSavingReview = input.required<boolean>();
   readonly reviewError = input<string | null>(null);
+  readonly isSavingSendMessage = input<boolean>(false);
+  readonly sendMessageError = input<string | null>(null);
+  readonly fieldErrors = input<Record<string, string> | null>(null);
   readonly deleteDocument = output<string>();
   readonly markReviewed = output<string>();
   readonly saveReviewRequested = output<{ documentId: string; payload: UpdateExtractedDataRequest }>();
+  readonly saveSendMessageRequested = output<{ documentId: string; payload: UpdateSendMessageRequest }>();
 
   protected readonly formatFallback = formatFallback;
+  protected readonly capitalizeFirst = capitalizeFirst;
+  // Il classificatore AI non e' vincolato alle 6 tipologie fisse (UC-43): se il
+  // documento ha gia' un valore fuori enum, lo si aggiunge come opzione extra
+  // cosi' la select lo mostra selezionato invece di apparire vuota.
+  protected readonly documentTypeOptions = computed<string[]>(() => {
+    const current = this.documentItem()?.documentType ?? "";
+    return current && !this.isPredefinedDocumentType(current)
+      ? [current, ...DOCUMENT_TYPE_OPTIONS]
+      : [...DOCUMENT_TYPE_OPTIONS];
+  });
   protected readonly isEditing = signal(false);
+  protected readonly isSendOpen = signal(false);
+  protected readonly isSendEditing = signal(false);
   protected readonly previewStatus = signal<DocumentPreviewStatus>("idle");
   // L'URL dell'anteprima e' una risorsa same-origin generata dal backend; va
   // marcato come SafeResourceUrl, altrimenti Angular blocca il binding su
@@ -248,7 +400,15 @@ export class SubDocumentListComponent {
     companyName: new FormControl("", { nonNullable: true }),
     documentDate: new FormControl("", { nonNullable: true }),
     documentType: new FormControl("", { nonNullable: true }),
-    description: new FormControl("", { nonNullable: true })
+    description: new FormControl("", { nonNullable: true }),
+    recipientEmail: new FormControl("", { nonNullable: true, validators: [Validators.email] }),
+    fiscalCode: new FormControl("", { nonNullable: true, validators: [codiceFiscaleValidator] }),
+    employeeId: new FormControl("", { nonNullable: true })
+  });
+  protected readonly sendForm = new FormGroup({
+    recipient: new FormControl("", { nonNullable: true }),
+    subject: new FormControl("", { nonNullable: true }),
+    body: new FormControl("", { nonNullable: true })
   });
 
   private readonly workflow = inject(DocumentWorkflowService);
@@ -270,11 +430,88 @@ export class SubDocumentListComponent {
 
       onCleanup(() => subscription.unsubscribe());
     });
+
+    // Evidenzia il campo segnalato dal backend (UC-55/UC-69) invece di un
+    // banner generico: rimuove prima i vecchi errori "backend" residui, poi
+    // riapplica quelli correnti (l'oggetto arriva nuovo ad ogni tentativo).
+    effect(() => {
+      const errors = this.fieldErrors();
+
+      for (const control of Object.values(this.form.controls)) {
+        if (control.hasError("backend")) {
+          const remainingErrors = { ...control.errors };
+          delete remainingErrors["backend"];
+          control.setErrors(Object.keys(remainingErrors).length ? remainingErrors : null);
+        }
+      }
+
+      if (!errors) {
+        return;
+      }
+
+      for (const [field, message] of Object.entries(errors)) {
+        const control = this.form.get(field);
+
+        if (control) {
+          control.setErrors({ ...control.errors, backend: message });
+          control.markAsTouched();
+        }
+      }
+    });
+  }
+
+  /** Messaggio d'errore per il campo, se non valido e gia' toccato dall'utente. */
+  protected fieldError(name: "recipientEmail" | "fiscalCode"): string | null {
+    const control = this.form.get(name);
+
+    if (!control || !control.touched || control.valid) {
+      return null;
+    }
+
+    if (typeof control.errors?.["backend"] === "string") {
+      return control.errors["backend"];
+    }
+
+    if (control.errors?.["email"]) {
+      return "Formato e-mail non valido.";
+    }
+
+    if (control.errors?.["codiceFiscale"]) {
+      return "Il codice fiscale non supera il controllo di validità formale.";
+    }
+
+    return null;
+  }
+
+  protected isPredefinedDocumentType(value: string): boolean {
+    return (DOCUMENT_TYPE_OPTIONS as readonly string[]).includes(value);
   }
 
   protected resetForm(document: SubDocument | null): void {
     this.form.setValue(toReviewForm(document));
+    this.form.markAsUntouched();
     this.isEditing.set(false);
+    this.sendForm.setValue(toSendMessageForm(document));
+    this.isSendOpen.set(false);
+    this.isSendEditing.set(false);
+  }
+
+  protected cancelSendMessageEdit(document: SubDocument): void {
+    this.sendForm.setValue(toSendMessageForm(document));
+    this.isSendEditing.set(false);
+  }
+
+  protected saveSendMessage(document: SubDocument): void {
+    const formValue = this.sendForm.getRawValue();
+
+    this.saveSendMessageRequested.emit({
+      documentId: document.id,
+      payload: {
+        recipient: nullableTrim(formValue.recipient),
+        subject: nullableTrim(formValue.subject),
+        body: nullableTrim(formValue.body)
+      }
+    });
   }
 
   protected confidenceDisplay(document: SubDocument): string {
@@ -282,23 +519,28 @@ export class SubDocumentListComponent {
   }
 
   protected documentDateDisplay(document: SubDocument): string {
-    return formatDateForDisplay(document.documentDate ?? document.date);
+    return formatDateForDisplay(document.documentDate);
   }
 
-  protected saveReview(markAsValidated: boolean): void {
+  protected saveReview(): void {
     const document = this.documentItem();
 
     if (!document) {
       return;
     }
 
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
     this.saveReviewRequested.emit({
       documentId: document.id,
-      payload: this.buildPayload(markAsValidated)
+      payload: this.buildPayload()
     });
   }
 
-  private buildPayload(markAsValidated: boolean): UpdateExtractedDataRequest {
+  private buildPayload(): UpdateExtractedDataRequest {
     const formValue = this.form.getRawValue();
     const employee = splitEmployeeName(formValue);
 
@@ -308,7 +550,10 @@ export class SubDocumentListComponent {
       documentDate: formValue.documentDate || null,
       documentType: nullableTrim(formValue.documentType),
       description: nullableTrim(formValue.description),
-      markAsValidated
+      recipientEmail: nullableTrim(formValue.recipientEmail),
+      fiscalCode: nullableTrim(formValue.fiscalCode),
+      employeeId: nullableTrim(formValue.employeeId),
+      markAsValidated: false
     };
   }
 }
@@ -331,10 +576,25 @@ function toReviewForm(documentItem: SubDocument | null): ReviewFormState {
     employeeName: compactEmployeeName(documentItem),
     employeeFirstName: documentItem.employeeFirstName ?? "",
     employeeLastName: documentItem.employeeLastName ?? "",
-    companyName: documentItem.companyName ?? documentItem.company ?? "",
+    companyName: documentItem.companyName ?? "",
     documentDate: documentItem.documentDate ?? "",
-    documentType: documentItem.documentType ?? documentItem.type ?? "",
-    description: documentItem.description ?? ""
+    documentType: documentItem.documentType ?? "",
+    description: documentItem.description ?? "",
+    recipientEmail: documentItem.recipientEmail ?? "",
+    fiscalCode: documentItem.fiscalCode ?? "",
+    employeeId: documentItem.employeeId ?? ""
+  };
+}
+
+function toSendMessageForm(documentItem: SubDocument | null): SendMessageFormState {
+  if (!documentItem) {
+    return emptySendMessageForm;
+  }
+
+  return {
+    recipient: documentItem.sendRecipient ?? "",
+    subject: documentItem.sendSubject ?? "",
+    body: documentItem.sendBody ?? ""
   };
 }
 

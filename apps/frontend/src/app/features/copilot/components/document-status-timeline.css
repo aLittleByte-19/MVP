@@ -1,7 +1,7 @@
 .timeline {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--poc-space-2);
+  gap: var(--mvp-space-2);
   margin: 0;
   padding: 0;
   list-style: none;

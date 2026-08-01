@@ -1,6 +1,6 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://poc.alittlebyte.local/schemas/ai/extract-fields.schema.json",
+    "$id": "https://mvp.alittlebyte.local/schemas/ai/extract-fields.schema.json",
     "title": "ExtractFieldsResult",
     "description": "Structured recipient fields returned by the Bedrock extraction model for any document type. Tolerant by design: missing keys are normalized to null and extra keys are ignored (LLM drift must not quarantine a usable extraction); declared fields are strictly typed.",
     "type": "object",

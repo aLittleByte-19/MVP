@@ -1,4 +1,4 @@
-# PoC - aLittleByte
+# MVP - aLittleByte
 <p align="center">
   <img src="https://img.shields.io/badge/Laravel-API-red?logo=laravel&logoColor=white" alt="Laravel API">
   <img src="https://img.shields.io/badge/Angular-SPA-DD0031?logo=angular&logoColor=white" alt="Angular SPA">
@@ -9,24 +9,24 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/aLittleByte-19/PoC/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/aLittleByte-19/PoC/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI (main)"></a>
+  <a href="https://github.com/aLittleByte-19/MVP/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/aLittleByte-19/MVP/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI (main)"></a>
 </p>
 
 
-Proof of Concept per workflow HR e documentali assistiti da AI, con generazione di comunicazioni, pipeline asincrona di elaborazione PDF, integrazione AWS-like locale e osservabilità end-to-end.
+MVP per workflow HR e documentali assistiti da AI, con generazione di comunicazioni, pipeline asincrona di elaborazione PDF, integrazione AWS-like locale e osservabilità end-to-end.
 
 
 ## Contesto
 
-Questa Proof of Concept nasce nel contesto del progetto proposto da **Eggon**, orientato all’evoluzione di processi HR e documentali tramite funzionalità intelligenti, automazione operativa e integrazione con strumenti digitali già presenti nell’ecosistema aziendale.
+Questa MVP nasce nel contesto del progetto proposto da **Eggon**, orientato all’evoluzione di processi HR e documentali tramite funzionalità intelligenti, automazione operativa e integrazione con strumenti digitali già presenti nell’ecosistema aziendale.
 
-Il lavoro si concentra su due aree applicative principali: un assistente generativo per comunicazioni HR e un Co-Pilot documentale per supportare l’elaborazione di PDF multi-destinatario. La PoC esplora come un’interfaccia web, un backend API, una pipeline asincrona, uno storage documentale e servizi AI possano cooperare in un flusso tecnico end-to-end, riproducibile in locale e osservabile durante l’esecuzione.
+Il lavoro si concentra su due aree applicative principali: un assistente generativo per comunicazioni HR e un Co-Pilot documentale per supportare l’elaborazione di PDF multi-destinatario. La MVP esplora come un’interfaccia web, un backend API, una pipeline asincrona, uno storage documentale e servizi AI possano cooperare in un flusso tecnico end-to-end, riproducibile in locale e osservabile durante l’esecuzione.
 
 Il valore principale del progetto è architetturale e dimostrativo: ogni fase del processo viene resa esplicita, tracciabile e verificabile, dalla richiesta utente alla persistenza, dall’avvio del workflow alla lavorazione asincrona, fino alla raccolta di metriche, log, trace e risultati applicativi.
 
-## Cosa dimostra la PoC
+## Cosa dimostra la MVP
 
-La PoC dimostra un modello applicativo composto da più livelli cooperanti:
+La MVP dimostra un modello applicativo composto da più livelli cooperanti:
 
 * una **SPA Angular/TypeScript** per l’interazione operatore;
 * un backend **Laravel/PHP** per API, validazione, autorizzazione, orchestrazione applicativa e persistenza;
@@ -45,11 +45,11 @@ La separazione tra richiesta HTTP e workflow asincrono è uno dei punti centrali
 
 L’architettura locale è organizzata intorno a un entrypoint edge, un layer applicativo, servizi dati, workflow asincroni e osservabilità.
 
-Traefik gestisce l’ingresso verso i servizi esposti e instrada il traffico applicativo verso l’emulatore CDN locale. Quest’ultimo (`edge-cdn`) è un secondo Nginx che emula il ruolo di una CDN/edge — non Amazon CloudFront — servendo la SPA Angular dagli oggetti caricati nel bucket S3 LocalStack e inoltrando `/api/`, `/health` e `/ready` all’Nginx applicativo/Laravel. È un container separato dall’Nginx applicativo, che è un’immagine di produzione e non deve conoscere LocalStack; quest’ultimo resta il proxy verso PHP-FPM e il percorso interno di compatibilità. PostgreSQL conserva lo stato persistente, Redis supporta componenti runtime a bassa latenza, mentre LocalStack fornisce servizi AWS-like in ambiente locale.
+Traefik gestisce l’ingresso verso i servizi esposti e instrada il traffico applicativo verso l’emulatore CDN locale. Quest’ultimo (`edge-cdn`) è un secondo Nginx che emula il ruolo di una CDN/edge (non Amazon CloudFront) servendo la SPA Angular dagli oggetti caricati nel bucket S3 LocalStack e inoltrando `/api/`, `/health` e `/ready` all’Nginx applicativo/Laravel. È un container separato dall’Nginx applicativo, che è un’immagine di produzione e non deve conoscere LocalStack; quest’ultimo resta il proxy verso PHP-FPM e il percorso interno di compatibilità. PostgreSQL conserva lo stato persistente, Redis supporta componenti runtime a bassa latenza, mentre LocalStack fornisce servizi AWS-like in ambiente locale.
 
 I worker Laravel consumano task asincroni da SQS e comunicano con Step Functions tramite callback task token. Questo permette di rappresentare una pipeline documentale composta da stati espliciti, retry, gestione errori, idempotenza e aggiornamento progressivo dello stato.
 
-![Architettura E2E della PoC](docs/architecture/diagrams/final-architecture.drawio.png)
+![Architettura E2E della MVP](docs/architecture/diagrams/final-architecture.drawio.png)
 
 <sub>Architettura e2e</sub>
 
@@ -57,7 +57,13 @@ I worker Laravel consumano task asincroni da SQS e comunicano con Step Functions
 
 Il flusso AI Assistant supporta la generazione di comunicazioni HR a partire da un prompt, con tono e stile selezionati dall’operatore.
 
-La richiesta parte dalla SPA e arriva alle API Laravel, dove viene validata e normalizzata. Il backend invoca il servizio AI configurato, interpreta la risposta, verifica la struttura dei dati ottenuti e registra il risultato come comunicazione applicativa. La generazione viene tracciata attraverso audit event e metriche, così da rendere osservabile l’intero processo.
+La richiesta parte dalla SPA e arriva alle API Laravel, dove viene validata e normalizzata. Il backend registra la comunicazione e avvia una state machine dedicata in LocalStack Step Functions, rispondendo subito senza attendere il modello. La pipeline genera prima il testo e poi l’immagine di copertina, e la SPA segue l’avanzamento via Server-Sent Events: il titolo e il corpo compaiono appena pronti, la copertina quando arriva. La generazione viene tracciata attraverso audit event e metriche, così da rendere osservabile l’intero processo.
+
+I due contenuti hanno criticità diverse e sono trattati di conseguenza: senza testo non esiste una comunicazione e l’esecuzione fallisce, mentre una copertina non disponibile viene segnalata all’operatore e lascia la bozza valida e utilizzabile.
+
+A generazione conclusa l’operatore può aprire l’anteprima del documento finale impaginato ed esportarlo in PDF. Ogni pagina riporta il marcatore «Creato da AI Assistant», così la provenienza del contenuto resta leggibile anche fuori dall’applicativo. Il PDF viene materializzato sullo storage a oggetti alla prima richiesta e riusato finché il contenuto non cambia.
+
+Sulla bozza l’operatore mantiene il controllo: può correggere a mano titolo e testo finché è in lavorazione, chiedere una nuova variante che rigenera testo e copertina conservando prompt, tono e stile, scartarla mantenendola tracciata, oppure eliminarla definitivamente dallo storico. Può inoltre assegnare una valutazione da 1 a 5 stelle con un commento facoltativo, una sola volta per generazione: è il segnale di qualità percepita, esposto anche come metrica. Lo storico è filtrabile per parola chiave, tono, stile e giorno di creazione, con i criteri applicati lato API.
 
 Il flusso evidenzia il ruolo del backend come livello di controllo tra interfaccia e modello AI: il provider genera il contenuto, mentre l’applicazione mantiene responsabilità su validazione, persistenza, stato e tracciabilità.
 
@@ -69,9 +75,11 @@ La state machine pubblica task su SQS usando il callback pattern con task token.
 
 Il risultato è una pipeline documentale composta da passaggi isolati, monitorabili e riavviabili, con persistenza dello stato e visibilità sui risultati prodotti.
 
+Sui sotto-documenti prodotti l’operatore lavora in revisione human-in-the-loop: corregge i campi estratti (inclusi email destinatario, codice fiscale e matricola, con validazione dedicata) e li marca come validati. Da ogni sotto-documento il sistema compone un messaggio di invio precompilato con destinatario, oggetto e testo, che si può correggere, visualizzare in anteprima ed esportare in PDF. Il recapito avviene fuori dalla piattaforma tramite canali terzi: per questo lo stato di invio coincide con l’avvenuto **scaricamento** del PDF, e non con un invio effettuato dal sistema. Lo storico dei documenti è filtrabile per nome, cognome o azienda, stato di invio, soglia di confidenza e periodo, sempre con i criteri applicati lato API e limitati al tenant chiamante.
+
 ## Monitoring e osservabilità
 
-La PoC integra un layer di osservabilità locale per seguire il comportamento dell’applicazione e della pipeline documentale.
+La MVP integra un layer di osservabilità locale per seguire il comportamento dell’applicazione e della pipeline documentale.
 
 Le metriche applicative e infrastrutturali vengono raccolte tramite OpenTelemetry Collector e Prometheus. Le trace vengono inviate a Tempo, i log sono centralizzati su Loki tramite Alloy, mentre Grafana fornisce dashboard per API, workflow documentale, qualità AI/OCR, code, DLQ, log ed errori. Alertmanager completa il flusso operativo con regole collegate a runbook dedicati.
 
@@ -81,9 +89,11 @@ Questa impostazione rende visibili latency, traffico, errori, saturazione, stato
 
 La pipeline CI verifica la qualità della repository attraverso controlli backend, frontend, infrastrutturali e di sicurezza.
 
-Il backend viene controllato con formattazione, analisi statica e test automatici. Il frontend viene verificato tramite typecheck, test, build e generazione del client API. Lo stack locale viene validato attraverso Terraform, configurazioni di osservabilità, build delle immagini, scansione Trivy, smoke test e audit di accessibilità con axe e pa11y.
+Il backend viene controllato con formattazione, analisi statica, test automatici e coverage globale. Il frontend viene verificato tramite typecheck, test, coverage globale, build e generazione del client API. Un job dedicato richiede almeno l'80% di coverage sulle linee nuove o modificate rispetto a `origin/develop`, misurato separatamente per backend e frontend. Lo stack locale viene validato attraverso Terraform, configurazioni di osservabilità, build delle immagini, scansione Trivy, smoke test e audit di accessibilità con axe e pa11y.
 
-La CI agisce come quality gate del progetto: ogni modifica significativa deve mantenere coerenti codice applicativo, contratto API, infrastruttura locale e comportamento osservabile dello stack.
+La CI agisce come quality gate del progetto: ogni modifica significativa deve mantenere coerenti codice applicativo, contratto API, infrastruttura locale e comportamento osservabile dello stack. I minimi globali e quello sul codice modificato sono definiti in `coverage-thresholds.json` e non prevedono tolleranze.
+
+I job pubblicano report coverage HTML, dati Cobertura e LCOV e un riepilogo del codice modificato in HTML e Markdown, uno per stack. Se lo smoke dello stack fallisce, la CI conserva anche lo stato dei container, i log Docker Compose e l'uso del disco per 14 giorni.
 
 ## Setup locale
 
@@ -97,8 +107,8 @@ La CI agisce come quality gate del progetto: ogni modifica significativa deve ma
 ### Avvio rapido
 
 ```bash
-git clone https://github.com/alittlebyte-19/PoC.git
-cd PoC
+git clone https://github.com/alittlebyte-19/MVP.git
+cd MVP
 
 make setup
 ```
@@ -107,6 +117,8 @@ make setup
 
 ```bash
 make test
+make backend-coverage
+make frontend-coverage
 make logs
 ```
 
@@ -120,7 +132,7 @@ make frontend-serving-local-test
 
 Il flusso builda Angular, provisiona il bucket S3 LocalStack via Terraform, carica `apps/frontend/dist` con cache-control differenziato (`index.html` no-cache, bundle hashati immutable) e verifica il serving attraverso l’emulatore CDN locale su `https://localhost:8443`. L’emulazione valida il pattern build → bucket → distribuzione edge in locale, ma non sostituisce una CDN reale (in produzione AWS CloudFront, con TLS/OAC/edge propagation/invalidation).
 
-Il bucket `FRONTEND_STATIC_BUCKET` è dedicato solo alla SPA. I documenti continuano a usare `POC_DOCUMENT_DISK=s3` per S3 LocalStack o `POC_DOCUMENT_DISK=real_s3` con `AWS_REAL_*` per S3/Textract reali.
+Il bucket `FRONTEND_STATIC_BUCKET` è dedicato solo alla SPA. I documenti continuano a usare `MVP_DOCUMENT_DISK=s3` per S3 LocalStack o `MVP_DOCUMENT_DISK=real_s3` con `AWS_REAL_*` per S3/Textract reali.
 
 ### Accesso ai servizi
 
@@ -137,7 +149,7 @@ I comandi disponibili sono raccolti nel `Makefile`, che funge da interfaccia ope
 
 ## Collegamento ad AWS reale
 
-La PoC è progettata per lavorare in locale tramite LocalStack, mantenendo un modello di integrazione compatibile con servizi AWS reali. Il codice applicativo dialoga con servizi astratti tramite configurazione, endpoint e credenziali, rendendo possibile indirizzare gli stessi flussi verso ambienti cloud configurati.
+La MVP è progettata per lavorare in locale tramite LocalStack, mantenendo un modello di integrazione compatibile con servizi AWS reali. Il codice applicativo dialoga con servizi astratti tramite configurazione, endpoint e credenziali, rendendo possibile indirizzare gli stessi flussi verso ambienti cloud configurati.
 
 Le aree predisposte per integrazione AWS reale includono:
 
@@ -154,7 +166,7 @@ Il passaggio a servizi reali richiede configurazione di account, regioni, IAM po
 
 ## Evoluzioni future
 
-La struttura della PoC è predisposta per successive estensioni verso scenari più vicini a un ambiente production-like.
+La struttura della MVP è predisposta per successive estensioni verso scenari più vicini a un ambiente production-like.
 
 Le principali aree di evoluzione riguardano:
 
@@ -176,7 +188,7 @@ documentazione con un percorso di lettura per chi apre il progetto la prima volt
 | Documento                                                          | Contenuto                                       |
 | ----------------------------------------------------------------- | ----------------------------------------------- |
 | [`docs/README.md`](docs/README.md)                                | Indice e percorso di lettura della doc          |
-| [`docs/poc-scope.md`](docs/poc-scope.md)                          | Perimetro funzionale della PoC                  |
+| [`docs/mvp-scope.md`](docs/mvp-scope.md)                          | Perimetro funzionale della MVP                  |
 | [`docs/IMPLEMENTATION_OVERVIEW.md`](docs/IMPLEMENTATION_OVERVIEW.md) | Panoramica implementativa dell'applicativo    |
 | [`docs/architecture/`](docs/architecture/)                        | Architettura, tracciabilità Capitolato, Well-Architected |
 | [`docs/architecture-decisions/`](docs/architecture-decisions/README.md) | Architecture Decision Records (ADR)       |

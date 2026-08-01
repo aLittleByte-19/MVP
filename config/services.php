@@ -37,7 +37,12 @@ return [
 
     'bedrock' => [
         'model_id' => env('BEDROCK_MODEL_ID'),
+        'image_model_id' => env('BEDROCK_IMAGE_MODEL_ID', env('MVP_BEDROCK_IMAGE_MODEL_ID')),
         'region' => env('BEDROCK_REGION', env('AWS_DEFAULT_REGION', 'eu-north-1')),
+        // I modelli immagine sono attivi in un insieme di region diverso da
+        // quelli testo: la copertina usa un client dedicato, con fallback sulla
+        // region del modello testo quando non specificata.
+        'image_region' => env('BEDROCK_IMAGE_REGION') ?: env('BEDROCK_REGION', env('AWS_DEFAULT_REGION', 'eu-north-1')),
         'endpoint' => env('BEDROCK_ENDPOINT') === 'not-configured' ? null : env('BEDROCK_ENDPOINT'),
         // Shared real-AWS credentials (same set used by real S3 and Textract).
         // Left empty in LocalStack mode, where the SDK default chain applies.
@@ -46,7 +51,7 @@ return [
             'secret' => env('AWS_REAL_SECRET_ACCESS_KEY'),
             'token' => env('AWS_REAL_SESSION_TOKEN'),
         ],
-        'poc_confidence_threshold' => (int) env('POC_CONFIDENCE_THRESHOLD', 80),
+        'mvp_confidence_threshold' => (int) env('MVP_CONFIDENCE_THRESHOLD', 80),
     ],
 
     'workflow' => [
@@ -55,13 +60,18 @@ return [
         'state_machine_arn' => env('DOCUMENT_PIPELINE_STATE_MACHINE_ARN'),
         'task_queue_url' => env('DOCUMENT_PIPELINE_TASK_QUEUE_URL'),
         'dlq_queue_url' => env('SQS_DLQ_URL'),
+        // Pipeline comunicazioni: coda e DLQ separate da quelle documentali, cosi'
+        // il backlog di un dominio non ritarda l'altro.
+        'communications_state_machine_arn' => env('COMMUNICATION_PIPELINE_STATE_MACHINE_ARN'),
+        'communications_task_queue_url' => env('COMMUNICATION_PIPELINE_TASK_QUEUE_URL'),
+        'communications_dlq_queue_url' => env('COMMUNICATION_PIPELINE_DLQ_URL'),
     ],
 
+    // Solo i parametri del client: gli URL delle code stanno sotto "workflow",
+    // una voce per pipeline, per non avere due sorgenti della stessa coda.
     'sqs' => [
         'region' => env('AWS_DEFAULT_REGION', 'eu-north-1'),
         'endpoint' => env('SQS_ENDPOINT'),
-        'queue_url' => env('DOCUMENT_PIPELINE_TASK_QUEUE_URL'),
-        'dlq_queue_url' => env('SQS_DLQ_URL'),
     ],
 
     'textract' => [

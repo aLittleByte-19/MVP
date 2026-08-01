@@ -3,11 +3,11 @@ import type { SubDocument } from "../../../../api/generated/model";
 import { ButtonComponent } from "../../../shared/components/button/button";
 import { EmptyStateComponent } from "../../../shared/components/empty-state/empty-state";
 import { StatusBadgeComponent } from "../../../shared/components/status-badge/status-badge";
-import { formatFallback } from "../../../shared/util/formatters";
-import { getReviewStatusTone } from "../../../shared/util/status";
+import { formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
+import { getReviewStatusTone, getSendStatusTone } from "../../../shared/util/status";
 
 @Component({
-  selector: "poc-document-list",
+  selector: "mvp-document-list",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ButtonComponent, EmptyStateComponent, StatusBadgeComponent],
   template: `
@@ -22,6 +22,7 @@ import { getReviewStatusTone } from "../../../shared/util/status";
               <th scope="col" data-column="date">Data</th>
               <th scope="col" data-column="confidence">Conf.</th>
               <th scope="col" data-column="status">Stato</th>
+              <th scope="col" data-column="send-status">Invio</th>
               <th scope="col" data-column="actions">Azioni</th>
             </tr>
           </thead>
@@ -31,27 +32,32 @@ import { getReviewStatusTone } from "../../../shared/util/status";
                 <td data-column="recipient" data-label="Destinatario">
                   <span class="recipient">
                     <strong>{{ formatFallback(documentItem.employee, "Destinatario rilevato") }}</strong>
-                    <small>{{ formatFallback(documentItem.company) }}</small>
+                    <small>{{ formatFallback(documentItem.companyName) }}</small>
                   </span>
                 </td>
                 <td data-column="document" data-label="Documento">
-                  {{ formatFallback(documentItem.title || documentItem.type, "Documento") }}
+                  {{ formatFallback(documentItem.title || documentItem.documentType, "Documento") }}
                 </td>
                 <td data-column="file" data-label="File">{{ formatFallback(documentItem.file) }}</td>
                 <td data-column="date" data-label="Data">
-                  <span class="date">{{ formatFallback(documentItem.date) }}</span>
+                  <span class="date">{{ formatDateForDisplay(documentItem.documentDate) }}</span>
                 </td>
                 <td data-column="confidence" data-label="Conf.">
                   {{ formatFallback(documentItem.confidence, "Da verificare") }}
                 </td>
                 <td data-column="status" data-label="Stato">
-                  <poc-status-badge [tone]="getReviewStatusTone(documentItem.reviewStatus, documentItem.error)">
+                  <mvp-status-badge [tone]="getReviewStatusTone(documentItem.reviewStatus, documentItem.error)">
                     {{ documentItem.reviewStatusLabel }}
-                  </poc-status-badge>
+                  </mvp-status-badge>
+                </td>
+                <td data-column="send-status" data-label="Invio">
+                  <mvp-status-badge [tone]="getSendStatusTone(documentItem.sendStatus)">
+                    {{ documentItem.sendStatusLabel }}
+                  </mvp-status-badge>
                 </td>
                 <td data-column="actions" data-label="Azioni">
                   <button
-                    pocButton
+                    mvpButton
                     class="action"
                     [variant]="documentItem.id === selectedDocumentId() ? 'primary' : 'secondary'"
                     type="button"
@@ -66,7 +72,7 @@ import { getReviewStatusTone } from "../../../shared/util/status";
         </table>
       </div>
     } @else {
-      <poc-empty-state>I documenti caricati compariranno qui.</poc-empty-state>
+      <mvp-empty-state>{{ emptyMessage() }}</mvp-empty-state>
     }
   `,
   styleUrls: ["../../../shared/components/data-table/data-table.css", "./document-list.css"]
@@ -74,8 +80,11 @@ import { getReviewStatusTone } from "../../../shared/util/status";
 export class DocumentListComponent {
   readonly documents = input<SubDocument[]>([]);
   readonly selectedDocumentId = input<string | null>(null);
+  readonly emptyMessage = input<string>("I documenti caricati compariranno qui.");
   readonly selectDocument = output<string>();
 
   protected readonly formatFallback = formatFallback;
+  protected readonly formatDateForDisplay = formatDateForDisplay;
   protected readonly getReviewStatusTone = getReviewStatusTone;
+  protected readonly getSendStatusTone = getSendStatusTone;
 }

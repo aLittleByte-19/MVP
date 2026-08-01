@@ -1,0 +1,1096 @@
+openapi: 3.1.1
+info:
+  title: Alittlebyte MVP API
+  version: 1.0.0
+  description: Versioned JSON contract consumed by the Angular SPA.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: /
+security:
+  - MvpIdentity: []
+tags:
+  - name: State
+    description: Current assistant and document pipeline state for the SPA.
+  - name: Communications
+    description: AI-assisted communication generation.
+  - name: Documents
+    description: Document upload, processing stream, preview and deletion.
+paths:
+  /api/v1/state:
+    get:
+      summary: Get current MVP state
+      operationId: getMvpState
+      tags: [State]
+      responses:
+        "200":
+          description: Current operational state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MvpState"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/communications:
+    get:
+      summary: List the tenant communication drafts, optionally filtered
+      operationId: listMvpCommunications
+      tags: [Communications]
+      parameters:
+        - name: keyword
+          in: query
+          required: false
+          description: Ricerca nel prompt della generazione (UC-15).
+          schema:
+            type: string
+            maxLength: 255
+        - name: tone
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+        - name: style
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+        - name: date
+          in: query
+          required: false
+          description: Giorno di creazione della bozza, in formato ISO.
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: perPage
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Bozze corrispondenti ai filtri, escluse quelle scartate.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListCommunicationsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    post:
+      summary: Request an AI communication draft
+      operationId: generateMvpCommunication
+      tags: [Communications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateCommunicationRequest"
+      responses:
+        "202":
+          description: Generation accepted and delegated to the communication pipeline.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartCommunicationGenerationResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "502":
+          $ref: "#/components/responses/UpstreamUnavailable"
+  /api/v1/communications/{communication}:
+    put:
+      summary: Update the title and body of a draft communication
+      operationId: updateMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCommunicationRequest"
+      responses:
+        "200":
+          description: Communication draft updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateCommunicationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      summary: Permanently delete a communication from history
+      operationId: deleteMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Communication deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteDocumentResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/communications/{communication}/regenerate:
+    post:
+      summary: Regenerate a communication draft
+      operationId: regenerateMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "202":
+          description: Regeneration accepted and delegated to the communication pipeline.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartCommunicationGenerationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/communications/{communication}/discard:
+    post:
+      summary: Discard a communication draft
+      operationId: discardMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Communication discarded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunicationMutationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/communications/{communication}/stream:
+    get:
+      summary: Stream communication generation events
+      operationId: streamMvpCommunicationGeneration
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Server-sent events for communication generation.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/communications/{communication}/cover-image:
+    get:
+      summary: Download the communication cover image
+      operationId: showMvpCommunicationCoverImage
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Cover image binary.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      summary: Replace communication cover image manually
+      operationId: updateMvpCommunicationCoverImage
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Cover image updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunicationMutationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      summary: Remove communication cover image
+      operationId: removeMvpCommunicationCoverImage
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Cover image removed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunicationMutationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/communications/{communication}/preview:
+    get:
+      summary: Preview the final laid-out communication PDF
+      operationId: previewMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: PDF preview stream.
+          headers:
+            ETag:
+              $ref: "#/components/headers/PdfETag"
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: Il PDF non e' cambiato rispetto all'ETag inviato dal client.
+          headers:
+            ETag:
+              $ref: "#/components/headers/PdfETag"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/communications/{communication}/export:
+    get:
+      summary: Export the communication as a finalized downloadable PDF
+      operationId: exportMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: PDF attachment.
+          headers:
+            ETag:
+              $ref: "#/components/headers/PdfETag"
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: Il PDF non e' cambiato rispetto all'ETag inviato dal client.
+          headers:
+            ETag:
+              $ref: "#/components/headers/PdfETag"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/communications/{communication}/rating:
+    post:
+      summary: Assign a 1–5 star rating to a generated communication draft
+      operationId: rateMvpCommunication
+      tags: [Communications]
+      parameters:
+        - name: communication
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RateCommunicationRequest"
+      responses:
+        "200":
+          description: Rating stored for the draft; further ratings for this generation are rejected.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateCommunicationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/documents:
+    get:
+      summary: List the tenant sub-documents, optionally filtered
+      operationId: listMvpDocuments
+      tags: [Documents]
+      parameters:
+        - name: search
+          in: query
+          required: false
+          description: Ricerca su nome, cognome e azienda dei dati estratti (UC-35).
+          schema:
+            type: string
+            maxLength: 255
+        - name: sendStatus
+          in: query
+          required: false
+          description: Stato di invio, che coincide con l'avvenuto scaricamento del PDF (UC-36).
+          schema:
+            $ref: "#/components/schemas/SubDocumentSendStatus"
+        - name: confidenceThreshold
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+        - name: confidenceCriterion
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [above, below]
+        - name: month
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+        - name: year
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 2000
+            maximum: 2100
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: perPage
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Sub-documents matching the filters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListDocumentsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/documents/ocr:
+    post:
+      summary: Upload a document for OCR and AI extraction
+      operationId: uploadMvpDocument
+      tags: [Documents]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [document]
+              properties:
+                document:
+                  type: string
+                  format: binary
+      responses:
+        "202":
+          description: Document accepted for asynchronous processing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadDocumentResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/documents/{originalDocument}/stream:
+    get:
+      summary: Stream document processing events
+      operationId: streamMvpDocumentProcessing
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/OriginalDocumentId"
+      responses:
+        "200":
+          description: Server-sent events for document processing.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/documents/{subDocument}:
+    delete:
+      summary: Delete a processed sub-document
+      operationId: deleteMvpSubDocument
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      responses:
+        "200":
+          description: Document deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteDocumentResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/documents/{subDocument}/extracted-data:
+    put:
+      summary: Correct extracted data for a sub-document
+      operationId: updateMvpSubDocumentExtractedData
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateExtractedDataRequest"
+      responses:
+        "200":
+          description: Extracted data updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateSubDocumentReviewResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/documents/{subDocument}/review:
+    post:
+      summary: Mark a sub-document as manually reviewed
+      operationId: reviewMvpSubDocument
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      responses:
+        "200":
+          description: Sub-document manually validated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateSubDocumentReviewResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/documents/{subDocument}/preview:
+    get:
+      summary: Preview a processed sub-document PDF
+      operationId: previewMvpSubDocument
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      responses:
+        "200":
+          description: PDF preview stream.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/documents/{subDocument}/send-preview:
+    get:
+      summary: Preview the precompiled send message for a sub-document
+      operationId: sendPreviewMvpSubDocument
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      responses:
+        "200":
+          description: PDF preview stream.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/documents/{subDocument}/send-export:
+    get:
+      summary: Export the precompiled send message for a sub-document as a downloadable PDF
+      operationId: sendExportMvpSubDocument
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      responses:
+        "200":
+          description: PDF attachment.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/documents/{subDocument}/send-message:
+    put:
+      summary: Correct the precompiled send message fields for a sub-document
+      operationId: updateMvpSubDocumentSendMessage
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSendMessageRequest"
+      responses:
+        "200":
+          description: Send message updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateSubDocumentReviewResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+components:
+  securitySchemes:
+    MvpIdentity:
+      type: apiKey
+      in: header
+      name: X-Mvp-User-Id
+      description: Identity claims injected by the enterprise boundary or local MVP middleware.
+  headers:
+    PdfETag:
+      description: >-
+        Impronta del contenuto del PDF (titolo, corpo, copertina). Cambia solo
+        quando cambia il documento renderizzato.
+      schema:
+        type: string
+  parameters:
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: >-
+        ETag ottenuto da una risposta precedente. Se coincide con il PDF
+        corrente il server risponde 304 senza rigenerare il documento.
+      schema:
+        type: string
+    OriginalDocumentId:
+      name: originalDocument
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    SubDocumentId:
+      name: subDocument
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    CommunicationId:
+      name: communication
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+  responses:
+    Unauthorized:
+      description: Missing or invalid identity.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Forbidden:
+      description: Identity lacks required role or attribute.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ValidationError:
+      description: Validation error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationErrorEnvelope"
+    Conflict:
+      description: Request conflicts with current resource state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    UpstreamUnavailable:
+      description: Required upstream service failed explicitly.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    MvpState:
+      type: object
+      required: [assistant, copilot]
+      properties:
+        assistant:
+          $ref: "#/components/schemas/AssistantState"
+        copilot:
+          $ref: "#/components/schemas/CopilotState"
+    AssistantState:
+      type: object
+      required: [metrics, history]
+      properties:
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/Metric"
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/Communication"
+    CopilotState:
+      type: object
+      required: [metrics, documents]
+      properties:
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/Metric"
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubDocument"
+    Metric:
+      type: object
+      required: [key, value, label]
+      properties:
+        key:
+          type: string
+          description: Identificativo stabile della metrica. La label è testo di presentazione e può cambiare; per selezionare una metrica si usa la key.
+        value:
+          oneOf:
+            - type: integer
+            - type: string
+        label:
+          type: string
+    GenerateCommunicationRequest:
+      type: object
+      required: [prompt, tone, style]
+      properties:
+        prompt:
+          type: string
+          minLength: 12
+          maxLength: 5000
+        tone:
+          type: string
+          enum: [Chiaro e diretto, Più istituzionale, Più sintetico, Empatico, Tecnico]
+        style:
+          type: string
+          enum: [Testo informativo, Avviso operativo, Aggiornamento breve]
+    StartCommunicationGenerationResponse:
+      type: object
+      required: [message, communicationId, streamUrl]
+      properties:
+        message:
+          type: string
+        communicationId:
+          type: integer
+        streamUrl:
+          type: string
+    CommunicationMutationResponse:
+      type: object
+      required: [message, communication, state]
+      properties:
+        message:
+          type: string
+        communication:
+          $ref: "#/components/schemas/Communication"
+        state:
+          $ref: "#/components/schemas/MvpState"
+    RateCommunicationRequest:
+      type: object
+      required: [rating]
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: [string, "null"]
+          maxLength: 1000
+          description: Optional qualitative comment for the rating (UC-25).
+    RateCommunicationResponse:
+      type: object
+      required: [message, communication, state]
+      properties:
+        message:
+          type: string
+        communication:
+          $ref: "#/components/schemas/Communication"
+        state:
+          $ref: "#/components/schemas/MvpState"
+    UploadDocumentResponse:
+      type: object
+      required: [message, streamUrl]
+      properties:
+        message:
+          type: string
+        streamUrl:
+          type: string
+    DeleteDocumentResponse:
+      type: object
+      required: [message, state]
+      properties:
+        message:
+          type: string
+        state:
+          $ref: "#/components/schemas/MvpState"
+    UpdateSubDocumentReviewResponse:
+      type: object
+      required: [message, document, state]
+      properties:
+        message:
+          type: string
+        document:
+          $ref: "#/components/schemas/SubDocument"
+        state:
+          $ref: "#/components/schemas/MvpState"
+    UpdateExtractedDataRequest:
+      type: object
+      properties:
+        employeeFirstName:
+          type: [string, "null"]
+          maxLength: 200
+        employeeLastName:
+          type: [string, "null"]
+          maxLength: 200
+        companyName:
+          type: [string, "null"]
+          maxLength: 500
+        documentDate:
+          type: [string, "null"]
+          format: date
+        documentType:
+          type: [string, "null"]
+          maxLength: 200
+        description:
+          type: [string, "null"]
+          maxLength: 2000
+        confidenceScore:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 100
+        markAsValidated:
+          type: boolean
+        recipientEmail:
+          type: [string, "null"]
+          maxLength: 255
+        fiscalCode:
+          type: [string, "null"]
+          maxLength: 16
+        employeeId:
+          type: [string, "null"]
+          maxLength: 255
+    UpdateCommunicationRequest:
+      type: object
+      required: [title, body]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        body:
+          type: string
+          minLength: 1
+          maxLength: 20000
+    UpdateCommunicationResponse:
+      type: object
+      required: [message, communication, state]
+      properties:
+        message:
+          type: string
+        communication:
+          $ref: "#/components/schemas/Communication"
+        state:
+          $ref: "#/components/schemas/MvpState"
+    UpdateSendMessageRequest:
+      type: object
+      properties:
+        recipient:
+          type: [string, "null"]
+          maxLength: 255
+        subject:
+          type: [string, "null"]
+          maxLength: 255
+        body:
+          type: [string, "null"]
+          maxLength: 5000
+    Communication:
+      type: object
+      required: [id, prompt, tone, style, status, previewUrl, exportUrl, generationStatus, generationStatusLabel, coverStatus, coverStatusLabel]
+      properties:
+        id:
+          type: integer
+        prompt:
+          type: string
+        tone:
+          type: string
+        style:
+          type: string
+        title:
+          type: [string, "null"]
+        body:
+          type: [string, "null"]
+        previewUrl:
+          type: string
+        exportUrl:
+          type: string
+        coverImageUrl:
+          type: [string, "null"]
+        coverStatus:
+          type: string
+          enum: [pending, processing, ready, failed, removed]
+        coverStatusLabel:
+          type: string
+        coverError:
+          type: [string, "null"]
+        generationStatus:
+          type: string
+          enum: [pending, processing, completed, failed]
+        generationStatusLabel:
+          type: string
+        error:
+          type: [string, "null"]
+        status:
+          type: string
+        statusValue:
+          type: string
+        createdAt:
+          type: [string, "null"]
+        rating:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 5
+        ratingComment:
+          type: [string, "null"]
+          maxLength: 1000
+        ratedAt:
+          type: [string, "null"]
+    SubDocumentSendStatus:
+      type: string
+      enum: [pending, sent]
+    ListDocumentsResponse:
+      type: object
+      required: [items, total, page, perPage]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubDocument"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+    ListCommunicationsResponse:
+      type: object
+      required: [items, total, page, perPage]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Communication"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+    SubDocument:
+      type: object
+      required: [id, reviewStatus, reviewStatusLabel, sendStatus, sendStatusLabel, previewLines]
+      properties:
+        id:
+          type: string
+        title:
+          type: [string, "null"]
+        employeeFirstName:
+          type: [string, "null"]
+        employeeLastName:
+          type: [string, "null"]
+        employee:
+          type: [string, "null"]
+        companyName:
+          type: [string, "null"]
+        file:
+          type: [string, "null"]
+        documentDate:
+          type: [string, "null"]
+          format: date
+        pages:
+          type: integer
+        documentType:
+          type: [string, "null"]
+        description:
+          type: [string, "null"]
+        confidence:
+          type: [integer, "null"]
+        reviewStatus:
+          type: string
+          enum: [needs_review, auto_validated, quarantined, manually_validated]
+        reviewStatusLabel:
+          type: string
+        sendStatus:
+          $ref: "#/components/schemas/SubDocumentSendStatus"
+        sendStatusLabel:
+          type: string
+        error:
+          type: [string, "null"]
+        previewUrl:
+          type: string
+        sendRecipient:
+          type: string
+        sendSubject:
+          type: string
+        sendBody:
+          type: string
+        sendPreviewUrl:
+          type: string
+        sendExportUrl:
+          type: string
+        previewLines:
+          type: array
+          items:
+            type: string
+        recipientEmail:
+          type: [string, "null"]
+        fiscalCode:
+          type: [string, "null"]
+        employeeId:
+          type: [string, "null"]
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId, correlationId]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            requestId:
+              type: [string, "null"]
+            correlationId:
+              type: [string, "null"]
+    ValidationErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId, correlationId, fields]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            requestId:
+              type: [string, "null"]
+            correlationId:
+              type: [string, "null"]
+            fields:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
