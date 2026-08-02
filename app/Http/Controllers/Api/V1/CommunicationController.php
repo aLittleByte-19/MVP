@@ -18,7 +18,6 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Ciclo di vita della bozza: creazione, modifica manuale, nuova variante, scarto ed eliminazione definitiva.
@@ -28,9 +27,10 @@ class CommunicationController
     use AuthorizesCommunications, ResolvesActor;
 
     /**
-     * Storico delle bozze del tenant, filtrabile (UC-15..UC-18). Come lo
-     * storico esposto in `state.assistant.history`, esclude le bozze scartate:
-     * restano tracciate ma fuori dall'area di lavoro dell'operatore.
+     * Storico del tenant, filtrabile (UC-15..UC-18). Una bozza vi entra solo
+     * dopo un salvataggio esplicito (UC-9): finche' resta in stato draft (o
+     * dopo uno scarto) non compare qui, e' visibile solo nell'area di lavoro
+     * corrente dell'operatore.
      */
     public function index(ListCommunicationsRequest $request, MvpStateService $state): JsonResponse
     {
@@ -39,7 +39,7 @@ class CommunicationController
 
         $query = Communication::query()
             ->where('tenant_id', $actor->tenantId)
-            ->where('status', '!=', CommunicationStatus::Discarded);
+            ->where('status', CommunicationStatus::Approved);
 
         if ($keyword = trim((string) ($filters['keyword'] ?? ''))) {
             $query->where('prompt', 'like', '%'.$keyword.'%');
@@ -117,11 +117,7 @@ class CommunicationController
         $actor = $this->actor($request);
         $this->assertCommunicationOwnership($communication, $actor);
 
-        if ($communication->status !== CommunicationStatus::Draft) {
-            throw ValidationException::withMessages([
-                'communication' => ['Solo le bozze in stato draft sono modificabili.'],
-            ]);
-        }
+        $this->assertCommunicationIsEditable($communication);
 
         $validated = $request->validated();
 
@@ -164,6 +160,46 @@ class CommunicationController
             'communicationId' => $communication->id,
             'streamUrl' => route('api.v1.communications.stream', ['communication' => $communication->id], false),
         ], 202);
+    }
+
+    /**
+     * Rende la bozza visibile nello storico (UC-9): resta comunque
+     * modificabile e rigenerabile come prima, il salvataggio decide solo
+     * cosa compare nell'elenco, non blocca il contenuto.
+     *
+     * @throws AuthorizationException
+     */
+    public function save(
+        Request $request,
+        Communication $communication,
+        AuditLogger $audit,
+        MvpStateService $state,
+    ): JsonResponse {
+        $actor = $this->actor($request);
+        $this->assertCommunicationOwnership($communication, $actor);
+
+        abort_if(
+            $communication->status !== CommunicationStatus::Draft,
+            422,
+            'Solo le bozze in stato draft possono essere salvate nello storico.',
+        );
+
+        $communication->update(['status' => CommunicationStatus::Approved]);
+
+        $audit->record(
+            'mvp-communication-saved',
+            $actor,
+            'communication',
+            (string) $communication->id,
+            [],
+            $request,
+        );
+
+        return response()->json([
+            'message' => 'Bozza salvata nello storico.',
+            'communication' => $state->communication($communication->refresh()),
+            'state' => $state->forActor($actor),
+        ]);
     }
 
     /**

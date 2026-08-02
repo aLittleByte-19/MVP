@@ -48,6 +48,8 @@ describe("GeneratedCommunicationPreviewComponent", () => {
     expect(component["isCoverPending"](draft({ coverStatus: "processing" }))).toBe(true);
     expect(component["isCoverPending"](draft({ coverStatus: "failed" }))).toBe(false);
     expect(component["isDiscarded"](draft({ status: "Scartata" }))).toBe(true);
+    expect(component["isApproved"](draft({ status: "Approvata" }))).toBe(true);
+    expect(component["isApproved"](draft({ status: "Bozza" }))).toBe(false);
     expect(component["isReadyForPreview"](draft())).toBe(true);
     expect(component["isReadyForPreview"](draft({ generationStatus: "processing" }))).toBe(false);
     expect(component["isReadyForPreview"](draft({ status: "Scartata" }))).toBe(false);
@@ -243,17 +245,41 @@ describe("GeneratedCommunicationPreviewComponent", () => {
     expect(component["form"].controls.body.touched).toBe(true);
   });
 
-  it("propaga le azioni di copertina, rigenerazione e scarto", () => {
+  it("propaga le azioni di copertina, rigenerazione, salvataggio e scarto", () => {
     const fixture = render(draft({ coverImageUrl: "/cover.png", coverStatus: "ready" }));
     const events: string[] = [];
     fixture.componentInstance.removeCover.subscribe(() => events.push("remove"));
     fixture.componentInstance.regenerate.subscribe(() => events.push("regenerate"));
     fixture.componentInstance.discard.subscribe(() => events.push("discard"));
+    fixture.componentInstance.saveToHistory.subscribe(() => events.push("saveToHistory"));
 
     fixture.componentInstance.removeCover.emit();
     fixture.componentInstance.regenerate.emit();
     fixture.componentInstance.discard.emit();
+    fixture.componentInstance.saveToHistory.emit();
 
-    expect(events).toEqual(["remove", "regenerate", "discard"]);
+    expect(events).toEqual(["remove", "regenerate", "discard", "saveToHistory"]);
+  });
+
+  it("nasconde solo il salvataggio una volta che la bozza e' nello storico, restando modificabile e rigenerabile", () => {
+    const fixture = render(draft({ status: "Approvata", statusValue: "approved" }));
+    const element = fixture.nativeElement as HTMLElement;
+    const labels = Array.from(element.querySelectorAll("button")).map((button) => button.textContent?.trim());
+
+    expect(labels).not.toContain("Salva nello storico");
+    expect(labels).toContain("Rigenera bozza");
+    expect(labels).toContain("Modifica");
+  });
+
+  it("nasconde modifica, rigenerazione e azioni copertina per una bozza scartata", () => {
+    const fixture = render(draft({ status: "Scartata", statusValue: "draft" }));
+    const element = fixture.nativeElement as HTMLElement;
+    const labels = Array.from(element.querySelectorAll("button")).map((button) => button.textContent?.trim());
+
+    expect(labels).not.toContain("Salva nello storico");
+    expect(labels).not.toContain("Rigenera bozza");
+    expect(labels).not.toContain("Modifica");
+    expect(labels).not.toContain("Cambia immagine");
+    expect(labels).not.toContain("Rimuovi immagine");
   });
 });
