@@ -8,6 +8,8 @@ import type {
   MvpState,
   RateCommunicationRequest,
   RateCommunicationResponse,
+  SavePromptConfigurationRequest,
+  SavePromptConfigurationResponse,
   StartCommunicationGenerationResponse,
   UpdateCommunicationRequest,
   UpdateCommunicationResponse
@@ -167,6 +169,13 @@ export class AssistantService {
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 
+  /** Fissa la bozza nello storico (UC-9): da qui non e' piu' modificabile ne' rigenerabile. */
+  saveToHistory(communicationId: number): Observable<CommunicationMutationResponse> {
+    return this.api
+      .saveMvpCommunication(communicationId)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
   deleteFromHistory(communicationId: number): Observable<DeleteDocumentResponse> {
     return this.api
       .deleteMvpCommunication(communicationId)
@@ -182,6 +191,19 @@ export class AssistantService {
   update(communicationId: number, payload: UpdateCommunicationRequest): Observable<UpdateCommunicationResponse> {
     return this.api
       .updateMvpCommunication(communicationId, payload)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  /** Salva la configurazione corrente del prompt nello storico (UC-19). */
+  saveConfiguration(payload: SavePromptConfigurationRequest): Observable<SavePromptConfigurationResponse> {
+    return this.api
+      .saveMvpPromptConfiguration(payload)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  deleteConfiguration(configurationId: number): Observable<DeleteDocumentResponse> {
+    return this.api
+      .deleteMvpPromptConfiguration(configurationId)
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 

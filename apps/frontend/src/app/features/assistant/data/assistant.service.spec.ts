@@ -51,6 +51,9 @@ describe("AssistantService", () => {
       updateMvpCommunicationCoverImage: jest.fn(),
       removeMvpCommunicationCoverImage: jest.fn(),
       discardMvpCommunication: jest.fn(),
+      saveMvpCommunication: jest.fn(),
+      saveMvpPromptConfiguration: jest.fn(),
+      deleteMvpPromptConfiguration: jest.fn(),
       deleteMvpCommunication: jest.fn(),
       rateMvpCommunication: jest.fn(),
       updateMvpCommunication: jest.fn(),
@@ -199,6 +202,13 @@ describe("AssistantService", () => {
     ["updateCoverImage", "updateMvpCommunicationCoverImage", [7, expect.any(File)]],
     ["removeCoverImage", "removeMvpCommunicationCoverImage", [7]],
     ["discard", "discardMvpCommunication", [7]],
+    ["saveToHistory", "saveMvpCommunication", [7]],
+    [
+      "saveConfiguration",
+      "saveMvpPromptConfiguration",
+      [{ prompt: "Un prompt qualsiasi lungo abbastanza", tone: "Tecnico", style: "Avviso operativo" }]
+    ],
+    ["deleteConfiguration", "deleteMvpPromptConfiguration", [1]],
     ["deleteFromHistory", "deleteMvpCommunication", [7]],
     ["rate", "rateMvpCommunication", [7, { rating: 4 }]],
     ["update", "updateMvpCommunication", [7, { title: "Titolo", body: "Corpo aggiornato" }]]
