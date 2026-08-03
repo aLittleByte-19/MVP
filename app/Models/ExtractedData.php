@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $document_date
  * @property string|null $document_type
  * @property string|null $description
+ * @property string|null $recipient_email
  * @property int|null $confidence_score
  * @property array<string, mixed>|null $ai_payload
  * @property SubDocument|null $subDocument
@@ -35,6 +36,7 @@ class ExtractedData extends Model
         'document_date',
         'document_type',
         'description',
+        'recipient_email',
         'confidence_score',
         'ai_payload',
     ];

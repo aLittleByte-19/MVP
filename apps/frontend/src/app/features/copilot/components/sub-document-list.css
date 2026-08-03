@@ -285,6 +285,27 @@
   grid-column: 1 / -1;
 }
 
+.fieldWithAction {
+  display: flex;
+  align-items: center;
+  gap: var(--mvp-space-2);
+}
+
+.fieldWithAction input {
+  flex: 1;
+}
+
+.copyButton {
+  flex-shrink: 0;
+}
+
+.copyFeedback {
+  color: var(--mvp-success);
+  font-size: var(--mvp-font-xs);
+  font-weight: 700;
+  text-transform: none;
+}
+
 .reviewActions {
   display: flex;
   flex-wrap: wrap;
