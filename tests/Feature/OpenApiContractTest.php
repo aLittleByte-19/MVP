@@ -107,6 +107,58 @@ test('DELETE /api/v1/communications/{communication}/cover-image rispetta il cont
     );
 });
 
+test('POST /api/v1/communications/{communication}/favorite rispetta il contratto OpenAPI', function () {
+    $communication = Communication::factory()->draft()->create(['is_favorite' => false]);
+
+    $response = $this->postJson("/api/v1/communications/{$communication->id}/favorite")->assertOk();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/favorite',
+        'post',
+        '200',
+    );
+});
+
+test('POST /api/v1/communications/{communication}/favorite gia preferita rispetta il contratto per il 422', function () {
+    $communication = Communication::factory()->draft()->favorite()->create();
+
+    $response = $this->postJson("/api/v1/communications/{$communication->id}/favorite")->assertUnprocessable();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/favorite',
+        'post',
+        '422',
+    );
+});
+
+test('DELETE /api/v1/communications/{communication}/favorite rispetta il contratto OpenAPI', function () {
+    $communication = Communication::factory()->draft()->favorite()->create();
+
+    $response = $this->deleteJson("/api/v1/communications/{$communication->id}/favorite")->assertOk();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/favorite',
+        'delete',
+        '200',
+    );
+});
+
+test('DELETE /api/v1/communications/{communication}/favorite non preferita rispetta il contratto per il 422', function () {
+    $communication = Communication::factory()->draft()->create(['is_favorite' => false]);
+
+    $response = $this->deleteJson("/api/v1/communications/{$communication->id}/favorite")->assertUnprocessable();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/favorite',
+        'delete',
+        '422',
+    );
+});
+
 test('POST /api/v1/documents/ocr rispetta il contratto OpenAPI', function () {
     Storage::fake('s3');
 

@@ -36,6 +36,7 @@ export * from './subDocument';
 export * from './subDocumentReviewStatus';
 export * from './subDocumentSendStatus';
 export * from './unauthorizedResponse';
+export * from './updateCommunicationFavoriteResponse';
 export * from './updateCommunicationRequest';
 export * from './updateCommunicationResponse';
 export * from './updateExtractedDataRequest';

@@ -37,6 +37,7 @@ import type {
   RateCommunicationRequest,
   RateCommunicationResponse,
   StartCommunicationGenerationResponse,
+  UpdateCommunicationFavoriteResponse,
   UpdateCommunicationRequest,
   UpdateCommunicationResponse,
   UpdateExtractedDataRequest,
@@ -262,6 +263,77 @@ export class AlittlebyteMVPAPIService {
     return this.http.post<TData>(
       `/api/v1/communications`,
       generateCommunicationRequest,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',
+      }
+    );
+  }
+
+/**
+ * @summary Add a communication to favorites
+ */
+ favoriteMvpCommunication<TData = UpdateCommunicationFavoriteResponse>(communication: number, options?: HttpClientBodyOptions): Observable<TData>;
+ favoriteMvpCommunication<TData = UpdateCommunicationFavoriteResponse>(communication: number, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ favoriteMvpCommunication<TData = UpdateCommunicationFavoriteResponse>(communication: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  favoriteMvpCommunication<TData = UpdateCommunicationFavoriteResponse>(
+    communication: number, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
+    if (options?.observe === 'events') {
+      return this.http.post<TData>(
+      `/api/v1/communications/${communication}/favorite`,
+      undefined,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',
+      }
+    );
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.post<TData>(
+      `/api/v1/communications/${communication}/favorite`,
+      undefined,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',
+      }
+    );
+    }
+
+    return this.http.post<TData>(
+      `/api/v1/communications/${communication}/favorite`,
+      undefined,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',
+      }
+    );
+  }
+
+/**
+ * @summary Remove a communication from favorites
+ */
+ unfavoriteMvpCommunication<TData = UpdateCommunicationFavoriteResponse>(communication: number, options?: HttpClientBodyOptions): Observable<TData>;
+ unfavoriteMvpCommunication<TData = UpdateCommunicationFavoriteResponse>(communication: number, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ unfavoriteMvpCommunication<TData = UpdateCommunicationFavoriteResponse>(communication: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  unfavoriteMvpCommunication<TData = UpdateCommunicationFavoriteResponse>(
+    communication: number, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
+    if (options?.observe === 'events') {
+      return this.http.delete<TData>(
+      `/api/v1/communications/${communication}/favorite`,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',
+      }
+    );
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.delete<TData>(
+      `/api/v1/communications/${communication}/favorite`,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',
+      }
+    );
+    }
+
+    return this.http.delete<TData>(
+      `/api/v1/communications/${communication}/favorite`,{
         ...(options as Omit<NonNullable<typeof options>, 'observe'>),
         observe: 'body',
       }

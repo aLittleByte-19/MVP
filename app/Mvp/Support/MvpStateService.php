@@ -121,6 +121,7 @@ class MvpStateService
             'error' => $communication->error_message,
             'status' => $communication->status->label(),
             'statusValue' => $communication->status->value,
+            'isFavorite' => (bool) $communication->is_favorite,
             'createdAt' => $communication->created_at?->format('d/m/Y H:i'),
             'rating' => $communication->rating,
             'ratingComment' => $communication->rating_comment,

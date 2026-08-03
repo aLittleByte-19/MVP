@@ -41,11 +41,11 @@ Incluso:
 - anteprima del documento finale impaginato, con marcatore di trasparenza "Creato da AI Assistant";
 - esportazione del documento finale in PDF, con lo stesso marcatore di trasparenza;
 - metriche operative (contenuti generati, bozze, stato della generazione e delle copertine,
-  valutazioni ricevute, media stelle).
+  valutazioni ricevute, media stelle);
+- aggiunta/rimozione di una generazione ai preferiti.
 
 In corso:
 
-- aggiunta e rimozione di una generazione dai preferiti (UC-21, UC-22);
 - salvataggio e riuso di una configurazione di prompt etichettata (UC-32 e logica di riuso).
 
 Fuori scope MVP:
