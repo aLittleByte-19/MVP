@@ -1,5 +1,7 @@
 .card {
   display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
   gap: var(--mvp-space-2);
   padding: var(--mvp-space-3);
   border: 1px solid var(--mvp-border);
@@ -73,6 +75,19 @@
   background: color-mix(in srgb, var(--mvp-warning) 14%, var(--mvp-surface));
   color: var(--mvp-text);
   font-size: var(--mvp-font-sm);
+}
+
+.favoriteToggle svg {
+  stroke: currentColor;
+  fill: none;
+}
+
+.favoriteToggle.isFavorite {
+  color: var(--mvp-primary);
+}
+
+.favoriteToggle.isFavorite svg {
+  fill: currentColor;
 }
 
 :host {

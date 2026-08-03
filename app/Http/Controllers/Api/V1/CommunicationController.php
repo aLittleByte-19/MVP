@@ -85,6 +85,7 @@ class CommunicationController
             'generation_status' => CommunicationGenerationStatus::Pending,
             'cover_status' => CoverImageStatus::Pending,
             'status' => CommunicationStatus::Draft,
+            'is_favorite' => false,
         ]);
 
         $audit->record(
@@ -106,6 +107,62 @@ class CommunicationController
             // schema "http://" e bloccato dal browser come mixed-content.
             'streamUrl' => route('api.v1.communications.stream', ['communication' => $communication->id], false),
         ], 202);
+    }
+
+    public function favorite(Request $request, Communication $communication, AuditLogger $audit, MvpStateService $state): JsonResponse
+    {
+        $actor = $this->actor($request);
+        $this->assertCommunicationOwnership($communication, $actor);
+
+        if ($communication->is_favorite) {
+            throw ValidationException::withMessages([
+                'communication' => ['La generazione è già contrassegnata come preferita.'],
+            ]);
+        }
+
+        $communication->update(['is_favorite' => true]);
+        $audit->record(
+            'mvp-communication-favorited',
+            $actor,
+            'communication',
+            (string) $communication->id,
+            [],
+            $request,
+        );
+
+        return response()->json([
+            'message' => 'Generazione aggiunta ai preferiti.',
+            'communication' => $state->communication($communication->fresh()),
+            'state' => $state->forActor($actor),
+        ]);
+    }
+
+    public function unfavorite(Request $request, Communication $communication, AuditLogger $audit, MvpStateService $state): JsonResponse
+    {
+        $actor = $this->actor($request);
+        $this->assertCommunicationOwnership($communication, $actor);
+
+        if (! $communication->is_favorite) {
+            throw ValidationException::withMessages([
+                'communication' => ['La generazione non è contrassegnata come preferita.'],
+            ]);
+        }
+
+        $communication->update(['is_favorite' => false]);
+        $audit->record(
+            'mvp-communication-unfavorited',
+            $actor,
+            'communication',
+            (string) $communication->id,
+            [],
+            $request,
+        );
+
+        return response()->json([
+            'message' => 'Generazione rimossa dai preferiti.',
+            'communication' => $state->communication($communication->fresh()),
+            'state' => $state->forActor($actor),
+        ]);
     }
 
     public function update(
