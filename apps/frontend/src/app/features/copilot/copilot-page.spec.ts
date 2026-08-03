@@ -95,15 +95,16 @@ describe("CopilotPage", () => {
 
   it("segue l'upload e seleziona il documento ricevuto", () => {
     const file = new File(["pdf"], "cedolino.pdf", { type: "application/pdf" });
+    const metadata = { documentType: "cedolino" as const, companyName: "Acme Srl", month: 3, year: 2026 };
     workflow["upload"].mockReturnValue(of(
       { status: "Caricato", phase: "processing" },
       { status: "Analizzato", phase: "completed", receivedDocumentId: "sub-7" }
     ));
     const page = createPage();
 
-    page["upload"](file);
+    page["upload"]({ file, metadata });
 
-    expect(workflow["upload"]).toHaveBeenCalledWith(file);
+    expect(workflow["upload"]).toHaveBeenCalledWith(file, metadata);
     expect(page["uploadStatus"]()).toBe("Analizzato");
     expect(page["uploadPhase"]()).toBe("completed");
     expect(page["selectedDocumentId"]()).toBe("sub-7");
@@ -114,7 +115,7 @@ describe("CopilotPage", () => {
     workflow["upload"].mockReturnValue(throwError(() => new Error("upload fallito")));
     const page = createPage();
 
-    page["upload"](new File(["pdf"], "cedolino.pdf"));
+    page["upload"]({ file: new File(["pdf"], "cedolino.pdf"), metadata: {} });
 
     expect(page["uploadPhase"]()).toBe("failed");
     expect(page["uploadStatus"]()).toBe("upload fallito");

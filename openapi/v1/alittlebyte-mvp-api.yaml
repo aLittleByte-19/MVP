@@ -468,6 +468,32 @@ paths:
                 document:
                   type: string
                   format: binary
+                documentType:
+                  description: >
+                    Tipologia documento impostata manualmente in upload.
+                    Se presente, prevale sull'estrazione AI e non viene sovrascritta.
+                  type: [string, "null"]
+                  enum: [cedolino, CU, comunicazione, documento da firmare, lettera, altro]
+                companyName:
+                  description: >
+                    Azienda di riferimento impostata manualmente in upload.
+                    Se presente, prevale sull'estrazione AI e non viene sovrascritta.
+                  type: [string, "null"]
+                  maxLength: 500
+                month:
+                  description: >
+                    Mese di riferimento (1-12) impostato manualmente in upload.
+                    Combinato con year forma la data documento preservata dall'AI.
+                  type: [integer, "null"]
+                  minimum: 1
+                  maximum: 12
+                year:
+                  description: >
+                    Anno di riferimento impostato manualmente in upload.
+                    Combinato con month forma la data documento preservata dall'AI.
+                  type: [integer, "null"]
+                  minimum: 1900
+                  maximum: 2100
       responses:
         "202":
           description: Document accepted for asynchronous processing.

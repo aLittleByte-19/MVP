@@ -90,14 +90,18 @@ class DocumentController
     {
         $validated = $request->validated();
         $actor = $this->actor($request);
+        $manualMetadata = $request->manualMetadata();
 
-        $original = $documents->storeUpload($validated['document'], $actor);
+        $original = $documents->storeUpload($validated['document'], $actor, $manualMetadata);
         $audit->record(
             'mvp-document-upload-accepted',
             $actor,
             'original_document',
             (string) $original->id,
-            ['filename' => $original->original_filename],
+            [
+                'filename' => $original->original_filename,
+                'manual_metadata' => array_filter($manualMetadata, static fn ($value) => $value !== null),
+            ],
             $request,
         );
 
