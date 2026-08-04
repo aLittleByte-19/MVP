@@ -24,6 +24,7 @@ function communication(overrides: Partial<Communication> = {}): Communication {
     generationStatusLabel: "Completata",
     status: "Bozza",
     statusValue: "draft",
+    isFavorite: false,
     rating: null,
     ratingComment: null,
     ratedAt: null,
