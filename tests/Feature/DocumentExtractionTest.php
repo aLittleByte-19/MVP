@@ -192,3 +192,81 @@ test('manual upload metadata overrides AI extraction without rewriting ai payloa
         ->and($extracted->ai_payload['company_name'])->toBe('AI Company')
         ->and($extracted->ai_payload['document_date'])->toBe('2024-06-15');
 });
+
+test('manual month alone is completed with the AI year', function () {
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('extractFields')
+            ->once()
+            ->andReturn([
+                'employee_first_name' => 'Mario',
+                'employee_last_name' => 'Rossi',
+                'company_name' => 'AI Company',
+                'document_date' => '2024-06-15',
+                'document_type' => 'lettera',
+                'description' => 'Estratto AI',
+                'confidence_score' => 90,
+            ]);
+    });
+
+    $subDocument = SubDocument::factory()->create();
+    $subDocument->originalDocument->update([
+        'manual_reference_month' => 3,
+        'manual_reference_year' => null,
+    ]);
+
+    app(DocumentProcessingService::class)->extractAndSaveFields($subDocument->fresh(['originalDocument']));
+
+    expect($subDocument->fresh()->extractedData->document_date?->toDateString())->toBe('2024-03-01');
+});
+
+test('manual year alone is completed with the AI month', function () {
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('extractFields')
+            ->once()
+            ->andReturn([
+                'employee_first_name' => 'Mario',
+                'employee_last_name' => 'Rossi',
+                'company_name' => 'AI Company',
+                'document_date' => '2024-06-15',
+                'document_type' => 'lettera',
+                'description' => 'Estratto AI',
+                'confidence_score' => 90,
+            ]);
+    });
+
+    $subDocument = SubDocument::factory()->create();
+    $subDocument->originalDocument->update([
+        'manual_reference_month' => null,
+        'manual_reference_year' => 2026,
+    ]);
+
+    app(DocumentProcessingService::class)->extractAndSaveFields($subDocument->fresh(['originalDocument']));
+
+    expect($subDocument->fresh()->extractedData->document_date?->toDateString())->toBe('2026-06-01');
+});
+
+test('partial manual date without usable AI date leaves the AI date untouched', function () {
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('extractFields')
+            ->once()
+            ->andReturn([
+                'employee_first_name' => 'Mario',
+                'employee_last_name' => 'Rossi',
+                'company_name' => 'AI Company',
+                'document_date' => null,
+                'document_type' => 'lettera',
+                'description' => 'Estratto AI',
+                'confidence_score' => 90,
+            ]);
+    });
+
+    $subDocument = SubDocument::factory()->create();
+    $subDocument->originalDocument->update([
+        'manual_reference_month' => 3,
+        'manual_reference_year' => null,
+    ]);
+
+    app(DocumentProcessingService::class)->extractAndSaveFields($subDocument->fresh(['originalDocument']));
+
+    expect($subDocument->fresh()->extractedData->document_date)->toBeNull();
+});

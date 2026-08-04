@@ -127,6 +127,15 @@ describe("DocumentWorkflowService", () => {
       expect(emissions[0]?.phase).toBe("queued");
     });
 
+    it("inoltra solo i metadati presenti senza inventarne altri", () => {
+      service.upload(file, { companyName: "Acme Srl" }).subscribe();
+
+      expect(api.uploadMvpDocument).toHaveBeenCalledWith({
+        document: file,
+        companyName: "Acme Srl"
+      });
+    });
+
     it.each([
       ["pending", 0, "queued", "Documento in coda di elaborazione."],
       ["processing", 0, "processing", "Analisi OCR del documento in corso."],

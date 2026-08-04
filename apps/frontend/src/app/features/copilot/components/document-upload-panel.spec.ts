@@ -63,6 +63,48 @@ describe("DocumentUploadPanelComponent", () => {
     ]);
   });
 
+  it("deseleziona la tipologia se cliccata di nuovo", () => {
+    const fixture = render();
+    const buttons = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(".typeButton")
+    );
+    const cedolino = buttons.find((button) => button.textContent?.trim() === "cedolino")!;
+
+    cedolino.click();
+    expect(fixture.componentInstance["metadataForm"].controls.documentType.value).toBe("cedolino");
+
+    cedolino.click();
+    expect(fixture.componentInstance["metadataForm"].controls.documentType.value).toBe("");
+  });
+
+  it("ignora la selezione tipologia mentre l'upload e' in corso", () => {
+    const fixture = render({ isUploading: true });
+    const buttons = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(".typeButton")
+    );
+
+    buttons.find((button) => button.textContent?.trim() === "cedolino")?.click();
+
+    expect(fixture.componentInstance["metadataForm"].controls.documentType.value).toBe("");
+  });
+
+  it("scarta mese e anno fuori range dai metadati emessi", () => {
+    const fixture = render();
+    const requests: unknown[] = [];
+    fixture.componentInstance.upload.subscribe((request) => requests.push(request));
+    fixture.componentInstance["metadataForm"].patchValue({
+      month: "13",
+      year: "1800",
+      companyName: ""
+    });
+    fixture.detectChanges();
+
+    const file = new File(["pdf"], "documento.pdf", { type: "application/pdf" });
+    selectFile(fixture, file);
+
+    expect(requests).toEqual([{ file, metadata: {} }]);
+  });
+
   it("mostra stato e avanzamento quando una fase e' attiva", () => {
     const element = render({ isUploading: true, status: "Analisi in corso", phase: "uploading" })
       .nativeElement as HTMLElement;
