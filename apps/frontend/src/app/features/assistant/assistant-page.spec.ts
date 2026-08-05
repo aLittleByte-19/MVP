@@ -53,7 +53,9 @@ describe("AssistantPage", () => {
       update: jest.fn(),
       removeCoverImage: jest.fn(),
       discard: jest.fn(),
-      deleteFromHistory: jest.fn()
+      deleteFromHistory: jest.fn(),
+      favorite: jest.fn(),
+      unfavorite: jest.fn()
     };
     animation = jest.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
       callback(0);
@@ -325,6 +327,37 @@ describe("AssistantPage", () => {
     expect(page["selectedDraftId"]()).toBe(9);
     expect(page["status"]()).toBe("delete fallita");
     expect(page["isDeletingHistoryItem"]()).toBe(false);
+  });
+
+  it("aggiunge e rimuove una comunicazione dai preferiti", () => {
+    const page = createPage();
+    const notFavorite = communication({ id: 7, isFavorite: false });
+
+    assistant["favorite"].mockReturnValue(of({ message: "Generazione aggiunta ai preferiti." }));
+    page["toggleFavorite"](notFavorite);
+
+    expect(assistant["favorite"]).toHaveBeenCalledWith(7);
+    expect(assistant["unfavorite"]).not.toHaveBeenCalled();
+    expect(page["status"]()).toBe("Generazione aggiunta ai preferiti.");
+    expect(page["togglingFavoriteId"]()).toBeNull();
+
+    const favorite = communication({ id: 7, isFavorite: true });
+    assistant["unfavorite"].mockReturnValue(of({ message: "Generazione rimossa dai preferiti." }));
+    page["toggleFavorite"](favorite);
+
+    expect(assistant["unfavorite"]).toHaveBeenCalledWith(7);
+    expect(page["status"]()).toBe("Generazione rimossa dai preferiti.");
+    expect(page["togglingFavoriteId"]()).toBeNull();
+  });
+
+  it("espone l'errore di aggiornamento dei preferiti", () => {
+    const page = createPage();
+    assistant["favorite"].mockReturnValue(throwError(() => new Error("preferiti non disponibili")));
+
+    page["toggleFavorite"](communication({ id: 7, isFavorite: false }));
+
+    expect(page["status"]()).toBe("preferiti non disponibili");
+    expect(page["togglingFavoriteId"]()).toBeNull();
   });
 
   it("azzera tutti i filtri e aggiorna il flag", () => {
