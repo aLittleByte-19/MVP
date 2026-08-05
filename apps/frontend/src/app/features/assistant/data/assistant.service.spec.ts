@@ -57,7 +57,9 @@ describe("AssistantService", () => {
       deleteMvpCommunication: jest.fn(),
       rateMvpCommunication: jest.fn(),
       updateMvpCommunication: jest.fn(),
-      listMvpCommunications: jest.fn()
+      listMvpCommunications: jest.fn(),
+      favoriteMvpCommunication: jest.fn(),
+      unfavoriteMvpCommunication: jest.fn()
     };
 
     const injector = Injector.create({
@@ -211,7 +213,9 @@ describe("AssistantService", () => {
     ["deleteConfiguration", "deleteMvpPromptConfiguration", [1]],
     ["deleteFromHistory", "deleteMvpCommunication", [7]],
     ["rate", "rateMvpCommunication", [7, { rating: 4 }]],
-    ["update", "updateMvpCommunication", [7, { title: "Titolo", body: "Corpo aggiornato" }]]
+    ["update", "updateMvpCommunication", [7, { title: "Titolo", body: "Corpo aggiornato" }]],
+    ["favorite", "favoriteMvpCommunication", [7]],
+    ["unfavorite", "unfavoriteMvpCommunication", [7]]
   ])("%s delega all'API e sincronizza lo store", (method, apiMethod, args) => {
     const state = { assistant: {}, copilot: {} };
     api[apiMethod].mockReturnValue(of({ state }));
@@ -223,6 +227,21 @@ describe("AssistantService", () => {
 
     expect(api[apiMethod]).toHaveBeenCalledWith(...expectedApiArgs);
     expect(setState).toHaveBeenCalledWith(state);
+  });
+
+  it.each([
+    ["favorite", "favoriteMvpCommunication"],
+    ["unfavorite", "unfavoriteMvpCommunication"]
+  ])("%s propaga l'errore dell'API senza sincronizzare lo store", (method, apiMethod) => {
+    const error = new Error("preferiti non disponibili");
+    api[apiMethod].mockReturnValue(throwError(() => error));
+    let received: unknown;
+
+    (service[method as keyof AssistantService] as (id: number) => Observable<unknown>)(7)
+      .subscribe({ error: (value: unknown) => { received = value; } });
+
+    expect(received).toBe(error);
+    expect(setState).not.toHaveBeenCalled();
   });
 
   it("inoltra i filtri valorizzati e normalizza quelli nulli", () => {

@@ -18,7 +18,14 @@
     "overrides": {
         "glob": "^13.0.6",
         "jsdom": "^29.1.1",
-        "test-exclude": "^8.0.0"
+        "test-exclude": "^8.0.0",
+        "@angular/core": "21.2.19",
+        "@angular/common": "21.2.19",
+        "@angular/compiler": "21.2.19",
+        "@angular/platform-browser": "21.2.19",
+        "orval": {
+            "js-yaml": "^4.3.1"
+        }
     },
     "devDependencies": {
         "axe-core": "^4.11.4",

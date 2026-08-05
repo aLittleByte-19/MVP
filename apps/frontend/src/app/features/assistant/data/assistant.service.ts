@@ -11,6 +11,7 @@ import type {
   SavePromptConfigurationRequest,
   SavePromptConfigurationResponse,
   StartCommunicationGenerationResponse,
+  UpdateCommunicationFavoriteResponse,
   UpdateCommunicationRequest,
   UpdateCommunicationResponse
 } from "../../../../api/generated/model";
@@ -225,6 +226,18 @@ export class AssistantService {
         date: filters.date ?? undefined
       })
       .pipe(map((response) => response.items));
+  }
+
+  favorite(communicationId: number): Observable<UpdateCommunicationFavoriteResponse> {
+    return this.api
+      .favoriteMvpCommunication(communicationId)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  unfavorite(communicationId: number): Observable<UpdateCommunicationFavoriteResponse> {
+    return this.api
+      .unfavoriteMvpCommunication(communicationId)
+      .pipe(tap((response) => this.store.setState(response.state)));
   }
 
 }

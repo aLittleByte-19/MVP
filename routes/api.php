@@ -99,6 +99,14 @@ Route::prefix('v1')
             ->whereNumber('communication')
             ->name('communications.update');
 
+        Route::post('/communications/{communication}/favorite', [CommunicationController::class, 'favorite'])
+            ->whereNumber('communication')
+            ->name('communications.favorite');
+
+        Route::delete('/communications/{communication}/favorite', [CommunicationController::class, 'unfavorite'])
+            ->whereNumber('communication')
+            ->name('communications.unfavorite');
+
         Route::get('/documents', [DocumentController::class, 'index'])
             ->name('documents.index');
 
