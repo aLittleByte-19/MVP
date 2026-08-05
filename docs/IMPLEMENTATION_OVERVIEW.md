@@ -351,25 +351,41 @@ e la stessa forma di risposta `{items, total, page, perPage}`:
 
 | Endpoint | Controller | Filtri |
 |---|---|---|
-| `GET /api/v1/communications` | `CommunicationController::index` (`ListCommunicationsRequest`) | parola chiave sul prompt, tono, stile, giorno di creazione (UC-15..UC-18). Esclude le bozze scartate, come lo storico |
+| `GET /api/v1/communications` | `CommunicationController::index` (`ListCommunicationsRequest`) | parola chiave sul prompt, tono, stile, giorno di creazione (UC-15..UC-18). Mostra solo le bozze salvate esplicitamente nello storico (stato `approved`, UC-9): draft e scartate non compaiono |
 | `GET /api/v1/documents` | `DocumentController::index` (`ListDocumentsRequest`) | nome/cognome/azienda, stato di invio, soglia di confidenza sopra o sotto, mese e anno (UC-35..UC-38) |
 
 Gli elementi hanno la stessa forma degli oggetti esposti nello stato: la SPA non conosce due
 rappresentazioni dello stesso dato.
 
-### 6.5 Revisione, modifica e valutazione delle bozze (implementato)
+### 6.5 Revisione, modifica, salvataggio e valutazione delle bozze (implementato)
 
 `routes/api.php` espone il ciclo completo sulla bozza: `PUT /api/v1/communications/{communication}`
-per la modifica manuale di titolo e testo (consentita solo in stato `draft`),
-`POST .../regenerate` per una nuova variante, `POST .../discard` per lo scarto,
-`DELETE .../{communication}` per l'eliminazione dallo storico e `POST .../rating` per la
+per la modifica manuale di titolo e testo, `POST .../regenerate` per una nuova variante,
+`POST .../save` per il salvataggio esplicito nello storico (UC-9), `POST .../discard` per lo
+scarto, `DELETE .../{communication}` per l'eliminazione definitiva e `POST .../rating` per la
 valutazione 1-5 con commento opzionale, registrabile una sola volta per generazione.
 Ogni mutazione passa da `assertCommunicationOwnership()` e viene registrata nell'audit trail.
-Lo stato `approved` resta **predisposizione deliberata e documentata**, come l'identità SES:
-esiste nell'enum `CommunicationStatus` e nel vincolo CHECK della migrazione, ma nessun codice lo
-assegna e non c'è endpoint per la transizione. Il perimetro non prevede un flusso di
-approvazione (vedi [`mvp-scope.md`](mvp-scope.md)): non è codice dimenticato e non va "completato"
-senza una decisione di scope.
+
+Lo stato `approved` (enum `CommunicationStatus`, vincolo CHECK nella migrazione) **non è più solo
+predisposizione**: `CommunicationController::save()` esegue la transizione `draft → approved`
+(UC-9). Da quel momento la bozza compare nello storico filtrabile (§6.4.1); resta comunque
+modificabile e rigenerabile come una draft, finché non viene scartata
+(`assertCommunicationIsEditable()`/`assertCommunicationCanRegenerate()` bloccano solo lo stato
+`discarded`, non `approved`) — il salvataggio decide cosa compare nello storico, non blocca il
+contenuto. Il modello dei permessi resta quello descritto in [`mvp-scope.md`](mvp-scope.md): non
+c'è un flusso di approvazione multi-ruolo, è l'operatore stesso a decidere cosa archiviare.
+
+**Preset di prompt riutilizzabili (UC-19, implementato)**: `POST /api/v1/prompt-configurations`
+salva testo/tono/stile del form corrente come preset con nome libero (`PromptConfigurationController`,
+tabella `prompt_configurations`); se il nome è vuoto o già in uso per il tenant,
+`PromptConfigurationNamer` assegna un'etichetta progressiva ("Senza nome (1)", "(2)", ...).
+`DELETE /api/v1/prompt-configurations/{promptConfiguration}` la rimuove definitivamente. I preset
+(fino a 20 per tenant) viaggiano dentro `assistant.promptConfigurations` nello stato applicativo,
+non tramite un endpoint di lista dedicato: il riuso di un preset è puramente lato frontend, popola
+i campi del form (`prefill` sul pannello di generazione) senza mutare nulla lato server. Il riuso
+dei parametri di una generazione già archiviata (distinto da UC-19, UC-20 nel catalogo dei casi
+d'uso) è stato valutato e scartato: sulle bozze già salvate esistono già Modifica e Rigenera, un
+terzo comando ridondante avrebbe solo aggiunto confusione.
 
 ### 6.6 Invio comunicazioni / email (fuori scope, stato reinterpretato come scaricamento)
 
@@ -397,7 +413,7 @@ Flag off → il task `textract.ocr` ritorna `enabled=false` e la pipeline proseg
 
 ## 7. Persistenza, stato e modello dati
 
-Sei tabelle di dominio (`database/migrations/`):
+Sette tabelle di dominio (`database/migrations/`):
 
 | Tabella | Chiavi/indici notevoli | Note |
 |---|---|---|
@@ -407,6 +423,7 @@ Sei tabelle di dominio (`database/migrations/`):
 | `extracted_data` | FK **unique** cascade su sub_document | 1:1 con sotto-documento; confidence 0-100; campi destinatario `recipient_email`, `fiscal_code`, `employee_id` correggibili a mano |
 | `audit_events` | `(tenant_id, event_type)`, `(resource_type, resource_id)`, `created_at` | append-only (nessun `updated_at`), metadata JSON |
 | `workflow_tasks` | `task_token_hash` char(64) **unique**; `(subject_type, subject_id, task_type)`, `(status, task_type)` | tabella unica delle due pipeline, soggetto polimorfico (`original_document`/`communication`), input/output payload JSON, stati pending→running→succeeded/skipped/failed |
+| `prompt_configurations` | `(tenant_id, name)` | preset di prompt riutilizzabili (UC-19): nome, testo, tono, stile; nessun vincolo UNIQUE sul nome, la de-duplicazione ("Senza nome (N)") è solo applicativa (`PromptConfigurationNamer`) |
 
 Gli stati applicativi sono enum PHP con cast Eloquent (`ProcessingStatus`, `SendStatus`, `CommunicationStatus`, `CommunicationGenerationStatus`, `CoverImageStatus`, `CoverImageSource`) duplicati come CHECK a livello DB: doppia difesa coerente. Le relazioni Eloquent rispecchiano le FK.
 
