@@ -36,6 +36,8 @@ import type {
   MvpState,
   RateCommunicationRequest,
   RateCommunicationResponse,
+  SavePromptConfigurationRequest,
+  SavePromptConfigurationResponse,
   StartCommunicationGenerationResponse,
   UpdateCommunicationRequest,
   UpdateCommunicationResponse,
@@ -269,6 +271,77 @@ export class AlittlebyteMVPAPIService {
   }
 
 /**
+ * @summary Save the current prompt configuration for later reuse (UC-19)
+ */
+ saveMvpPromptConfiguration<TData = SavePromptConfigurationResponse>(savePromptConfigurationRequest: SavePromptConfigurationRequest, options?: HttpClientBodyOptions): Observable<TData>;
+ saveMvpPromptConfiguration<TData = SavePromptConfigurationResponse>(savePromptConfigurationRequest: SavePromptConfigurationRequest, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ saveMvpPromptConfiguration<TData = SavePromptConfigurationResponse>(savePromptConfigurationRequest: SavePromptConfigurationRequest, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  saveMvpPromptConfiguration<TData = SavePromptConfigurationResponse>(
+    savePromptConfigurationRequest: SavePromptConfigurationRequest, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
+    if (options?.observe === 'events') {
+      return this.http.post<TData>(
+      `/api/v1/prompt-configurations`,
+      savePromptConfigurationRequest,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',
+      }
+    );
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.post<TData>(
+      `/api/v1/prompt-configurations`,
+      savePromptConfigurationRequest,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',
+      }
+    );
+    }
+
+    return this.http.post<TData>(
+      `/api/v1/prompt-configurations`,
+      savePromptConfigurationRequest,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',
+      }
+    );
+  }
+
+/**
+ * @summary Permanently delete a saved prompt configuration
+ */
+ deleteMvpPromptConfiguration<TData = DeleteDocumentResponse>(promptConfiguration: number, options?: HttpClientBodyOptions): Observable<TData>;
+ deleteMvpPromptConfiguration<TData = DeleteDocumentResponse>(promptConfiguration: number, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ deleteMvpPromptConfiguration<TData = DeleteDocumentResponse>(promptConfiguration: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  deleteMvpPromptConfiguration<TData = DeleteDocumentResponse>(
+    promptConfiguration: number, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
+    if (options?.observe === 'events') {
+      return this.http.delete<TData>(
+      `/api/v1/prompt-configurations/${promptConfiguration}`,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',
+      }
+    );
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.delete<TData>(
+      `/api/v1/prompt-configurations/${promptConfiguration}`,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',
+      }
+    );
+    }
+
+    return this.http.delete<TData>(
+      `/api/v1/prompt-configurations/${promptConfiguration}`,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',
+      }
+    );
+  }
+
+/**
  * @summary Update the title and body of a draft communication
  */
  updateMvpCommunication<TData = UpdateCommunicationResponse>(communication: number,
@@ -373,6 +446,43 @@ export class AlittlebyteMVPAPIService {
 
     return this.http.post<TData>(
       `/api/v1/communications/${communication}/regenerate`,
+      undefined,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',
+      }
+    );
+  }
+
+/**
+ * @summary Save a communication draft to history, fixing it as no longer editable or regenerable
+ */
+ saveMvpCommunication<TData = CommunicationMutationResponse>(communication: number, options?: HttpClientBodyOptions): Observable<TData>;
+ saveMvpCommunication<TData = CommunicationMutationResponse>(communication: number, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ saveMvpCommunication<TData = CommunicationMutationResponse>(communication: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+  saveMvpCommunication<TData = CommunicationMutationResponse>(
+    communication: number, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
+    if (options?.observe === 'events') {
+      return this.http.post<TData>(
+      `/api/v1/communications/${communication}/save`,
+      undefined,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',
+      }
+    );
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.post<TData>(
+      `/api/v1/communications/${communication}/save`,
+      undefined,{
+        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',
+      }
+    );
+    }
+
+    return this.http.post<TData>(
+      `/api/v1/communications/${communication}/save`,
       undefined,{
         ...(options as Omit<NonNullable<typeof options>, 'observe'>),
         observe: 'body',

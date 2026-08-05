@@ -1,7 +1,7 @@
 import { signal } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { of, throwError } from "rxjs";
-import type { Communication } from "../../../api/generated/model";
+import type { Communication, PromptConfiguration } from "../../../api/generated/model";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import type { CommunicationDraftForm, GeneratedDraft } from "./assistant.model";
 import { AssistantPage } from "./assistant-page";
@@ -38,11 +38,13 @@ describe("AssistantPage", () => {
     style: "Testo informativo"
   };
   let history: ReturnType<typeof signal<Communication[]>>;
+  let promptConfigurations: ReturnType<typeof signal<PromptConfiguration[]>>;
   let assistant: Record<string, jest.Mock>;
   let animation: jest.SpyInstance;
 
   beforeEach(() => {
     history = signal<Communication[]>([]);
+    promptConfigurations = signal<PromptConfiguration[]>([]);
     assistant = {
       searchCommunications: jest.fn(() => of([])),
       generate: jest.fn(),
@@ -52,6 +54,9 @@ describe("AssistantPage", () => {
       update: jest.fn(),
       removeCoverImage: jest.fn(),
       discard: jest.fn(),
+      saveToHistory: jest.fn(),
+      saveConfiguration: jest.fn(),
+      deleteConfiguration: jest.fn(),
       deleteFromHistory: jest.fn()
     };
     animation = jest.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
@@ -60,7 +65,10 @@ describe("AssistantPage", () => {
     });
     TestBed.configureTestingModule({
       providers: [
-        { provide: MvpStateStore, useValue: { history, error: signal(null) } },
+        {
+          provide: MvpStateStore,
+          useValue: { history, error: signal(null), promptConfigurations }
+        },
         { provide: AssistantService, useValue: assistant }
       ]
     });
@@ -295,6 +303,102 @@ describe("AssistantPage", () => {
     page["discard"]();
     expect(page["status"]()).toBe("scarto fallito");
     expect(page["previewDraft"]()).not.toBeNull();
+  });
+
+  it("salva una bozza nello storico (UC-9) o mantiene lo stato in caso di errore", () => {
+    const page = createPage();
+    page["saveToHistory"]();
+    expect(assistant["saveToHistory"]).not.toHaveBeenCalled();
+
+    setDraft(page);
+    assistant["saveToHistory"].mockReturnValue(
+      of({ message: "Bozza salvata nello storico.", communication: communication({ status: "Approvata", statusValue: "approved" }) })
+    );
+    page["saveToHistory"]();
+    expect(page["status"]()).toBe("Bozza salvata nello storico.");
+    expect(page["previewDraft"]()?.status).toBe("Approvata");
+    expect(page["isSavingToHistory"]()).toBe(false);
+
+    setDraft(page);
+    assistant["saveToHistory"].mockReturnValue(throwError(() => new Error("salvataggio fallito")));
+    page["saveToHistory"]();
+    expect(page["status"]()).toBe("salvataggio fallito");
+  });
+
+  it("salva la configurazione del prompt o segnala l'errore (UC-19)", () => {
+    const page = createPage();
+    assistant["saveConfiguration"].mockReturnValue(of({ message: "Configurazione salvata." }));
+
+    page["saveConfiguration"]({ prompt: "Un prompt qualsiasi lungo abbastanza", tone: "Tecnico", style: "Avviso operativo" });
+
+    expect(page["status"]()).toBe("Configurazione salvata.");
+    expect(page["isSavingConfiguration"]()).toBe(false);
+
+    assistant["saveConfiguration"].mockReturnValue(throwError(() => new Error("salvataggio config fallito")));
+    page["saveConfiguration"]({ prompt: "Un prompt qualsiasi lungo abbastanza", tone: "Tecnico", style: "Avviso operativo" });
+
+    expect(page["saveConfigurationError"]()).toBe("salvataggio config fallito");
+  });
+
+  it("filtra le configurazioni salvate con gli stessi filtri dello storico", () => {
+    promptConfigurations.set([
+      { id: 1, name: "Ferie estive", prompt: "Avviso sulle ferie estive", tone: "Empatico", style: "Avviso operativo", createdAt: "2026-03-04" },
+      { id: 2, name: "Manutenzione", prompt: "Comunicazione tecnica di manutenzione", tone: "Tecnico", style: "Testo informativo", createdAt: "2026-05-01" }
+    ]);
+    const page = createPage();
+
+    expect(page["filteredPromptConfigurations"]()).toHaveLength(2);
+
+    page["activeFilters"].set({ keyword: "ferie" });
+    expect(page["filteredPromptConfigurations"]().map((c) => c.id)).toEqual([1]);
+
+    page["activeFilters"].set({ tone: "Tecnico" });
+    expect(page["filteredPromptConfigurations"]().map((c) => c.id)).toEqual([2]);
+
+    page["activeFilters"].set({ style: "Avviso operativo" });
+    expect(page["filteredPromptConfigurations"]().map((c) => c.id)).toEqual([1]);
+
+    page["activeFilters"].set({ date: "2026-05-01" });
+    expect(page["filteredPromptConfigurations"]().map((c) => c.id)).toEqual([2]);
+
+    page["activeFilters"].set({ keyword: "nessuna corrispondenza" });
+    expect(page["filteredPromptConfigurations"]()).toEqual([]);
+  });
+
+  it("riusa una configurazione salvata senza chiamare il backend (UC-19)", () => {
+    const page = createPage();
+
+    page["useConfiguration"]({
+      id: 1,
+      name: "Ferie estive",
+      prompt: "Prompt della configurazione salvata",
+      tone: "Empatico",
+      style: "Avviso operativo"
+    });
+
+    expect(page["prefillPayload"]()).toEqual({
+      prompt: "Prompt della configurazione salvata",
+      tone: "Empatico",
+      style: "Avviso operativo"
+    });
+    expect(assistant["generate"]).not.toHaveBeenCalled();
+  });
+
+  it("elimina una configurazione salvata o segnala l'errore", () => {
+    const page = createPage();
+    page["confirmingConfigDeleteId"].set(3);
+    assistant["deleteConfiguration"].mockReturnValue(of({ message: "Configurazione eliminata." }));
+
+    page["deleteConfiguration"](3);
+
+    expect(page["status"]()).toBe("Configurazione eliminata.");
+    expect(page["confirmingConfigDeleteId"]()).toBeNull();
+    expect(page["isDeletingConfig"]()).toBe(false);
+
+    assistant["deleteConfiguration"].mockReturnValue(throwError(() => new Error("eliminazione config fallita")));
+    page["deleteConfiguration"](3);
+
+    expect(page["status"]()).toBe("eliminazione config fallita");
   });
 
   it("elimina dallo storico e pulisce le anteprime collegate", () => {

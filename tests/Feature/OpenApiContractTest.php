@@ -3,6 +3,7 @@
 use App\Models\Communication;
 use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
+use App\Models\PromptConfiguration;
 use App\Models\SubDocument;
 use App\Mvp\Communications\Services\CommunicationWorkflowService;
 use App\Mvp\Documents\Services\DocumentWorkflowService;
@@ -70,6 +71,36 @@ test('POST /api/v1/communications con payload invalido rispetta il contratto per
     // requestId e correlationId sono valorizzati dal middleware di correlazione
     expect($response->json('error.requestId'))->toBeString()
         ->and($response->json('error.correlationId'))->toBeString();
+});
+
+test('POST /api/v1/prompt-configurations rispetta il contratto OpenAPI', function () {
+    $response = $this->postJson('/api/v1/prompt-configurations', [
+        'name' => 'Comunicazione ferie',
+        'prompt' => 'Avvisa il personale delle nuove ferie disponibili da prenotare.',
+        'tone' => 'Chiaro e diretto',
+        'style' => 'Testo informativo',
+    ])->assertCreated();
+
+    OpenApiSpec::assertResponseMatchesContract($response->json(), '/api/v1/prompt-configurations', 'post', '201');
+});
+
+test('POST /api/v1/prompt-configurations con payload invalido rispetta il contratto per il 422', function () {
+    $response = $this->postJson('/api/v1/prompt-configurations', [])->assertUnprocessable();
+
+    OpenApiSpec::assertResponseMatchesContract($response->json(), '/api/v1/prompt-configurations', 'post', '422');
+});
+
+test('DELETE /api/v1/prompt-configurations/{promptConfiguration} rispetta il contratto OpenAPI', function () {
+    $configuration = PromptConfiguration::factory()->create();
+
+    $response = $this->deleteJson("/api/v1/prompt-configurations/{$configuration->id}")->assertOk();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/prompt-configurations/{promptConfiguration}',
+        'delete',
+        '200',
+    );
 });
 
 test('POST /api/v1/communications/{communication}/cover-image rispetta il contratto OpenAPI', function () {

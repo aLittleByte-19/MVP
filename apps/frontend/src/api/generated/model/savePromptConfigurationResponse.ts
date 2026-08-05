@@ -5,12 +5,11 @@
  * Versioned JSON contract consumed by the Angular SPA.
  * OpenAPI spec version: 1.0.0
  */
-import type { Communication } from './communication';
-import type { Metric } from './metric';
+import type { MvpState } from './mvpState';
 import type { PromptConfiguration } from './promptConfiguration';
 
-export interface AssistantState {
-  metrics: Metric[];
-  history: Communication[];
-  promptConfigurations: PromptConfiguration[];
+export interface SavePromptConfigurationResponse {
+  message: string;
+  configuration: PromptConfiguration;
+  state: MvpState;
 }

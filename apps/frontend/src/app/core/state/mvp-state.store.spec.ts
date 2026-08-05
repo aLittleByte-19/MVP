@@ -6,7 +6,7 @@ import type { MvpState, SubDocument } from "../../../api/generated/model";
 
 function stateWith(assistantMetrics: MvpState["assistant"]["metrics"], copilotMetrics: MvpState["copilot"]["metrics"]): MvpState {
   return {
-    assistant: { metrics: assistantMetrics, history: [] },
+    assistant: { metrics: assistantMetrics, history: [], promptConfigurations: [] },
     copilot: { metrics: copilotMetrics, documents: [] }
   } as MvpState;
 }
@@ -55,8 +55,19 @@ describe("MvpStateStore", () => {
     expect(store.state()).toBeNull();
     expect(store.documents()).toEqual([]);
     expect(store.history()).toEqual([]);
+    expect(store.promptConfigurations()).toEqual([]);
     expect(store.assistantMetrics()).toEqual([]);
     expect(store.copilotMetrics()).toEqual([]);
+  });
+
+  it("espone le configurazioni di prompt salvate (UC-19)", () => {
+    const state = stateWith([], []);
+    state.assistant.promptConfigurations = [
+      { id: 1, name: "Ferie estive", prompt: "Un prompt qualsiasi", tone: "Empatico", style: "Comunicato" }
+    ];
+    store.setState(state);
+
+    expect(store.promptConfigurations()).toEqual(state.assistant.promptConfigurations);
   });
 
   it("carica lo stato una sola volta e aggiorna loading ed errore", () => {

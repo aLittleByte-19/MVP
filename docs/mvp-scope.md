@@ -28,15 +28,24 @@ Incluso:
 - validazione del prompt;
 - persistenza della bozza generata (stato `draft`);
 - immagine di copertina generata dall'AI, con sostituzione manuale e rimozione;
-- storico delle generazioni con riapertura dell'anteprima di una bozza selezionata;
+- storico dei soli contenuti salvati (stato "Approvata"), con riapertura dell'anteprima di una
+  voce selezionata; una bozza non ancora salvata non vi compare (UC-9);
 - filtri dello storico per parola chiave, tono, stile e data (UC-15..UC-18);
 - modifica manuale persistente di titolo e testo della bozza, con annullamento prima del
-  salvataggio; la modifica è consentita solo finché la bozza è in stato `draft`;
+  salvataggio; consentita finché la bozza non è stata scartata;
 - richiesta di una nuova variante della bozza corrente, che sostituisce testo e copertina
-  mantenendo prompt, tono e stile (UC-6);
+  mantenendo prompt, tono e stile (UC-6); consentita anche dopo il salvataggio in storico;
+- salvataggio esplicito della bozza nello storico (UC-9): solo a questo punto entra nello
+  storico (stato "Approvata"); resta comunque modificabile e rigenerabile come prima;
 - scarto della bozza corrente con conferma, che la esclude dallo storico attivo mantenendola
   tracciata come "Scartata" (UC-7);
 - eliminazione definitiva di un elemento dello storico, con conferma (UC-23);
+- salvataggio della configurazione corrente del prompt (testo, tono, stile) come preset
+  riutilizzabile, con nome libero; se il nome è vuoto o già in uso per il tenant, il sistema
+  assegna un'etichetta progressiva ("Senza nome (1)", "(2)", ...); i preset compaiono nello
+  storico contenuti, filtrabili con gli stessi criteri delle bozze salvate (UC-19);
+- riutilizzo di un preset salvato, che precompila il form senza avviare una nuova generazione;
+  non applicabile a una bozza già salvata, per cui restano modifica e rigenerazione diretta;
 - valutazione 1-5 stelle con commento qualitativo opzionale, una sola per generazione;
 - anteprima del documento finale impaginato, con marcatore di trasparenza "Creato da AI Assistant";
 - esportazione del documento finale in PDF, con lo stesso marcatore di trasparenza;
@@ -45,8 +54,7 @@ Incluso:
 
 In corso:
 
-- aggiunta e rimozione di una generazione dai preferiti (UC-21, UC-22);
-- salvataggio e riuso di una configurazione di prompt etichettata (UC-32 e logica di riuso).
+- aggiunta e rimozione di una generazione dai preferiti (UC-21, UC-22).
 
 Fuori scope MVP:
 

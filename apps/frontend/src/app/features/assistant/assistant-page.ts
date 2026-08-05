@@ -4,7 +4,14 @@ import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
 import { LucideTrash2 } from "@lucide/angular";
 import { debounceTime, distinctUntilChanged, finalize } from "rxjs";
 import { AssistantService, type CommunicationFilters } from "./data/assistant.service";
-import type { Communication, UpdateCommunicationRequest } from "../../../api/generated/model";
+import type {
+  Communication,
+  GenerateCommunicationRequestStyle,
+  GenerateCommunicationRequestTone,
+  PromptConfiguration,
+  SavePromptConfigurationRequest,
+  UpdateCommunicationRequest
+} from "../../../api/generated/model";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { getApiErrorMessage } from "../../core/errors/api-error";
 import { EmptyStateComponent } from "../../shared/components/empty-state/empty-state";
@@ -12,7 +19,7 @@ import { ErrorStateComponent } from "../../shared/components/error-state/error-s
 import { SectionComponent } from "../../layout/section/section";
 import { StatusBadgeComponent } from "../../shared/components/status-badge/status-badge";
 import { ButtonComponent } from "../../shared/components/button/button";
-import { formatFallback } from "../../shared/util/formatters";
+import { formatDateForDisplay, formatFallback } from "../../shared/util/formatters";
 import { CommunicationGeneratorPanelComponent } from "./components/communication-generator-panel";
 import { GeneratedCommunicationPreviewComponent } from "./components/generated-communication-preview";
 import { communicationStyles, communicationTones } from "./assistant.model";
@@ -48,13 +55,19 @@ import type {
         [isGenerating]="isGenerating()"
         [status]="status()"
         [phase]="phase()"
+        [promptConfigurations]="promptConfigurations()"
+        [isSavingConfiguration]="isSavingConfiguration()"
+        [saveConfigurationError]="saveConfigurationError()"
+        [prefill]="prefillPayload()"
         (generate)="generate($event)"
+        (saveConfiguration)="saveConfiguration($event)"
       />
       <mvp-generated-communication-preview
         [draft]="previewDraft()"
         [isUpdatingCover]="isUpdatingCover()"
         [isGenerating]="isGenerating()"
         [isDiscarding]="isDiscarding()"
+        [isSavingToHistory]="isSavingToHistory()"
         [isRating]="isRating()"
         [rateError]="rateError()"
         [isSaving]="isSavingDraft()"
@@ -63,6 +76,7 @@ import type {
         (removeCover)="removeCover()"
         (regenerate)="regenerate()"
         (discard)="discard()"
+        (saveToHistory)="saveToHistory()"
         (rate)="rateDraft($event)"
         (saveRequested)="saveDraft($event)"
       />
@@ -103,6 +117,63 @@ import type {
           </label>
           <button mvpButton variant="secondary" type="button" (click)="resetFilters()">Azzera filtri</button>
         </form>
+
+        @if (filteredPromptConfigurations().length) {
+          <div class="saved-configs">
+            <span class="saved-configs-label">Configurazioni salvate</span>
+            @for (configuration of filteredPromptConfigurations(); track configuration.id) {
+              <div class="saved-config">
+                <div class="saved-config-header">
+                  <span>
+                    {{ configuration.name }}
+                    <span class="saved-config-date">{{ formatDateForDisplay(configuration.createdAt) }}</span>
+                  </span>
+                  <div class="saved-config-actions">
+                    <button mvpButton variant="secondary" type="button" (click)="useConfiguration(configuration)">
+                      Usa
+                    </button>
+                    @if (confirmingConfigDeleteId() !== configuration.id) {
+                      <button
+                        mvpButton
+                        variant="icon"
+                        type="button"
+                        aria-label="Elimina configurazione salvata"
+                        [disabled]="isDeletingConfig()"
+                        (click)="confirmingConfigDeleteId.set(configuration.id)"
+                      >
+                        <svg lucideTrash2 aria-hidden="true"></svg>
+                      </button>
+                    }
+                  </div>
+                </div>
+                @if (confirmingConfigDeleteId() === configuration.id) {
+                  <div class="cardConfirm">
+                    <p class="warning" role="status">Eliminare definitivamente questa configurazione salvata?</p>
+                    <div class="cardActions">
+                      <button
+                        mvpButton
+                        type="button"
+                        [disabled]="isDeletingConfig()"
+                        (click)="deleteConfiguration(configuration.id)"
+                      >
+                        Conferma eliminazione
+                      </button>
+                      <button
+                        mvpButton
+                        type="button"
+                        variant="secondary"
+                        [disabled]="isDeletingConfig()"
+                        (click)="confirmingConfigDeleteId.set(null)"
+                      >
+                        Annulla
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
 
         @if (filteredCommunications().length) {
           @for (communication of filteredCommunications(); track communication.id) {
@@ -168,6 +239,48 @@ import type {
   styleUrls: ["./components/communication-status-card.css", "../overview/overview-page.css"],
   styles: [
     `
+    .saved-configs {
+      display: grid;
+      gap: var(--mvp-space-2);
+      margin-bottom: var(--mvp-space-4);
+    }
+
+    .saved-configs-label {
+      color: var(--mvp-muted);
+      font-size: var(--mvp-font-sm);
+      font-weight: 800;
+    }
+
+    .saved-config {
+      display: grid;
+      gap: var(--mvp-space-2);
+      padding: var(--mvp-space-2) var(--mvp-space-3);
+      border: 1px solid var(--mvp-border);
+      border-radius: var(--mvp-radius);
+      background: var(--mvp-surface-muted);
+    }
+
+    .saved-config-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--mvp-space-3);
+    }
+
+    .saved-config-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--mvp-space-2);
+    }
+
+    .saved-config-date {
+      margin-left: var(--mvp-space-2);
+      color: var(--mvp-muted);
+      font-size: var(--mvp-font-sm);
+      font-weight: 400;
+    }
+
     .filters {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
@@ -216,8 +329,11 @@ export class AssistantPage {
   );
   protected readonly isUpdatingCover = signal(false);
   protected readonly isDiscarding = signal(false);
+  protected readonly isSavingToHistory = signal(false);
   protected readonly confirmingDeleteId = signal<number | null>(null);
   protected readonly isDeletingHistoryItem = signal(false);
+  protected readonly confirmingConfigDeleteId = signal<number | null>(null);
+  protected readonly isDeletingConfig = signal(false);
   protected readonly isRating = signal(false);
   protected readonly rateError = signal<string | null>(null);
   protected readonly status = signal("In attesa di istruzioni.");
@@ -225,7 +341,41 @@ export class AssistantPage {
   protected readonly latestDraft = signal<GeneratedDraft | null>(null);
   protected readonly isSavingDraft = signal(false);
   protected readonly saveDraftError = signal<string | null>(null);
+  protected readonly isSavingConfiguration = signal(false);
+  protected readonly saveConfigurationError = signal<string | null>(null);
+  protected readonly prefillPayload = signal<CommunicationDraftForm | null>(null);
+  protected readonly promptConfigurations = computed(() => this.store.promptConfigurations());
+  /** Le configurazioni salvate condividono gli stessi filtri dello storico contenuti. */
+  protected readonly filteredPromptConfigurations = computed(() => {
+    const filters = this.activeFilters();
+    const keyword = filters.keyword?.trim().toLowerCase();
+
+    return this.promptConfigurations().filter((configuration) => {
+      if (
+        keyword &&
+        !configuration.name.toLowerCase().includes(keyword) &&
+        !configuration.prompt.toLowerCase().includes(keyword)
+      ) {
+        return false;
+      }
+
+      if (filters.tone && configuration.tone !== filters.tone) {
+        return false;
+      }
+
+      if (filters.style && configuration.style !== filters.style) {
+        return false;
+      }
+
+      if (filters.date && configuration.createdAt !== filters.date) {
+        return false;
+      }
+
+      return true;
+    });
+  });
   protected readonly formatFallback = formatFallback;
+  protected readonly formatDateForDisplay = formatDateForDisplay;
   protected readonly tones = communicationTones;
   protected readonly styles = communicationStyles;
 
@@ -453,6 +603,82 @@ export class AssistantPage {
         },
         error: (error: unknown) => {
           this.status.set(getApiErrorMessage(error, "Eliminazione bozza non disponibile."));
+        }
+      });
+  }
+
+  protected saveToHistory(): void {
+    const draft = this.previewDraft();
+
+    if (!draft) {
+      return;
+    }
+
+    this.isSavingToHistory.set(true);
+    this.status.set("Salvataggio nello storico in corso.");
+
+    this.assistant
+      .saveToHistory(draft.id)
+      .pipe(finalize(() => this.isSavingToHistory.set(false)))
+      .subscribe({
+        next: (response) => {
+          this.status.set(response.message);
+          this.latestDraft.set(this.toDraft(response.communication));
+          this.selectedDraftId.set(response.communication.id);
+        },
+        error: (error: unknown) => {
+          this.status.set(getApiErrorMessage(error, "Salvataggio nello storico non disponibile."));
+        }
+      });
+  }
+
+  /** Salva la configurazione corrente del prompt nello storico (UC-19). */
+  protected saveConfiguration(payload: SavePromptConfigurationRequest): void {
+    this.saveConfigurationError.set(null);
+    this.isSavingConfiguration.set(true);
+
+    this.assistant
+      .saveConfiguration(payload)
+      .pipe(finalize(() => this.isSavingConfiguration.set(false)))
+      .subscribe({
+        next: (response) => {
+          this.status.set(response.message);
+        },
+        error: (error: unknown) => {
+          this.saveConfigurationError.set(
+            getApiErrorMessage(error, "Salvataggio della configurazione non disponibile.")
+          );
+        }
+      });
+  }
+
+  /** Riusa una configurazione di prompt salvata (UC-19): solo il form, nessuna chiamata al backend. */
+  protected useConfiguration(configuration: PromptConfiguration): void {
+    this.prefillPayload.set({
+      prompt: configuration.prompt,
+      tone: configuration.tone as GenerateCommunicationRequestTone,
+      style: configuration.style as GenerateCommunicationRequestStyle
+    });
+    this.scrollTo("assistant-compose");
+  }
+
+  protected deleteConfiguration(configurationId: number): void {
+    this.isDeletingConfig.set(true);
+
+    this.assistant
+      .deleteConfiguration(configurationId)
+      .pipe(
+        finalize(() => {
+          this.isDeletingConfig.set(false);
+          this.confirmingConfigDeleteId.set(null);
+        })
+      )
+      .subscribe({
+        next: (response) => {
+          this.status.set(response.message);
+        },
+        error: (error: unknown) => {
+          this.status.set(getApiErrorMessage(error, "Eliminazione della configurazione non disponibile."));
         }
       });
   }

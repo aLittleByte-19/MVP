@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\CommunicationStreamController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\DocumentPreviewController;
 use App\Http\Controllers\Api\V1\DocumentReviewController;
+use App\Http\Controllers\Api\V1\PromptConfigurationController;
 use App\Http\Controllers\Api\V1\SendMessageController;
 use App\Http\Controllers\Api\V1\StateController;
 use Illuminate\Support\Facades\Route;
@@ -25,6 +26,14 @@ Route::prefix('v1')
             ->middleware('throttle:20,1')
             ->name('communications.generate');
 
+        Route::post('/prompt-configurations', [PromptConfigurationController::class, 'store'])
+            ->middleware('throttle:20,1')
+            ->name('prompt-configurations.save');
+
+        Route::delete('/prompt-configurations/{promptConfiguration}', [PromptConfigurationController::class, 'destroy'])
+            ->whereNumber('promptConfiguration')
+            ->name('prompt-configurations.delete');
+
         Route::get('/communications/{communication}/stream', [CommunicationStreamController::class, 'stream'])
             ->whereNumber('communication')
             ->name('communications.stream');
@@ -33,6 +42,11 @@ Route::prefix('v1')
             ->whereNumber('communication')
             ->middleware('throttle:20,1')
             ->name('communications.regenerate');
+
+        Route::post('/communications/{communication}/save', [CommunicationController::class, 'save'])
+            ->whereNumber('communication')
+            ->middleware('throttle:20,1')
+            ->name('communications.save');
 
         Route::post('/communications/{communication}/discard', [CommunicationController::class, 'discard'])
             ->whereNumber('communication')

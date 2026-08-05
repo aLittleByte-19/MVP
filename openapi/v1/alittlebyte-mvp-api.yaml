@@ -113,6 +113,49 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "502":
           $ref: "#/components/responses/UpstreamUnavailable"
+  /api/v1/prompt-configurations:
+    post:
+      summary: Save the current prompt configuration for later reuse (UC-19)
+      operationId: saveMvpPromptConfiguration
+      tags: [Communications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavePromptConfigurationRequest"
+      responses:
+        "201":
+          description: Prompt configuration saved to history.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavePromptConfigurationResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/prompt-configurations/{promptConfiguration}:
+    delete:
+      summary: Permanently delete a saved prompt configuration
+      operationId: deleteMvpPromptConfiguration
+      tags: [Communications]
+      parameters:
+        - name: promptConfiguration
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Prompt configuration deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteDocumentResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/communications/{communication}:
     put:
       summary: Update the title and body of a draft communication
@@ -176,6 +219,26 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/communications/{communication}/save:
+    post:
+      summary: Save a communication draft to history, fixing it as no longer editable or regenerable
+      operationId: saveMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Communication saved to history.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunicationMutationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "422":
           $ref: "#/components/responses/ValidationError"
   /api/v1/communications/{communication}/discard:
@@ -290,6 +353,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   /api/v1/communications/{communication}/preview:
     get:
       summary: Preview the final laid-out communication PDF
@@ -725,7 +790,7 @@ components:
           $ref: "#/components/schemas/CopilotState"
     AssistantState:
       type: object
-      required: [metrics, history]
+      required: [metrics, history, promptConfigurations]
       properties:
         metrics:
           type: array
@@ -735,6 +800,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Communication"
+        promptConfigurations:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromptConfiguration"
     CopilotState:
       type: object
       required: [metrics, documents]
@@ -774,6 +843,50 @@ components:
         style:
           type: string
           enum: [Testo informativo, Avviso operativo, Aggiornamento breve]
+    SavePromptConfigurationRequest:
+      type: object
+      required: [prompt, tone, style]
+      properties:
+        name:
+          type: [string, "null"]
+          maxLength: 150
+          description: Nome identificativo scelto dal Redattore. Se vuoto o gia' in uso per il tenant, il sistema assegna un'etichetta progressiva (es. "Senza nome (1)") (UC-19).
+        prompt:
+          type: string
+          minLength: 12
+          maxLength: 5000
+        tone:
+          type: string
+          enum: [Chiaro e diretto, Più istituzionale, Più sintetico, Empatico, Tecnico]
+        style:
+          type: string
+          enum: [Testo informativo, Avviso operativo, Aggiornamento breve]
+    SavePromptConfigurationResponse:
+      type: object
+      required: [message, configuration, state]
+      properties:
+        message:
+          type: string
+        configuration:
+          $ref: "#/components/schemas/PromptConfiguration"
+        state:
+          $ref: "#/components/schemas/MvpState"
+    PromptConfiguration:
+      type: object
+      required: [id, name, prompt, tone, style]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        prompt:
+          type: string
+        tone:
+          type: string
+        style:
+          type: string
+        createdAt:
+          type: [string, "null"]
     StartCommunicationGenerationResponse:
       type: object
       required: [message, communicationId, streamUrl]
