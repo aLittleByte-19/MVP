@@ -526,7 +526,7 @@ export class AlittlebyteMVPAPIService {
   }
 
 /**
- * @summary Save a communication draft to history, fixing it as no longer editable or regenerable
+ * @summary Save a communication draft to history, leaving it editable and regenerable
  */
  saveMvpCommunication<TData = CommunicationMutationResponse>(communication: number, options?: HttpClientBodyOptions): Observable<TData>;
  saveMvpCommunication<TData = CommunicationMutationResponse>(communication: number, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;

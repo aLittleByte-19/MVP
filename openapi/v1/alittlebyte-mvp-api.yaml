@@ -262,7 +262,7 @@ paths:
           $ref: "#/components/responses/ValidationError"
   /api/v1/communications/{communication}/save:
     post:
-      summary: Save a communication draft to history, fixing it as no longer editable or regenerable
+      summary: Save a communication draft to history, leaving it editable and regenerable
       operationId: saveMvpCommunication
       tags: [Communications]
       parameters:
