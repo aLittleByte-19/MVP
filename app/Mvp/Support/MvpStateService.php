@@ -179,6 +179,7 @@ class MvpStateService
             'employee' => $employee !== '' ? $employee : null,
             'companyName' => $data?->company_name,
             'recipientEmail' => $data?->recipient_email,
+            'uploadedAt' => $original?->created_at?->format('d/m/Y H:i'),
             'fiscalCode' => $data?->fiscal_code,
             'employeeId' => $data?->employee_id,
             'file' => $original?->original_filename,

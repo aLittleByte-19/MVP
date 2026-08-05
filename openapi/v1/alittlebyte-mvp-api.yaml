@@ -1054,8 +1054,6 @@ components:
           type: array
           items:
             type: string
-        recipientEmail:
-          type: [string, "null"]
         fiscalCode:
           type: [string, "null"]
         employeeId:
