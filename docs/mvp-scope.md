@@ -107,12 +107,10 @@ In corso:
 
 Fuori scope MVP:
 
-- **invio del messaggio dall'interno della piattaforma**. Il recapito avviene tramite canali terzi:
-  il documento si esporta in PDF e si invia fuori dal prodotto. Di conseguenza
-  `sub_documents.send_status` non rappresenta un invio effettuato dal sistema ma **l'avvenuto
-  scaricamento del PDF**: la transizione `Da inviare` → `Inviato` scatta sul download
-  (`GET /api/v1/documents/{subDocument}/send-export`), non sull'anteprima, ed è a senso unico;
-- metriche e dashboard sugli invii reali (esiste invece la distribuzione per stato di scaricamento).
+- invio dei documenti e relativo "stato invio" (`Inviato`/`Non inviato`): la colonna `sub_documents.send_status` e l'identità SES Terraform esistono ma non c'è codice di invio;
+- estrazione AI automatica dell'email destinatario (campo `recipient_email` esposto in sola lettura nel pannello dati estratti, ma non popolato dalla pipeline OCR/Bedrock) e dei campi codice fiscale e matricola dipendente;
+- classificazione manuale iniziale in upload;
+- metriche e dashboard sugli invii.
 
 ## Observability e Sicurezza Operativa
 

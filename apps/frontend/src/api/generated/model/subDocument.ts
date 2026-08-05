@@ -30,6 +30,10 @@ export interface SubDocument {
   /** @nullable */
   description?: string | null;
   /** @nullable */
+  recipientEmail?: string | null;
+  /** @nullable */
+  uploadedAt?: string | null;
+  /** @nullable */
   confidence?: number | null;
   reviewStatus: SubDocumentReviewStatus;
   reviewStatusLabel: string;
@@ -44,8 +48,6 @@ export interface SubDocument {
   sendPreviewUrl?: string;
   sendExportUrl?: string;
   previewLines: string[];
-  /** @nullable */
-  recipientEmail?: string | null;
   /** @nullable */
   fiscalCode?: string | null;
   /** @nullable */

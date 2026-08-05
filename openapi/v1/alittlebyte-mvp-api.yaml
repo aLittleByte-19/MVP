@@ -1185,6 +1185,10 @@ components:
           type: [string, "null"]
         description:
           type: [string, "null"]
+        recipientEmail:
+          type: [string, "null"]
+        uploadedAt:
+          type: [string, "null"]
         confidence:
           type: [integer, "null"]
         reviewStatus:
@@ -1214,8 +1218,6 @@ components:
           type: array
           items:
             type: string
-        recipientEmail:
-          type: [string, "null"]
         fiscalCode:
           type: [string, "null"]
         employeeId:

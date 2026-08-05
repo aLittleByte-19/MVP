@@ -56,6 +56,8 @@ interface TestableSubDocumentList {
   confidenceDisplay(document: SubDocument): string;
   documentDateDisplay(document: SubDocument): string;
   saveReview(): void;
+  readonly copiedEmail: Signal<boolean>;
+  copyRecipientEmail(email: string): void;
 }
 
 describe("SubDocumentListComponent", () => {
@@ -279,6 +281,36 @@ describe("SubDocumentListComponent", () => {
     expect(component.confidenceDisplay(subDocument({ confidence: null }))).toBe("Da verificare");
     expect(component.documentDateDisplay(subDocument({ documentDate: "2026-03-31" }))).toBe("31/03/2026");
     expect(component.documentDateDisplay(subDocument({ documentDate: null }))).toBe("Non disponibile");
+  });
+
+  it("copia l'email destinatario negli appunti e mostra il feedback per 2 secondi", async () => {
+    jest.useFakeTimers();
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const { component } = render();
+
+    component.copyRecipientEmail("mario.rossi@example.test");
+    await Promise.resolve();
+
+    expect(writeText).toHaveBeenCalledWith("mario.rossi@example.test");
+    expect(component.copiedEmail()).toBe(true);
+
+    jest.advanceTimersByTime(2000);
+    expect(component.copiedEmail()).toBe(false);
+
+    jest.useRealTimers();
+  });
+
+  it("non mostra il feedback di copia se la scrittura negli appunti fallisce", async () => {
+    const writeText = jest.fn().mockRejectedValue(new Error("clipboard non disponibile"));
+    Object.assign(navigator, { clipboard: { writeText } });
+    const { component } = render();
+
+    component.copyRecipientEmail("mario.rossi@example.test");
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(component.copiedEmail()).toBe(false);
   });
 
   it("annulla la sottoscrizione alla preview quando il componente viene distrutto", () => {

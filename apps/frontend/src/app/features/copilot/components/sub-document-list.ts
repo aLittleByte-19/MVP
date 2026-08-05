@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from "@angular/core";
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
 import { DomSanitizer, type SafeResourceUrl } from "@angular/platform-browser";
-import { LucideCheckCircle2, LucidePencil, LucideSave, LucideTrash2, LucideX } from "@lucide/angular";
+import { LucideCheckCircle2, LucideCopy, LucidePencil, LucideSave, LucideTrash2, LucideX } from "@lucide/angular";
 import type { SubDocument, UpdateExtractedDataRequest, UpdateSendMessageRequest } from "../../../../api/generated/model";
 import { ButtonComponent } from "../../../shared/components/button/button";
 import { EmptyStateComponent } from "../../../shared/components/empty-state/empty-state";
@@ -57,6 +57,7 @@ const emptySendMessageForm: SendMessageFormState = {
     DocumentStatusTimelineComponent,
     EmptyStateComponent,
     LucideCheckCircle2,
+    LucideCopy,
     LucidePencil,
     LucideSave,
     LucideTrash2,
@@ -191,6 +192,31 @@ const emptySendMessageForm: SendMessageFormState = {
                 <label class="field lockedField">
                   <span>Stato revisione</span>
                   <input [value]="document.reviewStatusLabel" readOnly disabled tabindex="-1" />
+                </label>
+                <label class="field lockedField">
+                  <span>Email destinatario</span>
+                  <div class="fieldWithAction">
+                    <input [value]="formatFallback(document.recipientEmail)" readOnly disabled tabindex="-1" />
+                    @if (document.recipientEmail) {
+                      <button
+                        mvpButton
+                        variant="icon"
+                        type="button"
+                        class="copyButton"
+                        aria-label="Copia email destinatario"
+                        (click)="copyRecipientEmail(document.recipientEmail)"
+                      >
+                        <svg lucideCopy aria-hidden="true"></svg>
+                      </button>
+                    }
+                  </div>
+                  @if (copiedEmail()) {
+                    <small class="copyFeedback">Email copiata negli appunti.</small>
+                  }
+                </label>
+                <label class="field lockedField">
+                  <span>Data e ora di caricamento</span>
+                  <input [value]="formatFallback(document.uploadedAt)" readOnly disabled tabindex="-1" />
                 </label>
                 <label class="field editableField formFull">
                   <span>Descrizione</span>
@@ -384,6 +410,7 @@ export class SubDocumentListComponent {
   protected readonly isEditing = signal(false);
   protected readonly isSendOpen = signal(false);
   protected readonly isSendEditing = signal(false);
+  protected readonly copiedEmail = signal(false);
   protected readonly previewStatus = signal<DocumentPreviewStatus>("idle");
   // L'URL dell'anteprima e' una risorsa same-origin generata dal backend; va
   // marcato come SafeResourceUrl, altrimenti Angular blocca il binding su
@@ -520,6 +547,18 @@ export class SubDocumentListComponent {
 
   protected documentDateDisplay(document: SubDocument): string {
     return formatDateForDisplay(document.documentDate);
+  }
+
+  protected copyRecipientEmail(email: string): void {
+    navigator.clipboard
+      .writeText(email)
+      .then(() => {
+        this.copiedEmail.set(true);
+        setTimeout(() => this.copiedEmail.set(false), 2000);
+      })
+      .catch(() => {
+        this.copiedEmail.set(false);
+      });
   }
 
   protected saveReview(): void {
