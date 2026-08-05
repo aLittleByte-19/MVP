@@ -50,10 +50,7 @@ Incluso:
 - anteprima del documento finale impaginato, con marcatore di trasparenza "Creato da AI Assistant";
 - esportazione del documento finale in PDF, con lo stesso marcatore di trasparenza;
 - metriche operative (contenuti generati, bozze, stato della generazione e delle copertine,
-  valutazioni ricevute, media stelle).
-
-In corso:
-
+  valutazioni ricevute, media stelle);
 - aggiunta e rimozione di una generazione dai preferiti (UC-21, UC-22).
 
 Fuori scope MVP:

@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
-import { LucideTrash2 } from "@lucide/angular";
+import { LucideStar, LucideTrash2 } from "@lucide/angular";
 import { debounceTime, distinctUntilChanged, finalize } from "rxjs";
 import { AssistantService, type CommunicationFilters } from "./data/assistant.service";
 import type {
@@ -14,11 +14,11 @@ import type {
 } from "../../../api/generated/model";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { getApiErrorMessage } from "../../core/errors/api-error";
+import { ButtonComponent } from "../../shared/components/button/button";
 import { EmptyStateComponent } from "../../shared/components/empty-state/empty-state";
 import { ErrorStateComponent } from "../../shared/components/error-state/error-state";
 import { SectionComponent } from "../../layout/section/section";
 import { StatusBadgeComponent } from "../../shared/components/status-badge/status-badge";
-import { ButtonComponent } from "../../shared/components/button/button";
 import { formatDateForDisplay, formatFallback } from "../../shared/util/formatters";
 import { CommunicationGeneratorPanelComponent } from "./components/communication-generator-panel";
 import { GeneratedCommunicationPreviewComponent } from "./components/generated-communication-preview";
@@ -40,6 +40,7 @@ import type {
     EmptyStateComponent,
     ErrorStateComponent,
     GeneratedCommunicationPreviewComponent,
+    LucideStar,
     LucideTrash2,
     ReactiveFormsModule,
     SectionComponent,
@@ -189,6 +190,21 @@ import type {
               </button>
               <div class="cardFooter">
                 <p>{{ formatFallback(communication.createdAt) }}</p>
+                <button
+                  mvpButton
+                  variant="icon"
+                  type="button"
+                  class="favoriteToggle"
+                  [class.isFavorite]="communication.isFavorite"
+                  [attr.aria-pressed]="communication.isFavorite"
+                  [attr.aria-label]="
+                    communication.isFavorite ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'
+                  "
+                  [disabled]="togglingFavoriteId() === communication.id"
+                  (click)="toggleFavorite(communication)"
+                >
+                  <svg lucideStar aria-hidden="true"></svg>
+                </button>
                 @if (confirmingDeleteId() !== communication.id) {
                   <button
                     mvpButton
@@ -374,6 +390,7 @@ export class AssistantPage {
       return true;
     });
   });
+  protected readonly togglingFavoriteId = signal<number | null>(null);
   protected readonly formatFallback = formatFallback;
   protected readonly formatDateForDisplay = formatDateForDisplay;
   protected readonly tones = communicationTones;
@@ -747,6 +764,21 @@ export class AssistantPage {
 
   protected resetFilters(): void {
     this.filterForm.reset();
+  }
+
+  protected toggleFavorite(communication: Communication): void {
+    this.togglingFavoriteId.set(communication.id);
+
+    const request = communication.isFavorite
+      ? this.assistant.unfavorite(communication.id)
+      : this.assistant.favorite(communication.id);
+
+    request.pipe(finalize(() => this.togglingFavoriteId.set(null))).subscribe({
+      next: (response) => this.status.set(response.message),
+      error: (error: unknown) => {
+        this.status.set(getApiErrorMessage(error, "Aggiornamento preferiti non disponibile."));
+      }
+    });
   }
 
   private toDraft(communication: Communication): GeneratedDraft {

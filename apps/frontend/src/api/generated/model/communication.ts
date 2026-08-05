@@ -31,6 +31,7 @@ export interface Communication {
   error?: string | null;
   status: string;
   statusValue?: string;
+  isFavorite: boolean;
   /** @nullable */
   createdAt?: string | null;
   /**

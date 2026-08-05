@@ -33,6 +33,7 @@ class CommunicationFactory extends Factory
             'workflow_completed_at' => now(),
             'cover_status' => CoverImageStatus::Removed,
             'status' => fake()->randomElement(CommunicationStatus::cases()),
+            'is_favorite' => false,
             'rating' => null,
             'rating_comment' => null,
             'rated_at' => null,
@@ -53,6 +54,11 @@ class CommunicationFactory extends Factory
     public function discarded(): static
     {
         return $this->state(['status' => CommunicationStatus::Discarded]);
+    }
+
+    public function favorite(): static
+    {
+        return $this->state(['is_favorite' => true]);
     }
 
     public function processing(): static
