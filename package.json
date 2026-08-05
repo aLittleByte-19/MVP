@@ -18,7 +18,9 @@
     "overrides": {
         "glob": "^13.0.6",
         "jsdom": "^29.1.1",
-        "test-exclude": "^8.0.0"
+        "test-exclude": "^8.0.0",
+        "@angular/core": "21.2.19",
+        "@angular/common": "21.2.19"
     },
     "devDependencies": {
         "axe-core": "^4.11.4",
