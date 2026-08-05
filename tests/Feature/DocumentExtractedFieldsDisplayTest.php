@@ -1,9 +1,9 @@
 <?php
 
-use App\Copilot\Support\MvpStateService;
-use App\Models\Copilot\ExtractedData;
-use App\Models\Copilot\OriginalDocument;
-use App\Models\Copilot\SubDocument;
+use App\Models\ExtractedData;
+use App\Models\OriginalDocument;
+use App\Models\SubDocument;
+use App\Mvp\Support\MvpStateService;
 
 test('document exposes recipient email when extracted data has one', function () {
     $subDocument = SubDocument::factory()->create();
