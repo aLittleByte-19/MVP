@@ -169,7 +169,11 @@ export class AssistantService {
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 
-  /** Fissa la bozza nello storico (UC-9): da qui non e' piu' modificabile ne' rigenerabile. */
+  /**
+   * Rende la bozza visibile nello storico (UC-9). Il salvataggio decide solo
+   * cosa compare nell'elenco: la bozza resta modificabile e rigenerabile,
+   * solo lo scarto ne blocca il contenuto.
+   */
   saveToHistory(communicationId: number): Observable<CommunicationMutationResponse> {
     return this.api
       .saveMvpCommunication(communicationId)
@@ -209,8 +213,8 @@ export class AssistantService {
 
   /**
    * Storico filtrato (UC-15..UC-18): i criteri viaggiano al backend, che resta
-   * l'unica autorita' sui dati. Le bozze scartate restano escluse, come nello
-   * storico di `state.assistant.history`.
+   * l'unica autorita' sui dati. Comprende le sole bozze salvate esplicitamente,
+   * come lo storico di `state.assistant.history`.
    */
   searchCommunications(filters: CommunicationFilters): Observable<Communication[]> {
     return this.api
