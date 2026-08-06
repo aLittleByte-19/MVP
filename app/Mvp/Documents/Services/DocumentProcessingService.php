@@ -84,7 +84,9 @@ class DocumentProcessingService
             // La confidenza effettiva non è l'auto-valutazione del modello (non
             // calibrata), ma un valore oggettivo: leggibilità OCR × completezza
             // dei campi chiave. L'output grezzo del modello resta in ai_payload.
-            $confidenceScore = $this->computeConfidenceScore($fields, $subDocument);
+            // Si misura sull'estrazione grezza, non sui campi già sovrascritti
+            // dai metadati di upload: la confidenza riguarda l'AI, non l'operatore.
+            $confidenceScore = $this->computeConfidenceScore($aiFields, $subDocument);
             $reviewStatus = $this->reviewStatusForConfidence($confidenceScore);
             $subDocument->update([
                 'review_status' => $reviewStatus,
@@ -306,28 +308,72 @@ class DocumentProcessingService
      * of the key fields were actually extracted. Replaces the model's own
      * uncalibrated self-assessment.
      *
-     * @param  array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}  $fields
+     * Misura la sola estrazione automatica, come da UC-39.10: i campi dichiarati
+     * in upload dal consulente fanno fede e non vengono valutati, quindi restano
+     * esclusi sia dai campi trovati sia dal totale. Dichiarare metadati non alza
+     * il punteggio, determina solo su quali campi l'estrazione viene valutata.
+     *
+     * @param  array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}  $aiFields  Estrazione grezza del modello, senza i sovrascritti manuali.
      */
-    private function computeConfidenceScore(array $fields, SubDocument $subDocument): int
+    private function computeConfidenceScore(array $aiFields, SubDocument $subDocument): int
     {
-        $keyFields = ['employee_first_name', 'employee_last_name', 'company_name', 'document_date'];
+        $original = $subDocument->originalDocument;
+        $keyFields = array_values(array_diff(
+            ['employee_first_name', 'employee_last_name', 'company_name', 'document_date'],
+            $this->manuallyDeclaredKeyFields($original),
+        ));
+
+        $ocrConfidence = $this->ocrConfidenceForRange(
+            $original,
+            (int) $subDocument->start_page,
+            (int) $subDocument->end_page
+        );
+
+        // Nessun campo chiave a carico dell'estrazione automatica: non c'e' nulla
+        // da valutare, resta la sola leggibilita' della scansione.
+        if ($keyFields === []) {
+            return max(0, min(100, (int) round($ocrConfidence)));
+        }
+
         $found = 0;
 
         foreach ($keyFields as $key) {
-            if (isset($fields[$key]) && trim((string) $fields[$key]) !== '') {
+            if (isset($aiFields[$key]) && trim((string) $aiFields[$key]) !== '') {
                 $found++;
             }
         }
 
         $completeness = $found / count($keyFields);
 
-        $ocrConfidence = $this->ocrConfidenceForRange(
-            $subDocument->originalDocument,
-            (int) $subDocument->start_page,
-            (int) $subDocument->end_page
-        );
-
         return max(0, min(100, (int) round($ocrConfidence * $completeness)));
+    }
+
+    /**
+     * Campi chiave gia' dichiarati in upload, che non sono piu' a carico
+     * dell'estrazione automatica. `document_type` non compare fra questi:
+     * non rientra nei campi chiave della confidenza.
+     *
+     * @return list<string>
+     */
+    private function manuallyDeclaredKeyFields(?OriginalDocument $original): array
+    {
+        if ($original === null) {
+            return [];
+        }
+
+        $declared = [];
+
+        if ($original->manual_company_name !== null) {
+            $declared[] = 'company_name';
+        }
+
+        // E' sufficiente che sia dichiarato uno dei due: la data risultante non
+        // deriva piu' dalla sola estrazione automatica.
+        if ($original->manual_reference_month !== null || $original->manual_reference_year !== null) {
+            $declared[] = 'document_date';
+        }
+
+        return $declared;
     }
 
     /**
