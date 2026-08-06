@@ -11,9 +11,19 @@
   white-space: nowrap;
 }
 
+/* Data e ora di caricamento (UC-39.15): data e orario restano interi, ma
+   possono andare a capo fra loro invece di sfondare la colonna. */
+.stamp {
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+
 .action {
   min-height: 34px;
   padding: 0 var(--mvp-space-3);
+  /* L'etichetta resta su una riga: la cella eredita overflow-wrap anywhere,
+     che altrimenti spezzerebbe la parola dentro il pulsante. */
+  white-space: nowrap;
 }
 
 :host {
