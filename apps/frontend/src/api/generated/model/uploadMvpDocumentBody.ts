@@ -5,7 +5,33 @@
  * Versioned JSON contract consumed by the Angular SPA.
  * OpenAPI spec version: 1.0.0
  */
+import type { UploadMvpDocumentBodyDocumentType } from './uploadMvpDocumentBodyDocumentType';
 
 export type UploadMvpDocumentBody = {
   document: Blob;
+  /**
+     * Tipologia documento impostata manualmente in upload. Se presente, prevale sull'estrazione AI e non viene sovrascritta.
+     * @nullable
+     */
+  documentType?: UploadMvpDocumentBodyDocumentType;
+  /**
+     * Azienda di riferimento impostata manualmente in upload. Se presente, prevale sull'estrazione AI e non viene sovrascritta.
+     * @maxLength 500
+     * @nullable
+     */
+  companyName?: string | null;
+  /**
+     * Mese di riferimento (1-12) impostato manualmente in upload. Combinato con year forma la data documento preservata dall'AI.
+     * @minimum 1
+     * @maximum 12
+     * @nullable
+     */
+  month?: number | null;
+  /**
+     * Anno di riferimento impostato manualmente in upload. Combinato con month forma la data documento preservata dall'AI.
+     * @minimum 1900
+     * @maximum 2100
+     * @nullable
+     */
+  year?: number | null;
 };

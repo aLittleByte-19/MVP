@@ -12,6 +12,7 @@ import type {
 } from "../../../../api/generated/model";
 import { MvpStateStore } from "../../../core/state/mvp-state.store";
 import { getSubDocumentNumericId } from "../../../shared/util/formatters";
+import type { DOCUMENT_TYPE_OPTIONS } from "../../../shared/util/document-field-validators";
 
 /** Stato dell'anteprima PDF di un sotto-documento. */
 export type DocumentPreviewStatus = "idle" | "loading" | "available" | "unavailable" | "unreachable";
@@ -63,6 +64,14 @@ export interface DocumentFilters {
   year?: number;
 }
 
+/** Metadati manuali inviati insieme al file in upload. */
+export interface DocumentUploadMetadata {
+  documentType?: (typeof DOCUMENT_TYPE_OPTIONS)[number];
+  companyName?: string;
+  month?: number;
+  year?: number;
+}
+
 /**
  * Pipeline documentale del Co-Pilot: upload con elaborazione asincrona via SSE,
  * revisione/validazione dei dati estratti, eliminazione e verifica anteprima.
@@ -81,58 +90,66 @@ export class DocumentWorkflowService {
    * connessioni). Nessun fallback automatico: in caso di errore lo stato
    * documentale viene solo ricaricato per riflettere la situazione reale.
    */
-  upload(file: File): Observable<DocumentUploadProgress> {
+  upload(file: File, metadata: DocumentUploadMetadata = {}): Observable<DocumentUploadProgress> {
     return new Observable<DocumentUploadProgress>((observer) => {
       let eventSource: EventSource | null = null;
 
-      const subscription = this.api.uploadMvpDocument({ document: file }).subscribe({
-        next: (response) => {
-          observer.next({ status: response.message, phase: "queued" });
+      const subscription = this.api
+        .uploadMvpDocument({
+          document: file,
+          ...(metadata.documentType !== undefined ? { documentType: metadata.documentType } : {}),
+          ...(metadata.companyName !== undefined ? { companyName: metadata.companyName } : {}),
+          ...(metadata.month !== undefined ? { month: metadata.month } : {}),
+          ...(metadata.year !== undefined ? { year: metadata.year } : {})
+        })
+        .subscribe({
+          next: (response) => {
+            observer.next({ status: response.message, phase: "queued" });
 
-          eventSource = new EventSource(response.streamUrl);
+            eventSource = new EventSource(response.streamUrl);
 
-          eventSource.addEventListener("progress", (event) => {
-            const progress = JSON.parse((event as MessageEvent).data) as ProcessingProgressEvent;
-            observer.next({
-              status: progressStatusLabel(progress),
-              phase: progressPhase(progress)
+            eventSource.addEventListener("progress", (event) => {
+              const progress = JSON.parse((event as MessageEvent).data) as ProcessingProgressEvent;
+              observer.next({
+                status: progressStatusLabel(progress),
+                phase: progressPhase(progress)
+              });
             });
-          });
 
-          eventSource.addEventListener("document", (event) => {
-            const document = JSON.parse((event as MessageEvent).data) as SubDocument;
-            this.store.upsertDocument(document);
-            observer.next({
-              status: "Estrazione dati dai sotto-documenti in corso.",
-              phase: "extracting",
-              receivedDocumentId: document.id
+            eventSource.addEventListener("document", (event) => {
+              const document = JSON.parse((event as MessageEvent).data) as SubDocument;
+              this.store.upsertDocument(document);
+              observer.next({
+                status: "Estrazione dati dai sotto-documenti in corso.",
+                phase: "extracting",
+                receivedDocumentId: document.id
+              });
             });
-          });
 
-          eventSource.addEventListener("done", (event) => {
-            const payload = JSON.parse((event as MessageEvent).data) as { state?: MvpState };
+            eventSource.addEventListener("done", (event) => {
+              const payload = JSON.parse((event as MessageEvent).data) as { state?: MvpState };
 
-            if (payload.state) {
-              this.store.setState(payload.state);
-            }
+              if (payload.state) {
+                this.store.setState(payload.state);
+              }
 
-            observer.next({ status: "Elaborazione completata.", phase: "completed" });
-            eventSource?.close();
-            observer.complete();
-          });
-
-          eventSource.addEventListener("error", () => {
-            observer.next({
-              status: "Elaborazione non disponibile. Controlla lo stato del documento.",
-              phase: "failed"
+              observer.next({ status: "Elaborazione completata.", phase: "completed" });
+              eventSource?.close();
+              observer.complete();
             });
-            eventSource?.close();
-            this.store.reload();
-            observer.complete();
-          });
-        },
-        error: (error: unknown) => observer.error(error)
-      });
+
+            eventSource.addEventListener("error", () => {
+              observer.next({
+                status: "Elaborazione non disponibile. Controlla lo stato del documento.",
+                phase: "failed"
+              });
+              eventSource?.close();
+              this.store.reload();
+              observer.complete();
+            });
+          },
+          error: (error: unknown) => observer.error(error)
+        });
 
       return () => {
         subscription.unsubscribe();

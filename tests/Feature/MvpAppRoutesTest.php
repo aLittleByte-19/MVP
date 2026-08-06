@@ -308,6 +308,103 @@ test('workflow audit events keep the correlation id carried by the message', fun
         ->and($event->correlation_id)->toBe('corr-42');
 });
 
+test('document upload stores manual metadata and preserves it over AI extraction', function () {
+    config([
+        'filesystems.default' => 's3',
+    ]);
+
+    Queue::fake();
+    Storage::fake('s3');
+    mvpMockWorkflowStart($this);
+
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('splitDocument')
+            ->once()
+            ->andReturn([
+                ['employee_name' => 'Mario Rossi', 'start_page' => 1, 'end_page' => 1],
+            ]);
+
+        $mock->shouldReceive('extractFields')
+            ->once()
+            ->andReturn([
+                'employee_first_name' => 'Mario',
+                'employee_last_name' => 'Rossi',
+                'company_name' => 'Valore AI',
+                'document_date' => '2024-01-15',
+                'document_type' => 'lettera',
+                'description' => 'Estratto AI',
+                'confidence_score' => 86,
+            ]);
+    });
+
+    $this->post('/api/v1/documents/ocr', [
+        'document' => mvpPdfUpload(),
+        'documentType' => 'cedolino',
+        'companyName' => 'Acme Srl',
+        'month' => 3,
+        'year' => 2026,
+    ])->assertStatus(202);
+
+    $document = OriginalDocument::query()->first();
+
+    expect($document->manual_document_type)->toBe('cedolino')
+        ->and($document->manual_company_name)->toBe('Acme Srl')
+        ->and($document->manual_reference_month)->toBe(3)
+        ->and($document->manual_reference_year)->toBe(2026)
+        ->and($document->hasManualUploadMetadata())->toBeTrue();
+
+    $document->update(['ocr_text' => "[Pagina 1]\nMario Rossi", 'ocr_confidence_avg' => 97.5]);
+    mvpRunWorkflowTask($document);
+
+    $extracted = ExtractedData::query()->first();
+
+    expect($extracted->document_type)->toBe('cedolino')
+        ->and($extracted->company_name)->toBe('Acme Srl')
+        ->and($extracted->document_date?->toDateString())->toBe('2026-03-01')
+        ->and($extracted->ai_payload['document_type'])->toBe('lettera')
+        ->and($extracted->ai_payload['company_name'])->toBe('Valore AI');
+});
+
+test('document upload treats blank manual metadata as absent', function () {
+    config([
+        'filesystems.default' => 's3',
+    ]);
+
+    Queue::fake();
+    Storage::fake('s3');
+    mvpMockWorkflowStart($this);
+
+    $this->post('/api/v1/documents/ocr', [
+        'document' => mvpPdfUpload(),
+        'documentType' => '',
+        'companyName' => '   ',
+    ])->assertStatus(202);
+
+    $document = OriginalDocument::query()->first();
+
+    expect($document->manual_document_type)->toBeNull()
+        ->and($document->manual_company_name)->toBeNull()
+        ->and($document->manual_reference_month)->toBeNull()
+        ->and($document->manual_reference_year)->toBeNull()
+        ->and($document->hasManualUploadMetadata())->toBeFalse();
+});
+
+test('document upload rejects invalid manual metadata values', function () {
+    Storage::fake('s3');
+    mvpMockWorkflowNotStarted();
+
+    $this->post('/api/v1/documents/ocr', [
+        'document' => mvpPdfUpload(),
+        'documentType' => 'tipologia-non-valida',
+        'month' => 13,
+        'year' => 1800,
+    ])
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+
+    expect(OriginalDocument::query()->count())->toBe(0);
+});
+
 test('document upload performs initial split and field extraction', function () {
     config([
         'filesystems.default' => 's3',

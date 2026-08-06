@@ -30,9 +30,16 @@ class DocumentProcessingService
     ) {}
 
     /**
+     * @param  array{
+     *     document_type?: ?string,
+     *     company_name?: ?string,
+     *     reference_month?: ?int,
+     *     reference_year?: ?int
+     * }  $manualMetadata
+     *
      * @throws \RuntimeException when the upload cannot be persisted to the configured disk.
      */
-    public function storeUpload(UploadedFile $file, MvpUser $actor): OriginalDocument
+    public function storeUpload(UploadedFile $file, MvpUser $actor, array $manualMetadata = []): OriginalDocument
     {
         $path = $file->store('originals', $this->documentDisk());
 
@@ -42,16 +49,28 @@ class DocumentProcessingService
 
         $safeName = preg_replace('/[^\w.\-]/u', '_', $file->getClientOriginalName()) ?: 'documento.pdf';
 
-        return $this->handleStoredFile($path, $safeName, $actor);
+        return $this->handleStoredFile($path, $safeName, $actor, $manualMetadata);
     }
 
-    public function handleStoredFile(string $path, string $filename, ?MvpUser $actor = null): OriginalDocument
+    /**
+     * @param  array{
+     *     document_type?: ?string,
+     *     company_name?: ?string,
+     *     reference_month?: ?int,
+     *     reference_year?: ?int
+     * }  $manualMetadata
+     */
+    public function handleStoredFile(string $path, string $filename, ?MvpUser $actor = null, array $manualMetadata = []): OriginalDocument
     {
         return OriginalDocument::create([
             'tenant_id' => $actor?->tenantId ?? 'mvp-local-tenant',
             'created_by' => $actor?->id,
             'file_path' => $path,
             'original_filename' => $filename,
+            'manual_document_type' => $manualMetadata['document_type'] ?? null,
+            'manual_company_name' => $manualMetadata['company_name'] ?? null,
+            'manual_reference_month' => $manualMetadata['reference_month'] ?? null,
+            'manual_reference_year' => $manualMetadata['reference_year'] ?? null,
             'processing_status' => ProcessingStatus::Pending,
         ]);
     }
@@ -59,7 +78,9 @@ class DocumentProcessingService
     public function extractAndSaveFields(SubDocument $subDocument): void
     {
         try {
-            $fields = $this->extractFields($subDocument);
+            $aiFields = $this->extractFields($subDocument);
+            // I metadati impostati in upload prevalgono sull'estrazione AI.
+            $fields = $this->applyManualMetadataOverrides($aiFields, $subDocument->originalDocument);
             // La confidenza effettiva non è l'auto-valutazione del modello (non
             // calibrata), ma un valore oggettivo: leggibilità OCR × completezza
             // dei campi chiave. L'output grezzo del modello resta in ai_payload.
@@ -73,7 +94,7 @@ class DocumentProcessingService
                 ['sub_document_id' => $subDocument->id],
                 array_merge($fields, [
                     'confidence_score' => $confidenceScore,
-                    'ai_payload' => $fields,
+                    'ai_payload' => $aiFields,
                 ]),
             );
             $this->metrics->recordDomainCounter('ai_extractions_total', [
@@ -468,6 +489,63 @@ class DocumentProcessingService
         }
 
         return $this->bedrock->extractFields($ocrText);
+    }
+
+    /**
+     * Tipologia, azienda e mese/anno impostati in upload restano autoritativi.
+     * L'AI continua a produrre l'estrazione (e il payload grezzo), ma non sovrascrive
+     * i campi già dichiarati dal consulente.
+     *
+     * @param  array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}  $fields
+     * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}
+     */
+    private function applyManualMetadataOverrides(array $fields, ?OriginalDocument $original): array
+    {
+        if ($original === null || ! $original->hasManualUploadMetadata()) {
+            return $fields;
+        }
+
+        if ($original->manual_document_type !== null) {
+            $fields['document_type'] = $original->manual_document_type;
+        }
+
+        if ($original->manual_company_name !== null) {
+            $fields['company_name'] = $original->manual_company_name;
+        }
+
+        $month = $original->manual_reference_month;
+        $year = $original->manual_reference_year;
+
+        if ($month !== null && $year !== null) {
+            $fields['document_date'] = sprintf('%04d-%02d-01', $year, $month);
+        } elseif ($year !== null || $month !== null) {
+            $fields['document_date'] = $this->mergeManualDateWithAi($fields['document_date'] ?? null, $month, $year);
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Completa mese o anno mancante usando la data AI quando disponibile.
+     */
+    private function mergeManualDateWithAi(?string $aiDate, ?int $month, ?int $year): ?string
+    {
+        $aiYear = null;
+        $aiMonth = null;
+
+        if (is_string($aiDate) && preg_match('/^(\d{4})-(\d{2})/', $aiDate, $matches) === 1) {
+            $aiYear = (int) $matches[1];
+            $aiMonth = (int) $matches[2];
+        }
+
+        $resolvedYear = $year ?? $aiYear;
+        $resolvedMonth = $month ?? $aiMonth;
+
+        if ($resolvedYear === null || $resolvedMonth === null) {
+            return $aiDate;
+        }
+
+        return sprintf('%04d-%02d-01', $resolvedYear, $resolvedMonth);
     }
 
     /**

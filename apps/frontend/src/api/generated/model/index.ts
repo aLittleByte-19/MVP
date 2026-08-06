@@ -50,6 +50,7 @@ export * from './updateSendMessageRequest';
 export * from './updateSubDocumentReviewResponse';
 export * from './uploadDocumentResponse';
 export * from './uploadMvpDocumentBody';
+export * from './uploadMvpDocumentBodyDocumentType';
 export * from './upstreamUnavailableResponse';
 export * from './validationErrorEnvelope';
 export * from './validationErrorEnvelopeError';

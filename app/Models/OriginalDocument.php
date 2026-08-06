@@ -15,6 +15,10 @@ use Illuminate\Support\Carbon;
  * @property string|null $created_by
  * @property string $file_path
  * @property string $original_filename
+ * @property string|null $manual_document_type
+ * @property string|null $manual_company_name
+ * @property int|null $manual_reference_month
+ * @property int|null $manual_reference_year
  * @property ProcessingStatus $processing_status
  * @property string|null $error_message
  * @property string|null $s3_bucket
@@ -38,6 +42,10 @@ class OriginalDocument extends Model
         'created_by',
         'file_path',
         'original_filename',
+        'manual_document_type',
+        'manual_company_name',
+        'manual_reference_month',
+        'manual_reference_year',
         'processing_status',
         'error_message',
         's3_bucket',
@@ -60,12 +68,25 @@ class OriginalDocument extends Model
     {
         return [
             'processing_status' => ProcessingStatus::class,
+            'manual_reference_month' => 'integer',
+            'manual_reference_year' => 'integer',
             'workflow_started_at' => 'datetime',
             'workflow_completed_at' => 'datetime',
             'workflow_failed_at' => 'datetime',
             'ocr_confidence_avg' => 'float',
             'ocr_pages' => 'array',
         ];
+    }
+
+    /**
+     * True se almeno un metadato manuale e' stato impostato in fase di upload.
+     */
+    public function hasManualUploadMetadata(): bool
+    {
+        return $this->manual_document_type !== null
+            || $this->manual_company_name !== null
+            || $this->manual_reference_month !== null
+            || $this->manual_reference_year !== null;
     }
 
     /**

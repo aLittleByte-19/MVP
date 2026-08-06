@@ -21,7 +21,7 @@ import {
 } from "./data/document-workflow.service";
 import { createDocumentFilterForm, toDocumentFilters } from "./data/document-filters";
 import { DocumentListComponent } from "./components/document-list";
-import { DocumentUploadPanelComponent } from "./components/document-upload-panel";
+import { DocumentUploadPanelComponent, type DocumentUploadRequest } from "./components/document-upload-panel";
 import { SubDocumentListComponent } from "./components/sub-document-list";
 
 const MONTHS = [
@@ -275,13 +275,13 @@ export class CopilotPage {
     this.selectedDocumentId.set(documentId);
   }
 
-  protected upload(file: File): void {
+  protected upload(request: DocumentUploadRequest): void {
     this.isUploading.set(true);
     this.uploadPhase.set("uploading");
     this.uploadStatus.set("Caricamento documento in corso.");
 
     this.workflow
-      .upload(file)
+      .upload(request.file, request.metadata)
       .pipe(finalize(() => this.isUploading.set(false)))
       .subscribe({
         next: (progress) => {
