@@ -44,7 +44,7 @@ import { getReviewStatusTone, getSendStatusTone } from "../../../shared/util/sta
                   <span class="date">{{ formatDateForDisplay(documentItem.documentDate) }}</span>
                 </td>
                 <td data-column="uploadedAt" data-label="Caricato il">
-                  <span class="date">{{ formatFallback(documentItem.uploadedAt) }}</span>
+                  <span class="stamp">{{ formatFallback(documentItem.uploadedAt) }}</span>
                 </td>
                 <td data-column="confidence" data-label="Conf.">
                   {{ formatFallback(documentItem.confidence, "Da verificare") }}
