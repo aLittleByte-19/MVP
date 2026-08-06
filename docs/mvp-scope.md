@@ -80,7 +80,8 @@ Incluso:
 - estrazione dei campi principali tramite Bedrock sul testo OCR (nome/cognome, azienda, data,
   tipologia, descrizione);
 - confidenza calcolata oggettivamente come leggibilità OCR (Textract) ponderata sulla completezza
-  dei campi chiave, non come auto-valutazione del modello;
+  dei campi chiave, non come auto-valutazione del modello; misura la sola estrazione automatica
+  (UC-39.10), quindi i campi dichiarati in fase di caricamento restano fuori dal calcolo;
 - persistenza di documento originale, sotto-documenti e dati estratti;
 - dettaglio documento affiancato (anteprima a sinistra, dati estratti a destra);
 - correzione manuale dei campi estratti e validazione manuale (human-in-the-loop), con errori di
@@ -99,12 +100,9 @@ Incluso:
 - stato `failed` esplicito quando split o estrazione non riescono;
 - metriche operative su documenti elaborati, soglie di confidenza e stato di invio;
 - classificazione e metadati manuali in fase di upload: tipologia, mese, anno e azienda
-  impostati dal consulente restano autoritativi e non vengono sovrascritti dall'AI.
-
-In corso:
-
+  impostati dal consulente restano autoritativi e non vengono sovrascritti dall'AI;
 - visualizzazione dell'email destinatario e della data/ora di caricamento nel dettaglio
-  (UC-39.12, UC-39.15);
+  (UC-39.12, UC-39.15).
 
 Fuori scope MVP:
 
