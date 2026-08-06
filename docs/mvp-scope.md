@@ -97,13 +97,14 @@ Incluso:
   nome/cognome/azienda (UC-35), stato di invio (UC-36), soglia di confidenza sopra o sotto un
   valore (UC-37), mese e anno del documento (UC-38);
 - stato `failed` esplicito quando split o estrazione non riescono;
-- metriche operative su documenti elaborati, soglie di confidenza e stato di invio.
+- metriche operative su documenti elaborati, soglie di confidenza e stato di invio;
+- classificazione e metadati manuali in fase di upload: tipologia, mese, anno e azienda
+  impostati dal consulente restano autoritativi e non vengono sovrascritti dall'AI.
 
 In corso:
 
 - visualizzazione dell'email destinatario e della data/ora di caricamento nel dettaglio
   (UC-39.12, UC-39.15);
-- classificazione e metadati manuali in fase di upload (UC-32).
 
 Fuori scope MVP:
 

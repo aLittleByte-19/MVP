@@ -8,6 +8,7 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use setasign\Fpdi\Fpdi;
 
@@ -27,6 +28,36 @@ class UploadDocumentRequest extends FormRequest
 
         return [
             'document' => ['required', 'file', 'mimetypes:application/pdf', 'max:'.$maxKilobytes],
+            // Metadati manuali: opzionali; se presenti vengono preservati sull'output AI.
+            'documentType' => ['sometimes', 'nullable', 'string', Rule::in(UpdateExtractedDataRequest::DOCUMENT_TYPES)],
+            'companyName' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'month' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:12'],
+            'year' => ['sometimes', 'nullable', 'integer', 'min:1900', 'max:2100'],
+        ];
+    }
+
+    /**
+     * Metadati manuali da applicare dopo l'estrazione AI (null = lascia decidere all'AI).
+     *
+     * @return array{
+     *     document_type: ?string,
+     *     company_name: ?string,
+     *     reference_month: ?int,
+     *     reference_year: ?int
+     * }
+     */
+    public function manualMetadata(): array
+    {
+        $validated = $this->validated();
+
+        $documentType = isset($validated['documentType']) ? trim((string) $validated['documentType']) : '';
+        $companyName = isset($validated['companyName']) ? trim((string) $validated['companyName']) : '';
+
+        return [
+            'document_type' => $documentType !== '' ? $documentType : null,
+            'company_name' => $companyName !== '' ? $companyName : null,
+            'reference_month' => isset($validated['month']) ? (int) $validated['month'] : null,
+            'reference_year' => isset($validated['year']) ? (int) $validated['year'] : null,
         ];
     }
 

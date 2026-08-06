@@ -911,6 +911,18 @@ formData.append(`image`, updateMvpCommunicationCoverImageBody.image);
   uploadMvpDocument<TData = UploadDocumentResponse>(
     uploadMvpDocumentBody: UploadMvpDocumentBody, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {const formData = new FormData();
 formData.append(`document`, uploadMvpDocumentBody.document);
+if(uploadMvpDocumentBody.documentType !== undefined && uploadMvpDocumentBody.documentType !== null) {
+ formData.append(`documentType`, uploadMvpDocumentBody.documentType);
+ }
+if(uploadMvpDocumentBody.companyName !== undefined && uploadMvpDocumentBody.companyName !== null) {
+ formData.append(`companyName`, uploadMvpDocumentBody.companyName);
+ }
+if(uploadMvpDocumentBody.month !== undefined && uploadMvpDocumentBody.month !== null) {
+ formData.append(`month`, uploadMvpDocumentBody.month.toString())
+ }
+if(uploadMvpDocumentBody.year !== undefined && uploadMvpDocumentBody.year !== null) {
+ formData.append(`year`, uploadMvpDocumentBody.year.toString())
+ }
 
     if (options?.observe === 'events') {
       return this.http.post<TData>(
