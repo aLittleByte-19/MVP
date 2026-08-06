@@ -34,7 +34,7 @@ import type {
   template: `
     <mvp-section class="form" id="assistant-compose" title="Crea una bozza">
       <p class="note">
-        Inserisci cosa comunicare e mvphi parametri editoriali. Genera la bozza e rivedi titolo e testo nell'anteprima.
+        Inserisci cosa comunicare e pochi parametri editoriali. Genera la bozza e rivedi titolo e testo nell'anteprima.
       </p>
       <form [formGroup]="form" (ngSubmit)="submit()">
         <mvp-textarea-field
@@ -122,7 +122,7 @@ export class CommunicationGeneratorPanelComponent {
   protected readonly configNameControl = new FormControl("", { nonNullable: true });
   protected readonly form = new FormGroup({
     prompt: new FormControl(
-      "Scrivi una comunicazione interna per informare i dipendenti che la nuova area documentale NEXUM e disponibile. Spiega cosa cambia, dove trovare i documenti e perche la consultazione diventa piu semplice.",
+      "Scrivi una comunicazione interna per informare i dipendenti che la nuova area documentale NEXUM è disponibile. Spiega cosa cambia, dove trovare i documenti e perché la consultazione diventa più semplice.",
       { nonNullable: true, validators: [Validators.required, Validators.minLength(12)] }
     ),
     tone: new FormControl<GenerateCommunicationRequestTone>("Chiaro e diretto", { nonNullable: true }),

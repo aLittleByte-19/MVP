@@ -210,7 +210,7 @@ import {
             @if (!isDiscarded(currentDraft)) {
               @if (isConfirmingDiscard()) {
                 <p class="warning" role="status">
-                  Sei sicuro di voler scartare questa bozza? Non sara' piu' modificabile ne' rigenerabile.
+                  Sei sicuro di voler scartare questa bozza? Non sarà più modificabile né rigenerabile.
                 </p>
                 <button mvpButton type="button" [disabled]="isDiscarding()" (click)="discard.emit()">
                   Conferma eliminazione
