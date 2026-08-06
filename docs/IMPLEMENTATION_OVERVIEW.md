@@ -1,14 +1,14 @@
 # Panoramica implementativa dell'applicativo
 
 > Documento aggiornato tramite analisi diretta della codebase.
-> Branch analizzato: migrate/react_angular.
-> Ultimo aggiornamento: 2026-06-24.
+> Branch analizzato: integration/develop_merge.
+> Ultimo aggiornamento: 2026-08-06.
 
 ---
 
 ## 1. Executive summary tecnico
 
-L'applicativo è una MVP di **pipeline documentale HR assistita da AI** composta da due moduli funzionali: un **AI Assistant** che genera comunicazioni aziendali a partire da un prompt (tono e stile vincolati), e un **Co-Pilot CdL** che riceve PDF di qualsiasi tipologia, ne riconosce tipo e destinatari (sempre almeno uno) dal testo OCR tramite LLM, li separa in sotto-documenti per destinatario, ne estrae campi strutturati e ne traccia lo stato di lavorazione con una confidenza calcolata su leggibilità OCR e completezza dei campi.
+L'applicativo è una MVP di **pipeline documentale HR assistita da AI** composta da due moduli funzionali: un **AI Assistant** che genera comunicazioni aziendali a partire da un prompt (tono e stile vincolati), e un **Co-Pilot CdL** che riceve PDF di qualsiasi tipologia, ne riconosce tipo e destinatari (sempre almeno uno) dal testo OCR tramite LLM, li separa in sotto-documenti per destinatario, ne estrae campi strutturati e ne traccia lo stato di lavorazione con una confidenza calcolata su leggibilità OCR e completezza dei campi lasciati al modello.
 
 Il backend è **Laravel 12 / PHP 8.4** con PostgreSQL e Redis; il frontend è una **SPA Angular + TypeScript** servita di default tramite **Traefik → emulatore CDN locale (Nginx) → S3 LocalStack**, con Nginx applicativo come proxy per `/api/`, `/health` e `/ready`. Entrambi i flussi AI sono asincroni: due **state machine AWS Step Functions** (emulate in LocalStack) orchestrano i task via **SQS con callback task token**, ciascuna con la propria coda e il proprio worker Laravel dedicato. Le integrazioni AI usano **AWS Bedrock** (classificazione/split ed estrazione campi sul testo OCR e generazione del testo delle comunicazioni via Converse, copertine via `invokeModel` su un modello immagini in una region propria) e **AWS Textract** per l'OCR che alimenta la pipeline documentale (necessario per l'analisi, attivabile solo con S3 reale). La configurazione runtime arriva da **SSM Parameter Store + Secrets Manager**, caricata prima del boot di Laravel.
 
@@ -31,7 +31,7 @@ L'analisi si basa sullo **stato attuale del codice**: route, controller, service
 | Backend applicativo | `app/` | Controller HTTP divisi per area in `Http/Controllers/Api/V1/` (bozze, stream, copertine, export, rating; documenti, revisione, anteprima, messaggio di invio) con le guardie condivise su attore e tenant in `Http/Controllers/Api/V1/Concerns/`; middleware, model, console command |
 | Domini MVP | `app/Mvp/` | Service layer per dominio: `Ai/` (Bedrock), `Ocr/` (Textract), `Documents/` (Co-Pilot, elaborazione e orchestrazione), `Communications/` (AI Assistant, copertine e orchestrazione), `Workflow/` (infrastruttura di orchestrazione comune), `Identity/`, `Audit/`, `Observability/`, `Support/` |
 | Route | `routes/api.php`, `routes/web.php` | API v1 + endpoint di sistema |
-| Schema dati | `database/migrations/` | 6 tabelle di dominio + indici/FK |
+| Schema dati | `database/migrations/` | 7 tabelle di dominio + indici/FK |
 | Frontend SPA | `apps/frontend/` | Angular + TypeScript, client API Angular generato |
 | Contratto API | `openapi/v1/alittlebyte-mvp-api.yaml` | OpenAPI 3.1, fonte del client frontend |
 | Infrastruttura locale | `docker-compose.yml`, `docker/` | 22 servizi: app, due worker (uno per pipeline), nginx, edge-cdn, traefik, datastore, stack osservabilità, tool |
@@ -167,7 +167,7 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 ### AWS Bedrock (LLM)
 
 **Dove**: `app/Mvp/Ai/BedrockService.php` (due client `BedrockRuntimeClient` costruiti in `AppServiceProvider` con timeout 300s: uno per i modelli testo, uno per quelli immagine, che sono serviti in region diverse), config in `config/services.php` (`model_id`, `image_model_id`, `region`, `image_region`, `endpoint`, credenziali AWS reali opzionali; default `amazon.nova-lite-v1:0` e `stability.sd3-5-large-v1:0` da `docker-compose.yml`).
-**Ruolo**: quattro operazioni (`generateCommunication()` (JSON `{title, body, imagePrompt}` da prompt+tono+stile: lo stesso modello scrive anche la direzione visiva della copertina, avendo davanti il testo appena generato), `generateCommunicationImageWithMeta()` (copertina via `invokeModel`, con payload derivato dalla famiglia del modello configurato) Stability SD3/Core, Stability XL, Nova Canvas), `splitDocument()` (segmenti per destinatario dal testo OCR), `extractFields()` (campi strutturati dal testo OCR; la confidenza effettiva è calcolata a valle su leggibilità OCR e completezza dei campi). Le operazioni testuali usano Converse, la generazione immagini `invokeModel`.
+**Ruolo**: quattro operazioni (`generateCommunication()` (JSON `{title, body, imagePrompt}` da prompt+tono+stile: lo stesso modello scrive anche la direzione visiva della copertina, avendo davanti il testo appena generato), `generateCommunicationImageWithMeta()` (copertina via `invokeModel`, con payload derivato dalla famiglia del modello configurato) Stability SD3/Core, Stability XL, Nova Canvas), `splitDocument()` (segmenti per destinatario dal testo OCR), `extractFields()` (campi strutturati dal testo OCR; la confidenza effettiva è calcolata a valle su leggibilità OCR e completezza dei soli campi lasciati al modello). Le operazioni testuali usano Converse, la generazione immagini `invokeModel`.
 **Valutazione**: ogni risposta è trattata come input non attendibile; parsing difensivo (estrazione JSON da fence markdown con fallback regex) seguito da validazione contro JSON Schema in `AiOutputValidator` (`resources/schemas/ai/`) più le regole semantiche che uno schema non esprime; errori AWS mappati su `AiServiceException` → 502 con messaggio user-friendly, metriche di fallimento dedicate (`BedrockFailureRateHigh` alert). Sugli errori immagine la classificazione distingue i casi permanenti (accesso negato, modello non attivo, credenziali) da quelli ritentabili, evitando tentativi certi di fallire.
 **Gap**: nessuna mitigazione esplicita di prompt injection veicolata dal contenuto del PDF; nessun circuit breaker (solo retry SDK).
 
@@ -238,8 +238,8 @@ scrape. Sono gauge, in particolare, le distribuzioni per stato:
 ### CI: GitHub Actions
 
 **Dove**: `.github/workflows/ci.yml` (4 job), `mirror-images.yml`, `scripts/ci/`.
-**Pipeline**: `backend` (Composer validate, Pint, Larastan, Pest, coverage globale e report Cobertura e HTML), `frontend` (lint OpenAPI, generazione client con verifica del contenuto committato, ESLint, typecheck, Jest, coverage globale, report LCOV, JSON e HTML, build Angular, `npm audit --audit-level=high`), `coverage-diff` (coverage almeno all'80% sulle linee modificate rispetto a `origin/develop`, con `diff-cover==10.4.1`, una invocazione per stack ed esiti combinati, report HTML e Markdown), `stack` (mirroring e cache immagini, `terraform fmt/validate`, validazione della configurazione di osservabilità, build immagini di sviluppo e produzione, **Trivy** `--exit-code 1 --severity HIGH,CRITICAL` su app e nginx, avvio stack completo con LocalStack e Terraform, build e upload della SPA Angular su S3 LocalStack, smoke HTTPS via Traefik, audit axe e pa11y contro lo stack reale, pubblicazione condizionale delle immagini su GHCR per i non PR). La concurrency usa `cancel-in-progress`.
-**Valutazione**: copertura larga e realistica, poiché lo smoke testa il sistema integrato e i job applicativi misurano il codice effettivo. Il quality gate include coverage globale, coverage del codice modificato, sicurezza (Trivy, npm audit) e accessibilità. Se lo smoke fallisce, la CI pubblica stato dei container, log Docker Compose e uso del disco come artefatto diagnostico.
+**Pipeline**: `backend` (Composer validate, Pint, Larastan, Pest, coverage globale e report Cobertura e HTML, `composer audit` sulle dipendenze di produzione), `frontend` (lint OpenAPI, generazione client con verifica del contenuto committato, ESLint, typecheck, Jest, coverage globale, report LCOV, JSON e HTML, build Angular, `npm audit --audit-level=high`), `coverage-diff` (coverage almeno all'80% sulle linee modificate rispetto a `origin/develop`, con `diff-cover==10.4.1`, una invocazione per stack ed esiti combinati, report HTML e Markdown), `stack` (mirroring e cache immagini, `terraform fmt/validate`, validazione della configurazione di osservabilità, build immagini di sviluppo e produzione, **Trivy** `--exit-code 1 --severity HIGH,CRITICAL` su app e nginx, avvio stack completo con LocalStack e Terraform, build e upload della SPA Angular su S3 LocalStack, smoke HTTPS via Traefik, audit axe e pa11y contro lo stack reale, pubblicazione condizionale delle immagini su GHCR per i non PR). La concurrency usa `cancel-in-progress`.
+**Valutazione**: copertura larga e realistica, poiché lo smoke testa il sistema integrato e i job applicativi misurano il codice effettivo. Il quality gate include coverage globale, coverage del codice modificato, sicurezza (Trivy, npm audit, composer audit) e accessibilità. Se lo smoke fallisce, la CI pubblica stato dei container, log Docker Compose e uso del disco come artefatto diagnostico.
 
 ---
 
@@ -325,6 +325,23 @@ sequenceDiagram
 
 Error handling: retry ASL (2 tentativi, backoff 2x) e `Catch`→`Failed`; `sendTaskFailure` dal worker; stato `Failed` con `workflow_failure_reason` e `error_message`; alert `StepFunctionExecutionFailed` e `DocumentStuckInProcessing`. **Test**: `DocumentUploadTest`, `DocumentWorkflowTest`, `DocumentExtractionTest`.
 
+**Classificazione e metadati manuali in upload (UC-32, implementato)**: `POST /api/v1/documents/ocr`
+accetta, oltre al PDF, i campi opzionali `documentType` (vincolato agli stessi valori della
+correzione manuale), `companyName`, `month` e `year` (`UploadDocumentRequest::manualMetadata()`).
+Vengono persistiti sul documento originale e riapplicati a valle dell'estrazione da
+`DocumentProcessingService::applyManualMetadataOverrides()`: quanto dichiarato dal consulente
+prevale sull'output del modello, che resta comunque integro in `extracted_data.ai_payload`. Mese e
+anno concorrono a `document_date`; se ne arriva uno solo, l'altro viene completato dalla data
+estratta quando disponibile.
+
+**Confidenza e metadati dichiarati**: `computeConfidenceScore()` misura la sola estrazione
+automatica (UC-39.10) e riceve i campi grezzi del modello, non quelli già sovrascritti. I campi
+chiave dichiarati in upload escono dal calcolo sia dai trovati sia dal totale
+(`manuallyDeclaredKeyFields()`): compilarli non alza il punteggio, cambia solo su quali campi
+l'estrazione viene valutata. Senza questa esclusione un documento con azienda e periodo dichiarati
+a mano risulterebbe più completo di quanto il modello abbia effettivamente riconosciuto, e potrebbe
+essere auto-validato saltando la revisione umana proprio sui campi del destinatario.
+
 ### 6.3 Preview/cancellazione sotto-documenti (implementato)
 
 `GET /documents/{subDocument}/preview` streamma il PDF inline (`Storage::readStream`); `DELETE /documents/{subDocument}` rimuove file e record (e l'originale se senza split residui). Autorizzazione per match `tenant_id` tra documento e attore.
@@ -375,6 +392,14 @@ modificabile e rigenerabile come una draft, finché non viene scartata
 contenuto. Il modello dei permessi resta quello descritto in [`mvp-scope.md`](mvp-scope.md): non
 c'è un flusso di approvazione multi-ruolo, è l'operatore stesso a decidere cosa archiviare.
 
+**Preferiti (UC-21/UC-22, implementato)**: `POST` e `DELETE /api/v1/communications/{communication}/favorite`
+alzano e tolgono `communications.is_favorite`, con audit event dedicato e guardia di tenant come
+ogni altra mutazione. Il contrassegno è idempotente per costruzione: marcare una generazione già
+preferita, o togliere il contrassegno da una che non ce l'ha, risponde 422 invece di passare in
+silenzio. In UI la stella vive sulle voci dello storico, coerentemente con le pre-condizioni di
+UC-21/UC-22, quindi si applica alle sole generazioni già salvate; l'API resta più permissiva e
+accetta anche una bozza non archiviata.
+
 **Preset di prompt riutilizzabili (UC-19, implementato)**: `POST /api/v1/prompt-configurations`
 salva testo/tono/stile del form corrente come preset con nome libero (`PromptConfigurationController`,
 tabella `prompt_configurations`); se il nome è vuoto o già in uso per il tenant,
@@ -405,6 +430,14 @@ invio (UC-36), soglia di confidenza sopra o sotto un valore (UC-37) e mese/anno 
 (UC-38), più paginazione. Gli elementi hanno la stessa forma di `state.copilot.documents`: la SPA
 non conosce due rappresentazioni dello stesso oggetto.
 
+### 6.6.2 Dettaglio del sotto-documento (implementato)
+
+Il pannello dei dati estratti espone, oltre ai campi correggibili, l'email del destinatario
+(UC-39.12) con un comando per copiarla negli appunti, e la data/ora di caricamento del documento
+originale (UC-39.15). Quest'ultima non è un campo estratto: `MvpStateService` la deriva da
+`original_documents.created_at` e la serializza già formattata per la lettura, quindi il frontend
+la mostra così com'è invece di riformattarla.
+
 ### 6.7 OCR Textract (implementato, disabilitato di default)
 
 Flag off → il task `textract.ocr` ritorna `enabled=false` e la pipeline prosegue con il solo Bedrock. Con flag on, la guard richiede `real_s3` (vedi §5).
@@ -417,8 +450,8 @@ Sette tabelle di dominio (`database/migrations/`):
 
 | Tabella | Chiavi/indici notevoli | Note |
 |---|---|---|
-| `communications` | indici su `status`, `generation_status`, `cover_status`, `workflow_execution_arn`; CHECK su tutti e tre gli stati | `status` è la decisione dell'operatore, `generation_status` il ciclo della pipeline, `cover_status` l'esito della copertina; colonne workflow (arn, started/completed/failed_at, failure_reason), `image_prompt` con la direzione visiva prodotta dal modello testuale e cover (`cover_image_path` sul disco copertine, mime, size, source) |
-| `original_documents` | `(tenant_id, processing_status)`, `workflow_execution_arn`, `textract_job_id` | colonne workflow (arn, started/completed/failed_at, failure_reason), OCR (job id, testo, confidence), `s3_bucket/s3_key` |
+| `communications` | indici su `status`, `generation_status`, `cover_status`, `workflow_execution_arn`, `(tenant_id, is_favorite)`; CHECK su tutti e tre gli stati | `status` è la decisione dell'operatore, `generation_status` il ciclo della pipeline, `cover_status` l'esito della copertina; colonne workflow (arn, started/completed/failed_at, failure_reason), `image_prompt` con la direzione visiva prodotta dal modello testuale, cover (`cover_image_path` sul disco copertine, mime, size, source) e `is_favorite` per il contrassegno di preferita (UC-21/UC-22) |
+| `original_documents` | `(tenant_id, processing_status)`, `workflow_execution_arn`, `textract_job_id` | colonne workflow (arn, started/completed/failed_at, failure_reason), OCR (job id, testo, confidence), `s3_bucket/s3_key`; i metadati dichiarati in upload (`manual_document_type`, `manual_company_name`, `manual_reference_month`, `manual_reference_year`, UC-32) restano distinti dall'estrazione AI e non vengono sovrascritti |
 | `sub_documents` | FK cascade su original, indici su FK e `send_status` | range pagine; `send_status` = avvenuto **scaricamento** del PDF (vedi §6.6), override manuali del messaggio di invio |
 | `extracted_data` | FK **unique** cascade su sub_document | 1:1 con sotto-documento; confidence 0-100; campi destinatario `recipient_email`, `fiscal_code`, `employee_id` correggibili a mano |
 | `audit_events` | `(tenant_id, event_type)`, `(resource_type, resource_id)`, `created_at` | append-only (nessun `updated_at`), metadata JSON |
@@ -539,9 +572,9 @@ Area più matura della MVP (dettagli §5):
 ## 15. CI, test e quality gate
 
 - **Workflow** (`ci.yml`): 4 job descritti in §5, in esecuzione su ogni push di ogni branch. Mirroring immagini su GHCR (`mirror-images.yml` + `scripts/ci/`) per ridurre la dipendenza dai registry upstream, con cache dell'archivio immagini tra i run.
-- **Test backend**: 259 casi Pest; contratto API, route, upload, workflow (inclusi idempotenza e fallimenti di avvio), configurazione runtime, estrazione, storage comunicazioni, parsing Bedrock, readiness, elenchi filtrabili con isolamento fra tenant, ciclo di vita della bozza (modifica manuale, rigenerazione, scarto, valutazione) e transizione dello stato di scaricamento. I servizi AWS sono simulati nei test. La misura Xdebug corrente è 85,34% linee e 76,73% branch.
-- **Test frontend**: 302 casi Jest in 32 suite. Oltre a utility, store e service copre la shell, routing, interceptor, pagine Overview/Assistant/Copilot, generazione e anteprima comunicazioni, upload e componenti condivisi. `sub-document-list` raggiunge 99,15% statement, 100% funzioni e 76,62% branch. La misura complessiva corrente è 97,70% statement, 95,97% funzioni e 89,63% branch.
-- **Quality gate**: Pint (stile), Larastan (statico), Redocly (OpenAPI), verifica del client generato committato, minimi coverage globali rigidi senza tolleranza, coverage del codice modificato all'80%, `npm audit` HIGH, Trivy HIGH/CRITICAL bloccante, terraform fmt/validate, promtool/otelcol validate, axe e pa11y bloccanti.
+- **Test backend**: 307 casi Pest; contratto API, route, upload (inclusi i metadati manuali), workflow (inclusi idempotenza e fallimenti di avvio), configurazione runtime, estrazione e calcolo della confidenza, storage comunicazioni, parsing Bedrock, readiness, elenchi filtrabili con isolamento fra tenant, ciclo di vita della bozza (modifica manuale, rigenerazione, salvataggio in storico, scarto, valutazione, preferiti) e transizione dello stato di scaricamento. I servizi AWS sono simulati nei test. La misura Xdebug corrente è 86,13% linee e 77,55% branch.
+- **Test frontend**: 332 casi Jest in 32 suite. Oltre a utility, store e service copre la shell, routing, interceptor, pagine Overview/Assistant/Copilot, generazione e anteprima comunicazioni, upload e componenti condivisi. `sub-document-list` raggiunge 99,20% statement, 100% funzioni e 76,62% branch. La misura complessiva corrente è 97,91% statement, 96,54% funzioni e 90,72% branch.
+- **Quality gate**: Pint (stile), Larastan (statico), Redocly (OpenAPI), verifica del client generato committato, minimi coverage globali rigidi senza tolleranza, coverage del codice modificato all'80%, `npm audit` HIGH sulle dipendenze di produzione Node, `composer audit` sulle dipendenze di produzione PHP (`scripts/ci/check-composer-advisories.mjs`), Trivy HIGH/CRITICAL bloccante, terraform fmt/validate, promtool/otelcol validate, axe e pa11y bloccanti.
 - **Flussi critici coperti**: generazione comunicazioni e pipeline documentale sì (unit+feature+smoke integrato). **Scoperti**: SSE streaming end-to-end (testato solo indirettamente) e comportamento del consumer SQS in errore/reinvio (test sul handler ma non sul loop del command).
 - Lo smoke CI verifica anche i vincoli di sicurezza introdotti (404 su `/internal/metrics` esterno, 401 sulle dashboard senza credenziali): i controlli di hardening sono regression-tested.
 
