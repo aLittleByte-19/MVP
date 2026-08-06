@@ -145,7 +145,7 @@ const MONTHS = [
         (saveSendMessageRequested)="saveSendMessage($event)"
       />
 
-      <mvp-section id="copilot-metrics" title="Qualita e performance OCR">
+      <mvp-section id="copilot-metrics" title="Qualità e performance OCR">
         <mvp-metrics-panel [isLoading]="store.loading()" [metrics]="store.copilotMetrics()" />
       </mvp-section>
     </section>

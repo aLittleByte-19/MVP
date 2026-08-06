@@ -74,6 +74,6 @@ describe("OverviewPage", () => {
     error.set(null);
     history.set([]);
     fixture.detectChanges();
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain("Le nuove attivita compariranno qui.");
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain("Le nuove attività compariranno qui.");
   });
 });
