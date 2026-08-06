@@ -17,6 +17,7 @@
 
 ```bash
 docker compose run --rm --no-deps app composer validate --strict
+docker compose run --rm --no-deps app composer audit --locked --no-dev --abandoned=report --format=json | node scripts/ci/check-composer-advisories.mjs
 docker compose run --rm --no-deps app php artisan test
 docker compose run --rm --no-deps app php vendor/bin/pint --test
 docker compose run --rm --no-deps app vendor/bin/phpstan analyse --memory-limit=1G

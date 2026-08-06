@@ -12,7 +12,7 @@ instead of discovering it when the branch is already up for merge.
 
 The pipeline has four jobs through Docker Compose:
 
-- **backend**: builds the app image and runs the PHP checks: Composer manifest validation, Pint (format), Larastan/PHPStan (static analysis), Pest and Xdebug line/branch coverage. Xdebug is installed only when `COMPOSER_INSTALL_DEV=true`, so it is absent from the production image.
+- **backend**: builds the app image and runs the PHP checks: Composer manifest validation, Pint (format), Larastan/PHPStan (static analysis), Pest and Xdebug line/branch coverage, and finally `composer audit` on the production dependencies. Xdebug is installed only when `COMPOSER_INSTALL_DEV=true`, so it is absent from the production image. The audit runs last, like its npm counterpart in the frontend job, so an advisory never hides the test outcome.
 - **frontend**: runs the Angular SPA suite on the Node tool image: OpenAPI contract lint, generated client drift check, ESLint, typecheck, Jest tests with statement/function/branch coverage, production build, and a production-only `npm audit` at HIGH. The typecheck covers the test suites as well as the app (`tsconfig.spec-typecheck.json`): Jest transpiles specs without checking types, so without this step a test could reference fields that do not exist on the generated API model and still pass.
 - **coverage-diff**: downloads the Cobertura and LCOV artifacts from the two test jobs and applies the changed-line gate against `origin/develop` with `diff-cover==10.4.1`. The two stacks are measured in separate invocations, because `diff-cover` refuses XML and LCov reports in the same run; each report only describes its own files, so the two measurements never overlap and no line is counted twice.
 - **stack** (static infrastructure/observability checks (Terraform `fmt`/`init`/`validate`, OTel Collector and Prometheus config), production image build, Trivy scan (`vuln,secret,config` at HIGH/CRITICAL), LocalStack Terraform apply, Angular SPA build and upload to the LocalStack S3 bucket, HTTPS smoke of the served stack (SPA served via the local CDN emulator) a separate Nginx: with deep-link fallback, `/api`/`/health`/`/ready`, blocked surfaces, observability dashboards behind basic auth), accessibility (axe/Pa11y plus an enforced-CSP smoke), and conditional publish of the two custom images (`mvp-app`, `mvp-nginx`) to GHCR.
@@ -26,7 +26,7 @@ All jobs use a `concurrency` group per workflow/ref with `cancel-in-progress`, s
 
 ## Required Gates Before Deployment
 
-- Backend: Composer validation, Pint formatting, Larastan/PHPStan static analysis, Pest tests, line coverage and branch coverage.
+- Backend: Composer validation, Pint formatting, Larastan/PHPStan static analysis, Pest tests, line coverage and branch coverage, production `composer audit`.
 - Frontend: OpenAPI contract lint, generated client drift check, ESLint, typecheck, Jest tests, statement/function/branch coverage, production build, production `npm audit`.
 - Changed code: backend and frontend diff coverage at 80%, measured one stack at a time.
 - OTel Collector and Prometheus config validation.
@@ -35,6 +35,33 @@ All jobs use a `concurrency` group per workflow/ref with `cancel-in-progress`, s
 - LocalStack Terraform apply, Angular SPA build and upload to S3, and HTTPS smoke (SPA serving with deep-link fallback, API, blocked surfaces).
 - Accessibility smoke (axe/Pa11y) and enforced-CSP smoke against the served SPA.
 - Container image build (and conditional GHCR publish).
+
+## Dependency advisory gates
+
+Node and PHP dependencies are both audited, but the two ecosystems need different thresholds.
+
+`npm audit --omit=dev --audit-level=high` is enough on the Node side: the npm advisory database
+always carries a severity, so filtering on it is reliable.
+
+PHP needs `scripts/ci/check-composer-advisories.mjs`, because `composer audit` cannot filter by
+severity at all — it either passes or fails on everything. The script reads the JSON report and
+fails on `high`, `critical` **and on advisories with no severity declared**, letting only explicit
+`low` and `moderate` through. That last case is not a corner case: the PHP advisory source
+(`FriendsOfPHP/security-advisories`) often leaves `severity` at `null`, as it did for
+CVE-2026-54133 on `mtdowling/jmespath.php`, which GitHub rates 9.8 critical. A gate filtering
+strictly on `high` would have let that one through.
+
+Two flags carry weight:
+
+- `--locked` audits what the lockfile declares instead of the `vendor/` baked into the image, so
+  the gate does not silently describe whatever was installed when the image was last built.
+- `--abandoned=report` is required, not cosmetic: the project config sets `audit.abandoned` to
+  `fail`, so without it the job would break the day a package is marked abandoned — which is not a
+  vulnerability.
+
+When an advisory cannot be fixed because it depends on an upstream release, declare it in
+`composer.json` under `config.audit.ignore` with a reason, so the exception is explicit and
+reviewable, instead of weakening the gate for everything.
 
 ## Coverage gates
 
