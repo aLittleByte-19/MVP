@@ -270,3 +270,71 @@ test('partial manual date without usable AI date leaves the AI date untouched', 
 
     expect($subDocument->fresh()->extractedData->document_date)->toBeNull();
 });
+
+test('declared metadata does not stand in for fields the model failed to extract', function () {
+    config(['services.bedrock.mvp_confidence_threshold' => 80]);
+    // Azienda e data sono dichiarate in upload, quindi restano fuori dal calcolo:
+    // l'AI e' valutata su nome e cognome, e ne trova uno solo. Contando anche i
+    // campi dichiarati la completezza risulterebbe 3 su 4 invece di 1 su 2.
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('extractFields')
+            ->once()
+            ->andReturn([
+                'employee_first_name' => 'Mario',
+                'employee_last_name' => null,
+                'company_name' => null,
+                'document_date' => null,
+                'document_type' => null,
+                'description' => 'Estratto AI',
+                'confidence_score' => 95,
+            ]);
+    });
+
+    $subDocument = SubDocument::factory()->create();
+    $subDocument->originalDocument->update([
+        'manual_company_name' => 'Acme Srl',
+        'manual_reference_month' => 3,
+        'manual_reference_year' => 2026,
+    ]);
+
+    app(DocumentProcessingService::class)->extractAndSaveFields($subDocument->fresh(['originalDocument']));
+
+    $extracted = $subDocument->fresh()->extractedData;
+
+    // I campi dichiarati sono comunque persistiti, ma non concorrono al punteggio.
+    expect($extracted->company_name)->toBe('Acme Srl')
+        ->and($extracted->document_date?->toDateString())->toBe('2026-03-01')
+        ->and($extracted->confidence_score)->toBe(49)
+        ->and($subDocument->fresh()->review_status)->toBe(ReviewStatus::NeedsReview);
+});
+
+test('declaring metadata does not penalise a model that extracts what is left to it', function () {
+    config(['services.bedrock.mvp_confidence_threshold' => 80]);
+    // Stessi campi dichiarati del caso precedente, ma qui l'AI trova entrambi i
+    // campi rimasti a suo carico: la confidenza resta quella della scansione.
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('extractFields')
+            ->once()
+            ->andReturn([
+                'employee_first_name' => 'Mario',
+                'employee_last_name' => 'Rossi',
+                'company_name' => null,
+                'document_date' => null,
+                'document_type' => null,
+                'description' => 'Estratto AI',
+                'confidence_score' => 95,
+            ]);
+    });
+
+    $subDocument = SubDocument::factory()->create();
+    $subDocument->originalDocument->update([
+        'manual_company_name' => 'Acme Srl',
+        'manual_reference_month' => 3,
+        'manual_reference_year' => 2026,
+    ]);
+
+    app(DocumentProcessingService::class)->extractAndSaveFields($subDocument->fresh(['originalDocument']));
+
+    expect($subDocument->fresh()->extractedData->confidence_score)->toBe(98)
+        ->and($subDocument->fresh()->review_status)->toBe(ReviewStatus::AutoValidated);
+});
