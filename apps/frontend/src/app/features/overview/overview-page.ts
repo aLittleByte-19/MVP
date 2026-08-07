@@ -33,7 +33,7 @@ import { formatFallback } from "../../shared/util/formatters";
         <p class="eyebrow">Console operativa</p>
         <h2>Gestione assistita di comunicazioni interne e documenti del personale.</h2>
         <p>
-          NEXUM supporta redattori HR e operatori CdL nelle attivita quotidiane: preparazione dei contenuti,
+          NEXUM supporta redattori HR e operatori CdL nelle attività quotidiane: preparazione dei contenuti,
           classificazione documentale, verifica degli esiti e tracciamento delle consegne.
         </p>
         <div class="buttonRow">
@@ -56,12 +56,12 @@ import { formatFallback } from "../../shared/util/formatters";
           </li>
           <li>
             <strong>Metriche operative</strong>
-            <span>Controlla volumi, qualita e stato delle attivita direttamente nelle pagine degli strumenti.</span>
+            <span>Controlla volumi, qualità e stato delle attività direttamente nelle pagine degli strumenti.</span>
           </li>
         </ul>
       </mvp-section>
 
-      <mvp-section id="overview-priorities" title="Priorita essenziali">
+      <mvp-section id="overview-priorities" title="Priorità essenziali">
         <div class="priorityGrid">
           <mvp-metric-card label="Bozze generate" [value]="generatedDrafts()" />
           <mvp-metric-card label="Documenti da verificare" [value]="documentsToReview()" />
@@ -82,7 +82,7 @@ import { formatFallback } from "../../shared/util/formatters";
         </div>
       </mvp-section>
 
-      <mvp-section title="Attivita recenti">
+      <mvp-section title="Attività recenti">
         @if (communications().length) {
           <div class="tableWrapper">
             <table class="table">
@@ -109,7 +109,7 @@ import { formatFallback } from "../../shared/util/formatters";
             </table>
           </div>
         } @else {
-          <mvp-empty-state>Le nuove attivita compariranno qui.</mvp-empty-state>
+          <mvp-empty-state>Le nuove attività compariranno qui.</mvp-empty-state>
         }
       </mvp-section>
     </section>

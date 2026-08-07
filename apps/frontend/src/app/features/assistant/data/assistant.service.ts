@@ -8,7 +8,10 @@ import type {
   MvpState,
   RateCommunicationRequest,
   RateCommunicationResponse,
+  SavePromptConfigurationRequest,
+  SavePromptConfigurationResponse,
   StartCommunicationGenerationResponse,
+  UpdateCommunicationFavoriteResponse,
   UpdateCommunicationRequest,
   UpdateCommunicationResponse
 } from "../../../../api/generated/model";
@@ -167,6 +170,17 @@ export class AssistantService {
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 
+  /**
+   * Rende la bozza visibile nello storico (UC-9). Il salvataggio decide solo
+   * cosa compare nell'elenco: la bozza resta modificabile e rigenerabile,
+   * solo lo scarto ne blocca il contenuto.
+   */
+  saveToHistory(communicationId: number): Observable<CommunicationMutationResponse> {
+    return this.api
+      .saveMvpCommunication(communicationId)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
   deleteFromHistory(communicationId: number): Observable<DeleteDocumentResponse> {
     return this.api
       .deleteMvpCommunication(communicationId)
@@ -185,10 +199,23 @@ export class AssistantService {
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 
+  /** Salva la configurazione corrente del prompt nello storico (UC-19). */
+  saveConfiguration(payload: SavePromptConfigurationRequest): Observable<SavePromptConfigurationResponse> {
+    return this.api
+      .saveMvpPromptConfiguration(payload)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  deleteConfiguration(configurationId: number): Observable<DeleteDocumentResponse> {
+    return this.api
+      .deleteMvpPromptConfiguration(configurationId)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
   /**
    * Storico filtrato (UC-15..UC-18): i criteri viaggiano al backend, che resta
-   * l'unica autorita' sui dati. Le bozze scartate restano escluse, come nello
-   * storico di `state.assistant.history`.
+   * l'unica autorita' sui dati. Comprende le sole bozze salvate esplicitamente,
+   * come lo storico di `state.assistant.history`.
    */
   searchCommunications(filters: CommunicationFilters): Observable<Communication[]> {
     return this.api
@@ -199,6 +226,18 @@ export class AssistantService {
         date: filters.date ?? undefined
       })
       .pipe(map((response) => response.items));
+  }
+
+  favorite(communicationId: number): Observable<UpdateCommunicationFavoriteResponse> {
+    return this.api
+      .favoriteMvpCommunication(communicationId)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  unfavorite(communicationId: number): Observable<UpdateCommunicationFavoriteResponse> {
+    return this.api
+      .unfavoriteMvpCommunication(communicationId)
+      .pipe(tap((response) => this.store.setState(response.state)));
   }
 
 }

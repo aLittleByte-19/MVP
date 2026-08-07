@@ -20,6 +20,7 @@ import { getReviewStatusTone, getSendStatusTone } from "../../../shared/util/sta
               <th scope="col" data-column="document">Documento</th>
               <th scope="col" data-column="file">File</th>
               <th scope="col" data-column="date">Data</th>
+              <th scope="col" data-column="uploadedAt">Caricato il</th>
               <th scope="col" data-column="confidence">Conf.</th>
               <th scope="col" data-column="status">Stato</th>
               <th scope="col" data-column="send-status">Invio</th>
@@ -41,6 +42,9 @@ import { getReviewStatusTone, getSendStatusTone } from "../../../shared/util/sta
                 <td data-column="file" data-label="File">{{ formatFallback(documentItem.file) }}</td>
                 <td data-column="date" data-label="Data">
                   <span class="date">{{ formatDateForDisplay(documentItem.documentDate) }}</span>
+                </td>
+                <td data-column="uploadedAt" data-label="Caricato il">
+                  <span class="stamp">{{ formatFallback(documentItem.uploadedAt) }}</span>
                 </td>
                 <td data-column="confidence" data-label="Conf.">
                   {{ formatFallback(documentItem.confidence, "Da verificare") }}

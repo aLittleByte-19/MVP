@@ -8,7 +8,7 @@ use Illuminate\Validation\Rule;
 
 class GenerateCommunicationRequest extends FormRequest
 {
-    private const TONES = [
+    public const TONES = [
         'Chiaro e diretto',
         'Più istituzionale',
         'Più sintetico',
@@ -16,7 +16,7 @@ class GenerateCommunicationRequest extends FormRequest
         'Tecnico',
     ];
 
-    private const STYLES = [
+    public const STYLES = [
         'Testo informativo',
         'Avviso operativo',
         'Aggiornamento breve',

@@ -36,6 +36,7 @@ class CommunicationCoverController
     ): JsonResponse {
         $actor = $this->actor($request);
         $this->assertCommunicationOwnership($communication, $actor);
+        $this->assertCommunicationIsEditable($communication);
 
         /** @var UploadedFile $file */
         $file = $request->file('image');
@@ -72,6 +73,7 @@ class CommunicationCoverController
     ): JsonResponse {
         $actor = $this->actor($request);
         $this->assertCommunicationOwnership($communication, $actor);
+        $this->assertCommunicationIsEditable($communication);
 
         $covers->remove($communication);
 

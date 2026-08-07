@@ -5,6 +5,7 @@ namespace App\Mvp\Support;
 use App\Models\Communication;
 use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
+use App\Models\PromptConfiguration;
 use App\Models\SubDocument;
 use App\Mvp\Communications\Enums\CommunicationStatus;
 use App\Mvp\Documents\Enums\ReviewStatus;
@@ -38,13 +39,21 @@ class MvpStateService
         $drafts = (clone $baseQuery)->where('status', CommunicationStatus::Draft)->count();
         $rated = (clone $baseQuery)->whereNotNull('rating')->count();
         $averageRating = (clone $baseQuery)->whereNotNull('rating')->avg('rating');
-        // Una bozza scartata (UC-7) resta tracciata (audit, metrica Prometheus per
-        // stato) ma non deve piu' comparire nell'area di lavoro dell'operatore:
-        // e' li' che l'utente si aspetta di vederla sparire, non solo etichettata.
+        // Una bozza entra nello storico solo dopo un salvataggio esplicito
+        // (UC-9): finche' resta draft, o dopo uno scarto (UC-7), non deve
+        // comparire qui, e' l'operatore a decidere cosa fissare nello storico.
         $history = (clone $baseQuery)
-            ->where('status', '!=', CommunicationStatus::Discarded)
+            ->where('status', CommunicationStatus::Approved)
             ->latest()
             ->limit(10)
+            ->get();
+        // Preset di prompt salvati (UC-19): elenco limitato, non filtrabile,
+        // pensato per un riuso rapido dal form di generazione, non come
+        // archivio ricercabile.
+        $promptConfigurations = PromptConfiguration::query()
+            ->where('tenant_id', $actor->tenantId)
+            ->latest()
+            ->limit(20)
             ->get();
 
         return [
@@ -62,6 +71,24 @@ class MvpStateService
                 ],
             ],
             'history' => $history->map(fn ($communication) => $this->communication($communication))->values()->all(),
+            'promptConfigurations' => $promptConfigurations->map(fn ($configuration) => $this->promptConfiguration($configuration))->values()->all(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function promptConfiguration(PromptConfiguration $configuration): array
+    {
+        return [
+            'id' => $configuration->id,
+            'name' => $configuration->name,
+            'prompt' => $configuration->prompt,
+            'tone' => $configuration->tone,
+            'style' => $configuration->style,
+            // ISO, non formattata per la lettura: serve anche a filtrare per
+            // data lato frontend (vedi formatDateForDisplay in assistant-page).
+            'createdAt' => $configuration->created_at?->format('Y-m-d'),
         ];
     }
 
@@ -121,6 +148,7 @@ class MvpStateService
             'error' => $communication->error_message,
             'status' => $communication->status->label(),
             'statusValue' => $communication->status->value,
+            'isFavorite' => (bool) $communication->is_favorite,
             'createdAt' => $communication->created_at?->format('d/m/Y H:i'),
             'rating' => $communication->rating,
             'ratingComment' => $communication->rating_comment,
@@ -179,6 +207,7 @@ class MvpStateService
             'employee' => $employee !== '' ? $employee : null,
             'companyName' => $data?->company_name,
             'recipientEmail' => $data?->recipient_email,
+            'uploadedAt' => $original?->created_at?->format('d/m/Y H:i'),
             'fiscalCode' => $data?->fiscal_code,
             'employeeId' => $data?->employee_id,
             'file' => $original?->original_filename,

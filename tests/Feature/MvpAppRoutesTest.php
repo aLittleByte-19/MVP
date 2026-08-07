@@ -308,6 +308,103 @@ test('workflow audit events keep the correlation id carried by the message', fun
         ->and($event->correlation_id)->toBe('corr-42');
 });
 
+test('document upload stores manual metadata and preserves it over AI extraction', function () {
+    config([
+        'filesystems.default' => 's3',
+    ]);
+
+    Queue::fake();
+    Storage::fake('s3');
+    mvpMockWorkflowStart($this);
+
+    $this->mock(BedrockService::class, function ($mock) {
+        $mock->shouldReceive('splitDocument')
+            ->once()
+            ->andReturn([
+                ['employee_name' => 'Mario Rossi', 'start_page' => 1, 'end_page' => 1],
+            ]);
+
+        $mock->shouldReceive('extractFields')
+            ->once()
+            ->andReturn([
+                'employee_first_name' => 'Mario',
+                'employee_last_name' => 'Rossi',
+                'company_name' => 'Valore AI',
+                'document_date' => '2024-01-15',
+                'document_type' => 'lettera',
+                'description' => 'Estratto AI',
+                'confidence_score' => 86,
+            ]);
+    });
+
+    $this->post('/api/v1/documents/ocr', [
+        'document' => mvpPdfUpload(),
+        'documentType' => 'cedolino',
+        'companyName' => 'Acme Srl',
+        'month' => 3,
+        'year' => 2026,
+    ])->assertStatus(202);
+
+    $document = OriginalDocument::query()->first();
+
+    expect($document->manual_document_type)->toBe('cedolino')
+        ->and($document->manual_company_name)->toBe('Acme Srl')
+        ->and($document->manual_reference_month)->toBe(3)
+        ->and($document->manual_reference_year)->toBe(2026)
+        ->and($document->hasManualUploadMetadata())->toBeTrue();
+
+    $document->update(['ocr_text' => "[Pagina 1]\nMario Rossi", 'ocr_confidence_avg' => 97.5]);
+    mvpRunWorkflowTask($document);
+
+    $extracted = ExtractedData::query()->first();
+
+    expect($extracted->document_type)->toBe('cedolino')
+        ->and($extracted->company_name)->toBe('Acme Srl')
+        ->and($extracted->document_date?->toDateString())->toBe('2026-03-01')
+        ->and($extracted->ai_payload['document_type'])->toBe('lettera')
+        ->and($extracted->ai_payload['company_name'])->toBe('Valore AI');
+});
+
+test('document upload treats blank manual metadata as absent', function () {
+    config([
+        'filesystems.default' => 's3',
+    ]);
+
+    Queue::fake();
+    Storage::fake('s3');
+    mvpMockWorkflowStart($this);
+
+    $this->post('/api/v1/documents/ocr', [
+        'document' => mvpPdfUpload(),
+        'documentType' => '',
+        'companyName' => '   ',
+    ])->assertStatus(202);
+
+    $document = OriginalDocument::query()->first();
+
+    expect($document->manual_document_type)->toBeNull()
+        ->and($document->manual_company_name)->toBeNull()
+        ->and($document->manual_reference_month)->toBeNull()
+        ->and($document->manual_reference_year)->toBeNull()
+        ->and($document->hasManualUploadMetadata())->toBeFalse();
+});
+
+test('document upload rejects invalid manual metadata values', function () {
+    Storage::fake('s3');
+    mvpMockWorkflowNotStarted();
+
+    $this->post('/api/v1/documents/ocr', [
+        'document' => mvpPdfUpload(),
+        'documentType' => 'tipologia-non-valida',
+        'month' => 13,
+        'year' => 1800,
+    ])
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+
+    expect(OriginalDocument::query()->count())->toBe(0);
+});
+
 test('document upload performs initial split and field extraction', function () {
     config([
         'filesystems.default' => 's3',
@@ -887,9 +984,10 @@ test('editing rejects cross tenant access', function () {
     expect($communication->refresh()->generated_title)->not->toBe('Titolo');
 });
 
-test('the communication index excludes discarded drafts, like the history', function () {
+test('the communication index only returns communications saved to history, not drafts or discarded ones', function () {
     Communication::factory()->draft()->create();
     Communication::factory()->discarded()->create();
+    Communication::factory()->approved()->create();
 
     $response = $this->getJson('/api/v1/communications')->assertOk();
 
@@ -897,12 +995,12 @@ test('the communication index excludes discarded drafts, like the history', func
 });
 
 test('the communication index filters by keyword, tone and style', function () {
-    $target = Communication::factory()->draft()->create([
+    $target = Communication::factory()->approved()->create([
         'prompt' => 'Comunicazione sulla nuova area documentale',
         'tone' => 'Chiaro e diretto',
         'style' => 'Testo informativo',
     ]);
-    Communication::factory()->draft()->create([
+    Communication::factory()->approved()->create([
         'prompt' => 'Avviso ferie estive',
         'tone' => 'Più istituzionale',
         'style' => 'Comunicato',
@@ -924,9 +1022,9 @@ test('the communication index filters by keyword, tone and style', function () {
 });
 
 test('the communication index filters by creation day', function () {
-    $old = Communication::factory()->draft()->create();
+    $old = Communication::factory()->approved()->create();
     $old->forceFill(['created_at' => '2025-03-04 10:00:00'])->save();
-    Communication::factory()->draft()->create();
+    Communication::factory()->approved()->create();
 
     $this->getJson('/api/v1/communications?date=2025-03-04')
         ->assertOk()
@@ -934,11 +1032,11 @@ test('the communication index filters by creation day', function () {
         ->assertJsonPath('items.0.id', $old->id);
 });
 
-test('the communication index only returns drafts of the caller tenant', function () {
+test('the communication index only returns saved communications of the caller tenant', function () {
     config(['mvp.identity.mode' => 'trusted_headers']);
 
-    Communication::factory()->draft()->create(['tenant_id' => 'mvp-local-tenant']);
-    Communication::factory()->draft()->create(['tenant_id' => 'another-tenant']);
+    Communication::factory()->approved()->create(['tenant_id' => 'mvp-local-tenant']);
+    Communication::factory()->approved()->create(['tenant_id' => 'another-tenant']);
 
     $this->withHeaders([
         'Accept' => 'application/json',
@@ -1193,6 +1291,19 @@ test('operator can upload a manual cover image for a communication draft', funct
     Storage::disk('s3')->assertMissing($previousPath);
 });
 
+test('a discarded communication rejects a manual cover image upload', function () {
+    Storage::fake('s3');
+    config(['mvp.communications.cover_disk' => 's3']);
+
+    $communication = Communication::factory()->discarded()->coverReady()->create();
+
+    $this->withHeader('Accept', 'application/json')
+        ->post("/api/v1/communications/{$communication->id}/cover-image", [
+            'image' => UploadedFile::fake()->image('manual-cover.png', 1280, 720),
+        ])
+        ->assertUnprocessable();
+});
+
 test('operator can download the cover image of a communication', function () {
     Storage::fake('s3');
     config(['mvp.communications.cover_disk' => 's3']);
@@ -1238,6 +1349,18 @@ test('operator can remove a manual cover image from a communication draft', func
         ->and(AuditEvent::query()->where('event_type', 'mvp-communication-cover-removed')->count())->toBe(1);
 
     Storage::disk('s3')->assertMissing($path);
+});
+
+test('a discarded communication rejects a manual cover image removal', function () {
+    Storage::fake('s3');
+    config(['mvp.communications.cover_disk' => 's3']);
+
+    $communication = Communication::factory()->discarded()->coverReady()->create();
+    Storage::disk('s3')->put($communication->cover_image_path, 'copertina');
+
+    $this->withHeader('Accept', 'application/json')
+        ->deleteJson("/api/v1/communications/{$communication->id}/cover-image")
+        ->assertUnprocessable();
 });
 
 test('manual cover upload rejects cross tenant access', function () {
@@ -1421,6 +1544,15 @@ test('a discarded communication cannot be regenerated', function () {
         ->assertUnprocessable();
 });
 
+test('a communication already saved to history can still be regenerated', function () {
+    mvpMockCommunicationWorkflowRegenerate($this);
+
+    $communication = Communication::factory()->approved()->coverReady()->create();
+
+    $this->postJson("/api/v1/communications/{$communication->id}/regenerate")
+        ->assertAccepted();
+});
+
 test('regenerate endpoint rejects cross tenant access', function () {
     config(['mvp.identity.mode' => 'trusted_headers']);
     $communication = Communication::factory()->draft()->coverReady()->create();
@@ -1564,6 +1696,73 @@ test('regenerating a communication replaces text and cover with a new variant', 
     Storage::disk('s3')->assertExists($regenerated->cover_image_path);
 });
 
+test('operator can save a communication draft to history (UC-9)', function () {
+    $communication = Communication::factory()->draft()->coverReady()->create();
+
+    $this->postJson("/api/v1/communications/{$communication->id}/save")
+        ->assertOk()
+        ->assertJsonPath('message', 'Bozza salvata nello storico.')
+        ->assertJsonPath('communication.id', $communication->id)
+        ->assertJsonPath('communication.status', 'Approvata');
+
+    expect($communication->fresh()->status)->toBe(CommunicationStatus::Approved)
+        ->and(AuditEvent::query()->where('event_type', 'mvp-communication-saved')->count())->toBe(1);
+});
+
+test('a saved communication remains visible in the history returned to the operator', function () {
+    $communication = Communication::factory()->draft()->coverReady()->create();
+
+    $this->postJson("/api/v1/communications/{$communication->id}/save")->assertOk();
+
+    $response = $this->getJson('/api/v1/state')->assertOk();
+
+    $historyIds = collect($response->json('assistant.history'))->pluck('id');
+
+    expect($historyIds)->toContain($communication->id);
+});
+
+test('a communication already saved to history cannot be saved again', function () {
+    $communication = Communication::factory()->approved()->create();
+
+    $this->withHeader('Accept', 'application/json')
+        ->postJson("/api/v1/communications/{$communication->id}/save")
+        ->assertUnprocessable();
+});
+
+test('a discarded communication cannot be saved to history', function () {
+    $communication = Communication::factory()->discarded()->create();
+
+    $this->withHeader('Accept', 'application/json')
+        ->postJson("/api/v1/communications/{$communication->id}/save")
+        ->assertUnprocessable();
+});
+
+test('save endpoint rejects cross tenant access', function () {
+    config(['mvp.identity.mode' => 'trusted_headers']);
+    $communication = Communication::factory()->draft()->coverReady()->create();
+
+    $this->withHeaders([
+        'Accept' => 'application/json',
+        'X-Mvp-User-Id' => 'operator-b',
+        'X-Mvp-User-Email' => 'operator-b@example.test',
+        'X-Mvp-Tenant-Id' => 'another-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
+    ])->postJson("/api/v1/communications/{$communication->id}/save")
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
+});
+
+test('a saved communication can still be edited', function () {
+    $communication = Communication::factory()->approved()->create();
+
+    $this->putJson("/api/v1/communications/{$communication->id}", [
+        'title' => 'Nuovo titolo',
+        'body' => 'Nuovo corpo',
+    ])
+        ->assertOk()
+        ->assertJsonPath('communication.title', 'Nuovo titolo');
+});
+
 test('operator can discard a communication draft', function () {
     $communication = Communication::factory()->draft()->coverReady()->create();
 
@@ -1578,7 +1777,7 @@ test('operator can discard a communication draft', function () {
 });
 
 test('a discarded communication no longer appears in the history returned to the operator', function () {
-    $communication = Communication::factory()->draft()->coverReady()->create();
+    $communication = Communication::factory()->approved()->coverReady()->create();
 
     $this->postJson("/api/v1/communications/{$communication->id}/discard")->assertOk();
 
@@ -1587,6 +1786,14 @@ test('a discarded communication no longer appears in the history returned to the
     $historyIds = collect($response->json('assistant.history'))->pluck('id');
 
     expect($historyIds)->not->toContain($communication->id);
+});
+
+test('a draft not yet saved does not appear in the history until UC-9 is completed', function () {
+    Communication::factory()->draft()->create();
+
+    $response = $this->getJson('/api/v1/state')->assertOk();
+
+    expect($response->json('assistant.history'))->toBeEmpty();
 });
 
 test('an already discarded communication cannot be discarded again', function () {

@@ -105,6 +105,37 @@ describe("DocumentWorkflowService", () => {
       expect(FakeEventSource.last?.url).toBe("/api/v1/documents/1/stream");
     });
 
+    it("inoltra i metadati manuali insieme al file", () => {
+      const emissions: DocumentUploadProgress[] = [];
+
+      service
+        .upload(file, {
+          documentType: "cedolino",
+          companyName: "Acme Srl",
+          month: 3,
+          year: 2026
+        })
+        .subscribe((progress) => emissions.push(progress));
+
+      expect(api.uploadMvpDocument).toHaveBeenCalledWith({
+        document: file,
+        documentType: "cedolino",
+        companyName: "Acme Srl",
+        month: 3,
+        year: 2026
+      });
+      expect(emissions[0]?.phase).toBe("queued");
+    });
+
+    it("inoltra solo i metadati presenti senza inventarne altri", () => {
+      service.upload(file, { companyName: "Acme Srl" }).subscribe();
+
+      expect(api.uploadMvpDocument).toHaveBeenCalledWith({
+        document: file,
+        companyName: "Acme Srl"
+      });
+    });
+
     it.each([
       ["pending", 0, "queued", "Documento in coda di elaborazione."],
       ["processing", 0, "processing", "Analisi OCR del documento in corso."],

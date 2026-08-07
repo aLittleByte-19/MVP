@@ -176,8 +176,12 @@
   gap: var(--mvp-space-3);
 }
 
+/* align-content start: le celle della griglia sono alte quanto la piu' alta
+   della riga, e senza questo vincolo il campo affiancato a uno in errore si
+   stirerebbe per riempire lo spazio, disallineando le caselle. */
 .field {
   display: grid;
+  align-content: start;
   gap: var(--mvp-space-1);
   color: var(--mvp-text);
   font-weight: 700;
@@ -265,10 +269,14 @@
   background: var(--mvp-warning-soft);
 }
 
-.fieldError {
+/* Piu' specifico di ".field span": a parita' di peso quella regola vincerebbe
+   e imporrebbe al messaggio lo stile dell'etichetta, cioe' maiuscolo, 800 e
+   colore muted, rendendolo indistinguibile da un titolo di campo. */
+.field .fieldError {
   color: var(--mvp-warning);
-  font-size: var(--mvp-font-xs);
-  font-weight: 700;
+  font-size: var(--mvp-font-sm);
+  font-weight: 600;
+  text-transform: none;
 }
 
 .field select {
@@ -283,6 +291,27 @@
 
 .formFull {
   grid-column: 1 / -1;
+}
+
+.fieldWithAction {
+  display: flex;
+  align-items: center;
+  gap: var(--mvp-space-2);
+}
+
+.fieldWithAction input {
+  flex: 1;
+}
+
+.copyButton {
+  flex-shrink: 0;
+}
+
+.copyFeedback {
+  color: var(--mvp-success);
+  font-size: var(--mvp-font-xs);
+  font-weight: 700;
+  text-transform: none;
 }
 
 .reviewActions {

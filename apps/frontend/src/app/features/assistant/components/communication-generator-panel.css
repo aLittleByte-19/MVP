@@ -25,6 +25,45 @@
   color: var(--mvp-muted);
 }
 
+.config-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mvp-space-2);
+  align-items: center;
+}
+
+.field {
+  display: grid;
+  gap: var(--mvp-space-2);
+  flex-basis: 100%;
+}
+
+.field span {
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-sm);
+  font-weight: 800;
+}
+
+.field input {
+  width: 100%;
+  padding: var(--mvp-space-3);
+  border: 1px solid var(--mvp-border);
+  border-radius: var(--mvp-radius);
+  background: var(--mvp-surface-muted);
+  color: var(--mvp-text);
+}
+
+.warning {
+  flex-basis: 100%;
+  margin: 0;
+  padding: var(--mvp-space-2) var(--mvp-space-3);
+  border: 1px solid color-mix(in srgb, var(--mvp-warning) 50%, transparent);
+  border-radius: var(--mvp-radius);
+  background: color-mix(in srgb, var(--mvp-warning) 14%, var(--mvp-surface));
+  color: var(--mvp-text);
+  font-size: var(--mvp-font-sm);
+}
+
 @media (max-width: 640px) {
   .fieldRow {
     grid-template-columns: 1fr;
