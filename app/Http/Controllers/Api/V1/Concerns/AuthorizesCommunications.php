@@ -42,6 +42,18 @@ trait AuthorizesCommunications
         }
     }
 
+    /**
+     * @throws ValidationException
+     */
+    private function assertCommunicationIsEditable(Communication $communication): void
+    {
+        if ($communication->status === CommunicationStatus::Discarded) {
+            throw ValidationException::withMessages([
+                'communication' => ['Una bozza scartata non e\' modificabile.'],
+            ]);
+        }
+    }
+
     private function assertCommunicationCanRegenerate(Communication $communication): void
     {
         abort_if(

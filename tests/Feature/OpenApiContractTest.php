@@ -3,6 +3,7 @@
 use App\Models\Communication;
 use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
+use App\Models\PromptConfiguration;
 use App\Models\SubDocument;
 use App\Mvp\Communications\Services\CommunicationWorkflowService;
 use App\Mvp\Documents\Services\DocumentWorkflowService;
@@ -72,6 +73,36 @@ test('POST /api/v1/communications con payload invalido rispetta il contratto per
         ->and($response->json('error.correlationId'))->toBeString();
 });
 
+test('POST /api/v1/prompt-configurations rispetta il contratto OpenAPI', function () {
+    $response = $this->postJson('/api/v1/prompt-configurations', [
+        'name' => 'Comunicazione ferie',
+        'prompt' => 'Avvisa il personale delle nuove ferie disponibili da prenotare.',
+        'tone' => 'Chiaro e diretto',
+        'style' => 'Testo informativo',
+    ])->assertCreated();
+
+    OpenApiSpec::assertResponseMatchesContract($response->json(), '/api/v1/prompt-configurations', 'post', '201');
+});
+
+test('POST /api/v1/prompt-configurations con payload invalido rispetta il contratto per il 422', function () {
+    $response = $this->postJson('/api/v1/prompt-configurations', [])->assertUnprocessable();
+
+    OpenApiSpec::assertResponseMatchesContract($response->json(), '/api/v1/prompt-configurations', 'post', '422');
+});
+
+test('DELETE /api/v1/prompt-configurations/{promptConfiguration} rispetta il contratto OpenAPI', function () {
+    $configuration = PromptConfiguration::factory()->create();
+
+    $response = $this->deleteJson("/api/v1/prompt-configurations/{$configuration->id}")->assertOk();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/prompt-configurations/{promptConfiguration}',
+        'delete',
+        '200',
+    );
+});
+
 test('POST /api/v1/communications/{communication}/cover-image rispetta il contratto OpenAPI', function () {
     Storage::fake('s3');
     config(['mvp.communications.cover_disk' => 's3']);
@@ -104,6 +135,58 @@ test('DELETE /api/v1/communications/{communication}/cover-image rispetta il cont
         '/api/v1/communications/{communication}/cover-image',
         'delete',
         '200',
+    );
+});
+
+test('POST /api/v1/communications/{communication}/favorite rispetta il contratto OpenAPI', function () {
+    $communication = Communication::factory()->draft()->create(['is_favorite' => false]);
+
+    $response = $this->postJson("/api/v1/communications/{$communication->id}/favorite")->assertOk();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/favorite',
+        'post',
+        '200',
+    );
+});
+
+test('POST /api/v1/communications/{communication}/favorite gia preferita rispetta il contratto per il 422', function () {
+    $communication = Communication::factory()->draft()->favorite()->create();
+
+    $response = $this->postJson("/api/v1/communications/{$communication->id}/favorite")->assertUnprocessable();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/favorite',
+        'post',
+        '422',
+    );
+});
+
+test('DELETE /api/v1/communications/{communication}/favorite rispetta il contratto OpenAPI', function () {
+    $communication = Communication::factory()->draft()->favorite()->create();
+
+    $response = $this->deleteJson("/api/v1/communications/{$communication->id}/favorite")->assertOk();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/favorite',
+        'delete',
+        '200',
+    );
+});
+
+test('DELETE /api/v1/communications/{communication}/favorite non preferita rispetta il contratto per il 422', function () {
+    $communication = Communication::factory()->draft()->create(['is_favorite' => false]);
+
+    $response = $this->deleteJson("/api/v1/communications/{$communication->id}/favorite")->assertUnprocessable();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/communications/{communication}/favorite',
+        'delete',
+        '422',
     );
 });
 

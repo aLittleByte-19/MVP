@@ -30,7 +30,7 @@ export const mvpNavGroups: SidebarNavGroup[] = [
         label: "Overview",
         children: [
           { label: "Moduli", targetId: "overview-modules" },
-          { label: "Priorita", targetId: "overview-priorities" }
+          { label: "Priorità", targetId: "overview-priorities" }
         ]
       }
     ]

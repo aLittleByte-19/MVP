@@ -63,7 +63,11 @@ I due contenuti hanno criticità diverse e sono trattati di conseguenza: senza t
 
 A generazione conclusa l’operatore può aprire l’anteprima del documento finale impaginato ed esportarlo in PDF. Ogni pagina riporta il marcatore «Creato da AI Assistant», così la provenienza del contenuto resta leggibile anche fuori dall’applicativo. Il PDF viene materializzato sullo storage a oggetti alla prima richiesta e riusato finché il contenuto non cambia.
 
-Sulla bozza l’operatore mantiene il controllo: può correggere a mano titolo e testo finché è in lavorazione, chiedere una nuova variante che rigenera testo e copertina conservando prompt, tono e stile, scartarla mantenendola tracciata, oppure eliminarla definitivamente dallo storico. Può inoltre assegnare una valutazione da 1 a 5 stelle con un commento facoltativo, una sola volta per generazione: è il segnale di qualità percepita, esposto anche come metrica. Lo storico è filtrabile per parola chiave, tono, stile e giorno di creazione, con i criteri applicati lato API.
+Sulla bozza l’operatore mantiene il controllo: può correggere a mano titolo e testo, chiedere una nuova variante che rigenera testo e copertina conservando prompt, tono e stile, scartarla mantenendola tracciata, oppure eliminarla definitivamente dallo storico. Può inoltre assegnare una valutazione da 1 a 5 stelle con un commento facoltativo, una sola volta per generazione: è il segnale di qualità percepita, esposto anche come metrica.
+
+Nello storico entra solo ciò che l’operatore decide di conservare: una bozza vi compare dopo un salvataggio esplicito, e finché non lo riceve resta nell’area di lavoro corrente. Il salvataggio decide cosa viene archiviato, non congela il contenuto, che resta modificabile e rigenerabile come prima. Le generazioni archiviate si possono contrassegnare come preferite e lo storico è filtrabile per parola chiave, tono, stile e giorno di creazione, con i criteri applicati lato API.
+
+I parametri di partenza si possono riusare senza ripartire da zero: testo, tono e stile del form si salvano come preset con un nome a scelta, e se il nome manca o è già in uso il sistema ne assegna uno progressivo. Riaprire un preset ricompila il form senza avviare alcuna generazione.
 
 Il flusso evidenzia il ruolo del backend come livello di controllo tra interfaccia e modello AI: il provider genera il contenuto, mentre l’applicazione mantiene responsabilità su validazione, persistenza, stato e tracciabilità.
 
@@ -71,11 +75,13 @@ Il flusso evidenzia il ruolo del backend come livello di controllo tra interfacc
 
 Il flusso Co-Pilot documentale gestisce PDF multi-destinatario caricati dall’operatore. Dopo l’upload, il backend valida il file, registra il documento originale, salva il contenuto nello storage S3-compatible e avvia una state machine in LocalStack Step Functions.
 
+Chi carica il documento può dichiararne fin da subito tipologia, azienda, mese e anno. Sono tutti facoltativi, ma quello che dichiara fa fede: l’AI continua a produrre la propria estrazione, che resta consultabile, e i campi indicati a mano non vengono sovrascritti. Dichiararli non gonfia però la confidenza, che misura quanto ha riconosciuto il modello e quindi valuta soltanto i campi rimasti a suo carico.
+
 La state machine pubblica task su SQS usando il callback pattern con task token. I worker Laravel consumano i messaggi, eseguono le fasi previste e notificano a Step Functions il completamento o il fallimento del task. Le fasi principali comprendono OCR, split logico del documento, estrazione dei dati, generazione dei sotto-documenti, aggiornamento dello stato e registrazione degli eventi applicativi.
 
 Il risultato è una pipeline documentale composta da passaggi isolati, monitorabili e riavviabili, con persistenza dello stato e visibilità sui risultati prodotti.
 
-Sui sotto-documenti prodotti l’operatore lavora in revisione human-in-the-loop: corregge i campi estratti (inclusi email destinatario, codice fiscale e matricola, con validazione dedicata) e li marca come validati. Da ogni sotto-documento il sistema compone un messaggio di invio precompilato con destinatario, oggetto e testo, che si può correggere, visualizzare in anteprima ed esportare in PDF. Il recapito avviene fuori dalla piattaforma tramite canali terzi: per questo lo stato di invio coincide con l’avvenuto **scaricamento** del PDF, e non con un invio effettuato dal sistema. Lo storico dei documenti è filtrabile per nome, cognome o azienda, stato di invio, soglia di confidenza e periodo, sempre con i criteri applicati lato API e limitati al tenant chiamante.
+Sui sotto-documenti prodotti l’operatore lavora in revisione human-in-the-loop: corregge i campi estratti (inclusi email destinatario, codice fiscale e matricola, con validazione dedicata) e li marca come validati. Il dettaglio riporta anche l’email del destinatario, copiabile negli appunti con un comando, e la data e ora di caricamento del documento di origine. Da ogni sotto-documento il sistema compone un messaggio di invio precompilato con destinatario, oggetto e testo, che si può correggere, visualizzare in anteprima ed esportare in PDF. Il recapito avviene fuori dalla piattaforma tramite canali terzi: per questo lo stato di invio coincide con l’avvenuto **scaricamento** del PDF, e non con un invio effettuato dal sistema. Lo storico dei documenti è filtrabile per nome, cognome o azienda, stato di invio, soglia di confidenza e periodo, sempre con i criteri applicati lato API e limitati al tenant chiamante.
 
 ## Monitoring e osservabilità
 

@@ -56,28 +56,30 @@ import {
             <p class="warning" role="status">{{ currentDraft.coverError }}</p>
           }
 
-          <div class="cover-actions">
-            <input
-              #coverInput
-              class="cover-input"
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              [disabled]="isUpdatingCover()"
-              (change)="onCoverSelected($event)"
-            />
-            <button mvpButton type="button" variant="secondary" [disabled]="isUpdatingCover()" (click)="coverInput.click()">
-              Cambia immagine
-            </button>
-            <button
-              mvpButton
-              type="button"
-              variant="secondary"
-              [disabled]="isUpdatingCover() || !hasCover(currentDraft)"
-              (click)="removeCover.emit()"
-            >
-              Rimuovi immagine
-            </button>
-          </div>
+          @if (!isDiscarded(currentDraft)) {
+            <div class="cover-actions">
+              <input
+                #coverInput
+                class="cover-input"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                [disabled]="isUpdatingCover()"
+                (change)="onCoverSelected($event)"
+              />
+              <button mvpButton type="button" variant="secondary" [disabled]="isUpdatingCover()" (click)="coverInput.click()">
+                Cambia immagine
+              </button>
+              <button
+                mvpButton
+                type="button"
+                variant="secondary"
+                [disabled]="isUpdatingCover() || !hasCover(currentDraft)"
+                (click)="removeCover.emit()"
+              >
+                Rimuovi immagine
+              </button>
+            </div>
+          }
           @if (saveError()) {
             <p class="errorNote">{{ saveError() }}</p>
           }
@@ -105,7 +107,7 @@ import {
                   <svg lucideSave aria-hidden="true"></svg>
                   {{ isSaving() ? "Salvataggio" : "Salva" }}
                 </button>
-              } @else if (currentDraft.statusValue === "draft") {
+              } @else if (!isDiscarded(currentDraft)) {
                 <button mvpButton variant="secondary" type="button" (click)="startEdit(currentDraft)">
                   <svg lucidePencil aria-hidden="true"></svg>
                   Modifica
@@ -185,18 +187,30 @@ import {
           </div>
           <div class="review-actions">
             @if (!isDiscarded(currentDraft)) {
+              @if (!isApproved(currentDraft)) {
+                <button
+                  mvpButton
+                  type="button"
+                  [disabled]="isGenerating() || isDiscarding() || isSavingToHistory()"
+                  (click)="saveToHistory.emit()"
+                >
+                  {{ isSavingToHistory() ? "Salvataggio in corso…" : "Salva nello storico" }}
+                </button>
+              }
               <button
                 mvpButton
                 type="button"
                 variant="secondary"
-                [disabled]="isGenerating() || isDiscarding()"
+                [disabled]="isGenerating() || isDiscarding() || isSavingToHistory()"
                 (click)="regenerate.emit()"
               >
                 Rigenera bozza
               </button>
+            }
+            @if (!isDiscarded(currentDraft)) {
               @if (isConfirmingDiscard()) {
                 <p class="warning" role="status">
-                  Sei sicuro di voler scartare questa bozza? Non sara' piu' modificabile ne' rigenerabile.
+                  Sei sicuro di voler scartare questa bozza? Non sarà più modificabile né rigenerabile.
                 </p>
                 <button mvpButton type="button" [disabled]="isDiscarding()" (click)="discard.emit()">
                   Conferma eliminazione
@@ -236,6 +250,7 @@ export class GeneratedCommunicationPreviewComponent {
   readonly isUpdatingCover = input<boolean>(false);
   readonly isGenerating = input<boolean>(false);
   readonly isDiscarding = input<boolean>(false);
+  readonly isSavingToHistory = input<boolean>(false);
   readonly isRating = input(false);
   readonly rateError = input<string | null>(null);
   readonly isSaving = input<boolean>(false);
@@ -244,6 +259,7 @@ export class GeneratedCommunicationPreviewComponent {
   readonly removeCover = output<void>();
   readonly regenerate = output<void>();
   readonly discard = output<void>();
+  readonly saveToHistory = output<void>();
   readonly rate = output<RateDraftPayload>();
   readonly saveRequested = output<{ communicationId: number; payload: UpdateCommunicationRequest }>();
 
@@ -323,6 +339,10 @@ export class GeneratedCommunicationPreviewComponent {
 
   protected isDiscarded(draft: GeneratedDraft): boolean {
     return draft.status === "Scartata";
+  }
+
+  protected isApproved(draft: GeneratedDraft): boolean {
+    return draft.status === "Approvata";
   }
 
   protected isReadyForPreview(draft: GeneratedDraft): boolean {

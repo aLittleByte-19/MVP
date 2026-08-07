@@ -33,9 +33,11 @@
   border-bottom: 0;
 }
 
+/* Le larghezze sommano a 100%: con table-layout fixed una colonna senza
+   regola resterebbe a zero, mandando il contenuto sopra quelle adiacenti. */
 .table th[data-column="recipient"],
 .table td[data-column="recipient"] {
-  width: 18%;
+  width: 14%;
 }
 
 .table th[data-column="document"],
@@ -45,22 +47,27 @@
 
 .table th[data-column="file"],
 .table td[data-column="file"] {
-  width: 18%;
+  width: 11%;
 }
 
 .table th[data-column="date"],
 .table td[data-column="date"] {
-  width: 10%;
+  width: 9%;
+}
+
+.table th[data-column="uploadedAt"],
+.table td[data-column="uploadedAt"] {
+  width: 11%;
 }
 
 .table th[data-column="confidence"],
 .table td[data-column="confidence"] {
-  width: 7%;
+  width: 6%;
 }
 
 .table th[data-column="status"],
 .table td[data-column="status"] {
-  width: 15%;
+  width: 16%;
 }
 
 .table th[data-column="send-status"],
@@ -70,7 +77,7 @@
 
 .table th[data-column="actions"],
 .table td[data-column="actions"] {
-  width: 11%;
+  width: 12%;
 }
 
 .table td[data-column="actions"] {

@@ -35,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property CoverImageStatus $cover_status
  * @property string|null $cover_error
  * @property CommunicationStatus $status
+ * @property bool $is_favorite
  * @property int|null $rating
  * @property string|null $rating_comment
  * @property Carbon|null $rated_at
@@ -68,6 +69,7 @@ class Communication extends Model
         'cover_status',
         'cover_error',
         'status',
+        'is_favorite',
         'rating',
         'rating_comment',
         'rated_at',
@@ -81,6 +83,7 @@ class Communication extends Model
     {
         return [
             'status' => CommunicationStatus::class,
+            'is_favorite' => 'boolean',
             'generation_status' => CommunicationGenerationStatus::class,
             'cover_image_source' => CoverImageSource::class,
             'cover_status' => CoverImageStatus::class,

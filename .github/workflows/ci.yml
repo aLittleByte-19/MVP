@@ -150,6 +150,20 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      # Controparte PHP dell'audit npm del job frontend: come quello, guarda le
+      # sole dipendenze di produzione ed e' in coda, cosi' un advisory non
+      # nasconde l'esito dei test. I pacchetti abbandonati vengono riportati ma
+      # non fanno fallire il job: non sono vulnerabilita'.
+      # --locked audita quanto dichiarato dal lock, non il vendor cotto
+      # nell'immagine, cosi' il gate resta indipendente dal momento del build.
+      # La soglia e' applicata dallo script: composer da solo fallisce su
+      # qualsiasi severita' e non sa filtrarla.
+      - name: Audit production PHP dependencies
+        run: >
+          docker compose run --rm --no-deps app
+          composer audit --locked --no-dev --abandoned=report --format=json
+          | node scripts/ci/check-composer-advisories.mjs
+
   frontend:
     name: Frontend checks
     runs-on: ubuntu-latest

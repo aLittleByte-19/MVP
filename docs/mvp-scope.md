@@ -28,33 +28,39 @@ Incluso:
 - validazione del prompt;
 - persistenza della bozza generata (stato `draft`);
 - immagine di copertina generata dall'AI, con sostituzione manuale e rimozione;
-- storico delle generazioni con riapertura dell'anteprima di una bozza selezionata;
+- storico dei soli contenuti salvati (stato "Approvata"), con riapertura dell'anteprima di una
+  voce selezionata; una bozza non ancora salvata non vi compare (UC-9);
 - filtri dello storico per parola chiave, tono, stile e data (UC-15..UC-18);
 - modifica manuale persistente di titolo e testo della bozza, con annullamento prima del
-  salvataggio; la modifica è consentita solo finché la bozza è in stato `draft`;
+  salvataggio; consentita finché la bozza non è stata scartata;
 - richiesta di una nuova variante della bozza corrente, che sostituisce testo e copertina
-  mantenendo prompt, tono e stile (UC-6);
+  mantenendo prompt, tono e stile (UC-6); consentita anche dopo il salvataggio in storico;
+- salvataggio esplicito della bozza nello storico (UC-9): solo a questo punto entra nello
+  storico (stato "Approvata"); resta comunque modificabile e rigenerabile come prima;
 - scarto della bozza corrente con conferma, che la esclude dallo storico attivo mantenendola
   tracciata come "Scartata" (UC-7);
 - eliminazione definitiva di un elemento dello storico, con conferma (UC-23);
+- salvataggio della configurazione corrente del prompt (testo, tono, stile) come preset
+  riutilizzabile, con nome libero; se il nome è vuoto o già in uso per il tenant, il sistema
+  assegna un'etichetta progressiva ("Senza nome (1)", "(2)", ...); i preset compaiono nello
+  storico contenuti, filtrabili con gli stessi criteri delle bozze salvate (UC-19);
+- riutilizzo di un preset salvato, che precompila il form senza avviare una nuova generazione;
+  non applicabile a una bozza già salvata, per cui restano modifica e rigenerazione diretta;
 - valutazione 1-5 stelle con commento qualitativo opzionale, una sola per generazione;
 - anteprima del documento finale impaginato, con marcatore di trasparenza "Creato da AI Assistant";
 - esportazione del documento finale in PDF, con lo stesso marcatore di trasparenza;
 - metriche operative (contenuti generati, bozze, stato della generazione e delle copertine,
-  valutazioni ricevute, media stelle).
-
-In corso:
-
-- aggiunta e rimozione di una generazione dai preferiti (UC-21, UC-22);
-- salvataggio e riuso di una configurazione di prompt etichettata (UC-32 e logica di riuso).
+  valutazioni ricevute, media stelle);
+- aggiunta e rimozione di una generazione dai preferiti (UC-21, UC-22).
 
 Fuori scope MVP:
 
 - dashboard analista dedicata (statistiche di utilizzo aggregate oltre alle metriche operative);
-- flusso di approvazione della bozza. Lo stato `approved` esiste nell'enum `CommunicationStatus`
-  e nel vincolo CHECK in migrazione come **predisposizione documentata**, sullo stesso modello
-  dell'identità SES: non ha endpoint, interfaccia né transizione, e non va scambiato per un ramo
-  dimenticato. Il ciclo previsto oggi è bozza → modifica/rigenerazione → scarto o esportazione.
+- flusso di approvazione con revisore dedicato. Lo stato `approved` registra il salvataggio nello
+  storico deciso da chi redige (UC-9), non una validazione da parte di un altro ruolo: non esistono
+  ruoli di revisione, code di approvazione né transizioni oltre a quella del salvataggio. Il ciclo
+  previsto oggi è bozza → modifica/rigenerazione → salvataggio nello storico o scarto, con
+  esportazione disponibile su ogni bozza a generazione conclusa.
 
 La generazione usa il servizio AI configurato. Errori di configurazione, credenziali o modello
 vengono esposti come errori applicativi, senza contenuti sostitutivi. Il testo e la copertina hanno
@@ -74,7 +80,8 @@ Incluso:
 - estrazione dei campi principali tramite Bedrock sul testo OCR (nome/cognome, azienda, data,
   tipologia, descrizione);
 - confidenza calcolata oggettivamente come leggibilità OCR (Textract) ponderata sulla completezza
-  dei campi chiave, non come auto-valutazione del modello;
+  dei campi chiave, non come auto-valutazione del modello; misura la sola estrazione automatica
+  (UC-39.10), quindi i campi dichiarati in fase di caricamento restano fuori dal calcolo;
 - persistenza di documento originale, sotto-documenti e dati estratti;
 - dettaglio documento affiancato (anteprima a sinistra, dati estratti a destra);
 - correzione manuale dei campi estratti e validazione manuale (human-in-the-loop), con errori di
@@ -91,22 +98,18 @@ Incluso:
   nome/cognome/azienda (UC-35), stato di invio (UC-36), soglia di confidenza sopra o sotto un
   valore (UC-37), mese e anno del documento (UC-38);
 - stato `failed` esplicito quando split o estrazione non riescono;
-- metriche operative su documenti elaborati, soglie di confidenza e stato di invio.
-
-In corso:
-
+- metriche operative su documenti elaborati, soglie di confidenza e stato di invio;
+- classificazione e metadati manuali in fase di upload: tipologia, mese, anno e azienda
+  impostati dal consulente restano autoritativi e non vengono sovrascritti dall'AI;
 - visualizzazione dell'email destinatario e della data/ora di caricamento nel dettaglio
-  (UC-39.12, UC-39.15);
-- classificazione e metadati manuali in fase di upload (UC-32).
+  (UC-39.12, UC-39.15).
 
 Fuori scope MVP:
 
-- **invio del messaggio dall'interno della piattaforma**. Il recapito avviene tramite canali terzi:
-  il documento si esporta in PDF e si invia fuori dal prodotto. Di conseguenza
-  `sub_documents.send_status` non rappresenta un invio effettuato dal sistema ma **l'avvenuto
-  scaricamento del PDF**: la transizione `Da inviare` → `Inviato` scatta sul download
-  (`GET /api/v1/documents/{subDocument}/send-export`), non sull'anteprima, ed è a senso unico;
-- metriche e dashboard sugli invii reali (esiste invece la distribuzione per stato di scaricamento).
+- invio dei documenti e relativo "stato invio" (`Inviato`/`Non inviato`): la colonna `sub_documents.send_status` e l'identità SES Terraform esistono ma non c'è codice di invio;
+- estrazione AI automatica dell'email destinatario (campo `recipient_email` esposto in sola lettura nel pannello dati estratti, ma non popolato dalla pipeline OCR/Bedrock) e dei campi codice fiscale e matricola dipendente;
+- classificazione manuale iniziale in upload;
+- metriche e dashboard sugli invii.
 
 ## Observability e Sicurezza Operativa
 

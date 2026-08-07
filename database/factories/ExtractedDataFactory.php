@@ -26,6 +26,7 @@ class ExtractedDataFactory extends Factory
             'document_date' => fake()->date('Y-m-d'),
             'document_type' => fake()->randomElement(['Cedolino', 'CUD', 'Busta Paga', 'Contratto']),
             'description' => fake()->sentence(10),
+            'recipient_email' => fake()->safeEmail(),
             'confidence_score' => fake()->numberBetween(60, 99),
         ];
     }
@@ -39,6 +40,7 @@ class ExtractedDataFactory extends Factory
             'document_date' => null,
             'document_type' => null,
             'description' => null,
+            'recipient_email' => null,
             'confidence_score' => null,
         ]);
     }
