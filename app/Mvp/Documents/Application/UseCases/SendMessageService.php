@@ -2,9 +2,11 @@
 
 namespace App\Mvp\Documents\Application\UseCases;
 
-use App\Mvp\Audit\Services\AuditLogger;
 use App\Mvp\Communications\Enums\SendStatus;
+use App\Mvp\Documents\Domain\Events\SendMessageExported;
+use App\Mvp\Documents\Domain\Events\SendMessageOverridesCorrected;
 use App\Mvp\Documents\Domain\Ports\Inbound\SendMessageUseCase;
+use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\Ports\Outbound\SendMessageRendererPort;
 use App\Mvp\Documents\Domain\ValueObjects\RenderedSendMessage;
@@ -23,7 +25,7 @@ class SendMessageService implements SendMessageUseCase
     public function __construct(
         private readonly DocumentRepository $documents,
         private readonly SendMessageRendererPort $renderer,
-        private readonly AuditLogger $audit,
+        private readonly DocumentEventDispatcherPort $events,
     ) {}
 
     public function preview(int $subDocumentId, ?MvpUser $actor): RenderedSendMessage
@@ -43,13 +45,7 @@ class SendMessageService implements SendMessageUseCase
         // Transizione a senso unico: un secondo download non cambia lo stato.
         if ($context->sendStatus === SendStatus::Pending->value) {
             $this->documents->updateSubDocument($subDocumentId, ['send_status' => SendStatus::Sent]);
-            $this->audit->record(
-                'mvp-sub-document-send-exported',
-                $actor,
-                'sub_document',
-                (string) $subDocumentId,
-                ['sendStatus' => SendStatus::Sent->value],
-            );
+            $this->events->dispatch(new SendMessageExported($subDocumentId, $actor));
         }
 
         return new RenderedSendMessage($this->renderer->renderPdf($composition), $this->filename($composition, $subDocumentId));
@@ -75,13 +71,7 @@ class SendMessageService implements SendMessageUseCase
             $this->documents->updateSubDocument($subDocumentId, $updates);
         }
 
-        $this->audit->record(
-            'mvp-sub-document-send-message-corrected',
-            $actor,
-            'sub_document',
-            (string) $subDocumentId,
-            ['fields' => array_keys($overrides)],
-        );
+        $this->events->dispatch(new SendMessageOverridesCorrected($subDocumentId, $actor, array_keys($overrides)));
     }
 
     private function compose(SendMessageContext $context): SendMessageComposition

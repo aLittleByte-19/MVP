@@ -6,7 +6,6 @@ use App\Models\Communication;
 use App\Models\OriginalDocument;
 use App\Mvp\Ai\AiOutputValidator;
 use App\Mvp\Ai\BedrockService;
-use App\Mvp\Audit\Services\AuditLogger;
 use App\Mvp\Communications\Adapters\Outbound\Ai\BedrockCommunicationAiAdapter;
 use App\Mvp\Communications\Adapters\Outbound\Events\LaravelCommunicationEventDispatcher;
 use App\Mvp\Communications\Adapters\Outbound\Pdf\DompdfCommunicationPdfRenderer;
@@ -65,11 +64,23 @@ use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationPdfRendererPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\Ports\Outbound\PromptConfigurationRepository;
 use App\Mvp\Documents\Adapters\Outbound\Ai\BedrockDocumentAiAdapter;
+use App\Mvp\Documents\Adapters\Outbound\Events\LaravelDocumentEventDispatcher;
 use App\Mvp\Documents\Adapters\Outbound\Ocr\TextractOcrAdapter;
 use App\Mvp\Documents\Adapters\Outbound\Pdf\DompdfSendMessageRenderer;
 use App\Mvp\Documents\Adapters\Outbound\Persistence\EloquentDocumentRepository;
 use App\Mvp\Documents\Adapters\Outbound\Storage\FlysystemDocumentStorageAdapter;
 use App\Mvp\Documents\Adapters\Primary\Workflow\DocumentWorkflowTaskHandler;
+use App\Mvp\Documents\Application\Listeners\RecordAiOutputRejected as RecordDocumentAiOutputRejected;
+use App\Mvp\Documents\Application\Listeners\RecordDocumentProcessingCompleted;
+use App\Mvp\Documents\Application\Listeners\RecordDocumentProcessingFailed;
+use App\Mvp\Documents\Application\Listeners\RecordDocumentProcessingStarted;
+use App\Mvp\Documents\Application\Listeners\RecordDocumentWorkflowCompleted;
+use App\Mvp\Documents\Application\Listeners\RecordSendMessageExported;
+use App\Mvp\Documents\Application\Listeners\RecordSendMessageOverridesCorrected;
+use App\Mvp\Documents\Application\Listeners\RecordSubDocumentDeleted;
+use App\Mvp\Documents\Application\Listeners\RecordSubDocumentExtractedDataCorrected;
+use App\Mvp\Documents\Application\Listeners\RecordSubDocumentFieldsExtracted;
+use App\Mvp\Documents\Application\Listeners\RecordSubDocumentManuallyValidated;
 use App\Mvp\Documents\Application\UseCases\DeleteDocumentService;
 use App\Mvp\Documents\Application\UseCases\FinalizeDocumentWorkflowService;
 use App\Mvp\Documents\Application\UseCases\ListDocumentsService;
@@ -79,6 +90,17 @@ use App\Mvp\Documents\Application\UseCases\RunOcrService;
 use App\Mvp\Documents\Application\UseCases\SendMessageService;
 use App\Mvp\Documents\Application\UseCases\StartDocumentWorkflowService;
 use App\Mvp\Documents\Application\UseCases\UploadDocumentService;
+use App\Mvp\Documents\Domain\Events\AiOutputRejected as DocumentAiOutputRejected;
+use App\Mvp\Documents\Domain\Events\DocumentProcessingCompleted;
+use App\Mvp\Documents\Domain\Events\DocumentProcessingFailed;
+use App\Mvp\Documents\Domain\Events\DocumentProcessingStarted;
+use App\Mvp\Documents\Domain\Events\DocumentWorkflowCompleted;
+use App\Mvp\Documents\Domain\Events\SendMessageExported;
+use App\Mvp\Documents\Domain\Events\SendMessageOverridesCorrected;
+use App\Mvp\Documents\Domain\Events\SubDocumentDeleted;
+use App\Mvp\Documents\Domain\Events\SubDocumentExtractedDataCorrected;
+use App\Mvp\Documents\Domain\Events\SubDocumentFieldsExtracted;
+use App\Mvp\Documents\Domain\Events\SubDocumentManuallyValidated;
 use App\Mvp\Documents\Domain\Ports\Inbound\DeleteDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\FinalizeDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\ListDocumentsUseCase;
@@ -89,6 +111,7 @@ use App\Mvp\Documents\Domain\Ports\Inbound\SendMessageUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\StartDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\UploadDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentAiGatewayPort;
+use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
 use App\Mvp\Documents\Domain\Ports\Outbound\OcrGatewayPort;
@@ -194,6 +217,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(DocumentStoragePort::class, FlysystemDocumentStorageAdapter::class);
         $this->app->singleton(DocumentRepository::class, EloquentDocumentRepository::class);
         $this->app->singleton(SendMessageRendererPort::class, DompdfSendMessageRenderer::class);
+        $this->app->singleton(DocumentEventDispatcherPort::class, LaravelDocumentEventDispatcher::class);
 
         // Workflow: porta condivisa fra Documents e Communications.
         $this->app->singleton(WorkflowEnginePort::class, SfnWorkflowEngineAdapter::class);
@@ -213,9 +237,8 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(DocumentRepository::class),
                 $app->make(DocumentStoragePort::class),
                 $app->make(DocumentAiGatewayPort::class),
-                $app->make(AuditLogger::class),
+                $app->make(DocumentEventDispatcherPort::class),
                 $app->make(WorkflowTaskHeartbeat::class),
-                $app->make(MetricsRecorder::class),
                 $app->make(LoggerInterface::class),
                 max(0, min(100, (int) config('services.bedrock.mvp_confidence_threshold', 80))),
             );
@@ -330,5 +353,20 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(CommunicationDraftEdited::class, RecordCommunicationDraftEdited::class);
         Event::listen(CommunicationDraftApproved::class, RecordCommunicationDraftApproved::class);
         Event::listen(CommunicationDraftDiscarded::class, RecordCommunicationDraftDiscarded::class);
+
+        // Documents: stesso trattamento Observer di Communications, porta ed
+        // eventi separati (non condivisi) perche' gli eventi sono specifici
+        // del dominio, come le porte di persistenza (vedi ADR 0010).
+        Event::listen(DocumentProcessingStarted::class, RecordDocumentProcessingStarted::class);
+        Event::listen(DocumentProcessingCompleted::class, RecordDocumentProcessingCompleted::class);
+        Event::listen(DocumentProcessingFailed::class, RecordDocumentProcessingFailed::class);
+        Event::listen(SubDocumentFieldsExtracted::class, RecordSubDocumentFieldsExtracted::class);
+        Event::listen(DocumentAiOutputRejected::class, RecordDocumentAiOutputRejected::class);
+        Event::listen(DocumentWorkflowCompleted::class, RecordDocumentWorkflowCompleted::class);
+        Event::listen(SubDocumentDeleted::class, RecordSubDocumentDeleted::class);
+        Event::listen(SubDocumentExtractedDataCorrected::class, RecordSubDocumentExtractedDataCorrected::class);
+        Event::listen(SubDocumentManuallyValidated::class, RecordSubDocumentManuallyValidated::class);
+        Event::listen(SendMessageExported::class, RecordSendMessageExported::class);
+        Event::listen(SendMessageOverridesCorrected::class, RecordSendMessageOverridesCorrected::class);
     }
 }

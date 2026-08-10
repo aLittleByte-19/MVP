@@ -4,16 +4,20 @@ namespace App\Mvp\Documents\Application\UseCases;
 
 use App\Exceptions\InvalidAiOutputException;
 use App\Mvp\Ai\BedrockService;
-use App\Mvp\Audit\Services\AuditLogger;
+use App\Mvp\Documents\Domain\Events\AiOutputRejected;
+use App\Mvp\Documents\Domain\Events\DocumentProcessingCompleted;
+use App\Mvp\Documents\Domain\Events\DocumentProcessingFailed;
+use App\Mvp\Documents\Domain\Events\DocumentProcessingStarted;
+use App\Mvp\Documents\Domain\Events\SubDocumentFieldsExtracted;
 use App\Mvp\Documents\Domain\Ports\Inbound\ProcessDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentAiGatewayPort;
+use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
 use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
 use App\Mvp\Documents\Enums\ProcessingStatus;
 use App\Mvp\Documents\Enums\ReviewStatus;
-use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
 use Illuminate\Support\Str;
 use Psr\Log\LoggerInterface;
@@ -34,9 +38,8 @@ class ProcessDocumentService implements ProcessDocumentUseCase
         private readonly DocumentRepository $documents,
         private readonly DocumentStoragePort $storage,
         private readonly DocumentAiGatewayPort $ai,
-        private readonly AuditLogger $audit,
+        private readonly DocumentEventDispatcherPort $events,
         private readonly WorkflowTaskHeartbeat $heartbeat,
-        private readonly MetricsRecorder $metrics,
         private readonly LoggerInterface $logger,
         private readonly int $confidenceThreshold = 80,
     ) {}
@@ -51,13 +54,7 @@ class ProcessDocumentService implements ProcessDocumentUseCase
                 'error_message' => null,
             ]);
             $original = $this->documents->findOriginalDocument($documentId);
-            $this->audit->record(
-                'mvp-document-processing-started',
-                resourceType: 'original_document',
-                resourceId: (string) $documentId,
-                metadata: ['status' => ProcessingStatus::Processing->value],
-                tenantId: $original->tenantId,
-            );
+            $this->events->dispatch(new DocumentProcessingStarted($documentId, $original->tenantId));
 
             $absoluteSource = $this->copyStorageFileToTemporaryPath($original->filePath);
             $pdf = new Fpdi;
@@ -97,13 +94,7 @@ class ProcessDocumentService implements ProcessDocumentUseCase
                 'processing_status' => ProcessingStatus::Completed,
                 'error_message' => null,
             ]);
-            $this->audit->record(
-                'mvp-document-processing-completed',
-                resourceType: 'original_document',
-                resourceId: (string) $documentId,
-                metadata: ['status' => ProcessingStatus::Completed->value],
-                tenantId: $original->tenantId,
-            );
+            $this->events->dispatch(new DocumentProcessingCompleted($documentId, $original->tenantId));
         } catch (\Throwable $e) {
             $this->handleProcessingFailure($documentId, $e);
         } finally {
@@ -140,18 +131,13 @@ class ProcessDocumentService implements ProcessDocumentUseCase
                 'ai_payload' => $aiFields,
             ]));
 
-            $this->metrics->recordDomainCounter('ai_extractions_total', ['review_status' => $reviewStatus->value]);
-            $this->audit->record(
-                $reviewStatus === ReviewStatus::AutoValidated ? 'mvp-sub-document-auto-validated' : 'mvp-sub-document-needs-review',
-                resourceType: 'sub_document',
-                resourceId: (string) $subDocumentId,
-                metadata: [
-                    'confidence_score' => $confidenceScore,
-                    'confidence_threshold' => $this->confidenceThreshold,
-                    'review_status' => $reviewStatus->value,
-                ],
-                tenantId: $original->tenantId,
-            );
+            $this->events->dispatch(new SubDocumentFieldsExtracted(
+                $subDocumentId,
+                $original->tenantId,
+                $reviewStatus->value,
+                $confidenceScore,
+                $this->confidenceThreshold,
+            ));
         } catch (InvalidAiOutputException $e) {
             $safeMessage = 'Output AI non conforme: sotto-documento in quarantena.';
             $this->logger->warning('ProcessDocumentService: AI output quarantined', [
@@ -165,14 +151,7 @@ class ProcessDocumentService implements ProcessDocumentUseCase
                 'review_status' => ReviewStatus::Quarantined,
                 'error_message' => $safeMessage,
             ]);
-            $this->audit->record(
-                'mvp-sub-document-ai-output-quarantined',
-                resourceType: 'sub_document',
-                resourceId: (string) $subDocumentId,
-                metadata: ['operation' => $e->operation(), 'errors' => $e->errors(), 'review_status' => ReviewStatus::Quarantined->value],
-                tenantId: $original->tenantId,
-            );
-            $this->metrics->recordDomainCounter('ai_outputs_invalid_total', ['operation' => $e->operation()]);
+            $this->events->dispatch(new AiOutputRejected($subDocumentId, $original->tenantId, $e->operation(), $e->errors()));
         } catch (\Throwable $e) {
             $this->logger->error('ProcessDocumentService: extraction failed', ['sub_document_id' => $subDocumentId, 'message' => $e->getMessage()]);
             $this->documents->updateSubDocument($subDocumentId, [
@@ -203,17 +182,13 @@ class ProcessDocumentService implements ProcessDocumentUseCase
             // Il documento potrebbe non essere piu' leggibile: l'audit resta comunque utile senza tenant.
         }
 
-        $this->audit->record(
-            'mvp-document-processing-failed',
-            resourceType: 'original_document',
-            resourceId: (string) $documentId,
-            metadata: ['status' => ProcessingStatus::Failed->value, 'message' => $userMessage],
-            tenantId: $tenantId,
-        );
-
-        if ($e instanceof InvalidAiOutputException) {
-            $this->metrics->recordDomainCounter('ai_outputs_invalid_total', ['operation' => $e->operation()]);
-        }
+        $this->events->dispatch(new DocumentProcessingFailed(
+            $documentId,
+            $tenantId,
+            $userMessage,
+            $e instanceof InvalidAiOutputException,
+            $e instanceof InvalidAiOutputException ? $e->operation() : null,
+        ));
 
         throw $e;
     }
