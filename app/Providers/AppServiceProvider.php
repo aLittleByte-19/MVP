@@ -125,6 +125,7 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
 use App\Mvp\Documents\Domain\Ports\Outbound\OcrGatewayPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\SendMessageRendererPort;
 use App\Mvp\Observability\MetricsRecorder;
+use App\Mvp\Support\Clock\SystemClock;
 use App\Mvp\Workflow\Adapters\Outbound\SfnWorkflowEngineAdapter;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
@@ -137,6 +138,7 @@ use Aws\Textract\TextractClient;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
+use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 
 class AppServiceProvider extends ServiceProvider
@@ -218,6 +220,11 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(MetricsRecorder::class),
             );
         });
+
+        // Orologio condiviso (PSR-20): a differenza degli eventi di dominio,
+        // il tempo non ha semantica specifica di un dominio, quindi un solo
+        // binding serve sia Documents sia Communications (vedi ADR 0010).
+        $this->app->singleton(ClockInterface::class, SystemClock::class);
 
         // --- Dominio Documents: porta -> adapter (vedi ADR 0010) ---
         $this->app->singleton(OcrGatewayPort::class, TextractOcrAdapter::class);

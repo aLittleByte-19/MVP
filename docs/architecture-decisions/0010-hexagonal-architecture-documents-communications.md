@@ -363,7 +363,7 @@ verde ad ogni passaggio (commit separati):
   `RunOcrService`) — `ProcessDocumentService::process()` resta fuori: manipola PDF reali via Fpdi e
   chiama l'helper Laravel `storage_path()`, non testabile in isolamento per lo stesso motivo di
   `FinalizeDocumentWorkflowService`/`StartDocumentWorkflowService` (helper `now()` → facade `Date`,
-  vedi trade-off sotto). 349 test verdi in totale (307 Feature/Unit preesistenti + 27 DomainUnit
+  vedi trade-off sotto). 352 test verdi in totale (307 Feature/Unit preesistenti + 30 DomainUnit
   Communications + 15 DomainUnit Documents), stesso conteggio Feature di prima: nessuna regressione
   di comportamento.
 - **Asimmetria fra domini chiusa**: la prima passata su Communications (10 eventi) non copriva
@@ -372,8 +372,9 @@ verde ad ogni passaggio (commit separati):
   un'incoerenza emersa dal fatto che lo scope si e' allargato in corsa, non una scelta deliberata.
   Chiusa aggiungendo `CommunicationDeleted`, `CommunicationRated`, `PromptConfigurationSaved`,
   `PromptConfigurationDeleted` (14 eventi Communications in totale) e due nuovi test
-  (`DeleteCommunicationServiceTest`, `PromptConfigurationServiceTest`; `RateCommunicationService`
-  resta bloccato da `now()`, come gia' documentato sotto).
+  (`DeleteCommunicationServiceTest`, `PromptConfigurationServiceTest`). `RateCommunicationService`
+  restava bloccato da `now()` anche dopo la conversione ad evento — chiuso separatamente, vedi
+  punto sull'orologio PSR-20 sotto.
 - **Bug trovato scrivendo questi ultimi test**: due file riusavano una funzione helper globale
   (`fakeActor()`) dichiarata in un terzo file, senza ridichiararla. Passava con `php artisan test`
   seriale ma falliva con `--parallel`: Paratest distribuisce i file di test fra processi worker
@@ -381,6 +382,19 @@ verde ad ogni passaggio (commit separati):
   su worker diversi. Corretto dando a ogni file la propria funzione locale, univoca per nome
   (pattern gia' seguito correttamente in `tests/DomainUnit/Documents/`) — verificato rieseguendo
   la suite intera con `--parallel`, non solo il sotto-insieme fallito.
+- **Orologio condiviso (`Psr\Clock\ClockInterface`, standard PSR-20)**: `RateCommunicationService`
+  era l'ultimo dei tre a non avere un test `DomainUnit`, bloccato da `now()` (facade `Date`,
+  richiede il container). Nessuna porta custom: come gia' fatto per `Psr\Log\LoggerInterface`, si
+  usa direttamente lo standard — un'interfaccia PSR non ha bisogno di essere reinventata come
+  porta di dominio. Un solo adapter (`App\Mvp\Support\Clock\SystemClock`) condiviso fra i due
+  domini, non uno per dominio: a differenza degli eventi (specifici del dominio per costruzione),
+  il tempo non ha semantica di dominio, quindi condividerlo non e' un'eccezione al perimetro
+  deciso sopra ma la stessa logica gia' applicata a `WorkflowEnginePort`. 3 nuovi test
+  (`RateCommunicationServiceTest`, con un `FakeClock` che restituisce un istante fisso). Lo stesso
+  binding e' ora disponibile per sbloccare allo stesso modo `FinalizeCommunicationService`,
+  `StartCommunicationWorkflowService`, `FinalizeDocumentWorkflowService`,
+  `StartDocumentWorkflowService` — non fatto qui perche' non richiesto, resta un passo successivo
+  naturale se emerge la stessa esigenza.
 - **Trade-off noto, non risolto**: molti casi d'uso restano legati a `config()` per parametri di
   runtime genuinamente variabili per ambiente (`StartCommunicationWorkflowService`,
   `StartDocumentWorkflowService` in particolare: ARN di state machine, URL di coda, guardia
