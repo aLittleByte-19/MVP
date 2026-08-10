@@ -363,8 +363,8 @@ verde ad ogni passaggio (commit separati):
   `RunOcrService`) — `ProcessDocumentService::process()` resta fuori: manipola PDF reali via Fpdi e
   chiama l'helper Laravel `storage_path()`, non testabile in isolamento per lo stesso motivo di
   `FinalizeDocumentWorkflowService`/`StartDocumentWorkflowService` (helper `now()` → facade `Date`,
-  vedi trade-off sotto). 352 test verdi in totale (307 Feature/Unit preesistenti + 30 DomainUnit
-  Communications + 15 DomainUnit Documents), stesso conteggio Feature di prima: nessuna regressione
+  vedi trade-off sotto). 356 test verdi in totale (307 Feature/Unit preesistenti + 32 DomainUnit
+  Communications + 17 DomainUnit Documents), stesso conteggio Feature di prima: nessuna regressione
   di comportamento.
 - **Asimmetria fra domini chiusa**: la prima passata su Communications (10 eventi) non copriva
   `DeleteCommunicationService`, `RateCommunicationService`, `PromptConfigurationService`, mentre la
@@ -390,11 +390,17 @@ verde ad ogni passaggio (commit separati):
   domini, non uno per dominio: a differenza degli eventi (specifici del dominio per costruzione),
   il tempo non ha semantica di dominio, quindi condividerlo non e' un'eccezione al perimetro
   deciso sopra ma la stessa logica gia' applicata a `WorkflowEnginePort`. 3 nuovi test
-  (`RateCommunicationServiceTest`, con un `FakeClock` che restituisce un istante fisso). Lo stesso
-  binding e' ora disponibile per sbloccare allo stesso modo `FinalizeCommunicationService`,
-  `StartCommunicationWorkflowService`, `FinalizeDocumentWorkflowService`,
-  `StartDocumentWorkflowService` — non fatto qui perche' non richiesto, resta un passo successivo
-  naturale se emerge la stessa esigenza.
+  (`RateCommunicationServiceTest`, con un `FakeClock` che restituisce un istante fisso).
+- **Stesso orologio esteso ai 4 casi d'uso rimasti bloccati da `now()`**: `FinalizeCommunicationService`
+  e `FinalizeDocumentWorkflowService` erano gia' completamente basati su eventi (nessuna dipendenza
+  diretta da `AuditLogger`/`MetricsRecorder`) — `now()` era l'ultimo ostacolo alla purezza. Con
+  `ClockInterface` iniettato diventano interamente testabili in isolamento: 4 nuovi test
+  (`FinalizeCommunicationServiceTest`, `FinalizeDocumentWorkflowServiceTest`, ciascuno con un
+  `FakeClock` locale al dominio). `StartCommunicationWorkflowService` e `StartDocumentWorkflowService`
+  hanno ricevuto lo stesso trattamento per coerenza (`now()` → `$this->clock->now()`), ma restano
+  bloccati per test di dominio puro da `AuditLogger`/`MetricsRecorder` diretti e da `config()`
+  pesante (vedi trade-off sotto) — nessun nuovo test `DomainUnit` per questi due, sarebbe
+  fittizio senza risolvere anche quei due blocchi.
 - **Trade-off noto, non risolto**: molti casi d'uso restano legati a `config()` per parametri di
   runtime genuinamente variabili per ambiente (`StartCommunicationWorkflowService`,
   `StartDocumentWorkflowService` in particolare: ARN di state machine, URL di coda, guardia

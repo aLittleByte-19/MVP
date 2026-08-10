@@ -16,6 +16,7 @@ use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Support\WorkflowContext;
 use Illuminate\Support\Str;
+use Psr\Clock\ClockInterface;
 
 /**
  * Applicazione: avvia (o rilancia, per rigenerazione) l'esecuzione Step
@@ -32,6 +33,7 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
         private readonly AuditLogger $audit,
         private readonly MetricsRecorder $metrics,
         private readonly WorkflowContext $context,
+        private readonly ClockInterface $clock,
     ) {}
 
     public function start(int $communicationId, ?string $correlationId, ?string $requestId): void
@@ -67,7 +69,7 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
                 'generation_status' => CommunicationGenerationStatus::Processing,
                 'cover_status' => CoverImageStatus::Pending,
                 'workflow_execution_arn' => $executionArn,
-                'workflow_started_at' => now(),
+                'workflow_started_at' => $this->clock->now(),
                 'workflow_completed_at' => null,
                 'workflow_failed_at' => null,
                 'workflow_failure_reason' => null,
@@ -89,7 +91,7 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
         } catch (\Throwable $e) {
             $this->communications->updateCommunication($communicationId, [
                 'generation_status' => CommunicationGenerationStatus::Failed,
-                'workflow_failed_at' => now(),
+                'workflow_failed_at' => $this->clock->now(),
                 'workflow_failure_reason' => $e->getMessage(),
                 'error_message' => 'Avvio della generazione non disponibile.',
             ]);
