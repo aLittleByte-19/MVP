@@ -2,14 +2,16 @@
 
 namespace App\Mvp\Communications\Application\UseCases;
 
-use App\Mvp\Audit\Services\AuditLogger;
+use App\Mvp\Communications\Domain\Events\CommunicationCoverDegraded;
+use App\Mvp\Communications\Domain\Events\CommunicationCoverGenerated;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationCoverUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationAiGatewayPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
+use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationDraftBuilder;
 use App\Mvp\Communications\Enums\CoverImageSource;
 use App\Mvp\Communications\Enums\CoverImageStatus;
-use App\Mvp\Observability\MetricsRecorder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -31,8 +33,7 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
         private readonly CommunicationRepository $communications,
         private readonly CommunicationCoverStoragePort $storage,
         private readonly CommunicationAiGatewayPort $ai,
-        private readonly AuditLogger $audit,
-        private readonly MetricsRecorder $metrics,
+        private readonly CommunicationEventDispatcherPort $events,
     ) {}
 
     public function generate(int $communicationId): array
@@ -63,8 +64,14 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
             return ['skipped' => false, 'coverStatus' => CoverImageStatus::Failed->value];
         }
 
+        // L'invariante (il testo precede la copertina) e' verificata dal
+        // Builder qui, fuori dal try/catch di storage: se scattasse
+        // indicherebbe un bug di ordinamento del workflow, non un errore di
+        // storage da degradare silenziosamente.
+        $path = $this->newPath($communicationId, $image->mime);
+        $content = CommunicationDraftBuilder::fromRecord($communication)->withGeneratedCover($image, $path);
+
         try {
-            $path = $this->newPath($communicationId, $image->mime);
             $this->storage->store($path, $image->bytes);
         } catch (\Throwable $e) {
             Log::error('Communication cover storage failed', ['communication_id' => $communicationId, 'message' => $e->getMessage()]);
@@ -77,22 +84,12 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
             $this->storage->delete($communication->coverImagePath);
         }
 
-        $this->communications->updateCommunication($communicationId, [
-            'cover_image_path' => $path,
-            'cover_image_mime' => $image->mime,
-            'cover_image_size' => strlen($image->bytes),
+        $this->communications->updateCommunication($communicationId, array_merge($content, [
             'cover_image_source' => CoverImageSource::Ai,
             'cover_status' => CoverImageStatus::Ready,
             'cover_error' => null,
-        ]);
-        $this->metrics->recordDomainCounter('communication_covers_generated_total', ['source' => CoverImageSource::Ai->value]);
-        $this->audit->record(
-            'mvp-communication-cover-generated',
-            resourceType: 'communication',
-            resourceId: (string) $communicationId,
-            metadata: ['mime' => $image->mime],
-            tenantId: $communication->tenantId,
-        );
+        ]));
+        $this->events->dispatch(new CommunicationCoverGenerated($communicationId, $communication->tenantId, $image->mime));
 
         return ['skipped' => false, 'coverStatus' => CoverImageStatus::Ready->value];
     }
@@ -103,14 +100,7 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
             'cover_status' => CoverImageStatus::Failed,
             'cover_error' => $warning,
         ]);
-        $this->metrics->recordDomainCounter('communication_covers_failed_total', ['reason' => $reason]);
-        $this->audit->record(
-            'mvp-communication-cover-degraded',
-            resourceType: 'communication',
-            resourceId: (string) $communicationId,
-            metadata: ['reason' => $reason],
-            tenantId: $tenantId,
-        );
+        $this->events->dispatch(new CommunicationCoverDegraded($communicationId, $tenantId, $reason, $warning));
     }
 
     private function newPath(int $communicationId, string $mime): string
