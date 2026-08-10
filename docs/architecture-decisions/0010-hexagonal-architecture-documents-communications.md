@@ -330,9 +330,39 @@ verde ad ogni passaggio (commit separati):
   `app/Mvp/{Documents,Communications}/Domain/` referenzia `Illuminate\*`, `Aws\*` o
   `App\Models\*`.
 - Comportamento osservabile preservato: contratto OpenAPI, status HTTP ed effetti sul DB
-  invariati (verificato da `OpenApiContractTest` e dalla suite Pest esistente, 307 test verdi).
+  invariati (verificato da `OpenApiContractTest` e dalla suite Pest esistente).
 - `Identity`, `Audit`, `Observability`, `Support` e l'infrastruttura di `Workflow` non sono stati
   toccati oltre a `WorkflowEnginePort`, come da perimetro deciso sopra.
+- **Test di dominio senza bootstrap Laravel** (richiesto dal brief originale, Compito 3 punto 2,
+  mai soddisfatto fino a questo punto): nuova suite Pest `tests/DomainUnit/` (nessun
+  `->extend(TestCase::class)` in `Pest.php`, quindi nessun boot del framework), con adapter di
+  test in `Fakes/` che implementano le porte secondarie in memoria — 17 test dimostrano che i casi
+  d'uso di Communications sono davvero istanziabili ed eseguibili con `new`, senza container, DB o
+  LocalStack. Per renderlo possibile, `GenerateCommunicationCoverService`/
+  `UpdateCommunicationCoverService` (prefisso di storage) e `ProcessDocumentService`
+  (soglia di confidenza, dominio Documents) hanno smesso di leggere `config()` internamente
+  — il valore e' risolto una volta sola nel service provider e passato al costruttore; allo stesso
+  modo `GenerateCommunicationCoverService` e `ProcessDocumentService` non usano piu' la facade
+  `Illuminate\Support\Facades\Log` ma un `Psr\Log\LoggerInterface` iniettato. Documents ha ricevuto
+  solo questa pulizia mirata (Log/config in `ProcessDocumentService`), non una suite `DomainUnit`
+  completa: rimane un passo successivo naturale, non fatto qui per contenere lo scope di questa
+  passata.
+- **Trade-off noto, non risolto**: molti casi d'uso restano legati a `config()` per parametri di
+  runtime genuinamente variabili per ambiente (`StartCommunicationWorkflowService`,
+  `StartDocumentWorkflowService` in particolare: ARN di state machine, URL di coda, guardia
+  Textract/`real_s3`). Introdurre una porta di configurazione generica per astrarli
+  contraddirebbe esplicitamente questo stesso ADR ("non creare porte per valori scalari o
+  dettagli che non varieranno", vedi Vincoli) — quindi restano testati solo a livello Feature
+  (bootstrap Laravel completo), non a livello di dominio puro. Scelta deliberata, non un
+  oversight.
+- **Nota di onestà su `MvpUser`**: le porte di Communications e Documents tipizzano
+  `App\Mvp\Identity\MvpUser`, che implementa `Illuminate\Contracts\Auth\Authenticatable` (serve al
+  middleware di autenticazione). È una dipendenza transitiva del dominio verso un'interfaccia
+  Illuminate che lo script di conformità non intercetta (verifica solo le importazioni dirette nei
+  file sotto `Domain/`). Non è stata rimossa: `Identity` è infrastruttura condivisa accettata per
+  scelta esplicita di perimetro (vedi sopra), e introdurre un value object "Actor" di dominio
+  separato da tradurre a ogni confine avrebbe richiesto toccare ogni adapter primario dei due
+  domini per un guadagno di purezza marginale, non un problema concreto riscontrato.
 
 ## Related documents
 
