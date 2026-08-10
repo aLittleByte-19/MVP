@@ -235,7 +235,7 @@ completare l'elenco della specifica tecnica.
 | **Factory Method** | Creazionale | `WorkflowTaskRegistry::for(string $taskType): WorkflowTaskHandler` (già esistente, riletto in chiave esagonale come selettore dell'adapter primario corretto per tipo di task) | Centralizza la selezione dell'implementazione a runtime in un solo punto, senza che il chiamante (`WorkflowTaskRunner`) conosca le classi concrete. | Il runner dovrebbe istanziare/selezionare l'handler con logica propria, duplicata ad ogni punto di invocazione. |
 | **Builder** | Creazionale | `CommunicationDraftBuilder` (`Communications/Domain/ValueObjects/`), usato da `GenerateCommunicationTextService` e `GenerateCommunicationCoverService`: assembla il contenuto della bozza attraverso i passi asincroni (`generate_text` → `generate_cover`), rifiutando esplicitamente `withGeneratedCover()` se il testo non è ancora stato generato (`CoverPrecedesTextException`) | Prima lo stato parziale valido ad ogni fase era implicito nei rami dei singoli `Application Service`. Il Builder esplicita l'invariante ("dopo `generate_text` titolo e corpo sono impostati, la copertina no", richiesto perché `generate_cover` usa `image_prompt` scritto dal passo testuale) invece di lasciarlo dedotto dal codice. | Lo stato intermedio valido resta implicito e verificabile solo leggendo ogni `Service`; un nuovo passo aggiunto fuori ordine produce uno stato incoerente senza che nulla lo impedisca. |
 | **Singleton** | Creazionale | Binding dei client AWS e degli adapter nel service provider — invariato nella sostanza, ma ora bindato **all'interfaccia di porta**, non alla classe concreta | I client AWS restano condivisi (costruzione costosa, connection reuse); il binding diventa il punto in cui si sceglie *quale* adapter soddisfa la porta. | Nessun punto unico di sostituzione: cambiare adapter richiederebbe cercare e modificare ogni type-hint concreto nella codebase (situazione attuale). |
-| **Observer** | Comportamentale | Applicato simmetricamente a entrambi i domini, porte separate (non condivise: gli eventi sono specifici del dominio). Communications: 14 eventi (`Communications/Domain/Events/`) via `CommunicationEventDispatcherPort` → `LaravelCommunicationEventDispatcher`, 14 listener (copre anche `DeleteCommunicationService`, `RateCommunicationService`, `PromptConfigurationService`). Documents: 11 eventi (`Documents/Domain/Events/`) via `DocumentEventDispatcherPort` → `LaravelDocumentEventDispatcher`, 11 listener, su `ProcessDocumentService`, `DeleteDocumentService`, `ReviewDocumentService`, `SendMessageService`, `FinalizeDocumentWorkflowService` | Prima le chiamate ad audit/metriche erano sparse manualmente in ogni `Application Service`: la coppia audit+metrica per "copertina degradata" (Communications) era duplicata due volte (degrado da errore modello/storage e degrado da timeout in `finalize`) — con l'evento unico quella duplicazione sparisce. | Ogni nuova reazione a un evento (es. una notifica futura) richiederebbe toccare ogni caso d'uso che genera quell'evento, invece di aggiungere un listener. |
+| **Observer** | Comportamentale | Applicato simmetricamente a entrambi i domini, porte separate (non condivise: gli eventi sono specifici del dominio). Communications: 17 eventi (`Communications/Domain/Events/`) via `CommunicationEventDispatcherPort` → `LaravelCommunicationEventDispatcher`, 17 listener (copre anche `DeleteCommunicationService`, `RateCommunicationService`, `PromptConfigurationService`, `StartCommunicationWorkflowService`). Documents: 13 eventi (`Documents/Domain/Events/`) via `DocumentEventDispatcherPort` → `LaravelDocumentEventDispatcher`, 13 listener, su `ProcessDocumentService`, `DeleteDocumentService`, `ReviewDocumentService`, `SendMessageService`, `FinalizeDocumentWorkflowService`, `StartDocumentWorkflowService` | Prima le chiamate ad audit/metriche erano sparse manualmente in ogni `Application Service`: la coppia audit+metrica per "copertina degradata" (Communications) era duplicata due volte (degrado da errore modello/storage e degrado da timeout in `finalize`) — con l'evento unico quella duplicazione sparisce. | Ogni nuova reazione a un evento (es. una notifica futura) richiederebbe toccare ogni caso d'uso che genera quell'evento, invece di aggiungere un listener. |
 | **Command** | Comportamentale | Ogni caso d'uso applicativo è una classe dedicata a una porta primaria, coerente con la forma già usata da `WorkflowTaskHandler::execute()` | Un caso d'uso = una porta primaria = una responsabilità, testabile in isolamento passando mock delle porte secondarie. | I casi d'uso resterebbero metodi dentro service "fat" con più responsabilità (situazione precedente di `DocumentProcessingService`, `CommunicationWorkflowService`). |
 
 Nota di onestà su Command: l'idea originale ("un caso d'uso = una classe con un solo metodo
@@ -354,10 +354,11 @@ verde ad ogni passaggio (commit separati):
   `DocumentEventDispatcherPort` (`LaravelDocumentEventDispatcher`, non condivisa con Communications
   — gli eventi sono specifici del dominio, come le porte di persistenza). Sostituiscono le chiamate
   dirette ad `AuditLogger`/`MetricsRecorder` in `ProcessDocumentService`, `DeleteDocumentService`,
-  `ReviewDocumentService`, `SendMessageService` e `FinalizeDocumentWorkflowService`. Restano fuori
+  `ReviewDocumentService`, `SendMessageService` e `FinalizeDocumentWorkflowService`. Resta fuori
   per scelta esplicita, a specchio di quanto lasciato in Communications: `UploadDocumentService`
-  (un solo audit, come `GenerateCommunicationService`) e `StartDocumentWorkflowService` (gia'
-  bloccato da `config()`, come `StartCommunicationWorkflowService`). 15 nuovi test in
+  (un solo audit, come `GenerateCommunicationService`) — `StartDocumentWorkflowService` e' stato
+  convertito in un passo successivo, vedi punto sugli eventi dei casi d'uso di avvio pipeline sotto.
+  15 nuovi test in
   `tests/DomainUnit/Documents/` (`ProcessDocumentService::extractAndSaveFields()`,
   `DeleteDocumentService`, `ReviewDocumentService`, `SendMessageService`, `ListDocumentsService`,
   `RunOcrService`) — `ProcessDocumentService::process()` resta fuori: manipola PDF reali via Fpdi e
@@ -401,6 +402,18 @@ verde ad ogni passaggio (commit separati):
   bloccati per test di dominio puro da `AuditLogger`/`MetricsRecorder` diretti e da `config()`
   pesante (vedi trade-off sotto) — nessun nuovo test `DomainUnit` per questi due, sarebbe
   fittizio senza risolvere anche quei due blocchi.
+- **`StartCommunicationWorkflowService`/`StartDocumentWorkflowService` convertiti a eventi**:
+  ultimo punto della codebase con `AuditLogger`/`MetricsRecorder` chiamati direttamente da un
+  `Application Service` (a parte i due audit singoli lasciati per scelta, `GenerateCommunicationService`
+  e `UploadDocumentService`). Nuovi eventi: `CommunicationWorkflowStarted`,
+  `CommunicationWorkflowStartFailed`, `CommunicationRegenerationRequested` (17 eventi Communications
+  in totale) e `DocumentWorkflowStarted`, `DocumentWorkflowStartFailed` (13 eventi Documents in
+  totale), con i rispettivi listener. Non elimina il blocco di questi due casi d'uso per un test
+  `DomainUnit` — restano legati a `config()` (vedi trade-off sotto) — ma chiude l'ultima asimmetria
+  strutturale: ora ogni caso d'uso di entrambi i domini dispatcha eventi invece di chiamare
+  audit/metriche in modo diretto, senza eccezioni. Nessun nuovo test: nessuno dei due comportamenti
+  osservabili cambia, la copertura resta a livello Feature (`OpenApiContractTest` e la suite Pest
+  esistente).
 - **Trade-off noto, non risolto**: molti casi d'uso restano legati a `config()` per parametri di
   runtime genuinamente variabili per ambiente (`StartCommunicationWorkflowService`,
   `StartDocumentWorkflowService` in particolare: ARN di state machine, URL di coda, guardia

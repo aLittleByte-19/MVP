@@ -2,11 +2,12 @@
 
 namespace App\Mvp\Documents\Application\UseCases;
 
-use App\Mvp\Audit\Services\AuditLogger;
+use App\Mvp\Documents\Domain\Events\DocumentWorkflowStarted;
+use App\Mvp\Documents\Domain\Events\DocumentWorkflowStartFailed;
 use App\Mvp\Documents\Domain\Ports\Inbound\StartDocumentWorkflowUseCase;
+use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Enums\ProcessingStatus;
-use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Support\WorkflowContext;
 use Illuminate\Support\Str;
@@ -24,8 +25,7 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
     public function __construct(
         private readonly DocumentRepository $documents,
         private readonly WorkflowEnginePort $workflowEngine,
-        private readonly AuditLogger $audit,
-        private readonly MetricsRecorder $metrics,
+        private readonly DocumentEventDispatcherPort $events,
         private readonly WorkflowContext $context,
         private readonly ClockInterface $clock,
     ) {}
@@ -83,21 +83,14 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
                 'error_message' => null,
             ]);
 
-            $this->audit->record(
-                'mvp-document-workflow-started',
-                null,
-                'original_document',
-                (string) $documentId,
-                [
-                    'execution_arn' => $executionArn,
-                    'state_machine_arn' => $stateMachineArn,
-                    'task_queue_url' => $taskQueueUrl,
-                ],
-                tenantId: $document->tenantId,
-            );
-            $this->metrics->recordDomainCounter('stepfunctions_executions_started_total', [
-                'state_machine' => $this->shortName($stateMachineArn),
-            ]);
+            $this->events->dispatch(new DocumentWorkflowStarted(
+                $documentId,
+                $document->tenantId,
+                $executionArn,
+                $stateMachineArn,
+                $this->shortName($stateMachineArn),
+                $taskQueueUrl,
+            ));
         } catch (\Throwable $e) {
             $this->documents->updateOriginalDocument($documentId, [
                 'processing_status' => ProcessingStatus::Failed,
@@ -105,17 +98,12 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
                 'workflow_failure_reason' => $e->getMessage(),
                 'error_message' => 'Avvio workflow documentale non disponibile.',
             ]);
-            $this->audit->record(
-                'mvp-document-workflow-start-failed',
-                null,
-                'original_document',
-                (string) $documentId,
-                ['message' => $e->getMessage()],
-                tenantId: $document->tenantId,
-            );
-            $this->metrics->recordDomainCounter('stepfunctions_executions_failed_total', [
-                'state_machine' => $this->shortName($stateMachineArn),
-            ]);
+            $this->events->dispatch(new DocumentWorkflowStartFailed(
+                $documentId,
+                $document->tenantId,
+                $e->getMessage(),
+                $this->shortName($stateMachineArn),
+            ));
 
             // WorkflowEnginePort traduce gia' gli errori AWS in un RuntimeException
             // con messaggio azionabile: qui si rilancia senza ri-tradurlo.
