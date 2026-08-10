@@ -16,13 +16,17 @@ use App\Mvp\Communications\Adapters\Primary\Workflow\CommunicationWorkflowTaskHa
 use App\Mvp\Communications\Application\Listeners\RecordAiOutputRejected;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationCoverDegraded;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationCoverGenerated;
+use App\Mvp\Communications\Application\Listeners\RecordCommunicationDeleted;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftApproved;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftDiscarded;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftEdited;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftFavorited;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftUnfavorited;
+use App\Mvp\Communications\Application\Listeners\RecordCommunicationRated;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationTextGenerated;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationWorkflowCompleted;
+use App\Mvp\Communications\Application\Listeners\RecordPromptConfigurationDeleted;
+use App\Mvp\Communications\Application\Listeners\RecordPromptConfigurationSaved;
 use App\Mvp\Communications\Application\UseCases\CommunicationDraftService;
 use App\Mvp\Communications\Application\UseCases\DeleteCommunicationService;
 use App\Mvp\Communications\Application\UseCases\ExportCommunicationService;
@@ -38,13 +42,17 @@ use App\Mvp\Communications\Application\UseCases\UpdateCommunicationCoverService;
 use App\Mvp\Communications\Domain\Events\AiOutputRejected;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverDegraded;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverGenerated;
+use App\Mvp\Communications\Domain\Events\CommunicationDeleted;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftApproved;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftDiscarded;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftEdited;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftFavorited;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftUnfavorited;
+use App\Mvp\Communications\Domain\Events\CommunicationRated;
 use App\Mvp\Communications\Domain\Events\CommunicationTextGenerated;
 use App\Mvp\Communications\Domain\Events\CommunicationWorkflowCompleted;
+use App\Mvp\Communications\Domain\Events\PromptConfigurationDeleted;
+use App\Mvp\Communications\Domain\Events\PromptConfigurationSaved;
 use App\Mvp\Communications\Domain\Ports\Inbound\CommunicationDraftUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\DeleteCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\ExportCommunicationUseCase;
@@ -353,6 +361,10 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(CommunicationDraftEdited::class, RecordCommunicationDraftEdited::class);
         Event::listen(CommunicationDraftApproved::class, RecordCommunicationDraftApproved::class);
         Event::listen(CommunicationDraftDiscarded::class, RecordCommunicationDraftDiscarded::class);
+        Event::listen(CommunicationDeleted::class, RecordCommunicationDeleted::class);
+        Event::listen(CommunicationRated::class, RecordCommunicationRated::class);
+        Event::listen(PromptConfigurationSaved::class, RecordPromptConfigurationSaved::class);
+        Event::listen(PromptConfigurationDeleted::class, RecordPromptConfigurationDeleted::class);
 
         // Documents: stesso trattamento Observer di Communications, porta ed
         // eventi separati (non condivisi) perche' gli eventi sono specifici
