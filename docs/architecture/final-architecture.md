@@ -29,7 +29,7 @@ export PNG/SVG vanno rigenerati da draw.io dopo ogni modifica (`drawio -x -f png
 | API | API JSON Laravel in `app/Http` | Validazione, controlli di tenant, audit event, avvio del workflow. |
 | Workflow | Due state machine Step Functions e due code SQS (LocalStack) | Orchestrazione production-like con callback task token, end-to-end; pipeline documentale e pipeline comunicazioni isolate fra loro. |
 | Worker | `php artisan mvp:workflow:consume --queue=documents|communications` | Un worker per pipeline: ricezione SQS, esecuzione dei task, `SendTaskSuccess`/`SendTaskFailure`, `SendTaskHeartbeat`. |
-| OCR | `App\Mvp\Ocr\Services\TextractService` | Integrazione Textract reale, disabilitata di default nelle esecuzioni locali/CI standard. |
+| OCR | `App\Mvp\Documents\Adapters\Outbound\Ocr\TextractOcrAdapter` | Integrazione Textract reale, disabilitata di default nelle esecuzioni locali/CI standard. |
 | AI | `App\Mvp\Ai\BedrockService` | Integrazione Bedrock reale per split/estrazione, generazione del testo e delle copertine. |
 | Storage | Dischi Laravel `s3` o `real_s3`, bucket `frontend_static` | S3 LocalStack per documenti, copertine delle comunicazioni e asset Angular, S3 reale opzionale solo per documenti/Textract. |
 | Persistenza | PostgreSQL | Comunicazioni, documenti, sotto-documenti, dati estratti, audit e stato dei task di workflow. |

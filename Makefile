@@ -84,6 +84,7 @@ verify-backend:
 	docker compose run --rm --no-deps $(TEST_ENV) app php artisan test
 	docker compose run --rm --no-deps app php vendor/bin/pint --test
 	docker compose run --rm --no-deps $(TEST_ENV) app sh -lc 'if [ -x vendor/bin/phpstan ]; then vendor/bin/phpstan analyse --memory-limit=1G; else echo "phpstan non installato in vendor: skip locale"; fi'
+	bash scripts/ci/check-dependency-rule.sh
 
 verify-frontend: node-install
 	$(NODE) npm run openapi:generate

@@ -1,6 +1,6 @@
 # ADR 0010: Architettura esagonale (ports & adapters) per i domini Documents e Communications
 
-Status: Proposed
+Status: Accepted, implemented
 Date: 2026-08-07
 
 ## Context
@@ -118,62 +118,81 @@ adapter guidato da Step Functions". Le sue due implementazioni (`DocumentWorkflo
 loro interno smettono di toccare Eloquent/SDK direttamente: delegano ai casi d'uso di dominio
 tramite le stesse porte primarie usate dai Controller HTTP dello stesso dominio.
 
-## Struttura di package proposta
+## Struttura di package (come implementata)
+
+I Controller HTTP restano in `app/Http/Controllers/Api/V1/` (convenzione Laravel per il
+routing): non sono stati spostati sotto `app/Mvp/*/Adapters/`, ma sono comunque adapter primari
+nella sostanza — traducono la richiesta in una chiamata a una porta primaria, nessuna regola di
+dominio al loro interno. Gli adapter primari guidati da Step Functions/SQS (`WorkflowTaskHandler`)
+vivono invece sotto `Adapters/Primary/Workflow/`, dentro il rispettivo dominio. La sotto-cartella
+per gli adapter primari si chiama `Primary` (non `Inbound`, come nella versione proposta
+inizialmente) per restare simmetrica con `Outbound`, ed evitare l'ambiguità con `Domain/Ports/Inbound`.
 
 ```
 app/Mvp/Documents/
 ├── Domain/
-│   ├── Rules/                         # regole di dominio pure (es. ValidCodiceFiscale, già cosí)
-│   └── Ports/
-│       ├── Inbound/                   # porte primarie — un'interfaccia per caso d'uso
-│       │   ├── SubmitDocumentUploadUseCase.php
-│       │   ├── ListDocumentsUseCase.php
-│       │   ├── ReviewDocumentUseCase.php
-│       │   ├── ComposeSendMessageUseCase.php
-│       │   ├── SplitDocumentUseCase.php           # invocata oggi da Bedrock via workflow
-│       │   ├── ExtractDocumentFieldsUseCase.php    # invocata oggi da Bedrock via workflow
-│       │   └── PersistOcrResultUseCase.php
-│       └── Outbound/                  # porte secondarie
-│           ├── DocumentRepository.php
-│           ├── OcrGatewayPort.php                  # oggi implementata da TextractService
-│           ├── DocumentAiGatewayPort.php           # oggi implementata da BedrockService (split/extract)
-│           └── DocumentStoragePort.php
+│   ├── Ports/
+│   │   ├── Inbound/                   # porte primarie — un'interfaccia per caso d'uso
+│   │   │   ├── UploadDocumentUseCase.php
+│   │   │   ├── StartDocumentWorkflowUseCase.php
+│   │   │   ├── ListDocumentsUseCase.php
+│   │   │   ├── DeleteDocumentUseCase.php
+│   │   │   ├── RunOcrUseCase.php                   # invocata dal workflow (task Textract)
+│   │   │   ├── ProcessDocumentUseCase.php          # invocata dal workflow (task Bedrock)
+│   │   │   ├── FinalizeDocumentWorkflowUseCase.php
+│   │   │   ├── ReviewDocumentUseCase.php
+│   │   │   └── SendMessageUseCase.php
+│   │   └── Outbound/                  # porte secondarie
+│   │       ├── DocumentRepository.php
+│   │       ├── OcrGatewayPort.php                  # implementata da TextractOcrAdapter
+│   │       ├── DocumentAiGatewayPort.php           # implementata da BedrockDocumentAiAdapter
+│   │       ├── DocumentStoragePort.php
+│   │       └── SendMessageRendererPort.php
+│   ├── ValueObjects/                  # proiezioni di dominio, nessun riferimento a Eloquent
+│   ├── Commands/                      # UploadDocumentCommand, ...
+│   └── Exceptions/                    # MissingExtractedDataException, ...
 ├── Application/
 │   └── UseCases/                      # implementano le porte primarie, orchestrano via porte secondarie
-│       ├── SubmitDocumentUploadService.php
+│       ├── UploadDocumentService.php
+│       ├── StartDocumentWorkflowService.php
 │       ├── ListDocumentsService.php
-│       ├── ReviewDocumentService.php
 │       └── ...
 └── Adapters/
-    ├── Inbound/
-    │   ├── Http/DocumentController.php             # adapter primario: HTTP → caso d'uso
+    ├── Primary/
     │   └── Workflow/DocumentWorkflowTaskHandler.php # adapter primario: Step Functions → caso d'uso
     └── Outbound/
         ├── Persistence/EloquentDocumentRepository.php
         ├── Ocr/TextractOcrAdapter.php               # implementa OcrGatewayPort
         ├── Ai/BedrockDocumentAiAdapter.php           # implementa DocumentAiGatewayPort
-        └── Storage/FlysystemDocumentStorageAdapter.php
+        ├── Storage/FlysystemDocumentStorageAdapter.php
+        └── Pdf/DompdfSendMessageRenderer.php
 
 app/Mvp/Communications/
-├── Domain/Ports/{Inbound,Outbound}/   # stessa forma: GenerateCommunicationUseCase,
-│                                       # FavoriteCommunicationUseCase, CommunicationRepository,
-│                                       # CommunicationAiGatewayPort, CommunicationPdfRendererPort,
-│                                       # CommunicationCoverStoragePort, ...
+├── Domain/
+│   ├── Ports/{Inbound,Outbound}/      # GenerateCommunicationUseCase, StartCommunicationWorkflowUseCase,
+│   │                                   # CommunicationDraftUseCase, DeleteCommunicationUseCase,
+│   │                                   # UpdateCommunicationCoverUseCase, RateCommunicationUseCase,
+│   │                                   # ExportCommunicationUseCase, PromptConfigurationUseCase,
+│   │                                   # GenerateCommunicationTextUseCase, GenerateCommunicationCoverUseCase,
+│   │                                   # FinalizeCommunicationUseCase, ListCommunicationsUseCase;
+│   │                                   # CommunicationRepository, CommunicationAiGatewayPort,
+│   │                                   # CommunicationPdfRendererPort, CommunicationCoverStoragePort,
+│   │                                   # PromptConfigurationRepository
+│   ├── ValueObjects/, Commands/, Exceptions/
 ├── Application/UseCases/
 └── Adapters/
-    ├── Inbound/{Http,Workflow}/
+    ├── Primary/Workflow/CommunicationWorkflowTaskHandler.php
     └── Outbound/{Persistence,Ai,Pdf,Storage}/
 
 app/Mvp/Workflow/                       # invariato: infrastruttura condivisa, non ridisegnata
 ├── Contracts/WorkflowTaskHandler.php   # ora descritto come porta primaria "guidata da workflow"
+├── Ports/Outbound/WorkflowEnginePort.php  # astrae l'avvio di un'esecuzione Step Functions,
+│                                           # prima duplicato quasi identico in
+│                                           # DocumentWorkflowService e CommunicationWorkflowService
+│                                           # (entrambi iniettavano SfnClient direttamente).
+│                                           # Un solo adapter implementa la porta per entrambi i domini.
+├── Adapters/Outbound/SfnWorkflowEngineAdapter.php
 └── Services/{WorkflowTaskRegistry,WorkflowTaskRunner,WorkflowTaskHeartbeat}.php
-    └── Ports/Outbound/WorkflowEnginePort.php  # NUOVA: astrae l'avvio di un'esecuzione Step
-                                                 # Functions, oggi duplicato quasi identico in
-                                                 # DocumentWorkflowService e
-                                                 # CommunicationWorkflowService (entrambi
-                                                 # iniettano SfnClient direttamente).
-                                                 # Un solo adapter (SfnWorkflowEngineAdapter)
-                                                 # implementa la porta per entrambi i domini.
 ```
 
 Nota su `WorkflowEnginePort`: è l'unica porta condivisa fra i due domini. Non è
@@ -269,10 +288,29 @@ Pattern valutati e **scartati esplicitamente** (nessuna finzione che "andrebbero
 
 ## Implementation evidence
 
-Nessuna — questo ADR è `Proposed`: nessuna riga di codice del refactor è stata scritta. Diventerà
-`Accepted, implemented` (parziale, poi completo) via via che il Compito 3 (refactor incrementale
-dominio per dominio, con suite Pest verde ad ogni passaggio) procede, previa conferma esplicita
-del richiedente.
+Refactor completato per entrambi i domini del perimetro, dominio per dominio, con la suite Pest
+verde ad ogni passaggio (commit separati):
+
+- **Documents** (Co-Pilot CdL): porte, casi d'uso e adapter come da struttura sopra; Controller
+  (`DocumentController`, `DocumentReviewController`, `SendMessageController`) riscritti come
+  adapter primari sottili; `DocumentWorkflowTaskHandler` spostato in `Adapters/Primary/Workflow/`
+  e ridotto a dispatch verso le porte primarie del dominio.
+- **Communications** (AI Assistant): stessa struttura; `CommunicationController`,
+  `CommunicationCoverController`, `CommunicationRatingController`, `CommunicationExportController`,
+  `PromptConfigurationController` riscritti come adapter primari sottili; le precondizioni di
+  stato (bozza scartata, non pronta per l'export, rigenerazione non disponibile, ecc.), prima
+  verificate nel controller, sono migrate nei casi d'uso applicativi come eccezioni di dominio
+  (`Domain/Exceptions/*`), che l'adapter HTTP si limita a tradurre nello status code corretto.
+- `WorkflowEnginePort`/`SfnWorkflowEngineAdapter`: porta condivisa introdotta come previsto,
+  un solo adapter per entrambi i domini.
+- Verifica di conformità automatica alla Dependency Rule: `scripts/ci/check-dependency-rule.sh`,
+  eseguito da `make verify-backend` e dal job `backend` della CI — fallisce se un file sotto
+  `app/Mvp/{Documents,Communications}/Domain/` referenzia `Illuminate\*`, `Aws\*` o
+  `App\Models\*`.
+- Comportamento osservabile preservato: contratto OpenAPI, status HTTP ed effetti sul DB
+  invariati (verificato da `OpenApiContractTest` e dalla suite Pest esistente, 307 test verdi).
+- `Identity`, `Audit`, `Observability`, `Support` e l'infrastruttura di `Workflow` non sono stati
+  toccati oltre a `WorkflowEnginePort`, come da perimetro deciso sopra.
 
 ## Related documents
 
