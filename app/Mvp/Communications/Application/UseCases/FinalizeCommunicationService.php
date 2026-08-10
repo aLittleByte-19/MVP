@@ -9,12 +9,14 @@ use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPor
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Enums\CoverImageStatus;
+use Psr\Clock\ClockInterface;
 
 class FinalizeCommunicationService implements FinalizeCommunicationUseCase
 {
     public function __construct(
         private readonly CommunicationRepository $communications,
         private readonly CommunicationEventDispatcherPort $events,
+        private readonly ClockInterface $clock,
     ) {}
 
     public function finalize(int $communicationId): array
@@ -40,7 +42,7 @@ class FinalizeCommunicationService implements FinalizeCommunicationUseCase
 
         $this->communications->updateCommunication($communicationId, [
             'generation_status' => CommunicationGenerationStatus::Completed,
-            'workflow_completed_at' => now(),
+            'workflow_completed_at' => $this->clock->now(),
         ]);
         $this->events->dispatch(new CommunicationWorkflowCompleted($communicationId, $communication->tenantId));
 

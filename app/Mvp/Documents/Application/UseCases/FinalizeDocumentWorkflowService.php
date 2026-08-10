@@ -7,12 +7,14 @@ use App\Mvp\Documents\Domain\Ports\Inbound\FinalizeDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Enums\ProcessingStatus;
+use Psr\Clock\ClockInterface;
 
 class FinalizeDocumentWorkflowService implements FinalizeDocumentWorkflowUseCase
 {
     public function __construct(
         private readonly DocumentRepository $documents,
         private readonly DocumentEventDispatcherPort $events,
+        private readonly ClockInterface $clock,
     ) {}
 
     public function currentStatus(int $documentId): string
@@ -26,7 +28,7 @@ class FinalizeDocumentWorkflowService implements FinalizeDocumentWorkflowUseCase
         $completed = $document->processingStatus === ProcessingStatus::Completed->value;
 
         if ($completed && ! $document->workflowCompleted) {
-            $this->documents->updateOriginalDocument($documentId, ['workflow_completed_at' => now()]);
+            $this->documents->updateOriginalDocument($documentId, ['workflow_completed_at' => $this->clock->now()]);
         }
 
         $this->events->dispatch(new DocumentWorkflowCompleted($documentId, $document->tenantId));
