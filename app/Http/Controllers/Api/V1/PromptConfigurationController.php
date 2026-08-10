@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesActor;
 use App\Http\Requests\SavePromptConfigurationRequest;
 use App\Models\PromptConfiguration;
-use App\Mvp\Audit\Services\AuditLogger;
-use App\Mvp\Communications\Services\PromptConfigurationNamer;
+use App\Mvp\Communications\Domain\Commands\SavePromptConfigurationCommand;
+use App\Mvp\Communications\Domain\Ports\Inbound\PromptConfigurationUseCase;
 use App\Mvp\Identity\MvpUser;
 use App\Mvp\Support\MvpStateService;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -14,9 +14,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Preset di prompt riutilizzabili (UC-19): indipendenti da una generazione
- * effettiva, servono solo a precompilare il form con testo/tono/stile gia'
- * usati in passato.
+ * Adapter primario HTTP: preset di prompt riutilizzabili (UC-19). Nessuna
+ * regola di business qui (vedi ADR 0010); l'ownership resta un controllo di
+ * trasporto, come per PromptConfigurationUseCase::delete().
  */
 class PromptConfigurationController
 {
@@ -24,30 +24,21 @@ class PromptConfigurationController
 
     public function store(
         SavePromptConfigurationRequest $request,
-        PromptConfigurationNamer $namer,
-        AuditLogger $audit,
+        PromptConfigurationUseCase $configurations,
         MvpStateService $state,
     ): JsonResponse {
         $actor = $this->actor($request);
         $validated = $request->validated();
 
-        $configuration = PromptConfiguration::create([
-            'tenant_id' => $actor->tenantId,
-            'created_by' => $actor->id,
-            'name' => $namer->resolve($actor->tenantId, $validated['name'] ?? null),
-            'prompt' => $validated['prompt'],
-            'tone' => $validated['tone'],
-            'style' => $validated['style'],
-        ]);
+        $configurationId = $configurations->save(new SavePromptConfigurationCommand(
+            name: $validated['name'] ?? null,
+            prompt: $validated['prompt'],
+            tone: $validated['tone'],
+            style: $validated['style'],
+            actor: $actor,
+        ));
 
-        $audit->record(
-            'mvp-prompt-configuration-saved',
-            $actor,
-            'prompt_configuration',
-            (string) $configuration->id,
-            ['name' => $configuration->name],
-            $request,
-        );
+        $configuration = PromptConfiguration::query()->findOrFail($configurationId);
 
         return response()->json([
             'message' => 'Configurazione salvata.',
@@ -62,22 +53,13 @@ class PromptConfigurationController
     public function destroy(
         Request $request,
         PromptConfiguration $promptConfiguration,
-        AuditLogger $audit,
+        PromptConfigurationUseCase $configurations,
         MvpStateService $state,
     ): JsonResponse {
         $actor = $this->actor($request);
         $this->assertOwnership($promptConfiguration, $actor);
 
-        $promptConfiguration->delete();
-
-        $audit->record(
-            'mvp-prompt-configuration-deleted',
-            $actor,
-            'prompt_configuration',
-            (string) $promptConfiguration->id,
-            [],
-            $request,
-        );
+        $configurations->delete($promptConfiguration->id, $actor);
 
         return response()->json([
             'message' => 'Configurazione eliminata.',
