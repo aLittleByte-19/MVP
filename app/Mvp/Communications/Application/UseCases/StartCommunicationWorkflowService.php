@@ -2,17 +2,19 @@
 
 namespace App\Mvp\Communications\Application\UseCases;
 
-use App\Mvp\Audit\Services\AuditLogger;
+use App\Mvp\Communications\Domain\Events\CommunicationRegenerationRequested;
+use App\Mvp\Communications\Domain\Events\CommunicationWorkflowStarted;
+use App\Mvp\Communications\Domain\Events\CommunicationWorkflowStartFailed;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationAlreadyDiscardedException;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationRegenerationUnavailableException;
 use App\Mvp\Communications\Domain\Ports\Inbound\StartCommunicationWorkflowUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
+use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Enums\CommunicationStatus;
 use App\Mvp\Communications\Enums\CoverImageStatus;
 use App\Mvp\Identity\MvpUser;
-use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Support\WorkflowContext;
 use Illuminate\Support\Str;
@@ -30,8 +32,7 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
         private readonly CommunicationRepository $communications,
         private readonly CommunicationCoverStoragePort $coverStorage,
         private readonly WorkflowEnginePort $workflowEngine,
-        private readonly AuditLogger $audit,
-        private readonly MetricsRecorder $metrics,
+        private readonly CommunicationEventDispatcherPort $events,
         private readonly WorkflowContext $context,
         private readonly ClockInterface $clock,
     ) {}
@@ -77,17 +78,14 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
                 'cover_error' => null,
             ]);
 
-            $this->audit->record(
-                'mvp-communication-workflow-started',
-                null,
-                'communication',
-                (string) $communicationId,
-                ['execution_arn' => $executionArn, 'state_machine_arn' => $stateMachineArn, 'task_queue_url' => $taskQueueUrl],
-                tenantId: $communication->tenantId,
-            );
-            $this->metrics->recordDomainCounter('stepfunctions_executions_started_total', [
-                'state_machine' => $this->shortName($stateMachineArn),
-            ]);
+            $this->events->dispatch(new CommunicationWorkflowStarted(
+                $communicationId,
+                $communication->tenantId,
+                $executionArn,
+                $stateMachineArn,
+                $this->shortName($stateMachineArn),
+                $taskQueueUrl,
+            ));
         } catch (\Throwable $e) {
             $this->communications->updateCommunication($communicationId, [
                 'generation_status' => CommunicationGenerationStatus::Failed,
@@ -95,17 +93,12 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
                 'workflow_failure_reason' => $e->getMessage(),
                 'error_message' => 'Avvio della generazione non disponibile.',
             ]);
-            $this->audit->record(
-                'mvp-communication-workflow-start-failed',
-                null,
-                'communication',
-                (string) $communicationId,
-                ['message' => $e->getMessage()],
-                tenantId: $communication->tenantId,
-            );
-            $this->metrics->recordDomainCounter('stepfunctions_executions_failed_total', [
-                'state_machine' => $this->shortName($stateMachineArn),
-            ]);
+            $this->events->dispatch(new CommunicationWorkflowStartFailed(
+                $communicationId,
+                $communication->tenantId,
+                $e->getMessage(),
+                $this->shortName($stateMachineArn),
+            ));
 
             throw $e;
         }
@@ -141,14 +134,7 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
             'cover_error' => null,
         ]);
 
-        $this->audit->record(
-            'mvp-communication-regeneration-requested',
-            $actor,
-            'communication',
-            (string) $communicationId,
-            [],
-            tenantId: $communication->tenantId,
-        );
+        $this->events->dispatch(new CommunicationRegenerationRequested($communicationId, $communication->tenantId, $actor));
 
         $this->start($communicationId, $correlationId, $requestId);
     }
