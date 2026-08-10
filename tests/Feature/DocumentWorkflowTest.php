@@ -3,17 +3,27 @@
 use App\Models\AuditEvent;
 use App\Models\OriginalDocument;
 use App\Models\WorkflowTask;
-use App\Mvp\Audit\Services\AuditLogger;
+use App\Mvp\Documents\Application\UseCases\StartDocumentWorkflowService;
 use App\Mvp\Documents\Enums\ProcessingStatus;
-use App\Mvp\Documents\Services\DocumentWorkflowService;
-use App\Mvp\Observability\MetricsRecorder;
+use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Services\WorkflowTaskRunner;
-use Aws\Command;
-use Aws\Exception\AwsException;
-use Aws\Result;
-use Aws\Sfn\SfnClient;
+use Mockery\MockInterface;
 
-test('document workflow service starts a Step Functions execution and stores metadata', function () {
+/**
+ * Testa StartDocumentWorkflowService (adapter secondario WorkflowEnginePort
+ * mockato, resto reale) invece del vecchio DocumentWorkflowService: stessa
+ * copertura, ma al confine della porta invece che dell'SDK AWS diretto.
+ */
+function mvpStartDocumentWorkflowService(?MockInterface $workflowEngine = null): StartDocumentWorkflowService
+{
+    if ($workflowEngine !== null) {
+        app()->instance(WorkflowEnginePort::class, $workflowEngine);
+    }
+
+    return app(StartDocumentWorkflowService::class);
+}
+
+test('start document workflow service starts a Step Functions execution and stores metadata', function () {
     config([
         'services.workflow.state_machine_arn' => 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-document-pipeline',
         'services.workflow.task_queue_url' => 'http://localstack:4566/000000000000/mvp-documents',
@@ -22,80 +32,79 @@ test('document workflow service starts a Step Functions execution and stores met
         'filesystems.disks.s3.root' => null,
     ]);
 
-    $client = Mockery::mock(SfnClient::class);
-    $client->shouldReceive('startExecution')
+    $engine = Mockery::mock(WorkflowEnginePort::class);
+    $engine->shouldReceive('startExecution')
         ->once()
-        ->with(Mockery::on(function (array $payload): bool {
-            $input = json_decode($payload['input'], true);
-
-            return $payload['stateMachineArn'] === 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-document-pipeline'
-                && str_starts_with($payload['name'], 'mvp-doc-')
-                && $input['document_id'] > 0
-                && $input['task_queue_url'] === 'http://localstack:4566/000000000000/mvp-documents'
-                && $input['s3_bucket'] === 'mvp-documents-local';
-        }))
-        ->andReturn(new Result([
-            'executionArn' => 'arn:aws:states:eu-north-1:000000000000:execution:mvp-document-pipeline:test',
-        ]));
+        ->with(
+            'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-document-pipeline',
+            Mockery::on(fn (string $name) => str_starts_with($name, 'mvp-doc-')),
+            Mockery::on(function (array $input): bool {
+                return $input['document_id'] > 0
+                    && $input['task_queue_url'] === 'http://localstack:4566/000000000000/mvp-documents'
+                    && $input['s3_bucket'] === 'mvp-documents-local';
+            }),
+        )
+        ->andReturn('arn:aws:states:eu-north-1:000000000000:execution:mvp-document-pipeline:test');
 
     $document = OriginalDocument::factory()->create([
         'processing_status' => ProcessingStatus::Pending,
         'file_path' => 'documents/originals/test.pdf',
     ]);
-    $service = new DocumentWorkflowService($client, app(AuditLogger::class), app(MetricsRecorder::class));
 
-    $started = $service->start($document);
+    mvpStartDocumentWorkflowService($engine)->start($document->id, null, null);
 
-    expect($started->processing_status)->toBe(ProcessingStatus::Processing)
-        ->and($started->workflow_execution_arn)->toBe('arn:aws:states:eu-north-1:000000000000:execution:mvp-document-pipeline:test')
-        ->and($started->s3_bucket)->toBe('mvp-documents-local')
-        ->and($started->s3_key)->toBe('documents/originals/test.pdf')
+    $document->refresh();
+    expect($document->processing_status)->toBe(ProcessingStatus::Processing)
+        ->and($document->workflow_execution_arn)->toBe('arn:aws:states:eu-north-1:000000000000:execution:mvp-document-pipeline:test')
+        ->and($document->s3_bucket)->toBe('mvp-documents-local')
+        ->and($document->s3_key)->toBe('documents/originals/test.pdf')
         ->and(AuditEvent::query()->where('event_type', 'mvp-document-workflow-started')->count())->toBe(1);
 });
 
-test('document workflow does not start the same processing execution twice', function () {
+test('start document workflow does not start the same processing execution twice', function () {
     $document = OriginalDocument::factory()->create([
         'processing_status' => ProcessingStatus::Processing,
         'workflow_execution_arn' => 'arn:aws:states:eu-north-1:000000000000:execution:mvp-document-pipeline:running',
     ]);
-    $client = Mockery::mock(SfnClient::class);
-    $client->shouldNotReceive('startExecution');
-    $service = new DocumentWorkflowService($client, app(AuditLogger::class), app(MetricsRecorder::class));
+    $engine = Mockery::mock(WorkflowEnginePort::class);
+    $engine->shouldNotReceive('startExecution');
 
-    expect($service->start($document))->toBe($document);
+    mvpStartDocumentWorkflowService($engine)->start($document->id, null, null);
+
+    expect(true)->toBeTrue(); // Nessuna eccezione: il mock avrebbe fallito se startExecution fosse stato chiamato.
 });
 
-test('document workflow rejects incomplete runtime configuration', function () {
+test('start document workflow rejects incomplete runtime configuration', function () {
     config([
         'services.workflow.state_machine_arn' => '',
         'services.workflow.task_queue_url' => '',
         'queue.connections.sqs.prefix' => '',
         'queue.connections.sqs.queue' => '',
     ]);
-    $client = Mockery::mock(SfnClient::class);
-    $client->shouldNotReceive('startExecution');
-    $service = new DocumentWorkflowService($client, app(AuditLogger::class), app(MetricsRecorder::class));
+    $engine = Mockery::mock(WorkflowEnginePort::class);
+    $engine->shouldNotReceive('startExecution');
+    $document = OriginalDocument::factory()->create();
 
-    expect(fn () => $service->start(OriginalDocument::factory()->create()))
+    expect(fn () => mvpStartDocumentWorkflowService($engine)->start($document->id, null, null))
         ->toThrow(RuntimeException::class, 'Workflow documentale non configurato');
 });
 
-test('document workflow rejects real Textract with a local document disk', function () {
+test('start document workflow rejects real Textract with a local document disk', function () {
     config([
         'services.workflow.state_machine_arn' => 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-document-pipeline',
         'services.workflow.task_queue_url' => 'http://localstack:4566/000000000000/mvp-documents',
         'services.textract.enabled' => true,
         'mvp.documents.storage_disk' => 's3',
     ]);
-    $client = Mockery::mock(SfnClient::class);
-    $client->shouldNotReceive('startExecution');
-    $service = new DocumentWorkflowService($client, app(AuditLogger::class), app(MetricsRecorder::class));
+    $engine = Mockery::mock(WorkflowEnginePort::class);
+    $engine->shouldNotReceive('startExecution');
+    $document = OriginalDocument::factory()->create();
 
-    expect(fn () => $service->start(OriginalDocument::factory()->create()))
+    expect(fn () => mvpStartDocumentWorkflowService($engine)->start($document->id, null, null))
         ->toThrow(RuntimeException::class, 'Textract è abilitato');
 });
 
-test('document workflow records and exposes a Step Functions start failure', function () {
+test('start document workflow records and exposes a Step Functions start failure', function () {
     config([
         'services.workflow.state_machine_arn' => 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-document-pipeline',
         'services.workflow.task_queue_url' => 'http://localstack:4566/000000000000/mvp-documents',
@@ -103,29 +112,26 @@ test('document workflow records and exposes a Step Functions start failure', fun
         'mvp.documents.storage_disk' => 's3',
         'filesystems.disks.s3.bucket' => 'mvp-documents-local',
     ]);
-    $failure = new AwsException('Access denied', new Command('StartExecution'), [
-        'code' => 'AccessDeniedException',
-        'message' => 'Step Functions denied the request',
-    ]);
-    $client = Mockery::mock(SfnClient::class);
-    $client->shouldReceive('startExecution')->once()->andThrow($failure);
+    $engine = Mockery::mock(WorkflowEnginePort::class);
+    $engine->shouldReceive('startExecution')
+        ->once()
+        ->andThrow(new RuntimeException('Impossibile avviare la pipeline Step Functions: Access denied'));
     $document = OriginalDocument::factory()->create([
         'processing_status' => ProcessingStatus::Pending,
         'file_path' => 'documents/originals/test.pdf',
     ]);
-    $service = new DocumentWorkflowService($client, app(AuditLogger::class), app(MetricsRecorder::class));
 
-    expect(fn () => $service->start($document))
+    expect(fn () => mvpStartDocumentWorkflowService($engine)->start($document->id, null, null))
         ->toThrow(RuntimeException::class, 'Impossibile avviare la pipeline Step Functions');
 
     $document->refresh();
     expect($document->processing_status)->toBe(ProcessingStatus::Failed)
-        ->and($document->workflow_failure_reason)->toBe('Access denied')
+        ->and($document->workflow_failure_reason)->toBe('Impossibile avviare la pipeline Step Functions: Access denied')
         ->and($document->error_message)->toBe('Avvio workflow documentale non disponibile.')
         ->and(AuditEvent::query()->where('event_type', 'mvp-document-workflow-start-failed')->count())->toBe(1);
 });
 
-test('document workflow persists unexpected start failures before rethrowing them', function () {
+test('start document workflow persists unexpected start failures before rethrowing them', function () {
     config([
         'services.workflow.state_machine_arn' => 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-document-pipeline',
         'services.workflow.task_queue_url' => 'http://localstack:4566/000000000000/mvp-documents',
@@ -133,12 +139,12 @@ test('document workflow persists unexpected start failures before rethrowing the
         'mvp.documents.storage_disk' => 's3',
         'filesystems.disks.s3.bucket' => 'mvp-documents-local',
     ]);
-    $client = Mockery::mock(SfnClient::class);
-    $client->shouldReceive('startExecution')->once()->andThrow(new LogicException('Invalid local payload'));
+    $engine = Mockery::mock(WorkflowEnginePort::class);
+    $engine->shouldReceive('startExecution')->once()->andThrow(new LogicException('Invalid local payload'));
     $document = OriginalDocument::factory()->create(['file_path' => 'documents/originals/test.pdf']);
-    $service = new DocumentWorkflowService($client, app(AuditLogger::class), app(MetricsRecorder::class));
 
-    expect(fn () => $service->start($document))->toThrow(LogicException::class, 'Invalid local payload');
+    expect(fn () => mvpStartDocumentWorkflowService($engine)->start($document->id, null, null))
+        ->toThrow(LogicException::class, 'Invalid local payload');
     expect($document->refresh()->processing_status)->toBe(ProcessingStatus::Failed);
 });
 

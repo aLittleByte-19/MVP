@@ -1,0 +1,35 @@
+<?php
+
+namespace App\Mvp\Documents\Application\UseCases;
+
+use App\Mvp\Documents\Domain\Ports\Inbound\FinalizeDocumentWorkflowUseCase;
+use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
+use App\Mvp\Documents\Enums\ProcessingStatus;
+use App\Mvp\Observability\MetricsRecorder;
+
+class FinalizeDocumentWorkflowService implements FinalizeDocumentWorkflowUseCase
+{
+    public function __construct(
+        private readonly DocumentRepository $documents,
+        private readonly MetricsRecorder $metrics,
+    ) {}
+
+    public function currentStatus(int $documentId): string
+    {
+        return $this->documents->findOriginalDocument($documentId)->processingStatus;
+    }
+
+    public function dispatchCompletionEvent(int $documentId): array
+    {
+        $document = $this->documents->findOriginalDocument($documentId);
+        $completed = $document->processingStatus === ProcessingStatus::Completed->value;
+
+        if ($completed && ! $document->workflowCompleted) {
+            $this->documents->updateOriginalDocument($documentId, ['workflow_completed_at' => now()]);
+        }
+
+        $this->metrics->recordDomainCounter('document_workflow_completed_total');
+
+        return ['event' => $completed ? 'DocumentPipelineCompleted' : 'DocumentPipelineProgressed'];
+    }
+}

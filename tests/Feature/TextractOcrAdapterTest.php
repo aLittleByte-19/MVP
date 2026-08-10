@@ -1,8 +1,7 @@
 <?php
 
-use App\Models\OriginalDocument;
+use App\Mvp\Documents\Adapters\Outbound\Ocr\TextractOcrAdapter;
 use App\Mvp\Observability\MetricsRecorder;
-use App\Mvp\Ocr\Services\TextractService;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
 use Aws\Command;
 use Aws\Exception\AwsException;
@@ -12,15 +11,17 @@ use Aws\Textract\TextractClient;
 
 /**
  * Textract non viene mai contattato davvero: il client AWS e' un doppio e le
- * risposte sono simulate. Interessa il comportamento del servizio (assemblaggio
- * del testo, media di confidenza, paginazione, errori), non il servizio remoto.
+ * risposte sono simulate. Interessa il comportamento dell'adapter (assemblaggio
+ * del testo, media di confidenza, paginazione, errori), non il servizio remoto,
+ * e non la persistenza: quella e' responsabilita' del caso d'uso applicativo
+ * che chiama questo adapter tramite OcrGatewayPort (vedi RunOcrUseCaseTest).
  */
-function mvpMakeTextractService(TextractClient $client, ?MetricsRecorder $metrics = null): TextractService
+function mvpMakeTextractAdapter(TextractClient $client, ?MetricsRecorder $metrics = null): TextractOcrAdapter
 {
     // Heartbeat mai attivato: resta no-op fuori da un task workflow.
     $heartbeat = new WorkflowTaskHeartbeat(Mockery::mock(SfnClient::class), app(MetricsRecorder::class));
 
-    return new TextractService($client, $metrics ?? app(MetricsRecorder::class), $heartbeat);
+    return new TextractOcrAdapter($client, $metrics ?? app(MetricsRecorder::class), $heartbeat);
 }
 
 /** Blocco LINE come lo restituisce Textract. */
@@ -49,15 +50,14 @@ test('textract disabled returns an empty result without contacting aws', functio
     $client = Mockery::mock(TextractClient::class);
     $client->shouldNotReceive('startDocumentTextDetection');
 
-    $result = mvpMakeTextractService($client)
-        ->detectText('bucket', 'chiave.pdf', OriginalDocument::factory()->create());
+    $result = mvpMakeTextractAdapter($client)->detectText('bucket', 'chiave.pdf', 'mvp-document-1-abc');
 
     expect($result)->toBe([
         'enabled' => false,
-        'job_id' => null,
+        'jobId' => null,
         'text' => null,
         'pages' => [],
-        'confidence_avg' => null,
+        'confidenceAvg' => null,
     ]);
 });
 
@@ -65,7 +65,7 @@ test('textract requires a real bucket and key', function (string $bucket, string
     $client = Mockery::mock(TextractClient::class);
     $client->shouldNotReceive('startDocumentTextDetection');
 
-    expect(fn () => mvpMakeTextractService($client)->detectText($bucket, $key, OriginalDocument::factory()->create()))
+    expect(fn () => mvpMakeTextractAdapter($client)->detectText($bucket, $key, 'mvp-document-1-abc'))
         ->toThrow(RuntimeException::class, 'Textract richiede bucket e key S3 reali.');
 })->with([
     'bucket vuoto' => ['', 'chiave.pdf'],
@@ -73,8 +73,6 @@ test('textract requires a real bucket and key', function (string $bucket, string
 ]);
 
 test('a completed job assembles the text and averages the confidence per page', function () {
-    $document = OriginalDocument::factory()->create();
-
     $client = Mockery::mock(TextractClient::class);
     $client->shouldReceive('startDocumentTextDetection')
         ->once()
@@ -91,49 +89,30 @@ test('a completed job assembles the text and averages the confidence per page', 
             ],
         ]));
 
-    $result = mvpMakeTextractService($client)->detectText('bucket', 'chiave.pdf', $document);
+    $result = mvpMakeTextractAdapter($client)->detectText('bucket', 'chiave.pdf', 'mvp-document-1-abc');
 
     expect($result['enabled'])->toBeTrue()
-        ->and($result['job_id'])->toBe('job-123')
+        ->and($result['jobId'])->toBe('job-123')
         // I blocchi che non sono LINE restano fuori dal testo.
         ->and($result['text'])->toBe("Cedolino marzo\nMario Rossi\nCedolino aprile")
-        ->and($result['confidence_avg'])->toBe(80.0)
+        ->and($result['confidenceAvg'])->toBe(80.0)
         ->and($result['pages'])->toBe([
-            ['page' => 1, 'text' => "Cedolino marzo\nMario Rossi", 'confidence_avg' => 85.0],
-            ['page' => 2, 'text' => 'Cedolino aprile', 'confidence_avg' => 70.0],
+            ['page' => 1, 'text' => "Cedolino marzo\nMario Rossi", 'confidenceAvg' => 85.0],
+            ['page' => 2, 'text' => 'Cedolino aprile', 'confidenceAvg' => 70.0],
         ]);
-
-    $document->refresh();
-    expect($document->textract_job_id)->toBe('job-123')
-        ->and($document->ocr_text)->toBe("Cedolino marzo\nMario Rossi\nCedolino aprile")
-        ->and((float) $document->ocr_confidence_avg)->toBe(80.0);
 });
 
-test('the idempotency token depends on the s3 object, not only on the document', function () {
-    // Dopo un reset e un nuovo upload lo stesso id documento punta a un file
-    // diverso: un token fisso farebbe scattare IdempotentParameterMismatch
-    // contro il job precedente.
-    $document = OriginalDocument::factory()->create();
-    $tokens = [];
-
+test('the idempotency key is passed through as both request token and job tag', function () {
     $client = Mockery::mock(TextractClient::class);
     $client->shouldReceive('startDocumentTextDetection')
-        ->twice()
-        ->andReturnUsing(function (array $params) use (&$tokens) {
-            $tokens[] = $params['ClientRequestToken'];
-
-            return new Result(['JobId' => 'job-'.count($tokens)]);
-        });
+        ->once()
+        ->withArgs(fn (array $params) => $params['ClientRequestToken'] === 'mvp-document-1-abc' && $params['JobTag'] === 'mvp-document-1-abc')
+        ->andReturn(new Result(['JobId' => 'job-1']));
     $client->shouldReceive('getDocumentTextDetection')
-        ->twice()
+        ->once()
         ->andReturn(new Result(['JobStatus' => 'SUCCEEDED', 'Blocks' => []]));
 
-    $service = mvpMakeTextractService($client);
-    $service->detectText('bucket', 'primo.pdf', $document);
-    $service->detectText('bucket', 'secondo.pdf', $document);
-
-    expect($tokens[0])->not->toBe($tokens[1])
-        ->and($tokens[0])->toStartWith('mvp-document-'.$document->id.'-');
+    mvpMakeTextractAdapter($client)->detectText('bucket', 'chiave.pdf', 'mvp-document-1-abc');
 });
 
 test('paginated results are collected across pages', function () {
@@ -146,8 +125,7 @@ test('paginated results are collected across pages', function () {
             new Result(['JobStatus' => 'SUCCEEDED', 'Blocks' => [mvpLine('seconda parte')]]),
         );
 
-    $result = mvpMakeTextractService($client)
-        ->detectText('bucket', 'chiave.pdf', OriginalDocument::factory()->create());
+    $result = mvpMakeTextractAdapter($client)->detectText('bucket', 'chiave.pdf', 'mvp-document-1-abc');
 
     expect($result['text'])->toBe("prima parte\nseconda parte");
 });
@@ -162,8 +140,7 @@ test('a job still running is polled again until it succeeds', function () {
             new Result(['JobStatus' => 'SUCCEEDED', 'Blocks' => [mvpLine('pronto')]]),
         );
 
-    $result = mvpMakeTextractService($client)
-        ->detectText('bucket', 'chiave.pdf', OriginalDocument::factory()->create());
+    $result = mvpMakeTextractAdapter($client)->detectText('bucket', 'chiave.pdf', 'mvp-document-1-abc');
 
     expect($result['text'])->toBe('pronto');
 });
@@ -175,8 +152,7 @@ test('a job marked failed surfaces the message returned by textract', function (
         ->once()
         ->andReturn(new Result(['JobStatus' => 'FAILED', 'StatusMessage' => 'Documento corrotto.']));
 
-    expect(fn () => mvpMakeTextractService($client)
-        ->detectText('bucket', 'chiave.pdf', OriginalDocument::factory()->create()))
+    expect(fn () => mvpMakeTextractAdapter($client)->detectText('bucket', 'chiave.pdf', 'mvp-document-1-abc'))
         ->toThrow(RuntimeException::class, 'Documento corrotto.');
 });
 
@@ -188,8 +164,7 @@ test('polling gives up once the timeout has passed', function () {
     $client->shouldReceive('getDocumentTextDetection')
         ->andReturn(new Result(['JobStatus' => 'IN_PROGRESS']));
 
-    expect(fn () => mvpMakeTextractService($client)
-        ->detectText('bucket', 'chiave.pdf', OriginalDocument::factory()->create()))
+    expect(fn () => mvpMakeTextractAdapter($client)->detectText('bucket', 'chiave.pdf', 'mvp-document-1-abc'))
         ->toThrow(RuntimeException::class, 'Timeout Textract dopo 1 secondi.');
 });
 
@@ -203,12 +178,11 @@ test('lines without a confidence value leave the average undefined', function ()
             'Blocks' => [mvpLine('senza confidenza', 1, null)],
         ]));
 
-    $result = mvpMakeTextractService($client)
-        ->detectText('bucket', 'chiave.pdf', OriginalDocument::factory()->create());
+    $result = mvpMakeTextractAdapter($client)->detectText('bucket', 'chiave.pdf', 'mvp-document-1-abc');
 
     // Meglio nessun valore che uno zero, che si leggerebbe come "pessima".
-    expect($result['confidence_avg'])->toBeNull()
-        ->and($result['pages'][0]['confidence_avg'])->toBeNull();
+    expect($result['confidenceAvg'])->toBeNull()
+        ->and($result['pages'][0]['confidenceAvg'])->toBeNull();
 });
 
 test('aws failures are translated into an actionable message', function (string $awsCode, string $expected) {
@@ -220,8 +194,7 @@ test('aws failures are translated into an actionable message', function (string 
             'message' => 'errore grezzo',
         ]));
 
-    expect(fn () => mvpMakeTextractService($client)
-        ->detectText('bucket', 'chiave.pdf', OriginalDocument::factory()->create()))
+    expect(fn () => mvpMakeTextractAdapter($client)->detectText('bucket', 'chiave.pdf', 'mvp-document-1-abc'))
         ->toThrow(RuntimeException::class, $expected);
 })->with([
     ['AccessDeniedException', 'Textract non autorizzato: verifica IAM e bucket S3 reale.'],

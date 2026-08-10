@@ -103,7 +103,7 @@ class ResetMvpData extends Command
         $documentDisk = (string) config('mvp.documents.storage_disk', config('filesystems.default', 'local'));
 
         // I documenti sono salvati in "originals/" e "sub/" relativi al root del
-        // disk (vedi DocumentProcessingService); "documents/" resta per pulire
+        // disk (vedi ProcessDocumentService); "documents/" resta per pulire
         // eventuali dati pregressi del vecchio layout.
         Storage::disk($documentDisk)->deleteDirectory('originals');
         Storage::disk($documentDisk)->deleteDirectory('sub');

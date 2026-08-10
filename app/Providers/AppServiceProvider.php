@@ -8,10 +8,38 @@ use App\Mvp\Ai\AiOutputValidator;
 use App\Mvp\Ai\BedrockService;
 use App\Mvp\Audit\Services\AuditLogger;
 use App\Mvp\Communications\Services\CommunicationWorkflowTaskHandler;
-use App\Mvp\Documents\Services\DocumentProcessingService;
-use App\Mvp\Documents\Services\DocumentWorkflowTaskHandler;
+use App\Mvp\Documents\Adapters\Outbound\Ai\BedrockDocumentAiAdapter;
+use App\Mvp\Documents\Adapters\Outbound\Ocr\TextractOcrAdapter;
+use App\Mvp\Documents\Adapters\Outbound\Pdf\DompdfSendMessageRenderer;
+use App\Mvp\Documents\Adapters\Outbound\Persistence\EloquentDocumentRepository;
+use App\Mvp\Documents\Adapters\Outbound\Storage\FlysystemDocumentStorageAdapter;
+use App\Mvp\Documents\Adapters\Primary\Workflow\DocumentWorkflowTaskHandler;
+use App\Mvp\Documents\Application\UseCases\DeleteDocumentService;
+use App\Mvp\Documents\Application\UseCases\FinalizeDocumentWorkflowService;
+use App\Mvp\Documents\Application\UseCases\ListDocumentsService;
+use App\Mvp\Documents\Application\UseCases\ProcessDocumentService;
+use App\Mvp\Documents\Application\UseCases\ReviewDocumentService;
+use App\Mvp\Documents\Application\UseCases\RunOcrService;
+use App\Mvp\Documents\Application\UseCases\SendMessageService;
+use App\Mvp\Documents\Application\UseCases\StartDocumentWorkflowService;
+use App\Mvp\Documents\Application\UseCases\UploadDocumentService;
+use App\Mvp\Documents\Domain\Ports\Inbound\DeleteDocumentUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\FinalizeDocumentWorkflowUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\ListDocumentsUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\ProcessDocumentUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\ReviewDocumentUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\RunOcrUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\SendMessageUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\StartDocumentWorkflowUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\UploadDocumentUseCase;
+use App\Mvp\Documents\Domain\Ports\Outbound\DocumentAiGatewayPort;
+use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
+use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
+use App\Mvp\Documents\Domain\Ports\Outbound\OcrGatewayPort;
+use App\Mvp\Documents\Domain\Ports\Outbound\SendMessageRendererPort;
 use App\Mvp\Observability\MetricsRecorder;
-use App\Mvp\Ocr\Services\TextractService;
+use App\Mvp\Workflow\Adapters\Outbound\SfnWorkflowEngineAdapter;
+use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
 use App\Mvp\Workflow\Services\WorkflowTaskRegistry;
 use App\Mvp\Workflow\Support\WorkflowContext;
@@ -102,22 +130,26 @@ class AppServiceProvider extends ServiceProvider
             );
         });
 
-        $this->app->singleton(TextractService::class, function ($app) {
-            return new TextractService(
-                $app->make(TextractClient::class),
-                $app->make(MetricsRecorder::class),
-                $app->make(WorkflowTaskHeartbeat::class),
-            );
-        });
+        // --- Dominio Documents: porta -> adapter (vedi ADR 0010) ---
+        $this->app->singleton(OcrGatewayPort::class, TextractOcrAdapter::class);
+        $this->app->singleton(DocumentAiGatewayPort::class, BedrockDocumentAiAdapter::class);
+        $this->app->singleton(DocumentStoragePort::class, FlysystemDocumentStorageAdapter::class);
+        $this->app->singleton(DocumentRepository::class, EloquentDocumentRepository::class);
+        $this->app->singleton(SendMessageRendererPort::class, DompdfSendMessageRenderer::class);
 
-        $this->app->singleton(DocumentProcessingService::class, function ($app) {
-            return new DocumentProcessingService(
-                $app->make(BedrockService::class),
-                $app->make(AuditLogger::class),
-                $app->make(WorkflowTaskHeartbeat::class),
-                $app->make(MetricsRecorder::class),
-            );
-        });
+        // Workflow: porta condivisa fra Documents e Communications.
+        $this->app->singleton(WorkflowEnginePort::class, SfnWorkflowEngineAdapter::class);
+
+        // Documents: porta primaria -> caso d'uso applicativo.
+        $this->app->bind(UploadDocumentUseCase::class, UploadDocumentService::class);
+        $this->app->bind(StartDocumentWorkflowUseCase::class, StartDocumentWorkflowService::class);
+        $this->app->bind(ListDocumentsUseCase::class, ListDocumentsService::class);
+        $this->app->bind(DeleteDocumentUseCase::class, DeleteDocumentService::class);
+        $this->app->bind(RunOcrUseCase::class, RunOcrService::class);
+        $this->app->bind(ProcessDocumentUseCase::class, ProcessDocumentService::class);
+        $this->app->bind(FinalizeDocumentWorkflowUseCase::class, FinalizeDocumentWorkflowService::class);
+        $this->app->bind(ReviewDocumentUseCase::class, ReviewDocumentService::class);
+        $this->app->bind(SendMessageUseCase::class, SendMessageService::class);
 
         // Correlation id del messaggio in lavorazione: singleton perche' il
         // consumer lo popola e AuditLogger lo rilegge nello stesso processo.

@@ -1,15 +1,20 @@
 <?php
 
-namespace App\Mvp\Ocr\Services;
+namespace App\Mvp\Documents\Adapters\Outbound\Ocr;
 
-use App\Models\OriginalDocument;
+use App\Mvp\Documents\Domain\Ports\Outbound\OcrGatewayPort;
 use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
 use Aws\Exception\AwsException;
 use Aws\Textract\TextractClient;
 use Illuminate\Support\Facades\Log;
 
-class TextractService
+/**
+ * Adapter secondario: implementa {@see OcrGatewayPort} sopra Amazon Textract.
+ * Non tocca la persistenza dell'aggregato: restituisce il risultato grezzo,
+ * chi orchestra il caso d'uso decide cosa salvarne e dove.
+ */
+class TextractOcrAdapter implements OcrGatewayPort
 {
     public function __construct(
         private readonly TextractClient $client,
@@ -17,20 +22,17 @@ class TextractService
         private readonly WorkflowTaskHeartbeat $heartbeat,
     ) {}
 
-    /**
-     * @return array{enabled: bool, job_id: ?string, text: ?string, pages: array<int, array{page: int, text: string, confidence_avg: float|null}>, confidence_avg: ?float}
-     */
-    public function detectText(string $bucket, string $key, OriginalDocument $document): array
+    public function detectText(string $bucket, string $key, string $idempotencyKey): array
     {
         if (! (bool) config('services.textract.enabled')) {
             $this->metrics->recordDomainCounter('textract_jobs_skipped_total', ['reason' => 'disabled']);
 
             return [
                 'enabled' => false,
-                'job_id' => null,
+                'jobId' => null,
                 'text' => null,
                 'pages' => [],
-                'confidence_avg' => null,
+                'confidenceAvg' => null,
             ];
         }
 
@@ -41,12 +43,6 @@ class TextractService
         $startedAt = microtime(true);
 
         try {
-            // Il token di idempotenza deve dipendere anche dall'oggetto S3, non
-            // solo dall'id documento: dopo un reset/re-upload lo stesso id può
-            // puntare a un file diverso, e un token fisso farebbe scattare
-            // IdempotentParameterMismatchException contro il job precedente.
-            $requestToken = 'mvp-document-'.$document->id.'-'.substr(hash('sha256', $bucket.'/'.$key), 0, 24);
-
             $result = $this->client->startDocumentTextDetection([
                 'DocumentLocation' => [
                     'S3Object' => [
@@ -54,39 +50,32 @@ class TextractService
                         'Name' => $key,
                     ],
                 ],
-                'ClientRequestToken' => $requestToken,
-                'JobTag' => 'mvp-document-'.$document->id,
+                'ClientRequestToken' => $idempotencyKey,
+                'JobTag' => $idempotencyKey,
             ]);
 
             $jobId = (string) $result->get('JobId');
-            $document->update(['textract_job_id' => $jobId]);
             $this->metrics->recordDomainCounter('textract_jobs_started_total');
 
             $output = $this->pollTextDetection($jobId, $startedAt);
-            $document->update([
-                'ocr_text' => $output['text'],
-                'ocr_pages' => $output['pages'],
-                'ocr_confidence_avg' => $output['confidence_avg'],
-            ]);
             $this->metrics->recordDomainCounter('textract_jobs_completed_total');
-            $this->metrics->recordDomainCounter('textract_confidence_sum', [], (float) ($output['confidence_avg'] ?? 0));
+            $this->metrics->recordDomainCounter('textract_confidence_sum', [], (float) ($output['confidenceAvg'] ?? 0));
             $this->metrics->recordDomainCounter('textract_confidence_count');
             $this->metrics->recordDomainCounter('textract_duration_seconds_sum', [], microtime(true) - $startedAt);
             $this->metrics->recordDomainCounter('textract_duration_seconds_count');
 
             return [
                 'enabled' => true,
-                'job_id' => $jobId,
+                'jobId' => $jobId,
                 'text' => $output['text'],
                 'pages' => $output['pages'],
-                'confidence_avg' => $output['confidence_avg'],
+                'confidenceAvg' => $output['confidenceAvg'],
             ];
         } catch (AwsException $e) {
             $this->metrics->recordDomainCounter('textract_jobs_failed_total', [
                 'error' => $this->awsErrorCode($e),
             ]);
             Log::error('Textract OCR failed', [
-                'document_id' => $document->id,
                 'bucket' => $bucket,
                 'key' => $key,
                 'aws_error' => $this->awsErrorCode($e),
@@ -98,7 +87,7 @@ class TextractService
     }
 
     /**
-     * @return array{text: string, pages: array<int, array{page: int, text: string, confidence_avg: float|null}>, confidence_avg: ?float}
+     * @return array{text: string, pages: array<int, array{page: int, text: string, confidenceAvg: float|null}>, confidenceAvg: ?float}
      */
     private function pollTextDetection(string $jobId, float $startedAt): array
     {
@@ -170,14 +159,14 @@ class TextractService
             $pages[] = [
                 'page' => $page,
                 'text' => trim(implode("\n", array_filter($bucket['lines'] ?? []))),
-                'confidence_avg' => $pageConfidences === [] ? null : array_sum($pageConfidences) / count($pageConfidences),
+                'confidenceAvg' => $pageConfidences === [] ? null : array_sum($pageConfidences) / count($pageConfidences),
             ];
         }
 
         return [
             'text' => trim(implode("\n", array_filter($lines))),
             'pages' => $pages,
-            'confidence_avg' => $confidences === [] ? null : array_sum($confidences) / count($confidences),
+            'confidenceAvg' => $confidences === [] ? null : array_sum($confidences) / count($confidences),
         ];
     }
 
