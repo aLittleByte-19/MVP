@@ -7,7 +7,41 @@ use App\Models\OriginalDocument;
 use App\Mvp\Ai\AiOutputValidator;
 use App\Mvp\Ai\BedrockService;
 use App\Mvp\Audit\Services\AuditLogger;
-use App\Mvp\Communications\Services\CommunicationWorkflowTaskHandler;
+use App\Mvp\Communications\Adapters\Outbound\Ai\BedrockCommunicationAiAdapter;
+use App\Mvp\Communications\Adapters\Outbound\Pdf\DompdfCommunicationPdfRenderer;
+use App\Mvp\Communications\Adapters\Outbound\Persistence\EloquentCommunicationRepository;
+use App\Mvp\Communications\Adapters\Outbound\Persistence\EloquentPromptConfigurationRepository;
+use App\Mvp\Communications\Adapters\Outbound\Storage\FlysystemCommunicationCoverAdapter;
+use App\Mvp\Communications\Adapters\Primary\Workflow\CommunicationWorkflowTaskHandler;
+use App\Mvp\Communications\Application\UseCases\CommunicationDraftService;
+use App\Mvp\Communications\Application\UseCases\DeleteCommunicationService;
+use App\Mvp\Communications\Application\UseCases\ExportCommunicationService;
+use App\Mvp\Communications\Application\UseCases\FinalizeCommunicationService;
+use App\Mvp\Communications\Application\UseCases\GenerateCommunicationCoverService;
+use App\Mvp\Communications\Application\UseCases\GenerateCommunicationService;
+use App\Mvp\Communications\Application\UseCases\GenerateCommunicationTextService;
+use App\Mvp\Communications\Application\UseCases\ListCommunicationsService;
+use App\Mvp\Communications\Application\UseCases\PromptConfigurationService;
+use App\Mvp\Communications\Application\UseCases\RateCommunicationService;
+use App\Mvp\Communications\Application\UseCases\StartCommunicationWorkflowService;
+use App\Mvp\Communications\Application\UseCases\UpdateCommunicationCoverService;
+use App\Mvp\Communications\Domain\Ports\Inbound\CommunicationDraftUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\DeleteCommunicationUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\ExportCommunicationUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\FinalizeCommunicationUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationCoverUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationTextUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\ListCommunicationsUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\PromptConfigurationUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\RateCommunicationUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\StartCommunicationWorkflowUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\UpdateCommunicationCoverUseCase;
+use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationAiGatewayPort;
+use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
+use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationPdfRendererPort;
+use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
+use App\Mvp\Communications\Domain\Ports\Outbound\PromptConfigurationRepository;
 use App\Mvp\Documents\Adapters\Outbound\Ai\BedrockDocumentAiAdapter;
 use App\Mvp\Documents\Adapters\Outbound\Ocr\TextractOcrAdapter;
 use App\Mvp\Documents\Adapters\Outbound\Pdf\DompdfSendMessageRenderer;
@@ -150,6 +184,27 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(FinalizeDocumentWorkflowUseCase::class, FinalizeDocumentWorkflowService::class);
         $this->app->bind(ReviewDocumentUseCase::class, ReviewDocumentService::class);
         $this->app->bind(SendMessageUseCase::class, SendMessageService::class);
+
+        // --- Dominio Communications: porta -> adapter (vedi ADR 0010) ---
+        $this->app->singleton(CommunicationAiGatewayPort::class, BedrockCommunicationAiAdapter::class);
+        $this->app->singleton(CommunicationPdfRendererPort::class, DompdfCommunicationPdfRenderer::class);
+        $this->app->singleton(CommunicationCoverStoragePort::class, FlysystemCommunicationCoverAdapter::class);
+        $this->app->singleton(CommunicationRepository::class, EloquentCommunicationRepository::class);
+        $this->app->singleton(PromptConfigurationRepository::class, EloquentPromptConfigurationRepository::class);
+
+        // Communications: porta primaria -> caso d'uso applicativo.
+        $this->app->bind(GenerateCommunicationUseCase::class, GenerateCommunicationService::class);
+        $this->app->bind(StartCommunicationWorkflowUseCase::class, StartCommunicationWorkflowService::class);
+        $this->app->bind(ListCommunicationsUseCase::class, ListCommunicationsService::class);
+        $this->app->bind(CommunicationDraftUseCase::class, CommunicationDraftService::class);
+        $this->app->bind(DeleteCommunicationUseCase::class, DeleteCommunicationService::class);
+        $this->app->bind(UpdateCommunicationCoverUseCase::class, UpdateCommunicationCoverService::class);
+        $this->app->bind(RateCommunicationUseCase::class, RateCommunicationService::class);
+        $this->app->bind(ExportCommunicationUseCase::class, ExportCommunicationService::class);
+        $this->app->bind(PromptConfigurationUseCase::class, PromptConfigurationService::class);
+        $this->app->bind(GenerateCommunicationTextUseCase::class, GenerateCommunicationTextService::class);
+        $this->app->bind(GenerateCommunicationCoverUseCase::class, GenerateCommunicationCoverService::class);
+        $this->app->bind(FinalizeCommunicationUseCase::class, FinalizeCommunicationService::class);
 
         // Correlation id del messaggio in lavorazione: singleton perche' il
         // consumer lo popola e AuditLogger lo rilegge nello stesso processo.

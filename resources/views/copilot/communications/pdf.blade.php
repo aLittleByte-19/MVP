@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
     <meta charset="utf-8">
-    <title>{{ $communication->generated_title }}</title>
+    <title>{{ $title }}</title>
     <style>
         @page {
             margin: 80px 60px 70px 60px;
@@ -36,10 +36,10 @@
         </div>
     @endif
     <p class="eyebrow">Comunicazione</p>
-    <h1>{{ $communication->generated_title }}</h1>
+    <h1>{{ $title }}</h1>
     <hr class="rule">
     <div class="body">
-        @foreach (preg_split('/\n{2,}/', trim((string) $communication->generated_body)) as $paragraph)
+        @foreach (preg_split('/\n{2,}/', trim((string) $body)) as $paragraph)
             <p>{{ $paragraph }}</p>
         @endforeach
     </div>

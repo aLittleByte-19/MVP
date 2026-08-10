@@ -4,7 +4,6 @@ use App\Models\Communication;
 use App\Models\ExtractedData;
 use App\Models\PromptConfiguration;
 use App\Models\SubDocument;
-use App\Mvp\Communications\Services\CommunicationWorkflowService;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -47,11 +46,16 @@ test('GET /api/v1/state senza ruolo abilitato rispetta il contratto per il 403',
 });
 
 test('POST /api/v1/communications rispetta il contratto OpenAPI', function () {
-    $workflow = Mockery::mock(CommunicationWorkflowService::class);
-    $workflow->shouldReceive('start')
+    config([
+        'services.workflow.communications_state_machine_arn' => config('services.workflow.communications_state_machine_arn') ?: 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-communication-pipeline',
+        'services.workflow.communications_task_queue_url' => config('services.workflow.communications_task_queue_url') ?: 'http://localstack:4566/000000000000/mvp-communications',
+    ]);
+
+    $engine = Mockery::mock(WorkflowEnginePort::class);
+    $engine->shouldReceive('startExecution')
         ->once()
-        ->andReturnUsing(fn (Communication $communication) => $communication);
-    app()->instance(CommunicationWorkflowService::class, $workflow);
+        ->andReturn('arn:aws:states:eu-north-1:000000000000:execution:fake:mvp-comm-test');
+    app()->instance(WorkflowEnginePort::class, $engine);
 
     $response = $this->postJson('/api/v1/communications', [
         'prompt' => 'Comunica i nuovi orari di apertura degli uffici',
