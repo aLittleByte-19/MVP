@@ -183,11 +183,11 @@ app/Mvp/Communications/
 │   │                                   # CommunicationPdfRendererPort, CommunicationCoverStoragePort,
 │   │                                   # PromptConfigurationRepository, CommunicationEventDispatcherPort
 │   ├── ValueObjects/                  # ..., CommunicationDraftBuilder (Builder, vedi tabella pattern)
-│   ├── Events/                        # 10 eventi di dominio (Observer, vedi tabella pattern)
+│   ├── Events/                        # 14 eventi di dominio (Observer, vedi tabella pattern)
 │   ├── Commands/, Exceptions/
 ├── Application/
 │   ├── UseCases/
-│   └── Listeners/                     # 10 listener: un evento -> audit/metriche
+│   └── Listeners/                     # 14 listener: un evento -> audit/metriche
 └── Adapters/
     ├── Primary/Workflow/CommunicationWorkflowTaskHandler.php
     └── Outbound/{Persistence,Ai,Pdf,Storage,Events}/
@@ -235,7 +235,7 @@ completare l'elenco della specifica tecnica.
 | **Factory Method** | Creazionale | `WorkflowTaskRegistry::for(string $taskType): WorkflowTaskHandler` (già esistente, riletto in chiave esagonale come selettore dell'adapter primario corretto per tipo di task) | Centralizza la selezione dell'implementazione a runtime in un solo punto, senza che il chiamante (`WorkflowTaskRunner`) conosca le classi concrete. | Il runner dovrebbe istanziare/selezionare l'handler con logica propria, duplicata ad ogni punto di invocazione. |
 | **Builder** | Creazionale | `CommunicationDraftBuilder` (`Communications/Domain/ValueObjects/`), usato da `GenerateCommunicationTextService` e `GenerateCommunicationCoverService`: assembla il contenuto della bozza attraverso i passi asincroni (`generate_text` → `generate_cover`), rifiutando esplicitamente `withGeneratedCover()` se il testo non è ancora stato generato (`CoverPrecedesTextException`) | Prima lo stato parziale valido ad ogni fase era implicito nei rami dei singoli `Application Service`. Il Builder esplicita l'invariante ("dopo `generate_text` titolo e corpo sono impostati, la copertina no", richiesto perché `generate_cover` usa `image_prompt` scritto dal passo testuale) invece di lasciarlo dedotto dal codice. | Lo stato intermedio valido resta implicito e verificabile solo leggendo ogni `Service`; un nuovo passo aggiunto fuori ordine produce uno stato incoerente senza che nulla lo impedisca. |
 | **Singleton** | Creazionale | Binding dei client AWS e degli adapter nel service provider — invariato nella sostanza, ma ora bindato **all'interfaccia di porta**, non alla classe concreta | I client AWS restano condivisi (costruzione costosa, connection reuse); il binding diventa il punto in cui si sceglie *quale* adapter soddisfa la porta. | Nessun punto unico di sostituzione: cambiare adapter richiederebbe cercare e modificare ogni type-hint concreto nella codebase (situazione attuale). |
-| **Observer** | Comportamentale | Applicato simmetricamente a entrambi i domini, porte separate (non condivise: gli eventi sono specifici del dominio). Communications: 10 eventi (`Communications/Domain/Events/`) via `CommunicationEventDispatcherPort` → `LaravelCommunicationEventDispatcher`, 10 listener. Documents: 11 eventi (`Documents/Domain/Events/`) via `DocumentEventDispatcherPort` → `LaravelDocumentEventDispatcher`, 11 listener, su `ProcessDocumentService`, `DeleteDocumentService`, `ReviewDocumentService`, `SendMessageService`, `FinalizeDocumentWorkflowService` | Prima le chiamate ad audit/metriche erano sparse manualmente in ogni `Application Service`: la coppia audit+metrica per "copertina degradata" (Communications) era duplicata due volte (degrado da errore modello/storage e degrado da timeout in `finalize`) — con l'evento unico quella duplicazione sparisce. | Ogni nuova reazione a un evento (es. una notifica futura) richiederebbe toccare ogni caso d'uso che genera quell'evento, invece di aggiungere un listener. |
+| **Observer** | Comportamentale | Applicato simmetricamente a entrambi i domini, porte separate (non condivise: gli eventi sono specifici del dominio). Communications: 14 eventi (`Communications/Domain/Events/`) via `CommunicationEventDispatcherPort` → `LaravelCommunicationEventDispatcher`, 14 listener (copre anche `DeleteCommunicationService`, `RateCommunicationService`, `PromptConfigurationService`). Documents: 11 eventi (`Documents/Domain/Events/`) via `DocumentEventDispatcherPort` → `LaravelDocumentEventDispatcher`, 11 listener, su `ProcessDocumentService`, `DeleteDocumentService`, `ReviewDocumentService`, `SendMessageService`, `FinalizeDocumentWorkflowService` | Prima le chiamate ad audit/metriche erano sparse manualmente in ogni `Application Service`: la coppia audit+metrica per "copertina degradata" (Communications) era duplicata due volte (degrado da errore modello/storage e degrado da timeout in `finalize`) — con l'evento unico quella duplicazione sparisce. | Ogni nuova reazione a un evento (es. una notifica futura) richiederebbe toccare ogni caso d'uso che genera quell'evento, invece di aggiungere un listener. |
 | **Command** | Comportamentale | Ogni caso d'uso applicativo è una classe dedicata a una porta primaria, coerente con la forma già usata da `WorkflowTaskHandler::execute()` | Un caso d'uso = una porta primaria = una responsabilità, testabile in isolamento passando mock delle porte secondarie. | I casi d'uso resterebbero metodi dentro service "fat" con più responsabilità (situazione precedente di `DocumentProcessingService`, `CommunicationWorkflowService`). |
 
 Nota di onestà su Command: l'idea originale ("un caso d'uso = una classe con un solo metodo
@@ -321,7 +321,7 @@ verde ad ogni passaggio (commit separati):
   un solo adapter per entrambi i domini.
 - **Builder e Observer chiusi** (inizialmente solo "individuati" in questo ADR, non
   implementati): `CommunicationDraftBuilder` in `Communications/Domain/ValueObjects/` esplicita
-  l'invariante testo-prima-di-copertina; 10 eventi di dominio in `Communications/Domain/Events/`
+  l'invariante testo-prima-di-copertina; 14 eventi di dominio in `Communications/Domain/Events/`
   con altrettanti listener in `Communications/Application/Listeners/`, pubblicati tramite la
   nuova porta `CommunicationEventDispatcherPort` (`LaravelCommunicationEventDispatcher`),
   sostituiscono le chiamate dirette ad `AuditLogger`/`MetricsRecorder` sparse nei casi d'uso —
@@ -363,9 +363,24 @@ verde ad ogni passaggio (commit separati):
   `RunOcrService`) — `ProcessDocumentService::process()` resta fuori: manipola PDF reali via Fpdi e
   chiama l'helper Laravel `storage_path()`, non testabile in isolamento per lo stesso motivo di
   `FinalizeDocumentWorkflowService`/`StartDocumentWorkflowService` (helper `now()` → facade `Date`,
-  vedi trade-off sotto). 343 test verdi in totale (307 Feature/Unit preesistenti + 21 DomainUnit
+  vedi trade-off sotto). 349 test verdi in totale (307 Feature/Unit preesistenti + 27 DomainUnit
   Communications + 15 DomainUnit Documents), stesso conteggio Feature di prima: nessuna regressione
   di comportamento.
+- **Asimmetria fra domini chiusa**: la prima passata su Communications (10 eventi) non copriva
+  `DeleteCommunicationService`, `RateCommunicationService`, `PromptConfigurationService`, mentre la
+  passata simmetrica su Documents copriva sia `DeleteDocumentService` che `ReviewDocumentService` —
+  un'incoerenza emersa dal fatto che lo scope si e' allargato in corsa, non una scelta deliberata.
+  Chiusa aggiungendo `CommunicationDeleted`, `CommunicationRated`, `PromptConfigurationSaved`,
+  `PromptConfigurationDeleted` (14 eventi Communications in totale) e due nuovi test
+  (`DeleteCommunicationServiceTest`, `PromptConfigurationServiceTest`; `RateCommunicationService`
+  resta bloccato da `now()`, come gia' documentato sotto).
+- **Bug trovato scrivendo questi ultimi test**: due file riusavano una funzione helper globale
+  (`fakeActor()`) dichiarata in un terzo file, senza ridichiararla. Passava con `php artisan test`
+  seriale ma falliva con `--parallel`: Paratest distribuisce i file di test fra processi worker
+  separati, e una funzione globale dichiarata in un file non e' visibile in un altro se finiscono
+  su worker diversi. Corretto dando a ogni file la propria funzione locale, univoca per nome
+  (pattern gia' seguito correttamente in `tests/DomainUnit/Documents/`) — verificato rieseguendo
+  la suite intera con `--parallel`, non solo il sotto-insieme fallito.
 - **Trade-off noto, non risolto**: molti casi d'uso restano legati a `config()` per parametri di
   runtime genuinamente variabili per ambiente (`StartCommunicationWorkflowService`,
   `StartDocumentWorkflowService` in particolare: ARN di state machine, URL di coda, guardia

@@ -2,9 +2,11 @@
 
 namespace App\Mvp\Communications\Application\UseCases;
 
-use App\Mvp\Audit\Services\AuditLogger;
 use App\Mvp\Communications\Domain\Commands\SavePromptConfigurationCommand;
+use App\Mvp\Communications\Domain\Events\PromptConfigurationDeleted;
+use App\Mvp\Communications\Domain\Events\PromptConfigurationSaved;
 use App\Mvp\Communications\Domain\Ports\Inbound\PromptConfigurationUseCase;
+use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\PromptConfigurationRepository;
 use App\Mvp\Identity\MvpUser;
 
@@ -12,7 +14,7 @@ class PromptConfigurationService implements PromptConfigurationUseCase
 {
     public function __construct(
         private readonly PromptConfigurationRepository $configurations,
-        private readonly AuditLogger $audit,
+        private readonly CommunicationEventDispatcherPort $events,
     ) {}
 
     public function save(SavePromptConfigurationCommand $command): int
@@ -28,13 +30,7 @@ class PromptConfigurationService implements PromptConfigurationUseCase
             'style' => $command->style,
         ]);
 
-        $this->audit->record(
-            'mvp-prompt-configuration-saved',
-            $command->actor,
-            'prompt_configuration',
-            (string) $configurationId,
-            ['name' => $name],
-        );
+        $this->events->dispatch(new PromptConfigurationSaved($configurationId, $command->actor, $name));
 
         return $configurationId;
     }
@@ -43,7 +39,7 @@ class PromptConfigurationService implements PromptConfigurationUseCase
     {
         $this->configurations->delete($configurationId);
 
-        $this->audit->record('mvp-prompt-configuration-deleted', $actor, 'prompt_configuration', (string) $configurationId);
+        $this->events->dispatch(new PromptConfigurationDeleted($configurationId, $actor));
     }
 
     /**
