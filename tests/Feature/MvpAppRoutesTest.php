@@ -14,8 +14,8 @@ use App\Mvp\Communications\Enums\SendStatus;
 use App\Mvp\Communications\Services\CommunicationCoverService;
 use App\Mvp\Communications\Services\CommunicationWorkflowService;
 use App\Mvp\Documents\Enums\ReviewStatus;
-use App\Mvp\Documents\Services\DocumentWorkflowService;
 use App\Mvp\Observability\MetricsRecorder;
+use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Services\WorkflowTaskRunner;
 use App\Mvp\Workflow\Support\WorkflowContext;
 use Aws\Result;
@@ -50,20 +50,29 @@ function mvpAssertWellFormedPdf(string $bytes): void
 
 function mvpMockWorkflowStart(object $test): void
 {
-    $mock = Mockery::mock(DocumentWorkflowService::class);
-    $mock->shouldReceive('start')
-        ->once()
-        ->andReturnUsing(fn (OriginalDocument $document) => $document);
+    // Prima, l'intero DocumentWorkflowService era mockato: il suo guard di
+    // configurazione non veniva mai eseguito. Ora si mocka solo la porta
+    // secondaria (WorkflowEnginePort): StartDocumentWorkflowService gira per
+    // davvero, quindi la configurazione minima deve essere presente.
+    config([
+        'services.workflow.state_machine_arn' => config('services.workflow.state_machine_arn') ?: 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-document-pipeline',
+        'services.workflow.task_queue_url' => config('services.workflow.task_queue_url') ?: 'http://localstack:4566/000000000000/mvp-documents',
+    ]);
 
-    app()->instance(DocumentWorkflowService::class, $mock);
+    $mock = Mockery::mock(WorkflowEnginePort::class);
+    $mock->shouldReceive('startExecution')
+        ->once()
+        ->andReturn('arn:aws:states:eu-north-1:000000000000:execution:fake:mvp-doc-test');
+
+    app()->instance(WorkflowEnginePort::class, $mock);
 }
 
 function mvpMockWorkflowNotStarted(): void
 {
-    $mock = Mockery::mock(DocumentWorkflowService::class);
-    $mock->shouldNotReceive('start');
+    $mock = Mockery::mock(WorkflowEnginePort::class);
+    $mock->shouldNotReceive('startExecution');
 
-    app()->instance(DocumentWorkflowService::class, $mock);
+    app()->instance(WorkflowEnginePort::class, $mock);
 }
 
 function mvpMockCommunicationWorkflowStart(object $test): void

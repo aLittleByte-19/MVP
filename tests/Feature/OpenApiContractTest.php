@@ -2,11 +2,10 @@
 
 use App\Models\Communication;
 use App\Models\ExtractedData;
-use App\Models\OriginalDocument;
 use App\Models\PromptConfiguration;
 use App\Models\SubDocument;
 use App\Mvp\Communications\Services\CommunicationWorkflowService;
-use App\Mvp\Documents\Services\DocumentWorkflowService;
+use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use setasign\Fpdi\Fpdi;
@@ -193,11 +192,16 @@ test('DELETE /api/v1/communications/{communication}/favorite non preferita rispe
 test('POST /api/v1/documents/ocr rispetta il contratto OpenAPI', function () {
     Storage::fake('s3');
 
-    $workflow = Mockery::mock(DocumentWorkflowService::class);
-    $workflow->shouldReceive('start')
+    config([
+        'services.workflow.state_machine_arn' => config('services.workflow.state_machine_arn') ?: 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-document-pipeline',
+        'services.workflow.task_queue_url' => config('services.workflow.task_queue_url') ?: 'http://localstack:4566/000000000000/mvp-documents',
+    ]);
+
+    $workflow = Mockery::mock(WorkflowEnginePort::class);
+    $workflow->shouldReceive('startExecution')
         ->once()
-        ->andReturnUsing(fn (OriginalDocument $document) => $document);
-    app()->instance(DocumentWorkflowService::class, $workflow);
+        ->andReturn('arn:aws:states:eu-north-1:000000000000:execution:fake:mvp-doc-test');
+    app()->instance(WorkflowEnginePort::class, $workflow);
 
     $response = $this->postJson('/api/v1/documents/ocr', ['document' => contractPdfUpload()])
         ->assertStatus(202);

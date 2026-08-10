@@ -1,20 +1,32 @@
 <?php
 
-namespace App\Mvp\Documents\Services;
+namespace App\Mvp\Documents\Adapters\Primary\Workflow;
 
 use App\Models\OriginalDocument;
+use App\Mvp\Documents\Domain\Ports\Inbound\FinalizeDocumentWorkflowUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\ProcessDocumentUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\RunOcrUseCase;
 use App\Mvp\Documents\Enums\ProcessingStatus;
-use App\Mvp\Observability\MetricsRecorder;
-use App\Mvp\Ocr\Services\TextractService;
 use App\Mvp\Workflow\Contracts\WorkflowTaskHandler;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * Adapter primario guidato da Step Functions/SQS (invece che da HTTP):
+ * traduce ogni task di callback nella chiamata al caso d'uso corrispondente
+ * tramite la sua porta primaria. Nessuna regola di business qui — solo
+ * dispatch per tipo di task e traduzione del risultato nella forma che il
+ * runner si aspetta. Implementa il contratto condiviso WorkflowTaskHandler
+ * (infrastruttura di Workflow, fuori dal perimetro esagonale: vedi ADR 0010),
+ * quindi puo' legittimamente risolvere/aggiornare l'aggregato Eloquent per le
+ * proprie responsabilita' di adapter (resolveSubject, onFailure) — le
+ * decisioni di dominio restano nei casi d'uso iniettati.
+ */
 class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
 {
     public function __construct(
-        private readonly DocumentProcessingService $documents,
-        private readonly TextractService $textract,
-        private readonly MetricsRecorder $metrics,
+        private readonly RunOcrUseCase $runOcr,
+        private readonly ProcessDocumentUseCase $processDocument,
+        private readonly FinalizeDocumentWorkflowUseCase $finalize,
     ) {}
 
     /**
@@ -62,10 +74,10 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
         }
 
         return match ($taskType) {
-            'textract.ocr' => $this->runTextract($document, $message),
-            'bedrock.extract' => $this->runBedrockExtraction($document),
-            'persist.results' => $this->persistResults($document),
-            'dispatch.domain_event' => $this->dispatchDomainEvent($document),
+            'textract.ocr' => $this->runOcrStep($document, $message),
+            'bedrock.extract' => $this->processDocumentStep($document),
+            'persist.results' => ['skipped' => false, 'processing_status' => $this->finalize->currentStatus($document->id)],
+            'dispatch.domain_event' => array_merge(['skipped' => false], $this->finalize->dispatchCompletionEvent($document->id)),
             default => throw new \InvalidArgumentException("Task workflow non supportato: {$taskType}"),
         };
     }
@@ -78,8 +90,8 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
             'processing_status' => ProcessingStatus::Failed,
             'workflow_failed_at' => now(),
             'workflow_failure_reason' => $e->getMessage(),
-            // Il service di dominio ha gia' scritto un messaggio comprensibile
-            // per l'operatore: quello tecnico resta in workflow_failure_reason.
+            // Il caso d'uso ha gia' scritto un messaggio comprensibile per
+            // l'operatore: quello tecnico resta in workflow_failure_reason.
             'error_message' => $document->error_message ?: $e->getMessage(),
         ]);
     }
@@ -88,62 +100,30 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
      * @param  array<string, mixed>  $message
      * @return array<string, mixed>
      */
-    private function runTextract(OriginalDocument $document, array $message): array
+    private function runOcrStep(OriginalDocument $document, array $message): array
     {
-        $bucket = (string) ($message['s3Bucket'] ?? $message['s3_bucket'] ?? $document->s3_bucket ?? '');
-        $key = (string) ($message['s3Key'] ?? $message['s3_key'] ?? $document->s3_key ?? '');
-        $result = $this->textract->detectText($bucket, $key, $document);
+        $bucket = $message['s3Bucket'] ?? $message['s3_bucket'] ?? null;
+        $key = $message['s3Key'] ?? $message['s3_key'] ?? null;
+
+        $result = $this->runOcr->run($document->id, $bucket !== null ? (string) $bucket : null, $key !== null ? (string) $key : null);
 
         return [
-            'skipped' => ! $result['enabled'],
-            'textract_job_id' => $result['job_id'],
-            'ocr_confidence_avg' => $result['confidence_avg'],
+            'skipped' => $result['skipped'],
+            'textract_job_id' => $result['jobId'],
+            'ocr_confidence_avg' => $result['confidenceAvg'],
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function runBedrockExtraction(OriginalDocument $document): array
+    private function processDocumentStep(OriginalDocument $document): array
     {
-        $this->documents->process($document->refresh());
+        $this->processDocument->process($document->id);
 
         return [
             'skipped' => false,
             'sub_documents' => $document->refresh()->subDocuments()->count(),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function persistResults(OriginalDocument $document): array
-    {
-        $document->refresh();
-        $status = $document->processing_status;
-
-        return [
-            'skipped' => false,
-            'processing_status' => $status instanceof ProcessingStatus ? $status->value : (string) $status,
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function dispatchDomainEvent(OriginalDocument $document): array
-    {
-        if ($document->processing_status === ProcessingStatus::Completed && $document->workflow_completed_at === null) {
-            $document->update(['workflow_completed_at' => now()]);
-        }
-
-        $this->metrics->recordDomainCounter('document_workflow_completed_total');
-
-        return [
-            'skipped' => false,
-            'event' => $document->processing_status === ProcessingStatus::Completed
-                ? 'DocumentPipelineCompleted'
-                : 'DocumentPipelineProgressed',
         ];
     }
 

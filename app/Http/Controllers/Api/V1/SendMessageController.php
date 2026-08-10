@@ -6,99 +6,61 @@ use App\Http\Controllers\Api\V1\Concerns\AuthorizesDocuments;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesActor;
 use App\Http\Requests\UpdateSendMessageRequest;
 use App\Models\SubDocument;
-use App\Mvp\Audit\Services\AuditLogger;
-use App\Mvp\Communications\Enums\SendStatus;
-use App\Mvp\Documents\Services\SubDocumentSendMessageService;
+use App\Mvp\Documents\Domain\Ports\Inbound\SendMessageUseCase;
 use App\Mvp\Support\MvpStateService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 /**
- * Messaggio di invio precompilato: anteprima, esportazione PDF (che marca lo scaricamento) e correzione dei campi.
+ * Adapter primario HTTP: messaggio di invio precompilato. Traduce le
+ * richieste nel caso d'uso tramite la sua porta primaria (vedi ADR 0010).
  */
 class SendMessageController
 {
     use AuthorizesDocuments, ResolvesActor;
 
-    public function sendPreview(Request $request, SubDocument $subDocument, SubDocumentSendMessageService $messages): Response
+    public function sendPreview(Request $request, SubDocument $subDocument, SendMessageUseCase $sendMessage): Response
     {
         if ($subDocument->originalDocument) {
             $this->authorizeOriginalDocument($subDocument->originalDocument, $this->actor($request));
         }
 
-        return response($messages->renderPdf($subDocument), 200, [
+        $rendered = $sendMessage->preview($subDocument->id, $this->actor($request));
+
+        return response($rendered->pdf, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline',
         ]);
     }
 
-    public function sendExport(
-        Request $request,
-        SubDocument $subDocument,
-        SubDocumentSendMessageService $messages,
-        AuditLogger $audit,
-    ): Response {
+    public function sendExport(Request $request, SubDocument $subDocument, SendMessageUseCase $sendMessage): Response
+    {
         $actor = $this->actor($request);
 
         if ($subDocument->originalDocument) {
             $this->authorizeOriginalDocument($subDocument->originalDocument, $actor);
         }
 
-        $pdf = $messages->renderPdf($subDocument);
+        $rendered = $sendMessage->export($subDocument->id, $actor);
 
-        // Il recapito avviene fuori dalla piattaforma: il download del PDF e'
-        // l'ultimo evento osservabile, quindi e' quello che marca l'invio.
-        // Transizione a senso unico: un secondo download non cambia lo stato.
-        if ($subDocument->send_status === SendStatus::Pending) {
-            $subDocument->update(['send_status' => SendStatus::Sent]);
-
-            $audit->record(
-                'mvp-sub-document-send-exported',
-                $actor,
-                'sub_document',
-                (string) $subDocument->id,
-                ['sendStatus' => SendStatus::Sent->value],
-                $request,
-            );
-        }
-
-        return response($pdf, 200, [
+        return response($rendered->pdf, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="'.str_replace('"', '', $messages->filename($subDocument)).'"',
+            'Content-Disposition' => 'attachment; filename="'.str_replace('"', '', $rendered->filename).'"',
         ]);
     }
 
     public function updateSendMessage(
         UpdateSendMessageRequest $request,
         SubDocument $subDocument,
-        AuditLogger $audit,
+        SendMessageUseCase $sendMessage,
         MvpStateService $state,
     ): JsonResponse {
         $actor = $this->actor($request);
         $this->authorizeSubDocument($subDocument, $actor);
 
         $validated = $request->validated();
-        $subDocument->update([
-            'send_recipient_override' => array_key_exists('recipient', $validated)
-                ? $validated['recipient']
-                : $subDocument->send_recipient_override,
-            'send_subject_override' => array_key_exists('subject', $validated)
-                ? $validated['subject']
-                : $subDocument->send_subject_override,
-            'send_body_override' => array_key_exists('body', $validated)
-                ? $validated['body']
-                : $subDocument->send_body_override,
-        ]);
-
-        $audit->record(
-            'mvp-sub-document-send-message-corrected',
-            $actor,
-            'sub_document',
-            (string) $subDocument->id,
-            ['fields' => array_keys($validated)],
-            $request,
-        );
+        $sendMessage->updateOverrides($subDocument->id, $validated, $actor);
 
         return response()->json([
             'message' => 'Messaggio di invio aggiornato.',

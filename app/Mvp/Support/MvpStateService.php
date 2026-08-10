@@ -9,15 +9,10 @@ use App\Models\PromptConfiguration;
 use App\Models\SubDocument;
 use App\Mvp\Communications\Enums\CommunicationStatus;
 use App\Mvp\Documents\Enums\ReviewStatus;
-use App\Mvp\Documents\Services\SubDocumentSendMessageService;
 use App\Mvp\Identity\MvpUser;
 
 class MvpStateService
 {
-    public function __construct(
-        private readonly SubDocumentSendMessageService $sendMessages,
-    ) {}
-
     /**
      * @return array<string, mixed>
      */
@@ -197,7 +192,7 @@ class MvpStateService
             $previewLines[] = 'Errore estrazione: '.$subDocument->error_message;
         }
 
-        $sendMessage = $this->sendMessages->compose($subDocument);
+        $sendMessage = $this->composeSendMessage($subDocument, $data);
 
         return [
             'id' => 'sub-'.$subDocument->id,
@@ -234,5 +229,65 @@ class MvpStateService
             'sendExportUrl' => route('api.v1.documents.send-export', ['subDocument' => $subDocument->id], false),
             'previewLines' => $previewLines,
         ];
+    }
+
+    /**
+     * Compone destinatario/oggetto/testo del messaggio di invio precompilato
+     * (UC-48 e derivati) dai dati gia' estratti: nessuna generazione AI,
+     * calcolato al volo a ogni richiesta a meno che l'operatore non abbia
+     * corretto uno dei campi, nel qual caso vince l'override persistito su
+     * `sub_documents`. Duplica volutamente la stessa logica di
+     * `SendMessageService::compose()` nel dominio Documents: qui opera su un
+     * model Eloquent gia' caricato (MvpStateService resta infrastruttura di
+     * lettura condivisa, fuori dal perimetro esagonale, vedi ADR 0010), la'
+     * su un value object di dominio — condividerla accoppierebbe due livelli
+     * architetturali diversi per risparmiare una manciata di righe.
+     *
+     * @return array{recipient: string, subject: string, body: string}
+     */
+    private function composeSendMessage(SubDocument $subDocument, ?ExtractedData $data): array
+    {
+        $employeeName = trim(($data?->employee_first_name ?? '').' '.($data?->employee_last_name ?? ''));
+        $documentType = $data?->document_type;
+        $companyName = $data?->company_name;
+        $documentDate = $data?->document_date?->format('d/m/Y');
+
+        return [
+            'recipient' => $subDocument->send_recipient_override
+                ?: ($employeeName !== '' ? $employeeName : 'Destinatario non disponibile'),
+            'subject' => $subDocument->send_subject_override
+                ?: ($documentType ? "Invio documento — {$documentType}" : 'Invio documento'),
+            'body' => $subDocument->send_body_override
+                ?: $this->composeSendMessageBody($employeeName, $documentType, $companyName, $documentDate, $data?->description),
+        ];
+    }
+
+    private function composeSendMessageBody(string $employeeName, ?string $documentType, ?string $companyName, ?string $documentDate, ?string $description): string
+    {
+        $greeting = $employeeName !== '' ? "Gentile {$employeeName}," : 'Gentile destinatario,';
+        $documentLabel = $documentType ?: 'documento';
+        $reference = "in allegato trova il documento \"{$documentLabel}\"";
+
+        if ($companyName) {
+            $reference .= " relativo a {$companyName}";
+        }
+
+        if ($documentDate) {
+            $reference .= " del {$documentDate}";
+        }
+
+        $reference .= '.';
+
+        $lines = [$greeting, '', $reference];
+
+        if ($description) {
+            $lines[] = '';
+            $lines[] = $description;
+        }
+
+        $lines[] = '';
+        $lines[] = 'Cordiali saluti.';
+
+        return implode("\n", $lines);
     }
 }
