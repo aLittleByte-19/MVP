@@ -2,19 +2,19 @@
 
 namespace App\Mvp\Communications\Application\UseCases;
 
-use App\Mvp\Audit\Services\AuditLogger;
+use App\Mvp\Communications\Domain\Events\CommunicationCoverDegraded;
+use App\Mvp\Communications\Domain\Events\CommunicationWorkflowCompleted;
 use App\Mvp\Communications\Domain\Ports\Inbound\FinalizeCommunicationUseCase;
+use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Enums\CoverImageStatus;
-use App\Mvp\Observability\MetricsRecorder;
 
 class FinalizeCommunicationService implements FinalizeCommunicationUseCase
 {
     public function __construct(
         private readonly CommunicationRepository $communications,
-        private readonly AuditLogger $audit,
-        private readonly MetricsRecorder $metrics,
+        private readonly CommunicationEventDispatcherPort $events,
     ) {}
 
     public function finalize(int $communicationId): array
@@ -22,22 +22,19 @@ class FinalizeCommunicationService implements FinalizeCommunicationUseCase
         $communication = $this->communications->findCommunication($communicationId);
         $coverStatus = $communication->coverStatus;
 
-        // La copertina resta pending solo se il task e' stato saltato dal ramo
-        // di degrado dell'ASL (timeout o worker caduto): va chiusa qui,
-        // altrimenti la SPA continuerebbe ad aspettarla.
+        // La copertina resta pending/processing solo se il task e' stato
+        // saltato dal ramo di degrado dell'ASL (timeout o worker caduto): va
+        // chiusa qui, altrimenti la SPA continuerebbe ad aspettarla. Stesso
+        // evento CommunicationCoverDegraded usato da
+        // GenerateCommunicationCoverService::degrade() — prima la coppia
+        // audit+metrica era duplicata in entrambi i punti (vedi ADR 0010).
         if (in_array($coverStatus, [CoverImageStatus::Pending->value, CoverImageStatus::Processing->value], true)) {
+            $warning = 'Copertina AI non disponibile: generazione interrotta.';
             $this->communications->updateCommunication($communicationId, [
                 'cover_status' => CoverImageStatus::Failed,
-                'cover_error' => 'Copertina AI non disponibile: generazione interrotta.',
+                'cover_error' => $warning,
             ]);
-            $this->metrics->recordDomainCounter('communication_covers_failed_total', ['reason' => 'timeout']);
-            $this->audit->record(
-                'mvp-communication-cover-degraded',
-                resourceType: 'communication',
-                resourceId: (string) $communicationId,
-                metadata: ['reason' => 'timeout'],
-                tenantId: $communication->tenantId,
-            );
+            $this->events->dispatch(new CommunicationCoverDegraded($communicationId, $communication->tenantId, 'timeout', $warning));
             $coverStatus = CoverImageStatus::Failed->value;
         }
 
@@ -45,7 +42,7 @@ class FinalizeCommunicationService implements FinalizeCommunicationUseCase
             'generation_status' => CommunicationGenerationStatus::Completed,
             'workflow_completed_at' => now(),
         ]);
-        $this->metrics->recordDomainCounter('communication_workflow_completed_total');
+        $this->events->dispatch(new CommunicationWorkflowCompleted($communicationId, $communication->tenantId));
 
         return ['event' => 'CommunicationPipelineCompleted', 'coverStatus' => $coverStatus];
     }

@@ -177,12 +177,16 @@ app/Mvp/Communications/
 │   │                                   # FinalizeCommunicationUseCase, ListCommunicationsUseCase;
 │   │                                   # CommunicationRepository, CommunicationAiGatewayPort,
 │   │                                   # CommunicationPdfRendererPort, CommunicationCoverStoragePort,
-│   │                                   # PromptConfigurationRepository
-│   ├── ValueObjects/, Commands/, Exceptions/
-├── Application/UseCases/
+│   │                                   # PromptConfigurationRepository, CommunicationEventDispatcherPort
+│   ├── ValueObjects/                  # ..., CommunicationDraftBuilder (Builder, vedi tabella pattern)
+│   ├── Events/                        # 10 eventi di dominio (Observer, vedi tabella pattern)
+│   ├── Commands/, Exceptions/
+├── Application/
+│   ├── UseCases/
+│   └── Listeners/                     # 10 listener: un evento -> audit/metriche
 └── Adapters/
     ├── Primary/Workflow/CommunicationWorkflowTaskHandler.php
-    └── Outbound/{Persistence,Ai,Pdf,Storage}/
+    └── Outbound/{Persistence,Ai,Pdf,Storage,Events}/
 
 app/Mvp/Workflow/                       # invariato: infrastruttura condivisa, non ridisegnata
 ├── Contracts/WorkflowTaskHandler.php   # ora descritto come porta primaria "guidata da workflow"
@@ -225,10 +229,18 @@ completare l'elenco della specifica tecnica.
 | **Strategy** | Comportamentale | `WorkflowTaskHandler`, già esistente, generalizzato a porta primaria con adapter selezionato da `WorkflowTaskRegistry::for($taskType)` | `WorkflowTaskRunner` resta agnostico rispetto al dominio (dedup/claim/audit/metriche uguali per tutti); solo il passo di business varia. | `WorkflowTaskRunner` avrebbe bisogno di un `match`/`if` sul tipo di dominio, violando la Dependency Rule (l'infrastruttura di workflow dovrebbe conoscere i dettagli di Documents/Communications). |
 | **Facade** | Strutturale | I servizi applicativi (`SubmitDocumentUploadService`, `GenerateCommunicationService`, ...) offrono all'adapter primario un solo metodo pubblico che coordina più porte secondarie | Il Controller/`WorkflowTaskHandler` non deve sapere quanti collaboratori servono per soddisfare un caso d'uso (repository + gateway AI + storage + regola di dominio). | Il Controller orchestrerebbe direttamente 4-5 servizi (è la situazione odierna in `DocumentController`/`CommunicationController`). |
 | **Factory Method** | Creazionale | `WorkflowTaskRegistry::for(string $taskType): WorkflowTaskHandler` (già esistente, riletto in chiave esagonale come selettore dell'adapter primario corretto per tipo di task) | Centralizza la selezione dell'implementazione a runtime in un solo punto, senza che il chiamante (`WorkflowTaskRunner`) conosca le classi concrete. | Il runner dovrebbe istanziare/selezionare l'handler con logica propria, duplicata ad ogni punto di invocazione. |
-| **Builder** | Creazionale | Assemblaggio di una `Communication` attraverso i tre passi asincroni di `CommunicationWorkflowTaskHandler` (`generate_text` → `generate_cover` → `finalize`): un `CommunicationBuilder` di dominio rende esplicito quali campi sono validi dopo ciascun passo | Oggi lo stato parziale valido ad ogni fase è implicito nei rami del `match` dentro l'handler. Un Builder esplicita l'invariante ("dopo `generate_text` titolo e corpo sono impostati, la copertina no") invece di lasciarlo dedotto dal codice. | Lo stato intermedio valido resta implicito e verificabile solo leggendo tutti i rami del `match`; un nuovo passo aggiunto male può produrre uno stato incoerente senza che nulla lo impedisca. |
+| **Builder** | Creazionale | `CommunicationDraftBuilder` (`Communications/Domain/ValueObjects/`), usato da `GenerateCommunicationTextService` e `GenerateCommunicationCoverService`: assembla il contenuto della bozza attraverso i passi asincroni (`generate_text` → `generate_cover`), rifiutando esplicitamente `withGeneratedCover()` se il testo non è ancora stato generato (`CoverPrecedesTextException`) | Prima lo stato parziale valido ad ogni fase era implicito nei rami dei singoli `Application Service`. Il Builder esplicita l'invariante ("dopo `generate_text` titolo e corpo sono impostati, la copertina no", richiesto perché `generate_cover` usa `image_prompt` scritto dal passo testuale) invece di lasciarlo dedotto dal codice. | Lo stato intermedio valido resta implicito e verificabile solo leggendo ogni `Service`; un nuovo passo aggiunto fuori ordine produce uno stato incoerente senza che nulla lo impedisca. |
 | **Singleton** | Creazionale | Binding dei client AWS e degli adapter nel service provider — invariato nella sostanza, ma ora bindato **all'interfaccia di porta**, non alla classe concreta | I client AWS restano condivisi (costruzione costosa, connection reuse); il binding diventa il punto in cui si sceglie *quale* adapter soddisfa la porta. | Nessun punto unico di sostituzione: cambiare adapter richiederebbe cercare e modificare ogni type-hint concreto nella codebase (situazione attuale). |
-| **Observer** | Comportamentale | Introdurre eventi di dominio (`DocumentoElaborato`, `ComunicazioneApprovata`, `BozzaScartata`) emessi dai casi d'uso, con listener separati per `AuditLogger` e `MetricsRecorder` | Oggi le chiamate ad audit/metriche sono sparse manualmente dentro `CommunicationWorkflowTaskHandler`, `DocumentWorkflowTaskHandler` e i controller: ogni nuovo "cosa deve succedere quando X accade" richiede toccare ogni punto che fa X. | Ogni nuova reazione a un evento (es. una notifica futura) richiede una modifica in ogni caso d'uso che genera quell'evento, invece di un nuovo listener. |
-| **Command** | Comportamentale | Ogni caso d'uso applicativo è una classe con un solo metodo pubblico (`handle`/`__invoke`), coerente con la forma già usata da `WorkflowTaskHandler::execute()` | Un caso d'uso = una porta primaria = una responsabilità, testabile in isolamento passando mock delle porte secondarie. | I casi d'uso resterebbero metodi dentro service "fat" con più responsabilità (situazione attuale di `DocumentProcessingService`, `CommunicationWorkflowService`). |
+| **Observer** | Comportamentale | 10 eventi di dominio (`Communications/Domain/Events/`: `CommunicationTextGenerated`, `CommunicationCoverGenerated`, `CommunicationCoverDegraded`, `CommunicationWorkflowCompleted`, `AiOutputRejected`, `CommunicationDraftFavorited/Unfavorited/Edited/Approved/Discarded`) pubblicati dai casi d'uso tramite `CommunicationEventDispatcherPort` → `LaravelCommunicationEventDispatcher`; 10 listener in `Application/Listeners/` registrano audit/metriche | Prima le chiamate ad audit/metriche erano sparse manualmente in `GenerateCommunicationTextService`, `GenerateCommunicationCoverService`, `FinalizeCommunicationService`, `CommunicationDraftService`: la coppia audit+metrica per "copertina degradata" era duplicata due volte (degrado da errore modello/storage e degrado da timeout in `finalize`). Con `CommunicationCoverDegraded` unico, quella duplicazione sparisce. | Ogni nuova reazione a un evento (es. una notifica futura) richiederebbe toccare ogni caso d'uso che genera quell'evento, invece di aggiungere un listener. |
+| **Command** | Comportamentale | Ogni caso d'uso applicativo è una classe dedicata a una porta primaria, coerente con la forma già usata da `WorkflowTaskHandler::execute()` | Un caso d'uso = una porta primaria = una responsabilità, testabile in isolamento passando mock delle porte secondarie. | I casi d'uso resterebbero metodi dentro service "fat" con più responsabilità (situazione precedente di `DocumentProcessingService`, `CommunicationWorkflowService`). |
+
+Nota di onestà su Command: l'idea originale ("un caso d'uso = una classe con un solo metodo
+pubblico") non regge alla lettera per le porte che raggruppano transizioni sullo stesso aggregato
+— `CommunicationDraftUseCase` ne ha cinque (`favorite/unfavorite/update/save/discard`),
+`UpdateCommunicationCoverUseCase` e `StartCommunicationWorkflowUseCase` ne hanno due ciascuna. È
+una scelta esplicita (raggruppare transizioni correlate sullo stesso aggregato invece di una
+classe per transizione), non un Command puro: se in sede di discussione viene chiesto "dov'è il
+Command pattern", la risposta onesta è che si applica a metà dei casi d'uso, non a tutti.
 
 Pattern valutati e **scartati esplicitamente** (nessuna finzione che "andrebbero comunque bene"):
 
@@ -303,6 +315,16 @@ verde ad ogni passaggio (commit separati):
   (`Domain/Exceptions/*`), che l'adapter HTTP si limita a tradurre nello status code corretto.
 - `WorkflowEnginePort`/`SfnWorkflowEngineAdapter`: porta condivisa introdotta come previsto,
   un solo adapter per entrambi i domini.
+- **Builder e Observer chiusi** (inizialmente solo "individuati" in questo ADR, non
+  implementati): `CommunicationDraftBuilder` in `Communications/Domain/ValueObjects/` esplicita
+  l'invariante testo-prima-di-copertina; 10 eventi di dominio in `Communications/Domain/Events/`
+  con altrettanti listener in `Communications/Application/Listeners/`, pubblicati tramite la
+  nuova porta `CommunicationEventDispatcherPort` (`LaravelCommunicationEventDispatcher`),
+  sostituiscono le chiamate dirette ad `AuditLogger`/`MetricsRecorder` sparse nei casi d'uso —
+  eliminando anche la duplicazione audit+metrica di "copertina degradata" fra
+  `GenerateCommunicationCoverService` e `FinalizeCommunicationService`. 307 test verdi confermano
+  che l'evento_type e il conteggio degli `AuditEvent` restano identici al comportamento
+  precedente.
 - Verifica di conformità automatica alla Dependency Rule: `scripts/ci/check-dependency-rule.sh`,
   eseguito da `make verify-backend` e dal job `backend` della CI — fallisce se un file sotto
   `app/Mvp/{Documents,Communications}/Domain/` referenzia `Illuminate\*`, `Aws\*` o

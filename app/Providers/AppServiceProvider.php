@@ -8,11 +8,22 @@ use App\Mvp\Ai\AiOutputValidator;
 use App\Mvp\Ai\BedrockService;
 use App\Mvp\Audit\Services\AuditLogger;
 use App\Mvp\Communications\Adapters\Outbound\Ai\BedrockCommunicationAiAdapter;
+use App\Mvp\Communications\Adapters\Outbound\Events\LaravelCommunicationEventDispatcher;
 use App\Mvp\Communications\Adapters\Outbound\Pdf\DompdfCommunicationPdfRenderer;
 use App\Mvp\Communications\Adapters\Outbound\Persistence\EloquentCommunicationRepository;
 use App\Mvp\Communications\Adapters\Outbound\Persistence\EloquentPromptConfigurationRepository;
 use App\Mvp\Communications\Adapters\Outbound\Storage\FlysystemCommunicationCoverAdapter;
 use App\Mvp\Communications\Adapters\Primary\Workflow\CommunicationWorkflowTaskHandler;
+use App\Mvp\Communications\Application\Listeners\RecordAiOutputRejected;
+use App\Mvp\Communications\Application\Listeners\RecordCommunicationCoverDegraded;
+use App\Mvp\Communications\Application\Listeners\RecordCommunicationCoverGenerated;
+use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftApproved;
+use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftDiscarded;
+use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftEdited;
+use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftFavorited;
+use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftUnfavorited;
+use App\Mvp\Communications\Application\Listeners\RecordCommunicationTextGenerated;
+use App\Mvp\Communications\Application\Listeners\RecordCommunicationWorkflowCompleted;
 use App\Mvp\Communications\Application\UseCases\CommunicationDraftService;
 use App\Mvp\Communications\Application\UseCases\DeleteCommunicationService;
 use App\Mvp\Communications\Application\UseCases\ExportCommunicationService;
@@ -25,6 +36,16 @@ use App\Mvp\Communications\Application\UseCases\PromptConfigurationService;
 use App\Mvp\Communications\Application\UseCases\RateCommunicationService;
 use App\Mvp\Communications\Application\UseCases\StartCommunicationWorkflowService;
 use App\Mvp\Communications\Application\UseCases\UpdateCommunicationCoverService;
+use App\Mvp\Communications\Domain\Events\AiOutputRejected;
+use App\Mvp\Communications\Domain\Events\CommunicationCoverDegraded;
+use App\Mvp\Communications\Domain\Events\CommunicationCoverGenerated;
+use App\Mvp\Communications\Domain\Events\CommunicationDraftApproved;
+use App\Mvp\Communications\Domain\Events\CommunicationDraftDiscarded;
+use App\Mvp\Communications\Domain\Events\CommunicationDraftEdited;
+use App\Mvp\Communications\Domain\Events\CommunicationDraftFavorited;
+use App\Mvp\Communications\Domain\Events\CommunicationDraftUnfavorited;
+use App\Mvp\Communications\Domain\Events\CommunicationTextGenerated;
+use App\Mvp\Communications\Domain\Events\CommunicationWorkflowCompleted;
 use App\Mvp\Communications\Domain\Ports\Inbound\CommunicationDraftUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\DeleteCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\ExportCommunicationUseCase;
@@ -39,6 +60,7 @@ use App\Mvp\Communications\Domain\Ports\Inbound\StartCommunicationWorkflowUseCas
 use App\Mvp\Communications\Domain\Ports\Inbound\UpdateCommunicationCoverUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationAiGatewayPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
+use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationPdfRendererPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\Ports\Outbound\PromptConfigurationRepository;
@@ -82,6 +104,7 @@ use Aws\Sfn\SfnClient;
 use Aws\Sqs\SqsClient;
 use Aws\Textract\TextractClient;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -191,6 +214,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(CommunicationCoverStoragePort::class, FlysystemCommunicationCoverAdapter::class);
         $this->app->singleton(CommunicationRepository::class, EloquentCommunicationRepository::class);
         $this->app->singleton(PromptConfigurationRepository::class, EloquentPromptConfigurationRepository::class);
+        $this->app->singleton(CommunicationEventDispatcherPort::class, LaravelCommunicationEventDispatcher::class);
 
         // Communications: porta primaria -> caso d'uso applicativo.
         $this->app->bind(GenerateCommunicationUseCase::class, GenerateCommunicationService::class);
@@ -253,5 +277,21 @@ class AppServiceProvider extends ServiceProvider
             'original_document' => OriginalDocument::class,
             'communication' => Communication::class,
         ]);
+
+        // Communications: eventi di dominio (Observer, vedi ADR 0010) -> listener
+        // applicativi che registrano audit/metriche. I casi d'uso pubblicano un
+        // fatto avvenuto senza sapere chi reagisce; aggiungere una reazione (es.
+        // una notifica futura) significa aggiungere un listener, non toccare
+        // ogni caso d'uso che genera l'evento.
+        Event::listen(CommunicationTextGenerated::class, RecordCommunicationTextGenerated::class);
+        Event::listen(AiOutputRejected::class, RecordAiOutputRejected::class);
+        Event::listen(CommunicationCoverGenerated::class, RecordCommunicationCoverGenerated::class);
+        Event::listen(CommunicationCoverDegraded::class, RecordCommunicationCoverDegraded::class);
+        Event::listen(CommunicationWorkflowCompleted::class, RecordCommunicationWorkflowCompleted::class);
+        Event::listen(CommunicationDraftFavorited::class, RecordCommunicationDraftFavorited::class);
+        Event::listen(CommunicationDraftUnfavorited::class, RecordCommunicationDraftUnfavorited::class);
+        Event::listen(CommunicationDraftEdited::class, RecordCommunicationDraftEdited::class);
+        Event::listen(CommunicationDraftApproved::class, RecordCommunicationDraftApproved::class);
+        Event::listen(CommunicationDraftDiscarded::class, RecordCommunicationDraftDiscarded::class);
     }
 }
