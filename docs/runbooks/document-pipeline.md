@@ -8,8 +8,8 @@
 
 1. SPA posts a PDF to `POST /api/v1/documents/ocr`.
 2. `UploadDocumentRequest` validates MIME type, size, filename, PDF readability, page count and optional Textract limits.
-3. `DocumentProcessingService::storeUpload()` stores the original file on the configured document disk.
-4. `DocumentWorkflowService::start()` starts the Step Functions execution and stores execution metadata on `original_documents`.
+3. `UploadDocumentService::upload()` stores the original file on the configured document disk.
+4. `StartDocumentWorkflowService::start()` starts the Step Functions execution and stores execution metadata on `original_documents`.
 5. Step Functions sends callback-token tasks to SQS.
 6. `php artisan mvp:workflow:consume --queue=documents` receives each message, executes the task through `DocumentWorkflowTaskHandler`, and calls `SendTaskSuccess` or `SendTaskFailure`.
 7. `textract.ocr` calls real Textract only when `TEXTRACT_ENABLED=true` and stores the page-aware OCR text (`ocr_text` + `ocr_pages`) consumed by the next step.
@@ -29,7 +29,7 @@
 | `TEXTRACT_ENABLED` | OCR | Defaults false in local/CI. Requires `MVP_DOCUMENT_DISK=real_s3`. |
 | `BEDROCK_MODEL_ID` | AI extraction | Real Bedrock access must be granted externally. |
 
-When `TEXTRACT_ENABLED=true`, `MVP_DOCUMENT_DISK` must be `real_s3`: real Textract can only read objects from real S3, so `DocumentWorkflowService::start()` rejects the workflow up front with an explicit error if OCR is enabled while documents live on the LocalStack disk. The S3 key passed to Textract includes the document disk root prefix (`AWS_REAL_S3_PREFIX`).
+When `TEXTRACT_ENABLED=true`, `MVP_DOCUMENT_DISK` must be `real_s3`: real Textract can only read objects from real S3, so `StartDocumentWorkflowService::start()` rejects the workflow up front with an explicit error if OCR is enabled while documents live on the LocalStack disk. The S3 key passed to Textract includes the document disk root prefix (`AWS_REAL_S3_PREFIX`).
 
 ## Manual Smoke
 

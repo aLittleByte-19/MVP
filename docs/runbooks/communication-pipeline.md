@@ -5,7 +5,7 @@
 1. SPA posts a prompt to `POST /api/v1/communications`.
 2. `GenerateCommunicationRequest` validates prompt, tone and style.
 3. The controller stores the communication with `generation_status=pending` and returns **202** with a relative `streamUrl`.
-4. `CommunicationWorkflowService::start()` starts the Step Functions execution and stores execution metadata on `communications`.
+4. `StartCommunicationWorkflowService::start()` starts the Step Functions execution and stores execution metadata on `communications`.
 5. Step Functions sends callback-token tasks to the communications SQS queue.
 6. `php artisan mvp:workflow:consume --queue=communications` receives each message, executes the task through `CommunicationWorkflowTaskHandler`, and calls `SendTaskSuccess` or `SendTaskFailure`.
 7. `communication.generate_text` calls Bedrock and stores `generated_title`, `generated_body` and `image_prompt`. The text model also writes the visual direction for the cover, having the generated text in front of it, so the artwork follows the actual communication rather than the raw operator prompt. A failure here fails the execution: the communication is the text.
@@ -30,7 +30,7 @@
 | `BEDROCK_IMAGE_MODEL_ID` | Cover generation | Defaults to `stability.sd3-5-large-v1:0`. The request payload is derived from the configured model family (Stability SD3/Core, Stability XL, Nova Canvas). Without a reachable model every cover degrades with an explicit warning. |
 | `BEDROCK_IMAGE_REGION` | Cover generation | Region serving the image model (defaults to `us-west-2`), usually different from the text model one. The cover uses a dedicated Bedrock client; leave empty to reuse `BEDROCK_REGION`. |
 
-The two pipeline variables are part of `RuntimeConfigurationLoader::REQUIRED_KEYS`: after pulling a change that adds them, run `make refresh-runtime` so SSM parameters are rewritten and the runtime cache is rebuilt. `CommunicationWorkflowService::start()` also fails fast with an actionable message when either value is missing.
+The two pipeline variables are part of `RuntimeConfigurationLoader::REQUIRED_KEYS`: after pulling a change that adds them, run `make refresh-runtime` so SSM parameters are rewritten and the runtime cache is rebuilt. `StartCommunicationWorkflowService::start()` also fails fast with an actionable message when either value is missing.
 
 ## Manual Smoke
 
@@ -85,7 +85,7 @@ ORDER BY count(*) DESC;
 
 ## Final PDF
 
-`CommunicationPdfService` lays out title, body and cover into the A4 document served by both `preview` and `export`. Every page carries the `Creato da AI Assistant` transparency marker and the NEXUM footer with page numbers, stamped through the dompdf canvas API because dompdf does not render CSS3 margin boxes.
+`DompdfCommunicationPdfRenderer` (behind the `CommunicationPdfRendererPort`, orchestrated by `ExportCommunicationService`) lays out title, body and cover into the A4 document served by both `preview` and `export`. Every page carries the `Creato da AI Assistant` transparency marker and the NEXUM footer with page numbers, stamped through the dompdf canvas API because dompdf does not render CSS3 margin boxes.
 
 Rendering is the most expensive operation in the API and its result is deterministic, so the PDF is **materialized once** on the storage disk and re-read afterwards:
 
@@ -93,7 +93,7 @@ Rendering is the most expensive operation in the API and its result is determini
 - **invalidation is implicit**: change the cover or the text and the fingerprint changes, so a new object is written and the stale one is simply never requested again. No invalidation hook lives in the services that mutate a communication;
 - the same fingerprint is returned as the `ETag`. A client sending a matching `If-None-Match` gets a **304** without dompdf or the storage being touched at all.
 
-The fingerprint cannot see changes to the Blade template, the watermark or the footer. Those are covered by `CommunicationPdfService::RENDER_VERSION`: **bump it in the same commit that changes the layout**, or already-materialized PDFs keep being served with the old one.
+The fingerprint cannot see changes to the Blade template, the watermark or the footer. Those are covered by `DompdfCommunicationPdfRenderer::RENDER_VERSION`: **bump it in the same commit that changes the layout**, or already-materialized PDFs keep being served with the old one.
 
 The cache is an optimization, never a dependency. If the disk is missing or misconfigured, `Storage::disk()` throws at resolution time: the service catches it, reports it and re-renders on every request, so the export keeps working while degraded. `MvpAppRoutesTest` locks this behaviour in (`the export survives an unavailable PDF cache disk`).
 
@@ -115,5 +115,5 @@ docker compose exec app php artisan tinker --execute="Storage::disk(config('mvp.
 | Cover degraded | `cover_status=failed`, `mvp_communication_covers_failed_total{reason}` | See "Degraded Cover"; no action needed for isolated events. |
 | Cover storage failure | `mvp_communication_cover_storage_failed_total{operation}` | Check bucket, prefix and disk credentials. |
 | Stuck communication | `mvp_communication_stuck_processing_total` | Check worker, SQS queue and Step Functions execution. |
-| PDF cache unavailable | Reported exception from `CommunicationPdfService`, no 5xx to the user | Preview and export still work but re-render every time: check `MVP_COMMUNICATION_PDF_DISK`, bucket and credentials. |
+| PDF cache unavailable | Reported exception from `DompdfCommunicationPdfRenderer`, no 5xx to the user | Preview and export still work but re-render every time: check `MVP_COMMUNICATION_PDF_DISK`, bucket and credentials. |
 | Stale PDF layout after a template change | Exported PDF still shows the old layout | `RENDER_VERSION` was not bumped: increment it, or purge the prefix as shown above. |

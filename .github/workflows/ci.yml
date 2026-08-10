@@ -85,6 +85,12 @@ jobs:
           -e DB_PASSWORD=
           app vendor/bin/phpstan analyse --memory-limit=1G
 
+      # Verifica meccanica della Dependency Rule (ADR 0010): il livello
+      # Domain dei domini esagonali non deve importare Illuminate\*, Aws\*,
+      # o modelli Eloquent.
+      - name: Check hexagonal Dependency Rule
+        run: bash scripts/ci/check-dependency-rule.sh
+
       # L'immagine applicativa usa www-data. Su un runner Linux Docker crea un
       # bind mount mancante come root e Pest non può scriverci i report.
       - name: Prepare backend coverage directory
