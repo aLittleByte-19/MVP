@@ -106,6 +106,7 @@ use Aws\Textract\TextractClient;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
+use Psr\Log\LoggerInterface;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -203,7 +204,22 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(ListDocumentsUseCase::class, ListDocumentsService::class);
         $this->app->bind(DeleteDocumentUseCase::class, DeleteDocumentService::class);
         $this->app->bind(RunOcrUseCase::class, RunOcrService::class);
-        $this->app->bind(ProcessDocumentUseCase::class, ProcessDocumentService::class);
+        // Soglia di confidenza risolta qui (confine container) invece che con
+        // config() dentro la classe applicativa, cosi' ProcessDocumentService
+        // resta istanziabile in un test Pest puro senza bootstrap Laravel
+        // (vedi refactory.md, Compito 3 punto 2).
+        $this->app->bind(ProcessDocumentUseCase::class, function ($app) {
+            return new ProcessDocumentService(
+                $app->make(DocumentRepository::class),
+                $app->make(DocumentStoragePort::class),
+                $app->make(DocumentAiGatewayPort::class),
+                $app->make(AuditLogger::class),
+                $app->make(WorkflowTaskHeartbeat::class),
+                $app->make(MetricsRecorder::class),
+                $app->make(LoggerInterface::class),
+                max(0, min(100, (int) config('services.bedrock.mvp_confidence_threshold', 80))),
+            );
+        });
         $this->app->bind(FinalizeDocumentWorkflowUseCase::class, FinalizeDocumentWorkflowService::class);
         $this->app->bind(ReviewDocumentUseCase::class, ReviewDocumentService::class);
         $this->app->bind(SendMessageUseCase::class, SendMessageService::class);
@@ -222,13 +238,34 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(ListCommunicationsUseCase::class, ListCommunicationsService::class);
         $this->app->bind(CommunicationDraftUseCase::class, CommunicationDraftService::class);
         $this->app->bind(DeleteCommunicationUseCase::class, DeleteCommunicationService::class);
-        $this->app->bind(UpdateCommunicationCoverUseCase::class, UpdateCommunicationCoverService::class);
         $this->app->bind(RateCommunicationUseCase::class, RateCommunicationService::class);
         $this->app->bind(ExportCommunicationUseCase::class, ExportCommunicationService::class);
         $this->app->bind(PromptConfigurationUseCase::class, PromptConfigurationService::class);
-        $this->app->bind(GenerateCommunicationTextUseCase::class, GenerateCommunicationTextService::class);
-        $this->app->bind(GenerateCommunicationCoverUseCase::class, GenerateCommunicationCoverService::class);
         $this->app->bind(FinalizeCommunicationUseCase::class, FinalizeCommunicationService::class);
+
+        // Il prefisso di storage delle copertine e' l'unico parametro di
+        // configurazione di cui questi due casi d'uso hanno bisogno: lo
+        // risolviamo qui (confine container) invece che con config() dentro
+        // la classe applicativa, cosi' restano istanziabili in un test Pest
+        // puro senza bootstrap Laravel (vedi refactory.md, Compito 3 punto 2).
+        $this->app->bind(UpdateCommunicationCoverUseCase::class, function ($app) {
+            return new UpdateCommunicationCoverService(
+                $app->make(CommunicationRepository::class),
+                $app->make(CommunicationCoverStoragePort::class),
+                trim((string) config('mvp.communications.cover_prefix', 'communications/covers'), '/'),
+            );
+        });
+        $this->app->bind(GenerateCommunicationTextUseCase::class, GenerateCommunicationTextService::class);
+        $this->app->bind(GenerateCommunicationCoverUseCase::class, function ($app) {
+            return new GenerateCommunicationCoverService(
+                $app->make(CommunicationRepository::class),
+                $app->make(CommunicationCoverStoragePort::class),
+                $app->make(CommunicationAiGatewayPort::class),
+                $app->make(CommunicationEventDispatcherPort::class),
+                $app->make(LoggerInterface::class),
+                trim((string) config('mvp.communications.cover_prefix', 'communications/covers'), '/'),
+            );
+        });
 
         // Correlation id del messaggio in lavorazione: singleton perche' il
         // consumer lo popola e AuditLogger lo rilegge nello stesso processo.

@@ -24,6 +24,7 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
     public function __construct(
         private readonly CommunicationRepository $communications,
         private readonly CommunicationCoverStoragePort $storage,
+        private readonly string $coverPathPrefix = 'communications/covers',
     ) {}
 
     public function update(int $communicationId, string $bytes, string $mime, int $size, MvpUser $actor): void
@@ -77,7 +78,7 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
     {
         return sprintf(
             '%s/%d/%s.%s',
-            trim((string) config('mvp.communications.cover_prefix', 'communications/covers'), '/'),
+            trim($this->coverPathPrefix, '/'),
             $communicationId,
             Str::uuid()->toString(),
             self::EXTENSIONS[strtolower($mime)] ?? 'png',

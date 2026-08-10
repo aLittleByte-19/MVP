@@ -12,8 +12,8 @@ use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationDraftBuilder;
 use App\Mvp\Communications\Enums\CoverImageSource;
 use App\Mvp\Communications\Enums\CoverImageStatus;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Psr\Log\LoggerInterface;
 
 /**
  * La copertina e' un arricchimento: un fallimento viene registrato sulla
@@ -34,6 +34,8 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
         private readonly CommunicationCoverStoragePort $storage,
         private readonly CommunicationAiGatewayPort $ai,
         private readonly CommunicationEventDispatcherPort $events,
+        private readonly LoggerInterface $logger,
+        private readonly string $coverPathPrefix = 'communications/covers',
     ) {}
 
     public function generate(int $communicationId): array
@@ -52,7 +54,7 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
         try {
             $image = $this->ai->generateImage($communication->prompt, $communication->tone, $communication->style, $communication->imagePrompt);
         } catch (\Throwable $e) {
-            Log::warning('Communication cover generation failed', ['communication_id' => $communicationId, 'message' => $e->getMessage()]);
+            $this->logger->warning('Communication cover generation failed', ['communication_id' => $communicationId, 'message' => $e->getMessage()]);
             $this->degrade($communicationId, $communication->tenantId, 'Copertina AI non disponibile per un errore del servizio immagini.', 'model_error');
 
             return ['skipped' => false, 'coverStatus' => CoverImageStatus::Failed->value];
@@ -74,7 +76,7 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
         try {
             $this->storage->store($path, $image->bytes);
         } catch (\Throwable $e) {
-            Log::error('Communication cover storage failed', ['communication_id' => $communicationId, 'message' => $e->getMessage()]);
+            $this->logger->error('Communication cover storage failed', ['communication_id' => $communicationId, 'message' => $e->getMessage()]);
             $this->degrade($communicationId, $communication->tenantId, 'Copertina non disponibile: storage non raggiungibile.', 'storage_error');
 
             return ['skipped' => false, 'coverStatus' => CoverImageStatus::Failed->value];
@@ -107,7 +109,7 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
     {
         return sprintf(
             '%s/%d/%s.%s',
-            trim((string) config('mvp.communications.cover_prefix', 'communications/covers'), '/'),
+            trim($this->coverPathPrefix, '/'),
             $communicationId,
             Str::uuid()->toString(),
             self::EXTENSIONS[strtolower($mime)] ?? 'png',

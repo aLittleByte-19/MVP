@@ -15,8 +15,8 @@ use App\Mvp\Documents\Enums\ProcessingStatus;
 use App\Mvp\Documents\Enums\ReviewStatus;
 use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Psr\Log\LoggerInterface;
 use setasign\Fpdi\Fpdi;
 
 /**
@@ -37,6 +37,8 @@ class ProcessDocumentService implements ProcessDocumentUseCase
         private readonly AuditLogger $audit,
         private readonly WorkflowTaskHeartbeat $heartbeat,
         private readonly MetricsRecorder $metrics,
+        private readonly LoggerInterface $logger,
+        private readonly int $confidenceThreshold = 80,
     ) {}
 
     public function process(int $documentId): void
@@ -145,14 +147,14 @@ class ProcessDocumentService implements ProcessDocumentUseCase
                 resourceId: (string) $subDocumentId,
                 metadata: [
                     'confidence_score' => $confidenceScore,
-                    'confidence_threshold' => $this->confidenceThreshold(),
+                    'confidence_threshold' => $this->confidenceThreshold,
                     'review_status' => $reviewStatus->value,
                 ],
                 tenantId: $original->tenantId,
             );
         } catch (InvalidAiOutputException $e) {
             $safeMessage = 'Output AI non conforme: sotto-documento in quarantena.';
-            Log::warning('ProcessDocumentService: AI output quarantined', [
+            $this->logger->warning('ProcessDocumentService: AI output quarantined', [
                 'sub_document_id' => $subDocumentId,
                 'operation' => $e->operation(),
                 'errors' => $e->errors(),
@@ -172,7 +174,7 @@ class ProcessDocumentService implements ProcessDocumentUseCase
             );
             $this->metrics->recordDomainCounter('ai_outputs_invalid_total', ['operation' => $e->operation()]);
         } catch (\Throwable $e) {
-            Log::error('ProcessDocumentService: extraction failed', ['sub_document_id' => $subDocumentId, 'message' => $e->getMessage()]);
+            $this->logger->error('ProcessDocumentService: extraction failed', ['sub_document_id' => $subDocumentId, 'message' => $e->getMessage()]);
             $this->documents->updateSubDocument($subDocumentId, [
                 'error_message' => BedrockService::formatUserError($e, 'Estrazione campi non disponibile. Verifica configurazione e permessi Bedrock.'),
             ]);
@@ -183,7 +185,7 @@ class ProcessDocumentService implements ProcessDocumentUseCase
 
     private function handleProcessingFailure(int $documentId, \Throwable $e): void
     {
-        Log::error('PDF Pipeline Failure', ['document_id' => $documentId, 'error' => $e->getMessage()]);
+        $this->logger->error('PDF Pipeline Failure', ['document_id' => $documentId, 'error' => $e->getMessage()]);
 
         $userMessage = $e instanceof InvalidAiOutputException
             ? 'Il classificatore AI ha restituito un output non valido: il documento non può essere elaborato automaticamente.'
@@ -288,16 +290,11 @@ class ProcessDocumentService implements ProcessDocumentUseCase
 
     private function reviewStatusForConfidence(?int $confidenceScore): ReviewStatus
     {
-        if ($confidenceScore !== null && $confidenceScore >= $this->confidenceThreshold()) {
+        if ($confidenceScore !== null && $confidenceScore >= $this->confidenceThreshold) {
             return ReviewStatus::AutoValidated;
         }
 
         return ReviewStatus::NeedsReview;
-    }
-
-    private function confidenceThreshold(): int
-    {
-        return max(0, min(100, (int) config('services.bedrock.mvp_confidence_threshold', 80)));
     }
 
     /**
@@ -446,7 +443,7 @@ class ProcessDocumentService implements ProcessDocumentUseCase
             try {
                 $this->storage->delete($path);
             } catch (\Throwable $e) {
-                Log::warning('ProcessDocumentService: storage cleanup failed', ['path' => $path, 'message' => $e->getMessage()]);
+                $this->logger->warning('ProcessDocumentService: storage cleanup failed', ['path' => $path, 'message' => $e->getMessage()]);
             }
         }
     }
