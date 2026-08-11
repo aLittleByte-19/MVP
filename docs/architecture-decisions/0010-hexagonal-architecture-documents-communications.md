@@ -535,6 +535,26 @@ verde ad ogni passaggio (commit separati):
   puro prima di questo cambio — nessuno l'aveva ancora testato in isolamento. Comportamento HTTP
   osservabile invariato (stesso `event_type`, stesso conteggio di un solo `AuditEvent` per azione,
   verificato dai test Feature esistenti).
+- **`DocumentRepository` non prende piu' array associativi in scrittura (lato Documents)**: prima
+  `createOriginalDocument()`/`updateOriginalDocument()`/`createSubDocument()`/`updateSubDocument()`/
+  `saveExtractedData()` prendevano `array<string, mixed>` con chiavi a stringa che erano, di fatto,
+  i nomi delle colonne DB (`'processing_status'`, `'workflow_completed_at'`, ecc.) scritti a mano in
+  8 `Application Service` diversi — "il dominio non usa Eloquent" era vero solo a meta', perche' un
+  refuso o una colonna rinominata rompevano il codice applicativo silenziosamente, senza che nessun
+  tipo lo impedisse. Aggiunti cinque value object nel dominio (`OriginalDocumentChanges`,
+  `SubDocumentChanges`, `ExtractedDataChanges` — costruzione incrementale con metodi `with*()`
+  immutabili, per gli aggiornamenti parziali; `NewOriginalDocument`, `NewSubDocument` — costruttore
+  semplice, per le creazioni dove tutti i campi sono gia' noti). Il nome della colonna DB resta un
+  dettaglio interno di queste classi (`Domain/ValueObjects/`, non `Application/`): il chiamante scrive
+  `OriginalDocumentChanges::none()->withProcessingStatus(...)`, mai una stringa. L'adapter Eloquent
+  consuma `->toArray()` cosi' com'e' — nessuna doppia traduzione. Toccati tutti gli 8 casi d'uso che
+  scrivevano sull'aggregato documentale (`UploadDocumentService`, `StartDocumentWorkflowService`,
+  `FinalizeDocumentWorkflowService`, `RunOcrService`, `ProcessDocumentService`,
+  `ExtractSubDocumentFieldsService`, `ReviewDocumentService`, `SendMessageService`). Stesso cambio
+  non ancora fatto sul lato Communications (`CommunicationRepository::updateCommunication()`/
+  `createCommunication()`, ~19 punti di chiamata): stessa idea, prossimo passo. Nessun nuovo test:
+  comportamento invariato, solo la forma con cui i casi d'uso lo esprimono — verificato da Larastan
+  (i nuovi tipi sono staticamente controllati) e dalla suite esistente, 370/370.
 - **Trade-off noto, non risolto**: molti casi d'uso restano legati a `config()` per parametri di
   runtime genuinamente variabili per ambiente (`StartCommunicationWorkflowService`,
   `StartDocumentWorkflowService` in particolare: ARN di state machine, URL di coda, guardia

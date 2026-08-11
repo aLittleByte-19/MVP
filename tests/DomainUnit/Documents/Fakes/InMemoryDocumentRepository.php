@@ -3,8 +3,13 @@
 namespace Tests\DomainUnit\Documents\Fakes;
 
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
+use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
+use App\Mvp\Documents\Domain\ValueObjects\NewOriginalDocument;
+use App\Mvp\Documents\Domain\ValueObjects\NewSubDocument;
+use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
 use App\Mvp\Documents\Domain\ValueObjects\SendMessageContext;
+use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentPage;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
 
@@ -45,10 +50,10 @@ final class InMemoryDocumentRepository implements DocumentRepository
         $this->nextSubDocumentId = max($this->nextSubDocumentId, $id + 1);
     }
 
-    public function createOriginalDocument(array $attributes): int
+    public function createOriginalDocument(NewOriginalDocument $document): int
     {
         $id = $this->nextOriginalId++;
-        $this->originals[$id] = array_merge($this->originalDefaults($id), $this->normalize($attributes));
+        $this->originals[$id] = array_merge($this->originalDefaults($id), $this->normalize($document->toArray()));
 
         return $id;
     }
@@ -62,13 +67,13 @@ final class InMemoryDocumentRepository implements DocumentRepository
         return $this->toOriginalRecord($this->originals[$id]);
     }
 
-    public function updateOriginalDocument(int $id, array $attributes): void
+    public function updateOriginalDocument(int $id, OriginalDocumentChanges $changes): void
     {
         if (! isset($this->originals[$id])) {
             throw new \RuntimeException("OriginalDocument {$id} non seminato nel fake repository.");
         }
 
-        $this->originals[$id] = array_merge($this->originals[$id], $this->normalize($attributes));
+        $this->originals[$id] = array_merge($this->originals[$id], $this->normalize($changes->toArray()));
     }
 
     public function deleteOriginalDocumentWithWorkflowTasks(int $id): void
@@ -123,22 +128,21 @@ final class InMemoryDocumentRepository implements DocumentRepository
         return isset($this->extractedData[$subDocumentId]);
     }
 
-    public function createSubDocument(array $attributes): int
+    public function createSubDocument(NewSubDocument $subDocument): int
     {
         $id = $this->nextSubDocumentId++;
-        $originalDocumentId = (int) ($attributes['original_document_id'] ?? 0);
-        $this->subDocuments[$id] = array_merge($this->subDocumentDefaults($id, $originalDocumentId), $this->normalize($attributes));
+        $this->subDocuments[$id] = array_merge($this->subDocumentDefaults($id, $subDocument->originalDocumentId), $this->normalize($subDocument->toArray()));
 
         return $id;
     }
 
-    public function updateSubDocument(int $id, array $attributes): void
+    public function updateSubDocument(int $id, SubDocumentChanges $changes): void
     {
         if (! isset($this->subDocuments[$id])) {
             throw new \RuntimeException("SubDocument {$id} non seminato nel fake repository.");
         }
 
-        $this->subDocuments[$id] = array_merge($this->subDocuments[$id], $this->normalize($attributes));
+        $this->subDocuments[$id] = array_merge($this->subDocuments[$id], $this->normalize($changes->toArray()));
     }
 
     public function deleteSubDocument(int $id): void
@@ -192,9 +196,9 @@ final class InMemoryDocumentRepository implements DocumentRepository
         return $paths;
     }
 
-    public function saveExtractedData(int $subDocumentId, array $attributes): void
+    public function saveExtractedData(int $subDocumentId, ExtractedDataChanges $changes): void
     {
-        $this->extractedData[$subDocumentId] = $this->normalize($attributes);
+        $this->extractedData[$subDocumentId] = $this->normalize($changes->toArray());
     }
 
     public function deleteExtractedData(int $subDocumentId): void

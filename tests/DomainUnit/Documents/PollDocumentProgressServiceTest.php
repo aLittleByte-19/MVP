@@ -1,6 +1,7 @@
 <?php
 
 use App\Mvp\Documents\Application\UseCases\PollDocumentProgressService;
+use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use Tests\DomainUnit\Documents\Fakes\InMemoryDocumentRepository;
 
 /**
@@ -13,8 +14,8 @@ test('poll reports processing status, error message and extracted sub-document i
     $documents->seedOriginal(1, ['processing_status' => 'processing', 'error_message' => null]);
     $documents->seedSubDocument(2, 1);
     $documents->seedSubDocument(1, 1);
-    $documents->saveExtractedData(1, ['employee_first_name' => 'Mario']);
-    $documents->saveExtractedData(2, ['employee_first_name' => 'Luigi']);
+    $documents->saveExtractedData(1, ExtractedDataChanges::none()->withEmployeeFirstName('Mario'));
+    $documents->saveExtractedData(2, ExtractedDataChanges::none()->withEmployeeFirstName('Luigi'));
 
     $snapshot = (new PollDocumentProgressService($documents))->poll(1);
 
@@ -28,7 +29,7 @@ test('poll excludes sub-documents without extracted data yet', function () {
     $documents->seedOriginal(1);
     $documents->seedSubDocument(1, 1);
     $documents->seedSubDocument(2, 1);
-    $documents->saveExtractedData(1, ['employee_first_name' => 'Mario']);
+    $documents->saveExtractedData(1, ExtractedDataChanges::none()->withEmployeeFirstName('Mario'));
 
     $snapshot = (new PollDocumentProgressService($documents))->poll(1);
 

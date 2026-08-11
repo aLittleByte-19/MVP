@@ -13,6 +13,8 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentAiGatewayPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
+use App\Mvp\Documents\Domain\ValueObjects\NewSubDocument;
+use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
 use App\Mvp\Documents\Enums\ProcessingStatus;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
@@ -51,10 +53,9 @@ class ProcessDocumentService implements ProcessDocumentUseCase
         $absoluteSource = null;
 
         try {
-            $this->documents->updateOriginalDocument($documentId, [
-                'processing_status' => ProcessingStatus::Processing,
-                'error_message' => null,
-            ]);
+            $this->documents->updateOriginalDocument($documentId, OriginalDocumentChanges::none()
+                ->withProcessingStatus(ProcessingStatus::Processing)
+                ->withErrorMessage(null));
             $original = $this->documents->findOriginalDocument($documentId);
             $this->events->dispatch(new DocumentProcessingStarted($documentId, $original->tenantId));
 
@@ -77,12 +78,12 @@ class ProcessDocumentService implements ProcessDocumentUseCase
                 $splitPath = $this->extractPages($absoluteSource, $documentId, $segment['employee_name'], $segment['start_page'], $segment['end_page']);
 
                 try {
-                    $subDocumentId = $this->documents->createSubDocument([
-                        'original_document_id' => $documentId,
-                        'file_path' => $splitPath,
-                        'start_page' => $segment['start_page'],
-                        'end_page' => $segment['end_page'],
-                    ]);
+                    $subDocumentId = $this->documents->createSubDocument(new NewSubDocument(
+                        originalDocumentId: $documentId,
+                        filePath: $splitPath,
+                        startPage: $segment['start_page'],
+                        endPage: $segment['end_page'],
+                    ));
                 } catch (\Throwable $e) {
                     $this->deleteStoragePaths([$splitPath]);
 
@@ -92,10 +93,9 @@ class ProcessDocumentService implements ProcessDocumentUseCase
                 $this->fieldsExtractor->extractAndSaveFieldsWithContext($subDocumentId, $original);
             }
 
-            $this->documents->updateOriginalDocument($documentId, [
-                'processing_status' => ProcessingStatus::Completed,
-                'error_message' => null,
-            ]);
+            $this->documents->updateOriginalDocument($documentId, OriginalDocumentChanges::none()
+                ->withProcessingStatus(ProcessingStatus::Completed)
+                ->withErrorMessage(null));
             $this->events->dispatch(new DocumentProcessingCompleted($documentId, $original->tenantId));
         } catch (\Throwable $e) {
             $this->handleProcessingFailure($documentId, $e);
@@ -114,10 +114,9 @@ class ProcessDocumentService implements ProcessDocumentUseCase
             ? 'Il classificatore AI ha restituito un output non valido: il documento non può essere elaborato automaticamente.'
             : $this->ai->formatUserError($e, 'Analisi documento non disponibile. Verifica configurazione e permessi Bedrock.');
 
-        $this->documents->updateOriginalDocument($documentId, [
-            'processing_status' => ProcessingStatus::Failed,
-            'error_message' => $userMessage,
-        ]);
+        $this->documents->updateOriginalDocument($documentId, OriginalDocumentChanges::none()
+            ->withProcessingStatus(ProcessingStatus::Failed)
+            ->withErrorMessage($userMessage));
 
         $tenantId = null;
         try {

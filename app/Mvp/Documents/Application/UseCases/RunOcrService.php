@@ -5,6 +5,7 @@ namespace App\Mvp\Documents\Application\UseCases;
 use App\Mvp\Documents\Domain\Ports\Inbound\RunOcrUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\Ports\Outbound\OcrGatewayPort;
+use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
 
 class RunOcrService implements RunOcrUseCase
 {
@@ -28,12 +29,11 @@ class RunOcrService implements RunOcrUseCase
         $result = $this->ocr->detectText($resolvedBucket, $resolvedKey, $idempotencyKey);
 
         if ($result['enabled']) {
-            $this->documents->updateOriginalDocument($documentId, [
-                'textract_job_id' => $result['jobId'],
-                'ocr_text' => $result['text'],
-                'ocr_pages' => $result['pages'],
-                'ocr_confidence_avg' => $result['confidenceAvg'],
-            ]);
+            $this->documents->updateOriginalDocument($documentId, OriginalDocumentChanges::none()
+                ->withTextractJobId($result['jobId'])
+                ->withOcrText($result['text'])
+                ->withOcrPages($result['pages'])
+                ->withOcrConfidenceAvg($result['confidenceAvg']));
         }
 
         return [

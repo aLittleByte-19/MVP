@@ -11,6 +11,7 @@ use App\Mvp\Documents\Domain\Ports\Outbound\SendMessageRendererPort;
 use App\Mvp\Documents\Domain\ValueObjects\RenderedSendMessage;
 use App\Mvp\Documents\Domain\ValueObjects\SendMessageComposition;
 use App\Mvp\Documents\Domain\ValueObjects\SendMessageContext;
+use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Documents\Enums\SendStatus;
 use App\Mvp\Identity\MvpUser;
 use Illuminate\Support\Str;
@@ -44,7 +45,7 @@ class SendMessageService implements SendMessageUseCase
         // l'ultimo evento osservabile, quindi e' quello che marca l'invio.
         // Transizione a senso unico: un secondo download non cambia lo stato.
         if ($context->sendStatus === SendStatus::Pending->value) {
-            $this->documents->updateSubDocument($subDocumentId, ['send_status' => SendStatus::Sent]);
+            $this->documents->updateSubDocument($subDocumentId, SubDocumentChanges::none()->withSendStatus(SendStatus::Sent));
             $this->events->dispatch(new SendMessageExported($subDocumentId, $actor));
         }
 
@@ -53,22 +54,22 @@ class SendMessageService implements SendMessageUseCase
 
     public function updateOverrides(int $subDocumentId, array $overrides, ?MvpUser $actor): void
     {
-        $updates = [];
+        $changes = SubDocumentChanges::none();
 
         if (array_key_exists('recipient', $overrides)) {
-            $updates['send_recipient_override'] = $overrides['recipient'];
+            $changes = $changes->withSendRecipientOverride($overrides['recipient']);
         }
 
         if (array_key_exists('subject', $overrides)) {
-            $updates['send_subject_override'] = $overrides['subject'];
+            $changes = $changes->withSendSubjectOverride($overrides['subject']);
         }
 
         if (array_key_exists('body', $overrides)) {
-            $updates['send_body_override'] = $overrides['body'];
+            $changes = $changes->withSendBodyOverride($overrides['body']);
         }
 
-        if ($updates !== []) {
-            $this->documents->updateSubDocument($subDocumentId, $updates);
+        if (! $changes->isEmpty()) {
+            $this->documents->updateSubDocument($subDocumentId, $changes);
         }
 
         $this->events->dispatch(new SendMessageOverridesCorrected($subDocumentId, $actor, array_keys($overrides)));

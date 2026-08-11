@@ -4,6 +4,7 @@ use App\Mvp\Documents\Application\UseCases\ReviewDocumentService;
 use App\Mvp\Documents\Domain\Events\SubDocumentExtractedDataCorrected;
 use App\Mvp\Documents\Domain\Events\SubDocumentManuallyValidated;
 use App\Mvp\Documents\Domain\Exceptions\MissingExtractedDataException;
+use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Identity\MvpUser;
 use Tests\DomainUnit\Documents\Fakes\InMemoryDocumentRepository;
 use Tests\DomainUnit\Documents\Fakes\RecordingDocumentEventDispatcher;
@@ -45,7 +46,7 @@ test('markReviewed validates a sub-document that already has extracted data', fu
     $documents = new InMemoryDocumentRepository;
     $documents->seedOriginal(1);
     $documents->seedSubDocument(10, 1);
-    $documents->saveExtractedData(10, ['company_name' => 'Acme Srl']);
+    $documents->saveExtractedData(10, ExtractedDataChanges::none()->withCompanyName('Acme Srl'));
     $events = new RecordingDocumentEventDispatcher;
 
     (new ReviewDocumentService($documents, $events))->markReviewed(10, fakeReviewActor());
