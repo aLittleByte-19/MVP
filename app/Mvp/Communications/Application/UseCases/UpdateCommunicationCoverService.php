@@ -2,9 +2,12 @@
 
 namespace App\Mvp\Communications\Application\UseCases;
 
+use App\Mvp\Communications\Domain\Events\CommunicationCoverRemoved;
+use App\Mvp\Communications\Domain\Events\CommunicationCoverReplaced;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationNotEditableException;
 use App\Mvp\Communications\Domain\Ports\Inbound\UpdateCommunicationCoverUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
+use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Enums\CommunicationStatus;
 use App\Mvp\Communications\Enums\CoverImageSource;
@@ -24,6 +27,7 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
     public function __construct(
         private readonly CommunicationRepository $communications,
         private readonly CommunicationCoverStoragePort $storage,
+        private readonly CommunicationEventDispatcherPort $events,
         private readonly UniqueIdGeneratorPort $ids,
         private readonly string $coverPathPrefix = 'communications/covers',
     ) {}
@@ -51,6 +55,8 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
         if ($communication->coverImagePath !== null) {
             $this->storage->delete($communication->coverImagePath);
         }
+
+        $this->events->dispatch(new CommunicationCoverReplaced($communicationId, $communication->tenantId, $actor, $mime, $size));
     }
 
     public function remove(int $communicationId, MvpUser $actor): void
@@ -73,6 +79,8 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
         if ($communication->coverImagePath !== null) {
             $this->storage->delete($communication->coverImagePath);
         }
+
+        $this->events->dispatch(new CommunicationCoverRemoved($communicationId, $communication->tenantId, $actor));
     }
 
     private function newPath(int $communicationId, string $mime): string

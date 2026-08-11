@@ -6,7 +6,6 @@ use App\Http\Controllers\Api\V1\Concerns\AuthorizesCommunications;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesActor;
 use App\Http\Requests\UpdateCommunicationCoverRequest;
 use App\Models\Communication;
-use App\Mvp\Audit\Services\AuditLogger;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationCoverUnavailableException;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationNotEditableException;
 use App\Mvp\Communications\Domain\Ports\Inbound\DownloadCommunicationCoverUseCase;
@@ -21,10 +20,11 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Adapter primario HTTP: immagine di copertina della comunicazione
- * (sostituzione manuale, rimozione e download). L'audit della mutazione resta
- * qui perche' dipende da metadati solo HTTP (mime/size del file caricato),
- * non da una regola di dominio (vedi ADR 0010). Il download passa dalla
- * porta primaria DownloadCommunicationCoverUseCase, stesso schema di
+ * (sostituzione manuale, rimozione e download). L'audit della mutazione
+ * passa da CommunicationCoverReplaced/CommunicationCoverRemoved (dispatchati
+ * da UpdateCommunicationCoverService), stesso schema delle altre azioni sul
+ * dominio — non piu' scritto qui direttamente. Il download passa dalla porta
+ * primaria DownloadCommunicationCoverUseCase, stesso schema di
  * DocumentPreviewController.
  */
 class CommunicationCoverController
@@ -38,7 +38,6 @@ class CommunicationCoverController
         UpdateCommunicationCoverRequest $request,
         Communication $communication,
         UpdateCommunicationCoverUseCase $covers,
-        AuditLogger $audit,
         MvpStateService $state,
     ): JsonResponse {
         $actor = $this->actor($request);
@@ -61,15 +60,6 @@ class CommunicationCoverController
             throw ValidationException::withMessages(['communication' => [$e->getMessage()]]);
         }
 
-        $audit->record(
-            'mvp-communication-cover-updated',
-            $actor,
-            'communication',
-            (string) $communication->id,
-            ['mime' => $mime, 'size' => strlen($bytes)],
-            $request,
-        );
-
         return response()->json([
             'message' => 'Immagine di copertina aggiornata correttamente.',
             'communication' => $state->communication($communication->refresh()),
@@ -84,7 +74,6 @@ class CommunicationCoverController
         Request $request,
         Communication $communication,
         UpdateCommunicationCoverUseCase $covers,
-        AuditLogger $audit,
         MvpStateService $state,
     ): JsonResponse {
         $actor = $this->actor($request);
@@ -95,15 +84,6 @@ class CommunicationCoverController
         } catch (CommunicationNotEditableException $e) {
             throw ValidationException::withMessages(['communication' => [$e->getMessage()]]);
         }
-
-        $audit->record(
-            'mvp-communication-cover-removed',
-            $actor,
-            'communication',
-            (string) $communication->id,
-            [],
-            $request,
-        );
 
         return response()->json([
             'message' => 'Immagine di copertina rimossa.',
