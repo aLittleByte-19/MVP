@@ -97,6 +97,8 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
             'is_favorite' => false,
             'rating' => null,
             'workflow_execution_arn' => null,
+            'cover_error' => null,
+            'error_message' => null,
         ];
     }
 
@@ -122,6 +124,8 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
             isFavorite: (bool) $row['is_favorite'],
             rating: $row['rating'],
             workflowExecutionArn: $row['workflow_execution_arn'],
+            coverError: $row['cover_error'],
+            errorMessage: $row['error_message'],
         );
     }
 }

@@ -81,6 +81,14 @@ interface DocumentRepository
     public function originalDocumentHasRemainingSubDocuments(int $originalDocumentId): bool;
 
     /**
+     * Id, in ordine, dei sotto-documenti di un originale che hanno gia' dati
+     * estratti (serve al polling di avanzamento, UC-35/UC-36).
+     *
+     * @return list<int>
+     */
+    public function subDocumentIdsWithExtractedData(int $originalDocumentId): array;
+
+    /**
      * Elimina i sotto-documenti esistenti di un originale (rielaborazione) e
      * restituisce i percorsi storage da ripulire.
      *

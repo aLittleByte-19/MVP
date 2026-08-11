@@ -364,8 +364,8 @@ verde ad ogni passaggio (commit separati):
   `RunOcrService`) — `ProcessDocumentService::process()` resta fuori: manipola PDF reali via Fpdi e
   chiama l'helper Laravel `storage_path()`, non testabile in isolamento per lo stesso motivo di
   `FinalizeDocumentWorkflowService`/`StartDocumentWorkflowService` (helper `now()` → facade `Date`,
-  vedi trade-off sotto). 361 test verdi in totale (307 Feature/Unit preesistenti + 35 DomainUnit
-  Communications + 19 DomainUnit Documents), stesso conteggio Feature di prima: nessuna regressione
+  vedi trade-off sotto). 366 test verdi in totale (307 Feature/Unit preesistenti + 37 DomainUnit
+  Communications + 22 DomainUnit Documents), stesso conteggio Feature di prima: nessuna regressione
   di comportamento.
 - **Asimmetria fra domini chiusa**: la prima passata su Communications (10 eventi) non copriva
   `DeleteCommunicationService`, `RateCommunicationService`, `PromptConfigurationService`, mentre la
@@ -453,6 +453,27 @@ verde ad ogni passaggio (commit separati):
   Comportamento HTTP osservabile invariato (stessi header, stesso corpo, stessi 404/503) —
   verificato dai test Feature esistenti, aggiornati solo dove asserivano `streamedContent()` (il
   tipo concreto di risposta e' cambiato, il contenuto no).
+- **Polling SSE spostato dietro una porta primaria**: `DocumentController::stream()` e
+  `CommunicationStreamController::stream()` interrogavano `OriginalDocument::query()->with([...])`/
+  `Communication::query()->find()` direttamente a ogni iterazione del loop `while
+  (!connection_aborted())` — l'esempio esplicitamente citato nella sezione "Evidenza concreta della
+  mescolanza" di questo stesso ADR, mai risolto nelle passate precedenti. Aggiunte due porte primarie
+  di sola lettura (`PollDocumentProgressUseCase`/`PollDocumentProgressService`,
+  `PollCommunicationProgressUseCase`/`PollCommunicationProgressService`) che restituiscono uno
+  snapshot di dominio (`DocumentProgressSnapshot`, `CommunicationProgressSnapshot`) ogni iterazione,
+  attraverso `DocumentRepository`/`CommunicationRepository`. `DocumentRepository` guadagna
+  `subDocumentIdsWithExtractedData()` (prima il controller caricava l'intero albero
+  `subDocuments.extractedData` a ogni poll e filtrava in PHP); `OriginalDocumentRecord` e
+  `CommunicationRecord` guadagnano `errorMessage` (e `CommunicationRecord` anche `coverError`), mai
+  esposti prima perche' letti solo dai controller via Eloquent diretto. Il controller resta
+  responsabile solo del protocollo SSE (loop, heartbeat, timeout, bookkeeping di cosa e' gia' stato
+  inviato a *questa* connessione — intrinsecamente legato al ciclo di vita di una singola risposta
+  HTTP, non una decisione di dominio) e ricarica l'Eloquent model solo nei punti che richiedono
+  `MvpStateService` (shaping del payload `document`/`cover`/`done`, gia' dichiarato fuori perimetro).
+  5 nuovi test `DomainUnit` (`PollDocumentProgressServiceTest`, `PollCommunicationProgressServiceTest`).
+  Nessun test Feature esisteva per questi due endpoint prima o dopo (il polling SSE non e' testabile
+  utilmente in Pest): verificato manualmente contro lo stack live per il percorso "risorsa non
+  trovata" di entrambi.
 - **Trade-off noto, non risolto**: molti casi d'uso restano legati a `config()` per parametri di
   runtime genuinamente variabili per ambiente (`StartCommunicationWorkflowService`,
   `StartDocumentWorkflowService` in particolare: ARN di state machine, URL di coda, guardia

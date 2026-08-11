@@ -163,6 +163,21 @@ final class InMemoryDocumentRepository implements DocumentRepository
         return false;
     }
 
+    public function subDocumentIdsWithExtractedData(int $originalDocumentId): array
+    {
+        $ids = [];
+
+        foreach ($this->subDocuments as $id => $row) {
+            if ($row['original_document_id'] === $originalDocumentId && isset($this->extractedData[$id])) {
+                $ids[] = $id;
+            }
+        }
+
+        sort($ids);
+
+        return $ids;
+    }
+
     public function deleteExistingSubDocuments(int $originalDocumentId): array
     {
         $paths = [];
@@ -228,6 +243,7 @@ final class InMemoryDocumentRepository implements DocumentRepository
             's3_key' => null,
             'workflow_completed_at' => null,
             'workflow_execution_arn' => null,
+            'error_message' => null,
         ];
     }
 
@@ -267,6 +283,7 @@ final class InMemoryDocumentRepository implements DocumentRepository
             s3Key: $row['s3_key'],
             workflowCompleted: $row['workflow_completed_at'] !== null,
             workflowExecutionArn: $row['workflow_execution_arn'],
+            errorMessage: $row['error_message'],
         );
     }
 }

@@ -24,5 +24,7 @@ final class CommunicationRecord
         public readonly bool $isFavorite,
         public readonly ?int $rating,
         public readonly ?string $workflowExecutionArn,
+        public readonly ?string $coverError,
+        public readonly ?string $errorMessage,
     ) {}
 }

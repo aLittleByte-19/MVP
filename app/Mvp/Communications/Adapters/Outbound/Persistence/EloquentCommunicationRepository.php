@@ -81,6 +81,8 @@ class EloquentCommunicationRepository implements CommunicationRepository
             isFavorite: (bool) $communication->is_favorite,
             rating: $communication->rating,
             workflowExecutionArn: $communication->workflow_execution_arn,
+            coverError: $communication->cover_error,
+            errorMessage: $communication->error_message,
         );
     }
 }
