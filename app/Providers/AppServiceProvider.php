@@ -39,6 +39,7 @@ use App\Mvp\Communications\Application\UseCases\GenerateCommunicationCoverServic
 use App\Mvp\Communications\Application\UseCases\GenerateCommunicationService;
 use App\Mvp\Communications\Application\UseCases\GenerateCommunicationTextService;
 use App\Mvp\Communications\Application\UseCases\ListCommunicationsService;
+use App\Mvp\Communications\Application\UseCases\PollCommunicationProgressService;
 use App\Mvp\Communications\Application\UseCases\PromptConfigurationService;
 use App\Mvp\Communications\Application\UseCases\RateCommunicationService;
 use App\Mvp\Communications\Application\UseCases\StartCommunicationWorkflowService;
@@ -69,6 +70,7 @@ use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationCoverUseCas
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationTextUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\ListCommunicationsUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\PollCommunicationProgressUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\PromptConfigurationUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\RateCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\StartCommunicationWorkflowUseCase;
@@ -102,6 +104,7 @@ use App\Mvp\Documents\Application\Listeners\RecordSubDocumentManuallyValidated;
 use App\Mvp\Documents\Application\UseCases\DeleteDocumentService;
 use App\Mvp\Documents\Application\UseCases\FinalizeDocumentWorkflowService;
 use App\Mvp\Documents\Application\UseCases\ListDocumentsService;
+use App\Mvp\Documents\Application\UseCases\PollDocumentProgressService;
 use App\Mvp\Documents\Application\UseCases\PreviewDocumentService;
 use App\Mvp\Documents\Application\UseCases\ProcessDocumentService;
 use App\Mvp\Documents\Application\UseCases\ReviewDocumentService;
@@ -125,6 +128,7 @@ use App\Mvp\Documents\Domain\Events\SubDocumentManuallyValidated;
 use App\Mvp\Documents\Domain\Ports\Inbound\DeleteDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\FinalizeDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\ListDocumentsUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\PollDocumentProgressUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\PreviewDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\ProcessDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\ReviewDocumentUseCase;
@@ -276,6 +280,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(ReviewDocumentUseCase::class, ReviewDocumentService::class);
         $this->app->bind(SendMessageUseCase::class, SendMessageService::class);
         $this->app->bind(PreviewDocumentUseCase::class, PreviewDocumentService::class);
+        $this->app->bind(PollDocumentProgressUseCase::class, PollDocumentProgressService::class);
 
         // --- Dominio Communications: porta -> adapter (vedi ADR 0010) ---
         $this->app->singleton(CommunicationAiGatewayPort::class, BedrockCommunicationAiAdapter::class);
@@ -289,6 +294,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(GenerateCommunicationUseCase::class, GenerateCommunicationService::class);
         $this->app->bind(StartCommunicationWorkflowUseCase::class, StartCommunicationWorkflowService::class);
         $this->app->bind(ListCommunicationsUseCase::class, ListCommunicationsService::class);
+        $this->app->bind(PollCommunicationProgressUseCase::class, PollCommunicationProgressService::class);
         $this->app->bind(CommunicationDraftUseCase::class, CommunicationDraftService::class);
         $this->app->bind(DeleteCommunicationUseCase::class, DeleteCommunicationService::class);
         $this->app->bind(RateCommunicationUseCase::class, RateCommunicationService::class);

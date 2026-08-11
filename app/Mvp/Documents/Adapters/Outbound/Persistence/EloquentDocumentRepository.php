@@ -146,6 +146,17 @@ class EloquentDocumentRepository implements DocumentRepository
         return SubDocument::query()->where('original_document_id', $originalDocumentId)->exists();
     }
 
+    public function subDocumentIdsWithExtractedData(int $originalDocumentId): array
+    {
+        return SubDocument::query()
+            ->where('original_document_id', $originalDocumentId)
+            ->whereHas('extractedData')
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
     public function deleteExistingSubDocuments(int $originalDocumentId): array
     {
         $splits = SubDocument::query()->where('original_document_id', $originalDocumentId)->get(['id', 'file_path']);
@@ -184,6 +195,7 @@ class EloquentDocumentRepository implements DocumentRepository
             s3Key: $document->s3_key,
             workflowCompleted: $document->workflow_completed_at !== null,
             workflowExecutionArn: $document->workflow_execution_arn,
+            errorMessage: $document->error_message,
         );
     }
 

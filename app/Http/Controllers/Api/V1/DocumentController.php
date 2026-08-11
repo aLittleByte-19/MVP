@@ -11,6 +11,7 @@ use App\Models\SubDocument;
 use App\Mvp\Documents\Domain\Commands\UploadDocumentCommand;
 use App\Mvp\Documents\Domain\Ports\Inbound\DeleteDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\ListDocumentsUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\PollDocumentProgressUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\StartDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\UploadDocumentUseCase;
 use App\Mvp\Documents\Enums\ProcessingStatus;
@@ -22,10 +23,11 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /**
  * Adapter primario HTTP: traduce le richieste nei casi d'uso del dominio
  * Documents tramite le loro porte primarie. Nessuna regola di business qui —
- * quella vive in Domain/Application (vedi ADR 0010). `stream()` resta
- * un'eccezione dichiarata: e' solo presentazione (polling SSE + shaping via
- * MvpStateService, infrastruttura condivisa fuori perimetro), nessuna
- * decisione di dominio.
+ * quella vive in Domain/Application (vedi ADR 0010). `stream()` legge lo
+ * stato tramite PollDocumentProgressUseCase (porta primaria): il controller
+ * resta responsabile solo del protocollo SSE e dello shaping via
+ * MvpStateService (infrastruttura condivisa fuori perimetro), ricaricando
+ * dal modello Eloquent solo i sotto-documenti nuovi da quest'ultimo poll.
  */
 class DocumentController
 {
@@ -103,12 +105,13 @@ class DocumentController
         ], 202);
     }
 
-    public function stream(Request $request, OriginalDocument $originalDocument, MvpStateService $state): StreamedResponse
+    public function stream(Request $request, OriginalDocument $originalDocument, MvpStateService $state, PollDocumentProgressUseCase $poll): StreamedResponse
     {
         $actor = $this->actor($request);
         $this->authorizeOriginalDocument($originalDocument, $actor);
+        $documentId = $originalDocument->id;
 
-        return response()->stream(function () use ($originalDocument, $actor, $state): void {
+        return response()->stream(function () use ($documentId, $actor, $state, $poll): void {
             if (app()->runningUnitTests()) {
                 return;
             }
@@ -139,36 +142,38 @@ class DocumentController
             $lastSignature = null;
 
             while (! connection_aborted()) {
-                $freshDocument = OriginalDocument::query()
-                    ->with(['subDocuments' => fn ($query) => $query
-                        ->with(['originalDocument', 'extractedData'])
-                        ->orderBy('id')])
-                    ->find($originalDocument->id);
-
-                if (! $freshDocument) {
+                try {
+                    $snapshot = $poll->poll($documentId);
+                } catch (\Throwable) {
                     $send('error', ['message' => 'Documento non trovato.']);
 
                     return;
                 }
 
-                foreach ($freshDocument->subDocuments as $subDocument) {
-                    if (in_array($subDocument->id, $sentDocumentIds, true) || ! $subDocument->extractedData) {
-                        continue;
-                    }
+                $newSubDocumentIds = array_values(array_diff($snapshot->extractedSubDocumentIds, $sentDocumentIds));
 
-                    $sentDocumentIds[] = $subDocument->id;
-                    $send('document', $state->document($subDocument));
+                if ($newSubDocumentIds !== []) {
+                    $freshSubDocuments = SubDocument::query()
+                        ->with(['originalDocument', 'extractedData'])
+                        ->whereIn('id', $newSubDocumentIds)
+                        ->orderBy('id')
+                        ->get();
+
+                    foreach ($freshSubDocuments as $subDocument) {
+                        $sentDocumentIds[] = $subDocument->id;
+                        $send('document', $state->document($subDocument));
+                    }
                 }
 
                 // Avanzamento a step per la barra di progressione della SPA: stato
                 // del workflow + numero di sotto-documenti gia' estratti. Si emette
                 // solo quando qualcosa cambia; altrimenti un heartbeat tiene viva la
                 // connessione senza generare rumore.
-                $signature = $freshDocument->processing_status->value.':'.count($sentDocumentIds);
+                $signature = $snapshot->processingStatus.':'.count($sentDocumentIds);
 
                 if ($signature !== $lastSignature) {
                     $send('progress', [
-                        'status' => $freshDocument->processing_status->value,
+                        'status' => $snapshot->processingStatus,
                         'subDocuments' => count($sentDocumentIds),
                     ]);
                     $lastSignature = $signature;
@@ -176,14 +181,14 @@ class DocumentController
                     $heartbeat();
                 }
 
-                if ($freshDocument->processing_status === ProcessingStatus::Completed) {
+                if ($snapshot->processingStatus === ProcessingStatus::Completed->value) {
                     $send('done', ['state' => $state->forActor($actor)]);
 
                     return;
                 }
 
-                if ($freshDocument->processing_status === ProcessingStatus::Failed) {
-                    $send('error', ['message' => $freshDocument->error_message ?: 'Analisi documento non disponibile.']);
+                if ($snapshot->processingStatus === ProcessingStatus::Failed->value) {
+                    $send('error', ['message' => $snapshot->errorMessage ?: 'Analisi documento non disponibile.']);
 
                     return;
                 }

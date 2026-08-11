@@ -30,6 +30,8 @@ function fakeCommunicationRecord(array $overrides = []): CommunicationRecord
         isFavorite: $overrides['isFavorite'] ?? false,
         rating: $overrides['rating'] ?? null,
         workflowExecutionArn: $overrides['workflowExecutionArn'] ?? null,
+        coverError: $overrides['coverError'] ?? null,
+        errorMessage: $overrides['errorMessage'] ?? null,
     );
 }
 

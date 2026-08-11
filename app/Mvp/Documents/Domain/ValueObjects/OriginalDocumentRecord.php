@@ -29,6 +29,7 @@ final class OriginalDocumentRecord
         public readonly ?string $s3Key,
         public readonly bool $workflowCompleted,
         public readonly ?string $workflowExecutionArn,
+        public readonly ?string $errorMessage,
     ) {}
 
     public function hasManualUploadMetadata(): bool
