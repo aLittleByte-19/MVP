@@ -6,8 +6,13 @@ use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
 use App\Models\SubDocument;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
+use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
+use App\Mvp\Documents\Domain\ValueObjects\NewOriginalDocument;
+use App\Mvp\Documents\Domain\ValueObjects\NewSubDocument;
+use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
 use App\Mvp\Documents\Domain\ValueObjects\SendMessageContext;
+use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentPage;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
 
@@ -18,9 +23,9 @@ use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
  */
 class EloquentDocumentRepository implements DocumentRepository
 {
-    public function createOriginalDocument(array $attributes): int
+    public function createOriginalDocument(NewOriginalDocument $document): int
     {
-        return OriginalDocument::create($attributes)->id;
+        return OriginalDocument::create($document->toArray())->id;
     }
 
     public function findOriginalDocument(int $id): OriginalDocumentRecord
@@ -28,9 +33,9 @@ class EloquentDocumentRepository implements DocumentRepository
         return $this->toOriginalDocumentRecord(OriginalDocument::query()->findOrFail($id));
     }
 
-    public function updateOriginalDocument(int $id, array $attributes): void
+    public function updateOriginalDocument(int $id, OriginalDocumentChanges $changes): void
     {
-        OriginalDocument::query()->whereKey($id)->firstOrFail()->update($attributes);
+        OriginalDocument::query()->whereKey($id)->firstOrFail()->update($changes->toArray());
     }
 
     public function deleteOriginalDocumentWithWorkflowTasks(int $id): void
@@ -121,14 +126,14 @@ class EloquentDocumentRepository implements DocumentRepository
         return ExtractedData::query()->where('sub_document_id', $subDocumentId)->exists();
     }
 
-    public function createSubDocument(array $attributes): int
+    public function createSubDocument(NewSubDocument $subDocument): int
     {
-        return SubDocument::create($attributes)->id;
+        return SubDocument::create($subDocument->toArray())->id;
     }
 
-    public function updateSubDocument(int $id, array $attributes): void
+    public function updateSubDocument(int $id, SubDocumentChanges $changes): void
     {
-        SubDocument::query()->whereKey($id)->firstOrFail()->update($attributes);
+        SubDocument::query()->whereKey($id)->firstOrFail()->update($changes->toArray());
     }
 
     public function deleteSubDocument(int $id): void
@@ -167,9 +172,9 @@ class EloquentDocumentRepository implements DocumentRepository
         return $paths;
     }
 
-    public function saveExtractedData(int $subDocumentId, array $attributes): void
+    public function saveExtractedData(int $subDocumentId, ExtractedDataChanges $changes): void
     {
-        ExtractedData::updateOrCreate(['sub_document_id' => $subDocumentId], $attributes);
+        ExtractedData::updateOrCreate(['sub_document_id' => $subDocumentId], $changes->toArray());
     }
 
     public function deleteExtractedData(int $subDocumentId): void

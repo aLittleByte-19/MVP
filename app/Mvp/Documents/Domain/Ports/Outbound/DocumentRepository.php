@@ -2,8 +2,13 @@
 
 namespace App\Mvp\Documents\Domain\Ports\Outbound;
 
+use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
+use App\Mvp\Documents\Domain\ValueObjects\NewOriginalDocument;
+use App\Mvp\Documents\Domain\ValueObjects\NewSubDocument;
+use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
 use App\Mvp\Documents\Domain\ValueObjects\SendMessageContext;
+use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentPage;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
 
@@ -12,9 +17,12 @@ use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
  * (OriginalDocument + SubDocument + ExtractedData). Nessun riferimento a
  * Eloquent: i metodi di lettura restituiscono value object di dominio
  * ({@see OriginalDocumentRecord}, {@see SubDocumentRecord},
- * {@see SubDocumentPage}); le scritture prendono parametri primitivi — chi
- * implementa questa interfaccia decide come tradurli in una mutazione
- * Eloquent, il chiamante non costruisce mai la query o la mutazione stessa.
+ * {@see SubDocumentPage}); le scritture prendono value object di dominio
+ * ({@see NewOriginalDocument}, {@see OriginalDocumentChanges},
+ * {@see NewSubDocument}, {@see SubDocumentChanges},
+ * {@see ExtractedDataChanges}) invece di array associativi con chiavi a
+ * stringa: il nome della colonna DB resta un dettaglio di quelle classi
+ * (Domain), non qualcosa che ogni caso d'uso deve scrivere a mano.
  *
  * `paginateSubDocuments` restituisce solo identificativi e metadati di
  * paginazione: e' una scelta di perimetro esplicita (vedi ADR 0010) — la
@@ -25,17 +33,11 @@ use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
  */
 interface DocumentRepository
 {
-    /**
-     * @param  array<string, mixed>  $attributes
-     */
-    public function createOriginalDocument(array $attributes): int;
+    public function createOriginalDocument(NewOriginalDocument $document): int;
 
     public function findOriginalDocument(int $id): OriginalDocumentRecord;
 
-    /**
-     * @param  array<string, mixed>  $attributes
-     */
-    public function updateOriginalDocument(int $id, array $attributes): void;
+    public function updateOriginalDocument(int $id, OriginalDocumentChanges $changes): void;
 
     public function deleteOriginalDocumentWithWorkflowTasks(int $id): void;
 
@@ -61,15 +63,9 @@ interface DocumentRepository
      */
     public function subDocumentHasExtractedData(int $subDocumentId): bool;
 
-    /**
-     * @param  array<string, mixed>  $attributes
-     */
-    public function createSubDocument(array $attributes): int;
+    public function createSubDocument(NewSubDocument $subDocument): int;
 
-    /**
-     * @param  array<string, mixed>  $attributes
-     */
-    public function updateSubDocument(int $id, array $attributes): void;
+    public function updateSubDocument(int $id, SubDocumentChanges $changes): void;
 
     public function deleteSubDocument(int $id): void;
 
@@ -96,10 +92,7 @@ interface DocumentRepository
      */
     public function deleteExistingSubDocuments(int $originalDocumentId): array;
 
-    /**
-     * @param  array<string, mixed>  $attributes
-     */
-    public function saveExtractedData(int $subDocumentId, array $attributes): void;
+    public function saveExtractedData(int $subDocumentId, ExtractedDataChanges $changes): void;
 
     public function deleteExtractedData(int $subDocumentId): void;
 }

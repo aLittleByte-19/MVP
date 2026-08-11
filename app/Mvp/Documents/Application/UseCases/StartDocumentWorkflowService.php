@@ -7,6 +7,7 @@ use App\Mvp\Documents\Domain\Events\DocumentWorkflowStartFailed;
 use App\Mvp\Documents\Domain\Ports\Inbound\StartDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
+use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
 use App\Mvp\Documents\Enums\ProcessingStatus;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
@@ -73,17 +74,16 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
         try {
             $executionArn = $this->workflowEngine->startExecution($stateMachineArn, $this->executionName($documentId), $input);
 
-            $this->documents->updateOriginalDocument($documentId, [
-                'processing_status' => ProcessingStatus::Processing,
-                'workflow_execution_arn' => $executionArn,
-                'workflow_started_at' => $this->clock->now(),
-                'workflow_completed_at' => null,
-                'workflow_failed_at' => null,
-                'workflow_failure_reason' => null,
-                's3_bucket' => $bucket,
-                's3_key' => $key,
-                'error_message' => null,
-            ]);
+            $this->documents->updateOriginalDocument($documentId, OriginalDocumentChanges::none()
+                ->withProcessingStatus(ProcessingStatus::Processing)
+                ->withWorkflowExecutionArn($executionArn)
+                ->withWorkflowStartedAt($this->clock->now())
+                ->withWorkflowCompletedAt(null)
+                ->withWorkflowFailedAt(null)
+                ->withWorkflowFailureReason(null)
+                ->withS3Bucket($bucket)
+                ->withS3Key($key)
+                ->withErrorMessage(null));
 
             $this->events->dispatch(new DocumentWorkflowStarted(
                 $documentId,
@@ -94,12 +94,11 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
                 $taskQueueUrl,
             ));
         } catch (\Throwable $e) {
-            $this->documents->updateOriginalDocument($documentId, [
-                'processing_status' => ProcessingStatus::Failed,
-                'workflow_failed_at' => $this->clock->now(),
-                'workflow_failure_reason' => $e->getMessage(),
-                'error_message' => 'Avvio workflow documentale non disponibile.',
-            ]);
+            $this->documents->updateOriginalDocument($documentId, OriginalDocumentChanges::none()
+                ->withProcessingStatus(ProcessingStatus::Failed)
+                ->withWorkflowFailedAt($this->clock->now())
+                ->withWorkflowFailureReason($e->getMessage())
+                ->withErrorMessage('Avvio workflow documentale non disponibile.'));
             $this->events->dispatch(new DocumentWorkflowStartFailed(
                 $documentId,
                 $document->tenantId,

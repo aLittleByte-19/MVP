@@ -6,6 +6,7 @@ use App\Mvp\Documents\Domain\Events\DocumentWorkflowCompleted;
 use App\Mvp\Documents\Domain\Ports\Inbound\FinalizeDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
+use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
 use App\Mvp\Documents\Enums\ProcessingStatus;
 use Psr\Clock\ClockInterface;
 
@@ -28,7 +29,7 @@ class FinalizeDocumentWorkflowService implements FinalizeDocumentWorkflowUseCase
         $completed = $document->processingStatus === ProcessingStatus::Completed->value;
 
         if ($completed && ! $document->workflowCompleted) {
-            $this->documents->updateOriginalDocument($documentId, ['workflow_completed_at' => $this->clock->now()]);
+            $this->documents->updateOriginalDocument($documentId, OriginalDocumentChanges::none()->withWorkflowCompletedAt($this->clock->now()));
         }
 
         $this->events->dispatch(new DocumentWorkflowCompleted($documentId, $document->tenantId));

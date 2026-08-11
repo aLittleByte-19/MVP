@@ -10,7 +10,9 @@ use App\Mvp\Documents\Domain\Ports\Inbound\ExtractSubDocumentFieldsUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentAiGatewayPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
+use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
+use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
 use App\Mvp\Documents\Enums\ReviewStatus;
 use Psr\Log\LoggerInterface;
@@ -53,14 +55,18 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
             $confidenceScore = $this->computeConfidenceScore($aiFields, $subDocument, $original);
             $reviewStatus = $this->reviewStatusForConfidence($confidenceScore);
 
-            $this->documents->updateSubDocument($subDocumentId, [
-                'review_status' => $reviewStatus,
-                'error_message' => null,
-            ]);
-            $this->documents->saveExtractedData($subDocumentId, array_merge($fields, [
-                'confidence_score' => $confidenceScore,
-                'ai_payload' => $aiFields,
-            ]));
+            $this->documents->updateSubDocument($subDocumentId, SubDocumentChanges::none()
+                ->withReviewStatus($reviewStatus)
+                ->withErrorMessage(null));
+            $this->documents->saveExtractedData($subDocumentId, ExtractedDataChanges::none()
+                ->withEmployeeFirstName($fields['employee_first_name'])
+                ->withEmployeeLastName($fields['employee_last_name'])
+                ->withCompanyName($fields['company_name'])
+                ->withDocumentDate($fields['document_date'])
+                ->withDocumentType($fields['document_type'])
+                ->withDescription($fields['description'])
+                ->withConfidenceScore($confidenceScore)
+                ->withAiPayload($aiFields));
 
             $this->events->dispatch(new SubDocumentFieldsExtracted(
                 $subDocumentId,
@@ -78,16 +84,14 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
             ]);
 
             $this->documents->deleteExtractedData($subDocumentId);
-            $this->documents->updateSubDocument($subDocumentId, [
-                'review_status' => ReviewStatus::Quarantined,
-                'error_message' => $safeMessage,
-            ]);
+            $this->documents->updateSubDocument($subDocumentId, SubDocumentChanges::none()
+                ->withReviewStatus(ReviewStatus::Quarantined)
+                ->withErrorMessage($safeMessage));
             $this->events->dispatch(new AiOutputRejected($subDocumentId, $original->tenantId, $e->operation(), $e->errors()));
         } catch (\Throwable $e) {
             $this->logger->error('ExtractSubDocumentFieldsService: extraction failed', ['sub_document_id' => $subDocumentId, 'message' => $e->getMessage()]);
-            $this->documents->updateSubDocument($subDocumentId, [
-                'error_message' => $this->ai->formatUserError($e, 'Estrazione campi non disponibile. Verifica configurazione e permessi Bedrock.'),
-            ]);
+            $this->documents->updateSubDocument($subDocumentId, SubDocumentChanges::none()
+                ->withErrorMessage($this->ai->formatUserError($e, 'Estrazione campi non disponibile. Verifica configurazione e permessi Bedrock.')));
 
             throw $e;
         }
