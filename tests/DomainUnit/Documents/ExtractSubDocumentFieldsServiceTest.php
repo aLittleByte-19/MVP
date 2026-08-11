@@ -1,36 +1,34 @@
 <?php
 
 use App\Exceptions\InvalidAiOutputException;
-use App\Mvp\Documents\Application\UseCases\ProcessDocumentService;
+use App\Mvp\Documents\Application\Support\OcrRangeReader;
+use App\Mvp\Documents\Application\UseCases\ExtractSubDocumentFieldsService;
 use App\Mvp\Documents\Domain\Events\AiOutputRejected;
 use App\Mvp\Documents\Domain\Events\SubDocumentFieldsExtracted;
 use Psr\Log\NullLogger;
 use Tests\DomainUnit\Documents\Fakes\FakeDocumentAiGateway;
-use Tests\DomainUnit\Documents\Fakes\FakeDocumentStorage;
-use Tests\DomainUnit\Documents\Fakes\FakeUniqueIdGenerator;
 use Tests\DomainUnit\Documents\Fakes\InMemoryDocumentRepository;
-use Tests\DomainUnit\Documents\Fakes\NullWorkflowTaskHeartbeat;
 use Tests\DomainUnit\Documents\Fakes\RecordingDocumentEventDispatcher;
 
 /**
  * Test di dominio puro (nessun bootstrap Laravel/DB/AWS, vedi refactory.md
- * Compito 3 punto 2). Copre extractAndSaveFields(), non process(): quest'ultimo
- * manipola PDF reali via Fpdi e chiama storage_path(), un helper Laravel che
- * richiede il container — resta testato solo a livello Feature.
+ * Compito 3 punto 2). Prima questa logica viveva dentro ProcessDocumentService
+ * (480 righe, mescolata a Fpdi/storage_path()): separata perche' l'estrazione
+ * per destinatario e' un'operazione a se' stante — non solo un dettaglio
+ * interno dello split — e non ha bisogno di manipolazione PDF per essere
+ * testata (vedi ADR 0010).
  */
-function processDocumentService(
+function extractSubDocumentFieldsService(
     InMemoryDocumentRepository $documents,
     FakeDocumentAiGateway $ai,
     RecordingDocumentEventDispatcher $events,
-): ProcessDocumentService {
-    return new ProcessDocumentService(
+): ExtractSubDocumentFieldsService {
+    return new ExtractSubDocumentFieldsService(
         $documents,
-        new FakeDocumentStorage,
         $ai,
         $events,
-        new NullWorkflowTaskHeartbeat,
         new NullLogger,
-        new FakeUniqueIdGenerator,
+        new OcrRangeReader($ai),
         80,
     );
 }
@@ -51,7 +49,7 @@ test('extractAndSaveFields saves the AI fields and dispatches SubDocumentFieldsE
     ]);
     $events = new RecordingDocumentEventDispatcher;
 
-    processDocumentService($documents, $ai, $events)->extractAndSaveFields(10);
+    extractSubDocumentFieldsService($documents, $ai, $events)->extractAndSaveFields(10);
 
     $extracted = $documents->extractedDataFor(10);
 
@@ -68,7 +66,7 @@ test('extractAndSaveFields quarantines the sub-document and dispatches AiOutputR
     $ai->willThrowOnExtract(new InvalidAiOutputException('extract_fields', ['company_name is required']));
     $events = new RecordingDocumentEventDispatcher;
 
-    processDocumentService($documents, $ai, $events)->extractAndSaveFields(10);
+    extractSubDocumentFieldsService($documents, $ai, $events)->extractAndSaveFields(10);
 
     expect($documents->extractedDataFor(10))->toBeNull()
         ->and($events->hasDispatched(AiOutputRejected::class))->toBeTrue()
@@ -95,7 +93,7 @@ test('manual metadata overrides the AI output before computing confidence', func
     ]);
     $events = new RecordingDocumentEventDispatcher;
 
-    processDocumentService($documents, $ai, $events)->extractAndSaveFields(10);
+    extractSubDocumentFieldsService($documents, $ai, $events)->extractAndSaveFields(10);
 
     // company_name dichiarato in upload prevale, ed esce dal calcolo della
     // confidenza (non e' un campo lasciato al modello).

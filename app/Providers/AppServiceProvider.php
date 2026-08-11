@@ -101,7 +101,9 @@ use App\Mvp\Documents\Application\Listeners\RecordSubDocumentDeleted;
 use App\Mvp\Documents\Application\Listeners\RecordSubDocumentExtractedDataCorrected;
 use App\Mvp\Documents\Application\Listeners\RecordSubDocumentFieldsExtracted;
 use App\Mvp\Documents\Application\Listeners\RecordSubDocumentManuallyValidated;
+use App\Mvp\Documents\Application\Support\OcrRangeReader;
 use App\Mvp\Documents\Application\UseCases\DeleteDocumentService;
+use App\Mvp\Documents\Application\UseCases\ExtractSubDocumentFieldsService;
 use App\Mvp\Documents\Application\UseCases\FinalizeDocumentWorkflowService;
 use App\Mvp\Documents\Application\UseCases\ListDocumentsService;
 use App\Mvp\Documents\Application\UseCases\PollDocumentProgressService;
@@ -126,6 +128,7 @@ use App\Mvp\Documents\Domain\Events\SubDocumentExtractedDataCorrected;
 use App\Mvp\Documents\Domain\Events\SubDocumentFieldsExtracted;
 use App\Mvp\Documents\Domain\Events\SubDocumentManuallyValidated;
 use App\Mvp\Documents\Domain\Ports\Inbound\DeleteDocumentUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\ExtractSubDocumentFieldsUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\FinalizeDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\ListDocumentsUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\PollDocumentProgressUseCase;
@@ -269,21 +272,20 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(DeleteDocumentUseCase::class, DeleteDocumentService::class);
         $this->app->bind(RunOcrUseCase::class, RunOcrService::class);
         // Soglia di confidenza risolta qui (confine container) invece che con
-        // config() dentro la classe applicativa, cosi' ProcessDocumentService
+        // config() dentro la classe applicativa, cosi' ExtractSubDocumentFieldsService
         // resta istanziabile in un test Pest puro senza bootstrap Laravel
         // (vedi refactory.md, Compito 3 punto 2).
-        $this->app->bind(ProcessDocumentUseCase::class, function ($app) {
-            return new ProcessDocumentService(
+        $this->app->bind(ExtractSubDocumentFieldsUseCase::class, function ($app) {
+            return new ExtractSubDocumentFieldsService(
                 $app->make(DocumentRepository::class),
-                $app->make(DocumentStoragePort::class),
                 $app->make(DocumentAiGatewayPort::class),
                 $app->make(DocumentEventDispatcherPort::class),
-                $app->make(WorkflowTaskHeartbeat::class),
                 $app->make(LoggerInterface::class),
-                $app->make(UniqueIdGeneratorPort::class),
+                $app->make(OcrRangeReader::class),
                 max(0, min(100, (int) config('services.bedrock.mvp_confidence_threshold', 80))),
             );
         });
+        $this->app->bind(ProcessDocumentUseCase::class, ProcessDocumentService::class);
         $this->app->bind(FinalizeDocumentWorkflowUseCase::class, FinalizeDocumentWorkflowService::class);
         $this->app->bind(ReviewDocumentUseCase::class, ReviewDocumentService::class);
         $this->app->bind(SendMessageUseCase::class, SendMessageService::class);

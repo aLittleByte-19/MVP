@@ -484,8 +484,30 @@ verde ad ogni passaggio (commit separati):
   e' l'adapter). Toccati: `GenerateCommunicationCoverService`, `UpdateCommunicationCoverService`,
   `StartCommunicationWorkflowService`, `StartDocumentWorkflowService`, `ProcessDocumentService`.
   Nessun nuovo test: i due unici DomainUnit test che istanziano direttamente uno di questi servizi
-  (`GenerateCommunicationCoverServiceTest`, `ProcessDocumentServiceTest`) sono stati aggiornati per
-  passare un `FakeUniqueIdGenerator`, comportamento osservabile invariato.
+  (`GenerateCommunicationCoverServiceTest`, l'allora `ProcessDocumentServiceTest`, vedi punto
+  successivo per la ridenominazione) sono stati aggiornati per passare un `FakeUniqueIdGenerator`,
+  comportamento osservabile invariato.
+- **`ProcessDocumentService` (478 righe) spezzata in due casi d'uso**: `process()` (split del
+  documento via Bedrock, manipolazione Fpdi/`storage_path()`) ed `extractAndSaveFields()`
+  (estrazione campi per destinatario) erano nella stessa classe solo perche' `process()` invocava la
+  seconda internamente per ogni segmento appena creato — la porta `ProcessDocumentUseCase` lo
+  documentava gia' esplicitamente ("esposta a se' stante... perche' e' un punto di ingresso
+  testabile in isolamento"), un'incoerenza fra dichiarazione e struttura mai risolta. Estratta
+  `ExtractSubDocumentFieldsService` (nuova porta `ExtractSubDocumentFieldsUseCase`, 238 righe) con
+  tutta la logica di estrazione/confidenza/override manuali; `ProcessDocumentService` (246 righe)
+  ora dipende da quella porta per delegare l'estrazione di ogni destinatario, invece di contenerne
+  la logica. I due helper condivisi (testo OCR per intervallo di pagine, nonce del marcatore)
+  estratti in `OcrRangeReader` (52 righe, `Application/Support/`), iniettato in entrambe. Il vecchio
+  test `ProcessDocumentServiceTest` rinominato in `ExtractSubDocumentFieldsServiceTest` (stessi 3
+  test, ora contro la classe che possiede davvero quella logica); i 9 test Feature di
+  `DocumentExtractionTest` che risolvevano `ProcessDocumentService::class` dal container per
+  chiamare `extractAndSaveFields()` aggiornati a risolvere `ExtractSubDocumentFieldsService::class`.
+  Rimossi due doppi di test rimasti orfani dello split (`NullWorkflowTaskHeartbeat`,
+  `FakeUniqueIdGenerator` in Documents): nessun test li usava piu'. Nessuna regressione di
+  comportamento: `DocumentWorkflowTaskHandler` continua a dipendere solo da `ProcessDocumentUseCase`
+  e a chiamare `process()`, invariato. `process()` resta non testabile in `DomainUnit` per lo stesso
+  motivo di sempre (Fpdi/`storage_path()`); `ExtractSubDocumentFieldsService` invece lo era gia'
+  prima dello split e lo resta identicamente dopo.
 - **Trade-off noto, non risolto**: molti casi d'uso restano legati a `config()` per parametri di
   runtime genuinamente variabili per ambiente (`StartCommunicationWorkflowService`,
   `StartDocumentWorkflowService` in particolare: ARN di state machine, URL di coda, guardia
