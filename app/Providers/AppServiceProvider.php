@@ -16,6 +16,8 @@ use App\Mvp\Communications\Adapters\Primary\Workflow\CommunicationWorkflowTaskHa
 use App\Mvp\Communications\Application\Listeners\RecordAiOutputRejected;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationCoverDegraded;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationCoverGenerated;
+use App\Mvp\Communications\Application\Listeners\RecordCommunicationCoverRemoved;
+use App\Mvp\Communications\Application\Listeners\RecordCommunicationCoverReplaced;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationDeleted;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftApproved;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftDiscarded;
@@ -47,6 +49,8 @@ use App\Mvp\Communications\Application\UseCases\UpdateCommunicationCoverService;
 use App\Mvp\Communications\Domain\Events\AiOutputRejected;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverDegraded;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverGenerated;
+use App\Mvp\Communications\Domain\Events\CommunicationCoverRemoved;
+use App\Mvp\Communications\Domain\Events\CommunicationCoverReplaced;
 use App\Mvp\Communications\Domain\Events\CommunicationDeleted;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftApproved;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftDiscarded;
@@ -322,6 +326,7 @@ class AppServiceProvider extends ServiceProvider
             return new UpdateCommunicationCoverService(
                 $app->make(CommunicationRepository::class),
                 $app->make(CommunicationCoverStoragePort::class),
+                $app->make(CommunicationEventDispatcherPort::class),
                 $app->make(UniqueIdGeneratorPort::class),
                 trim((string) config('mvp.communications.cover_prefix', 'communications/covers'), '/'),
             );
@@ -395,6 +400,8 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(CommunicationTextGenerated::class, RecordCommunicationTextGenerated::class);
         Event::listen(AiOutputRejected::class, RecordAiOutputRejected::class);
         Event::listen(CommunicationCoverGenerated::class, RecordCommunicationCoverGenerated::class);
+        Event::listen(CommunicationCoverReplaced::class, RecordCommunicationCoverReplaced::class);
+        Event::listen(CommunicationCoverRemoved::class, RecordCommunicationCoverRemoved::class);
         Event::listen(CommunicationCoverDegraded::class, RecordCommunicationCoverDegraded::class);
         Event::listen(CommunicationWorkflowCompleted::class, RecordCommunicationWorkflowCompleted::class);
         Event::listen(CommunicationDraftFavorited::class, RecordCommunicationDraftFavorited::class);
