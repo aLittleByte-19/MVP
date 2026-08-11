@@ -28,6 +28,14 @@ interface DocumentStoragePort
     public function read(string $path): string;
 
     /**
+     * Verifica l'esistenza di un file sul disco documenti.
+     *
+     * @throws \RuntimeException se lo storage non e' raggiungibile (guasto
+     *                           infrastrutturale, da distinguere da "file assente").
+     */
+    public function exists(string $path): bool;
+
+    /**
      * Scrive contenuto binario a un percorso del disco documenti.
      */
     public function write(string $path, string $contents): void;

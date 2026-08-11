@@ -39,6 +39,16 @@ final class FakeCommunicationCoverStorage implements CommunicationCoverStoragePo
         return isset($this->stored[$path]);
     }
 
+    public function exists(string $path): bool
+    {
+        return isset($this->stored[$path]);
+    }
+
+    public function read(string $path): string
+    {
+        return $this->stored[$path] ?? throw new \RuntimeException("Copertina non trovata: {$path}");
+    }
+
     /**
      * @return list<string>
      */

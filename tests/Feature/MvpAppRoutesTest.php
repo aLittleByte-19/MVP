@@ -10,8 +10,8 @@ use App\Mvp\Communications\Domain\Ports\Inbound\StartCommunicationWorkflowUseCas
 use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Enums\CommunicationStatus;
 use App\Mvp\Communications\Enums\CoverImageStatus;
-use App\Mvp\Communications\Enums\SendStatus;
 use App\Mvp\Documents\Enums\ReviewStatus;
+use App\Mvp\Documents\Enums\SendStatus;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Services\WorkflowTaskRunner;
 use App\Mvp\Workflow\Support\WorkflowContext;
@@ -776,7 +776,7 @@ test('operator can preview a processed sub-document PDF', function () {
         ->assertHeader('Content-Type', 'application/pdf');
 
     expect($response->headers->get('Content-Disposition'))->toContain('inline');
-    expect($response->streamedContent())->toBe('contenuto-documento');
+    expect($response->getContent())->toBe('contenuto-documento');
 });
 
 test('sub-document preview returns 404 when the file is missing', function () {
@@ -1333,7 +1333,7 @@ test('operator can download the cover image of a communication', function () {
     $response->assertOk()
         ->assertHeader('Content-Type', 'image/png');
 
-    expect($response->streamedContent())->toBe('contenuto-copertina');
+    expect($response->getContent())->toBe('contenuto-copertina');
 });
 
 test('cover download returns 404 when the object is missing', function () {

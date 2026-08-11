@@ -4,8 +4,8 @@ namespace Database\Factories;
 
 use App\Models\OriginalDocument;
 use App\Models\SubDocument;
-use App\Mvp\Communications\Enums\SendStatus;
 use App\Mvp\Documents\Enums\ReviewStatus;
+use App\Mvp\Documents\Enums\SendStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

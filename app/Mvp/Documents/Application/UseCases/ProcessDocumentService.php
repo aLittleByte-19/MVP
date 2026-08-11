@@ -3,7 +3,6 @@
 namespace App\Mvp\Documents\Application\UseCases;
 
 use App\Exceptions\InvalidAiOutputException;
-use App\Mvp\Ai\BedrockService;
 use App\Mvp\Documents\Domain\Events\AiOutputRejected;
 use App\Mvp\Documents\Domain\Events\DocumentProcessingCompleted;
 use App\Mvp\Documents\Domain\Events\DocumentProcessingFailed;
@@ -155,7 +154,7 @@ class ProcessDocumentService implements ProcessDocumentUseCase
         } catch (\Throwable $e) {
             $this->logger->error('ProcessDocumentService: extraction failed', ['sub_document_id' => $subDocumentId, 'message' => $e->getMessage()]);
             $this->documents->updateSubDocument($subDocumentId, [
-                'error_message' => BedrockService::formatUserError($e, 'Estrazione campi non disponibile. Verifica configurazione e permessi Bedrock.'),
+                'error_message' => $this->ai->formatUserError($e, 'Estrazione campi non disponibile. Verifica configurazione e permessi Bedrock.'),
             ]);
 
             throw $e;
@@ -168,7 +167,7 @@ class ProcessDocumentService implements ProcessDocumentUseCase
 
         $userMessage = $e instanceof InvalidAiOutputException
             ? 'Il classificatore AI ha restituito un output non valido: il documento non può essere elaborato automaticamente.'
-            : BedrockService::formatUserError($e, 'Analisi documento non disponibile. Verifica configurazione e permessi Bedrock.');
+            : $this->ai->formatUserError($e, 'Analisi documento non disponibile. Verifica configurazione e permessi Bedrock.');
 
         $this->documents->updateOriginalDocument($documentId, [
             'processing_status' => ProcessingStatus::Failed,
@@ -400,7 +399,7 @@ class ProcessDocumentService implements ProcessDocumentUseCase
                 $text = trim((string) ($page['text'] ?? ''));
 
                 if ($text !== '') {
-                    $parts[] = BedrockService::pageBoundaryMarker($number, $boundaryNonce)."\n".$text;
+                    $parts[] = $this->ai->pageBoundaryMarker($number, $boundaryNonce)."\n".$text;
                 }
             }
 

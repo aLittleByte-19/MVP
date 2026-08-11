@@ -36,6 +36,11 @@ final class FakeDocumentStorage implements DocumentStoragePort
         unset($this->files[$path]);
     }
 
+    public function exists(string $path): bool
+    {
+        return isset($this->files[$path]);
+    }
+
     public function has(string $path): bool
     {
         return isset($this->files[$path]);

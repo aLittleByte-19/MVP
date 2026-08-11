@@ -7,25 +7,25 @@ use App\Http\Controllers\Api\V1\Concerns\ResolvesActor;
 use App\Http\Requests\UpdateCommunicationCoverRequest;
 use App\Models\Communication;
 use App\Mvp\Audit\Services\AuditLogger;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationCoverUnavailableException;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationNotEditableException;
+use App\Mvp\Communications\Domain\Ports\Inbound\DownloadCommunicationCoverUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\UpdateCommunicationCoverUseCase;
 use App\Mvp\Support\MvpStateService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use League\Flysystem\FilesystemException;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Adapter primario HTTP: immagine di copertina della comunicazione
  * (sostituzione manuale, rimozione e download). L'audit della mutazione resta
  * qui perche' dipende da metadati solo HTTP (mime/size del file caricato),
- * non da una regola di dominio (vedi ADR 0010). Il download resta
- * un'eccezione dichiarata (solo I/O di streaming, stesso schema di
- * DocumentPreviewController).
+ * non da una regola di dominio (vedi ADR 0010). Il download passa dalla
+ * porta primaria DownloadCommunicationCoverUseCase, stesso schema di
+ * DocumentPreviewController.
  */
 class CommunicationCoverController
 {
@@ -115,37 +115,22 @@ class CommunicationCoverController
     /**
      * @throws AuthorizationException
      */
-    public function coverImage(Request $request, Communication $communication): StreamedResponse
+    public function coverImage(Request $request, Communication $communication, DownloadCommunicationCoverUseCase $covers): Response
     {
         $this->assertCommunicationOwnership($communication, $this->actor($request));
 
-        $path = $communication->cover_image_path;
-        abort_if($path === null || $path === '', 404);
-
-        $disk = Storage::disk((string) config('mvp.communications.cover_disk', config('filesystems.default', 'local')));
-
         try {
-            abort_unless($disk->exists($path), 404);
-        } catch (FilesystemException $exception) {
+            $cover = $covers->download($communication->id);
+        } catch (CommunicationCoverUnavailableException $exception) {
+            abort(404, $exception->getMessage());
+        } catch (\RuntimeException $exception) {
             report($exception);
 
             abort(503, 'Storage copertine non raggiungibile.');
         }
 
-        return response()->stream(function () use ($disk, $path): void {
-            $stream = $disk->readStream($path);
-
-            if (! is_resource($stream)) {
-                return;
-            }
-
-            try {
-                fpassthru($stream);
-            } finally {
-                fclose($stream);
-            }
-        }, 200, [
-            'Content-Type' => $communication->cover_image_mime ?: 'image/png',
+        return response($cover->bytes, 200, [
+            'Content-Type' => $cover->mime,
             'Content-Disposition' => 'inline',
             // Il percorso e' stabile e distingue le versioni solo con il
             // parametro "v": la risposta va rivalidata, altrimenti una

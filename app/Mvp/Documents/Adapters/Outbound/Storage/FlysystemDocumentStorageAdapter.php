@@ -6,6 +6,7 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use League\Flysystem\FilesystemException;
 
 /**
  * Adapter secondario: implementa {@see DocumentStoragePort} sopra il disco
@@ -52,6 +53,15 @@ class FlysystemDocumentStorageAdapter implements DocumentStoragePort
         }
 
         Storage::disk($this->disk())->delete($path);
+    }
+
+    public function exists(string $path): bool
+    {
+        try {
+            return Storage::disk($this->disk())->exists($path);
+        } catch (FilesystemException $exception) {
+            throw new \RuntimeException("Storage documenti non raggiungibile: {$path}", previous: $exception);
+        }
     }
 
     private function disk(): string

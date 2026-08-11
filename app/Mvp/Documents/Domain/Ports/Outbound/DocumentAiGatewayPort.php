@@ -23,4 +23,16 @@ interface DocumentAiGatewayPort
      * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}
      */
     public function extractFields(string $ocrText): array;
+
+    /**
+     * Marcatore di confine pagina inserito nel testo OCR passato a
+     * splitDocument()/extractFields(): il formato e' un dettaglio del
+     * protocollo di prompt dell'adapter, non una decisione di dominio.
+     */
+    public function pageBoundaryMarker(int $page, string $nonce): string;
+
+    /**
+     * Traduce un'eccezione del gateway AI in un messaggio utente leggibile.
+     */
+    public function formatUserError(\Throwable $e, string $defaultMessage): string;
 }

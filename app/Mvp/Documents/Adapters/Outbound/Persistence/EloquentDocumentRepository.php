@@ -93,7 +93,7 @@ class EloquentDocumentRepository implements DocumentRepository
 
     public function findSubDocument(int $id): SubDocumentRecord
     {
-        return $this->toSubDocumentRecord(SubDocument::query()->findOrFail($id));
+        return $this->toSubDocumentRecord(SubDocument::query()->with('originalDocument')->findOrFail($id));
     }
 
     public function findSendMessageContext(int $subDocumentId): SendMessageContext
@@ -195,6 +195,7 @@ class EloquentDocumentRepository implements DocumentRepository
             filePath: $subDocument->file_path,
             startPage: $subDocument->start_page,
             endPage: $subDocument->end_page,
+            originalFilename: $subDocument->originalDocument?->original_filename ?: 'documento.pdf',
         );
     }
 }

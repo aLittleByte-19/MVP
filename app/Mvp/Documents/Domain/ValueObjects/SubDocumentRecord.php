@@ -13,5 +13,6 @@ final class SubDocumentRecord
         public readonly string $filePath,
         public readonly int $startPage,
         public readonly int $endPage,
+        public readonly string $originalFilename,
     ) {}
 }
