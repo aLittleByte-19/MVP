@@ -3,7 +3,9 @@
 namespace Tests\DomainUnit\Communications\Fakes;
 
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationRecord;
+use App\Mvp\Communications\Domain\ValueObjects\NewCommunication;
 
 /**
  * Adapter secondario di test: implementa CommunicationRepository in memoria,
@@ -27,10 +29,10 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
         $this->nextId = max($this->nextId, $id + 1);
     }
 
-    public function createCommunication(array $attributes): int
+    public function createCommunication(NewCommunication $communication): int
     {
         $id = $this->nextId++;
-        $this->rows[$id] = array_merge($this->defaults($id), $this->normalize($attributes));
+        $this->rows[$id] = array_merge($this->defaults($id), $this->normalize($communication->toArray()));
 
         return $id;
     }
@@ -44,13 +46,13 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
         return $this->toRecord($this->rows[$id]);
     }
 
-    public function updateCommunication(int $id, array $attributes): void
+    public function updateCommunication(int $id, CommunicationChanges $changes): void
     {
         if (! isset($this->rows[$id])) {
             throw new \RuntimeException("Communication {$id} non seminata nel fake repository.");
         }
 
-        $this->rows[$id] = array_merge($this->rows[$id], $this->normalize($attributes));
+        $this->rows[$id] = array_merge($this->rows[$id], $this->normalize($changes->toArray()));
     }
 
     public function deleteCommunication(int $id): void

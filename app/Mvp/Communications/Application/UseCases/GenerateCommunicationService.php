@@ -6,6 +6,7 @@ use App\Mvp\Audit\Services\AuditLogger;
 use App\Mvp\Communications\Domain\Commands\GenerateCommunicationCommand;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
+use App\Mvp\Communications\Domain\ValueObjects\NewCommunication;
 use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Enums\CommunicationStatus;
 use App\Mvp\Communications\Enums\CoverImageStatus;
@@ -19,17 +20,17 @@ class GenerateCommunicationService implements GenerateCommunicationUseCase
 
     public function generate(GenerateCommunicationCommand $command): int
     {
-        $communicationId = $this->communications->createCommunication([
-            'tenant_id' => $command->actor->tenantId,
-            'created_by' => $command->actor->id,
-            'prompt' => $command->prompt,
-            'tone' => $command->tone,
-            'style' => $command->style,
-            'generation_status' => CommunicationGenerationStatus::Pending,
-            'cover_status' => CoverImageStatus::Pending,
-            'status' => CommunicationStatus::Draft,
-            'is_favorite' => false,
-        ]);
+        $communicationId = $this->communications->createCommunication(new NewCommunication(
+            tenantId: $command->actor->tenantId,
+            createdBy: $command->actor->id,
+            prompt: $command->prompt,
+            tone: $command->tone,
+            style: $command->style,
+            generationStatus: CommunicationGenerationStatus::Pending,
+            coverStatus: CoverImageStatus::Pending,
+            status: CommunicationStatus::Draft,
+            isFavorite: false,
+        ));
 
         $this->audit->record(
             'mvp-communication-generation-requested',

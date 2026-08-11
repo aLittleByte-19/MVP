@@ -11,6 +11,7 @@ use App\Mvp\Communications\Domain\Ports\Inbound\StartCommunicationWorkflowUseCas
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
 use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Enums\CommunicationStatus;
 use App\Mvp\Communications\Enums\CoverImageStatus;
@@ -67,17 +68,16 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
         try {
             $executionArn = $this->workflowEngine->startExecution($stateMachineArn, 'mvp-comm-'.$communicationId.'-'.$this->ids->generate(), $input);
 
-            $this->communications->updateCommunication($communicationId, [
-                'generation_status' => CommunicationGenerationStatus::Processing,
-                'cover_status' => CoverImageStatus::Pending,
-                'workflow_execution_arn' => $executionArn,
-                'workflow_started_at' => $this->clock->now(),
-                'workflow_completed_at' => null,
-                'workflow_failed_at' => null,
-                'workflow_failure_reason' => null,
-                'error_message' => null,
-                'cover_error' => null,
-            ]);
+            $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
+                ->withGenerationStatus(CommunicationGenerationStatus::Processing)
+                ->withCoverStatus(CoverImageStatus::Pending)
+                ->withWorkflowExecutionArn($executionArn)
+                ->withWorkflowStartedAt($this->clock->now())
+                ->withWorkflowCompletedAt(null)
+                ->withWorkflowFailedAt(null)
+                ->withWorkflowFailureReason(null)
+                ->withErrorMessage(null)
+                ->withCoverError(null));
 
             $this->events->dispatch(new CommunicationWorkflowStarted(
                 $communicationId,
@@ -88,12 +88,11 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
                 $taskQueueUrl,
             ));
         } catch (\Throwable $e) {
-            $this->communications->updateCommunication($communicationId, [
-                'generation_status' => CommunicationGenerationStatus::Failed,
-                'workflow_failed_at' => $this->clock->now(),
-                'workflow_failure_reason' => $e->getMessage(),
-                'error_message' => 'Avvio della generazione non disponibile.',
-            ]);
+            $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
+                ->withGenerationStatus(CommunicationGenerationStatus::Failed)
+                ->withWorkflowFailedAt($this->clock->now())
+                ->withWorkflowFailureReason($e->getMessage())
+                ->withErrorMessage('Avvio della generazione non disponibile.'));
             $this->events->dispatch(new CommunicationWorkflowStartFailed(
                 $communicationId,
                 $communication->tenantId,
@@ -121,19 +120,18 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
             $this->coverStorage->delete($communication->coverImagePath);
         }
 
-        $this->communications->updateCommunication($communicationId, [
-            'generated_title' => null,
-            'generated_body' => null,
-            'image_prompt' => null,
-            'generation_status' => CommunicationGenerationStatus::Pending,
-            'workflow_execution_arn' => null,
-            'error_message' => null,
-            'cover_image_path' => null,
-            'cover_image_mime' => null,
-            'cover_image_size' => null,
-            'cover_image_source' => null,
-            'cover_error' => null,
-        ]);
+        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
+            ->withGeneratedTitle(null)
+            ->withGeneratedBody(null)
+            ->withImagePrompt(null)
+            ->withGenerationStatus(CommunicationGenerationStatus::Pending)
+            ->withWorkflowExecutionArn(null)
+            ->withErrorMessage(null)
+            ->withCoverImagePath(null)
+            ->withCoverImageMime(null)
+            ->withCoverImageSize(null)
+            ->withCoverImageSource(null)
+            ->withCoverError(null));
 
         $this->events->dispatch(new CommunicationRegenerationRequested($communicationId, $communication->tenantId, $actor));
 
