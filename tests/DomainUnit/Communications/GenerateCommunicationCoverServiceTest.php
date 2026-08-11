@@ -7,6 +7,7 @@ use App\Mvp\Communications\Domain\ValueObjects\GeneratedCommunicationImage;
 use Psr\Log\NullLogger;
 use Tests\DomainUnit\Communications\Fakes\FakeCommunicationAiGateway;
 use Tests\DomainUnit\Communications\Fakes\FakeCommunicationCoverStorage;
+use Tests\DomainUnit\Communications\Fakes\FakeUniqueIdGenerator;
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
 
@@ -24,7 +25,7 @@ test('generate stores the image and dispatches CommunicationCoverGenerated', fun
     $storage = new FakeCommunicationCoverStorage;
     $events = new RecordingEventDispatcher;
 
-    $service = new GenerateCommunicationCoverService($repository, $storage, $ai, $events, new NullLogger, 'communications/covers');
+    $service = new GenerateCommunicationCoverService($repository, $storage, $ai, $events, new NullLogger, new FakeUniqueIdGenerator, 'communications/covers');
     $result = $service->generate(1);
 
     $record = $repository->findCommunication(1);
@@ -41,7 +42,7 @@ test('generate skips when the cover is already ready', function () {
     $repository->seed(1, ['cover_status' => 'ready']);
     $events = new RecordingEventDispatcher;
 
-    $service = new GenerateCommunicationCoverService($repository, new FakeCommunicationCoverStorage, new FakeCommunicationAiGateway, $events, new NullLogger, 'communications/covers');
+    $service = new GenerateCommunicationCoverService($repository, new FakeCommunicationCoverStorage, new FakeCommunicationAiGateway, $events, new NullLogger, new FakeUniqueIdGenerator, 'communications/covers');
     $result = $service->generate(1);
 
     expect($result)->toBe(['skipped' => true, 'coverStatus' => 'ready'])
@@ -55,7 +56,7 @@ test('generate degrades and dispatches CommunicationCoverDegraded when the model
     $ai->willReturnImage(new GeneratedCommunicationImage(bytes: null, mime: 'image/png', warning: 'Modello non disponibile.', reason: 'model_not_configured'));
     $events = new RecordingEventDispatcher;
 
-    $service = new GenerateCommunicationCoverService($repository, new FakeCommunicationCoverStorage, $ai, $events, new NullLogger, 'communications/covers');
+    $service = new GenerateCommunicationCoverService($repository, new FakeCommunicationCoverStorage, $ai, $events, new NullLogger, new FakeUniqueIdGenerator, 'communications/covers');
     $result = $service->generate(1);
 
     expect($result)->toBe(['skipped' => false, 'coverStatus' => 'failed'])
@@ -72,7 +73,7 @@ test('generate degrades when storage fails, without persisting the image', funct
     $storage->willThrowOnStore(new RuntimeException('Storage non raggiungibile.'));
     $events = new RecordingEventDispatcher;
 
-    $service = new GenerateCommunicationCoverService($repository, $storage, $ai, $events, new NullLogger, 'communications/covers');
+    $service = new GenerateCommunicationCoverService($repository, $storage, $ai, $events, new NullLogger, new FakeUniqueIdGenerator, 'communications/covers');
     $result = $service->generate(1);
 
     expect($result)->toBe(['skipped' => false, 'coverStatus' => 'failed'])

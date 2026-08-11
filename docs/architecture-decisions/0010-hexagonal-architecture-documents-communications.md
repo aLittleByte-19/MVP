@@ -474,6 +474,18 @@ verde ad ogni passaggio (commit separati):
   Nessun test Feature esisteva per questi due endpoint prima o dopo (il polling SSE non e' testabile
   utilmente in Pest): verificato manualmente contro lo stack live per il percorso "risorsa non
   trovata" di entrambi.
+- **`Str::uuid()` sostituito da `UniqueIdGeneratorPort` in 5 servizi applicativi**: ultimo residuo di
+  `Illuminate\Support\Str` nell'Application layer con un motivo reale per essere isolato (genera
+  entropia/casualita', non e' una trasformazione pura come `Str::slug()`/`Str::of()`, lasciati
+  intatti). Stessa logica del Clock PSR-20 (vedi sopra): nessuno standard PSR esiste per la
+  generazione di id univoci, quindi l'interfaccia e' definita in `App\Mvp\Support\Identifiers`
+  invece di riusarne una esterna, con un solo binding condiviso fra i due domini
+  (`RandomUuidGenerator`, che delega a `Str::uuid()` — la dipendenza concreta e' corretta li',
+  e' l'adapter). Toccati: `GenerateCommunicationCoverService`, `UpdateCommunicationCoverService`,
+  `StartCommunicationWorkflowService`, `StartDocumentWorkflowService`, `ProcessDocumentService`.
+  Nessun nuovo test: i due unici DomainUnit test che istanziano direttamente uno di questi servizi
+  (`GenerateCommunicationCoverServiceTest`, `ProcessDocumentServiceTest`) sono stati aggiornati per
+  passare un `FakeUniqueIdGenerator`, comportamento osservabile invariato.
 - **Trade-off noto, non risolto**: molti casi d'uso restano legati a `config()` per parametri di
   runtime genuinamente variabili per ambiente (`StartCommunicationWorkflowService`,
   `StartDocumentWorkflowService` in particolare: ARN di state machine, URL di coda, guardia

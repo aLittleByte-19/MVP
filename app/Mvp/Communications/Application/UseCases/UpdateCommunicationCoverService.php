@@ -10,7 +10,7 @@ use App\Mvp\Communications\Enums\CommunicationStatus;
 use App\Mvp\Communications\Enums\CoverImageSource;
 use App\Mvp\Communications\Enums\CoverImageStatus;
 use App\Mvp\Identity\MvpUser;
-use Illuminate\Support\Str;
+use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 
 class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
 {
@@ -24,6 +24,7 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
     public function __construct(
         private readonly CommunicationRepository $communications,
         private readonly CommunicationCoverStoragePort $storage,
+        private readonly UniqueIdGeneratorPort $ids,
         private readonly string $coverPathPrefix = 'communications/covers',
     ) {}
 
@@ -80,7 +81,7 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
             '%s/%d/%s.%s',
             trim($this->coverPathPrefix, '/'),
             $communicationId,
-            Str::uuid()->toString(),
+            $this->ids->generate(),
             self::EXTENSIONS[strtolower($mime)] ?? 'png',
         );
     }

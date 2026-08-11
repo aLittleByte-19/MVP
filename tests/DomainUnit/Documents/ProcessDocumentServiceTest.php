@@ -7,6 +7,7 @@ use App\Mvp\Documents\Domain\Events\SubDocumentFieldsExtracted;
 use Psr\Log\NullLogger;
 use Tests\DomainUnit\Documents\Fakes\FakeDocumentAiGateway;
 use Tests\DomainUnit\Documents\Fakes\FakeDocumentStorage;
+use Tests\DomainUnit\Documents\Fakes\FakeUniqueIdGenerator;
 use Tests\DomainUnit\Documents\Fakes\InMemoryDocumentRepository;
 use Tests\DomainUnit\Documents\Fakes\NullWorkflowTaskHeartbeat;
 use Tests\DomainUnit\Documents\Fakes\RecordingDocumentEventDispatcher;
@@ -29,6 +30,7 @@ function processDocumentService(
         $events,
         new NullWorkflowTaskHeartbeat,
         new NullLogger,
+        new FakeUniqueIdGenerator,
         80,
     );
 }

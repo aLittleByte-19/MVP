@@ -8,6 +8,7 @@ use App\Mvp\Documents\Domain\Ports\Inbound\StartDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Enums\ProcessingStatus;
+use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Support\WorkflowContext;
 use Illuminate\Support\Str;
@@ -28,6 +29,7 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
         private readonly DocumentEventDispatcherPort $events,
         private readonly WorkflowContext $context,
         private readonly ClockInterface $clock,
+        private readonly UniqueIdGeneratorPort $ids,
     ) {}
 
     public function start(int $documentId, ?string $correlationId, ?string $requestId): void
@@ -60,8 +62,8 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
         $input = [
             'document_id' => $documentId,
             'tenant_id' => $document->tenantId,
-            'correlation_id' => $this->context->correlationId() ?? (string) Str::uuid(),
-            'request_id' => $this->context->requestId() ?? (string) Str::uuid(),
+            'correlation_id' => $this->context->correlationId() ?? $this->ids->generate(),
+            'request_id' => $this->context->requestId() ?? $this->ids->generate(),
             's3_bucket' => $bucket,
             's3_key' => $key,
             'task_queue_url' => $taskQueueUrl,
@@ -113,7 +115,7 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
 
     private function executionName(int $documentId): string
     {
-        return 'mvp-doc-'.$documentId.'-'.Str::uuid();
+        return 'mvp-doc-'.$documentId.'-'.$this->ids->generate();
     }
 
     private function taskQueueUrl(): string

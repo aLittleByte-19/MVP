@@ -12,7 +12,7 @@ use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationDraftBuilder;
 use App\Mvp\Communications\Enums\CoverImageSource;
 use App\Mvp\Communications\Enums\CoverImageStatus;
-use Illuminate\Support\Str;
+use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -35,6 +35,7 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
         private readonly CommunicationAiGatewayPort $ai,
         private readonly CommunicationEventDispatcherPort $events,
         private readonly LoggerInterface $logger,
+        private readonly UniqueIdGeneratorPort $ids,
         private readonly string $coverPathPrefix = 'communications/covers',
     ) {}
 
@@ -111,7 +112,7 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
             '%s/%d/%s.%s',
             trim($this->coverPathPrefix, '/'),
             $communicationId,
-            Str::uuid()->toString(),
+            $this->ids->generate(),
             self::EXTENSIONS[strtolower($mime)] ?? 'png',
         );
     }
