@@ -550,11 +550,21 @@ verde ad ogni passaggio (commit separati):
   consuma `->toArray()` cosi' com'e' — nessuna doppia traduzione. Toccati tutti gli 8 casi d'uso che
   scrivevano sull'aggregato documentale (`UploadDocumentService`, `StartDocumentWorkflowService`,
   `FinalizeDocumentWorkflowService`, `RunOcrService`, `ProcessDocumentService`,
-  `ExtractSubDocumentFieldsService`, `ReviewDocumentService`, `SendMessageService`). Stesso cambio
-  non ancora fatto sul lato Communications (`CommunicationRepository::updateCommunication()`/
-  `createCommunication()`, ~19 punti di chiamata): stessa idea, prossimo passo. Nessun nuovo test:
-  comportamento invariato, solo la forma con cui i casi d'uso lo esprimono — verificato da Larastan
-  (i nuovi tipi sono staticamente controllati) e dalla suite esistente, 370/370.
+  `ExtractSubDocumentFieldsService`, `ReviewDocumentService`, `SendMessageService`). Nessun nuovo
+  test: comportamento invariato, solo la forma con cui i casi d'uso lo esprimono — verificato da
+  Larastan (i nuovi tipi sono staticamente controllati) e dalla suite esistente, 370/370.
+- **Stesso cambio esteso a Communications**: `CommunicationRepository::createCommunication()`/
+  `updateCommunication()` avevano lo stesso problema, su una superficie piu' larga — 18 chiamate a
+  `updateCommunication()` in 8 `Application Service` diversi, il singolo metodo piu' usato di tutto
+  il refactor. Aggiunti `CommunicationChanges` (aggiornamento parziale, 21 campi coperti da metodi
+  `with*()`) e `NewCommunication` (creazione). Unica complicazione reale: `CommunicationDraftBuilder`
+  (il Builder gia' esistente, vedi tabella pattern sopra) restituisce gia' array snake_case per
+  `withGeneratedText()`/`withGeneratedCover()` — invece di riscrivere il Builder (avrebbe richiesto
+  toccare anche il suo test dedicato per un guadagno marginale), `CommunicationChanges::fromRawFields()`
+  fa da punto di conversione esplicito e unico, usato solo li' e dove `GenerateCommunicationCoverService`
+  doveva unire l'output del Builder ad altri campi (`array_merge` prima, `->with*()` incatenato ora).
+  Nessun nuovo test, stesso motivo del punto precedente — verificato da Larastan e dalla suite
+  esistente, 370/370 (eseguita due volte, nessuna flakiness) e da `OpenApiContractTest` (21/21).
 - **Trade-off noto, non risolto**: molti casi d'uso restano legati a `config()` per parametri di
   runtime genuinamente variabili per ambiente (`StartCommunicationWorkflowService`,
   `StartDocumentWorkflowService` in particolare: ARN di state machine, URL di coda, guardia

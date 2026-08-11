@@ -9,6 +9,7 @@ use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationTextUseCase
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationAiGatewayPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationDraftBuilder;
 
 /**
@@ -35,15 +36,14 @@ class GenerateCommunicationTextService implements GenerateCommunicationTextUseCa
             $generated = $this->ai->generateText($communication->prompt, $communication->tone, $communication->style);
         } catch (InvalidAiOutputException $e) {
             $this->events->dispatch(new AiOutputRejected($communicationId, $communication->tenantId, $e->operation(), $e->errors()));
-            $this->communications->updateCommunication($communicationId, [
-                'error_message' => 'La risposta del servizio AI non è valida. Riprova la generazione.',
-            ]);
+            $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
+                ->withErrorMessage('La risposta del servizio AI non è valida. Riprova la generazione.'));
 
             throw $e;
         }
 
         $builder = CommunicationDraftBuilder::fromRecord($communication);
-        $this->communications->updateCommunication($communicationId, $builder->withGeneratedText($generated));
+        $this->communications->updateCommunication($communicationId, CommunicationChanges::fromRawFields($builder->withGeneratedText($generated)));
         $this->events->dispatch(new CommunicationTextGenerated($communicationId, $communication->tenantId, $communication->tone, $communication->style));
 
         return ['skipped' => false, 'title' => $generated->title];

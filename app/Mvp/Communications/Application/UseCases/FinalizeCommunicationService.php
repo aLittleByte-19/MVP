@@ -7,6 +7,7 @@ use App\Mvp\Communications\Domain\Events\CommunicationWorkflowCompleted;
 use App\Mvp\Communications\Domain\Ports\Inbound\FinalizeCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
 use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Enums\CoverImageStatus;
 use Psr\Clock\ClockInterface;
@@ -32,18 +33,16 @@ class FinalizeCommunicationService implements FinalizeCommunicationUseCase
         // audit+metrica era duplicata in entrambi i punti (vedi ADR 0010).
         if (in_array($coverStatus, [CoverImageStatus::Pending->value, CoverImageStatus::Processing->value], true)) {
             $warning = 'Copertina AI non disponibile: generazione interrotta.';
-            $this->communications->updateCommunication($communicationId, [
-                'cover_status' => CoverImageStatus::Failed,
-                'cover_error' => $warning,
-            ]);
+            $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
+                ->withCoverStatus(CoverImageStatus::Failed)
+                ->withCoverError($warning));
             $this->events->dispatch(new CommunicationCoverDegraded($communicationId, $communication->tenantId, 'timeout', $warning));
             $coverStatus = CoverImageStatus::Failed->value;
         }
 
-        $this->communications->updateCommunication($communicationId, [
-            'generation_status' => CommunicationGenerationStatus::Completed,
-            'workflow_completed_at' => $this->clock->now(),
-        ]);
+        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
+            ->withGenerationStatus(CommunicationGenerationStatus::Completed)
+            ->withWorkflowCompletedAt($this->clock->now()));
         $this->events->dispatch(new CommunicationWorkflowCompleted($communicationId, $communication->tenantId));
 
         return ['event' => 'CommunicationPipelineCompleted', 'coverStatus' => $coverStatus];

@@ -9,6 +9,7 @@ use App\Mvp\Communications\Domain\Ports\Inbound\UpdateCommunicationCoverUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
 use App\Mvp\Communications\Enums\CommunicationStatus;
 use App\Mvp\Communications\Enums\CoverImageSource;
 use App\Mvp\Communications\Enums\CoverImageStatus;
@@ -43,14 +44,13 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
         $path = $this->newPath($communicationId, $mime);
         $this->storage->store($path, $bytes);
 
-        $this->communications->updateCommunication($communicationId, [
-            'cover_image_path' => $path,
-            'cover_image_mime' => $mime,
-            'cover_image_size' => $size,
-            'cover_image_source' => CoverImageSource::Manual,
-            'cover_status' => CoverImageStatus::Ready,
-            'cover_error' => null,
-        ]);
+        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
+            ->withCoverImagePath($path)
+            ->withCoverImageMime($mime)
+            ->withCoverImageSize($size)
+            ->withCoverImageSource(CoverImageSource::Manual)
+            ->withCoverStatus(CoverImageStatus::Ready)
+            ->withCoverError(null));
 
         if ($communication->coverImagePath !== null) {
             $this->storage->delete($communication->coverImagePath);
@@ -67,14 +67,13 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
             throw new CommunicationNotEditableException;
         }
 
-        $this->communications->updateCommunication($communicationId, [
-            'cover_image_path' => null,
-            'cover_image_mime' => null,
-            'cover_image_size' => null,
-            'cover_image_source' => null,
-            'cover_status' => CoverImageStatus::Removed,
-            'cover_error' => null,
-        ]);
+        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
+            ->withCoverImagePath(null)
+            ->withCoverImageMime(null)
+            ->withCoverImageSize(null)
+            ->withCoverImageSource(null)
+            ->withCoverStatus(CoverImageStatus::Removed)
+            ->withCoverError(null));
 
         if ($communication->coverImagePath !== null) {
             $this->storage->delete($communication->coverImagePath);

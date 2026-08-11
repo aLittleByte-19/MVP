@@ -15,6 +15,7 @@ use App\Mvp\Communications\Domain\Exceptions\CommunicationNotFavoritedException;
 use App\Mvp\Communications\Domain\Ports\Inbound\CommunicationDraftUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
 use App\Mvp\Communications\Enums\CommunicationStatus;
 use App\Mvp\Identity\MvpUser;
 
@@ -33,7 +34,7 @@ class CommunicationDraftService implements CommunicationDraftUseCase
             throw new CommunicationAlreadyFavoritedException;
         }
 
-        $this->communications->updateCommunication($communicationId, ['is_favorite' => true]);
+        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()->withIsFavorite(true));
         $this->events->dispatch(new CommunicationDraftFavorited($communicationId, $actor));
     }
 
@@ -45,7 +46,7 @@ class CommunicationDraftService implements CommunicationDraftUseCase
             throw new CommunicationNotFavoritedException;
         }
 
-        $this->communications->updateCommunication($communicationId, ['is_favorite' => false]);
+        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()->withIsFavorite(false));
         $this->events->dispatch(new CommunicationDraftUnfavorited($communicationId, $actor));
     }
 
@@ -57,10 +58,9 @@ class CommunicationDraftService implements CommunicationDraftUseCase
             throw new CommunicationNotEditableException;
         }
 
-        $this->communications->updateCommunication($communicationId, [
-            'generated_title' => $title,
-            'generated_body' => $body,
-        ]);
+        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
+            ->withGeneratedTitle($title)
+            ->withGeneratedBody($body));
         $this->events->dispatch(new CommunicationDraftEdited($communicationId, $actor));
     }
 
@@ -72,7 +72,7 @@ class CommunicationDraftService implements CommunicationDraftUseCase
             throw new CommunicationNotDraftException;
         }
 
-        $this->communications->updateCommunication($communicationId, ['status' => CommunicationStatus::Approved]);
+        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()->withStatus(CommunicationStatus::Approved));
         $this->events->dispatch(new CommunicationDraftApproved($communicationId, $actor));
     }
 
@@ -84,7 +84,7 @@ class CommunicationDraftService implements CommunicationDraftUseCase
             throw new CommunicationAlreadyDiscardedException;
         }
 
-        $this->communications->updateCommunication($communicationId, ['status' => CommunicationStatus::Discarded]);
+        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()->withStatus(CommunicationStatus::Discarded));
         $this->events->dispatch(new CommunicationDraftDiscarded($communicationId, $actor));
     }
 }

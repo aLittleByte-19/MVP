@@ -7,6 +7,7 @@ use App\Mvp\Communications\Domain\Exceptions\CommunicationAlreadyRatedException;
 use App\Mvp\Communications\Domain\Ports\Inbound\RateCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
 use App\Mvp\Identity\MvpUser;
 use Psr\Clock\ClockInterface;
 
@@ -29,12 +30,11 @@ class RateCommunicationService implements RateCommunicationUseCase
         $normalizedComment = $comment !== null ? trim($comment) : null;
         $normalizedComment = $normalizedComment === '' ? null : $normalizedComment;
 
-        $this->communications->updateCommunication($communicationId, [
-            'rating' => $rating,
-            'rating_comment' => $normalizedComment,
-            'rated_at' => $this->clock->now(),
-            'rated_by' => $actor->id,
-        ]);
+        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
+            ->withRating($rating)
+            ->withRatingComment($normalizedComment)
+            ->withRatedAt($this->clock->now())
+            ->withRatedBy($actor->id));
 
         $this->events->dispatch(new CommunicationRated($communicationId, $actor, $rating, $normalizedComment !== null));
     }

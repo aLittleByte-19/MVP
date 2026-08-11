@@ -9,6 +9,7 @@ use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationAiGatewayPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationDraftBuilder;
 use App\Mvp\Communications\Enums\CoverImageSource;
 use App\Mvp\Communications\Enums\CoverImageStatus;
@@ -47,10 +48,9 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
             return ['skipped' => true, 'coverStatus' => CoverImageStatus::Ready->value];
         }
 
-        $this->communications->updateCommunication($communicationId, [
-            'cover_status' => CoverImageStatus::Processing,
-            'cover_error' => null,
-        ]);
+        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
+            ->withCoverStatus(CoverImageStatus::Processing)
+            ->withCoverError(null));
 
         try {
             $image = $this->ai->generateImage($communication->prompt, $communication->tone, $communication->style, $communication->imagePrompt);
@@ -87,11 +87,10 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
             $this->storage->delete($communication->coverImagePath);
         }
 
-        $this->communications->updateCommunication($communicationId, array_merge($content, [
-            'cover_image_source' => CoverImageSource::Ai,
-            'cover_status' => CoverImageStatus::Ready,
-            'cover_error' => null,
-        ]));
+        $this->communications->updateCommunication($communicationId, CommunicationChanges::fromRawFields($content)
+            ->withCoverImageSource(CoverImageSource::Ai)
+            ->withCoverStatus(CoverImageStatus::Ready)
+            ->withCoverError(null));
         $this->events->dispatch(new CommunicationCoverGenerated($communicationId, $communication->tenantId, $image->mime));
 
         return ['skipped' => false, 'coverStatus' => CoverImageStatus::Ready->value];
@@ -99,10 +98,9 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
 
     private function degrade(int $communicationId, string $tenantId, string $warning, string $reason): void
     {
-        $this->communications->updateCommunication($communicationId, [
-            'cover_status' => CoverImageStatus::Failed,
-            'cover_error' => $warning,
-        ]);
+        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
+            ->withCoverStatus(CoverImageStatus::Failed)
+            ->withCoverError($warning));
         $this->events->dispatch(new CommunicationCoverDegraded($communicationId, $tenantId, $reason, $warning));
     }
 

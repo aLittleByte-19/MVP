@@ -4,7 +4,9 @@ namespace App\Mvp\Communications\Adapters\Outbound\Persistence;
 
 use App\Models\Communication;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationRecord;
+use App\Mvp\Communications\Domain\ValueObjects\NewCommunication;
 use App\Mvp\Communications\Enums\CommunicationStatus;
 
 /**
@@ -12,9 +14,9 @@ use App\Mvp\Communications\Enums\CommunicationStatus;
  */
 class EloquentCommunicationRepository implements CommunicationRepository
 {
-    public function createCommunication(array $attributes): int
+    public function createCommunication(NewCommunication $communication): int
     {
-        return Communication::create($attributes)->id;
+        return Communication::create($communication->toArray())->id;
     }
 
     public function findCommunication(int $id): CommunicationRecord
@@ -22,9 +24,9 @@ class EloquentCommunicationRepository implements CommunicationRepository
         return $this->toRecord(Communication::query()->findOrFail($id));
     }
 
-    public function updateCommunication(int $id, array $attributes): void
+    public function updateCommunication(int $id, CommunicationChanges $changes): void
     {
-        Communication::query()->whereKey($id)->firstOrFail()->update($attributes);
+        Communication::query()->whereKey($id)->firstOrFail()->update($changes->toArray());
     }
 
     public function deleteCommunication(int $id): void
