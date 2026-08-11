@@ -508,6 +508,18 @@ verde ad ogni passaggio (commit separati):
   e a chiamare `process()`, invariato. `process()` resta non testabile in `DomainUnit` per lo stesso
   motivo di sempre (Fpdi/`storage_path()`); `ExtractSubDocumentFieldsService` invece lo era gia'
   prima dello split e lo resta identicamente dopo.
+- **`CommunicationWorkflowTaskHandler::onFailure()` non chiama piu' `BedrockService` staticamente**:
+  trovato durante un controllo generale finale, non durante lo split di `ProcessDocumentService` che
+  aveva chiuso lo stesso pattern sul lato Documents — un adapter primario (non un caso d'uso
+  applicativo, quindi fuori dal raggio del fix precedente) chiamava
+  `BedrockService::formatUserError()` come metodo statico della classe concreta per costruire un
+  messaggio di fallback quando il caso d'uso non aveva gia' scritto un `error_message` leggibile.
+  `DocumentWorkflowTaskHandler::onFailure()`, lo stesso metodo sul lato Documents, non lo fa mai: usa
+  `$e->getMessage()` grezzo. Nessuna buona ragione per l'asimmetria — allineato a quel comportamento
+  invece di aggiungere `formatUserError()` a `CommunicationAiGatewayPort`, perche' un adapter
+  primario che dipende da una porta *secondaria* per formattare un messaggio sarebbe un'eccezione al
+  perimetro peggiore del problema che risolve. Nessun test asseriva sul testo esatto del messaggio
+  di fallback rimosso: nessuna regressione.
 - **Trade-off noto, non risolto**: molti casi d'uso restano legati a `config()` per parametri di
   runtime genuinamente variabili per ambiente (`StartCommunicationWorkflowService`,
   `StartDocumentWorkflowService` in particolare: ARN di state machine, URL di coda, guardia

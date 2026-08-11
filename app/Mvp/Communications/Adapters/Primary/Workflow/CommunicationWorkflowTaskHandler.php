@@ -3,7 +3,6 @@
 namespace App\Mvp\Communications\Adapters\Primary\Workflow;
 
 use App\Models\Communication;
-use App\Mvp\Ai\BedrockService;
 use App\Mvp\Communications\Domain\Ports\Inbound\FinalizeCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationCoverUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationTextUseCase;
@@ -128,8 +127,9 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
             'generation_status' => CommunicationGenerationStatus::Failed,
             'workflow_failed_at' => now(),
             'workflow_failure_reason' => $e->getMessage(),
-            'error_message' => $communication->error_message
-                ?: BedrockService::formatUserError($e, 'Generazione non disponibile. Riprova o verifica la configurazione AI.'),
+            // Il caso d'uso ha gia' scritto un messaggio comprensibile per
+            // l'operatore: quello tecnico resta in workflow_failure_reason.
+            'error_message' => $communication->error_message ?: $e->getMessage(),
         ]);
     }
 
