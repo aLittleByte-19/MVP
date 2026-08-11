@@ -4,7 +4,7 @@ use App\Exceptions\InvalidAiOutputException;
 use App\Models\ExtractedData;
 use App\Models\SubDocument;
 use App\Mvp\Ai\BedrockService;
-use App\Mvp\Documents\Application\UseCases\ProcessDocumentService;
+use App\Mvp\Documents\Application\UseCases\ExtractSubDocumentFieldsService;
 use App\Mvp\Documents\Enums\ReviewStatus;
 
 test('extractFields returns all expected keys on success', function () {
@@ -110,7 +110,7 @@ test('extracted data above confidence threshold is auto validated and preserves 
 
     $subDocument = SubDocument::factory()->create();
 
-    app(ProcessDocumentService::class)->extractAndSaveFields($subDocument->id);
+    app(ExtractSubDocumentFieldsService::class)->extractAndSaveFields($subDocument->id);
 
     expect($subDocument->fresh()->review_status)->toBe(ReviewStatus::AutoValidated)
         ->and($subDocument->fresh()->extractedData->ai_payload['confidence_score'])->toBe(90);
@@ -136,7 +136,7 @@ test('low confidence extraction is stored but marked as needs review', function 
 
     $subDocument = SubDocument::factory()->create();
 
-    app(ProcessDocumentService::class)->extractAndSaveFields($subDocument->id);
+    app(ExtractSubDocumentFieldsService::class)->extractAndSaveFields($subDocument->id);
 
     expect($subDocument->fresh()->review_status)->toBe(ReviewStatus::NeedsReview)
         ->and($subDocument->fresh()->extractedData)->not->toBeNull();
@@ -151,7 +151,7 @@ test('invalid ai extraction output quarantines the sub document without persiste
 
     $subDocument = SubDocument::factory()->create();
 
-    app(ProcessDocumentService::class)->extractAndSaveFields($subDocument->id);
+    app(ExtractSubDocumentFieldsService::class)->extractAndSaveFields($subDocument->id);
 
     expect($subDocument->fresh()->review_status)->toBe(ReviewStatus::Quarantined)
         ->and($subDocument->fresh()->error_message)->toContain('quarantena')
@@ -181,7 +181,7 @@ test('manual upload metadata overrides AI extraction without rewriting ai payloa
         'manual_reference_year' => 2026,
     ]);
 
-    app(ProcessDocumentService::class)->extractAndSaveFields($subDocument->id);
+    app(ExtractSubDocumentFieldsService::class)->extractAndSaveFields($subDocument->id);
 
     $extracted = $subDocument->fresh()->extractedData;
 
@@ -214,7 +214,7 @@ test('manual month alone is completed with the AI year', function () {
         'manual_reference_year' => null,
     ]);
 
-    app(ProcessDocumentService::class)->extractAndSaveFields($subDocument->id);
+    app(ExtractSubDocumentFieldsService::class)->extractAndSaveFields($subDocument->id);
 
     expect($subDocument->fresh()->extractedData->document_date?->toDateString())->toBe('2024-03-01');
 });
@@ -240,7 +240,7 @@ test('manual year alone is completed with the AI month', function () {
         'manual_reference_year' => 2026,
     ]);
 
-    app(ProcessDocumentService::class)->extractAndSaveFields($subDocument->id);
+    app(ExtractSubDocumentFieldsService::class)->extractAndSaveFields($subDocument->id);
 
     expect($subDocument->fresh()->extractedData->document_date?->toDateString())->toBe('2026-06-01');
 });
@@ -266,7 +266,7 @@ test('partial manual date without usable AI date leaves the AI date untouched', 
         'manual_reference_year' => null,
     ]);
 
-    app(ProcessDocumentService::class)->extractAndSaveFields($subDocument->id);
+    app(ExtractSubDocumentFieldsService::class)->extractAndSaveFields($subDocument->id);
 
     expect($subDocument->fresh()->extractedData->document_date)->toBeNull();
 });
@@ -297,7 +297,7 @@ test('declared metadata does not stand in for fields the model failed to extract
         'manual_reference_year' => 2026,
     ]);
 
-    app(ProcessDocumentService::class)->extractAndSaveFields($subDocument->id);
+    app(ExtractSubDocumentFieldsService::class)->extractAndSaveFields($subDocument->id);
 
     $extracted = $subDocument->fresh()->extractedData;
 
@@ -333,7 +333,7 @@ test('declaring metadata does not penalise a model that extracts what is left to
         'manual_reference_year' => 2026,
     ]);
 
-    app(ProcessDocumentService::class)->extractAndSaveFields($subDocument->id);
+    app(ExtractSubDocumentFieldsService::class)->extractAndSaveFields($subDocument->id);
 
     expect($subDocument->fresh()->extractedData->confidence_score)->toBe(98)
         ->and($subDocument->fresh()->review_status)->toBe(ReviewStatus::AutoValidated);
