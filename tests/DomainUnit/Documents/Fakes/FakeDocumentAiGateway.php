@@ -49,4 +49,14 @@ final class FakeDocumentAiGateway implements DocumentAiGatewayPort
 
         return $this->fields ?? throw new \LogicException('FakeDocumentAiGateway::willReturnFields() non configurato.');
     }
+
+    public function pageBoundaryMarker(int $page, string $nonce): string
+    {
+        return "⟦PAGE {$page} {$nonce}⟧";
+    }
+
+    public function formatUserError(\Throwable $e, string $defaultMessage): string
+    {
+        return $defaultMessage;
+    }
 }

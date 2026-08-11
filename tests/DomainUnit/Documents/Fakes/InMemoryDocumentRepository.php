@@ -95,6 +95,7 @@ final class InMemoryDocumentRepository implements DocumentRepository
             filePath: $row['file_path'],
             startPage: $row['start_page'],
             endPage: $row['end_page'],
+            originalFilename: $row['original_filename'],
         );
     }
 
@@ -241,6 +242,7 @@ final class InMemoryDocumentRepository implements DocumentRepository
             'file_path' => "documents/sub/{$id}.pdf",
             'start_page' => 1,
             'end_page' => 1,
+            'original_filename' => 'documento.pdf',
         ];
     }
 

@@ -43,6 +43,34 @@ class FlysystemCommunicationCoverAdapter implements CommunicationCoverStoragePor
         }
     }
 
+    public function exists(string $path): bool
+    {
+        try {
+            return $this->disk()->exists($path);
+        } catch (FilesystemException $e) {
+            $this->metrics->recordDomainCounter('communication_cover_storage_failed_total', ['operation' => 'exists']);
+
+            throw new \RuntimeException("Storage copertine non raggiungibile: {$path}", previous: $e);
+        }
+    }
+
+    public function read(string $path): string
+    {
+        try {
+            $contents = $this->disk()->get($path);
+        } catch (FilesystemException $e) {
+            $contents = null;
+        }
+
+        if ($contents === null) {
+            $this->metrics->recordDomainCounter('communication_cover_storage_failed_total', ['operation' => 'get']);
+
+            throw new \RuntimeException("Copertina non trovata sullo storage: {$path}");
+        }
+
+        return $contents;
+    }
+
     private function disk(): Filesystem
     {
         return Storage::disk((string) config('mvp.communications.cover_disk', config('filesystems.default', 'local')));

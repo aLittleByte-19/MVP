@@ -18,4 +18,15 @@ interface CommunicationCoverStoragePort
      * dell'operatore, l'adapter registra e prosegue (vedi CommunicationCoverService originale).
      */
     public function delete(string $path): void;
+
+    /**
+     * @throws \RuntimeException se lo storage non e' raggiungibile (guasto
+     *                           infrastrutturale, da distinguere da "file assente").
+     */
+    public function exists(string $path): bool;
+
+    /**
+     * @throws \RuntimeException se il file non esiste.
+     */
+    public function read(string $path): string;
 }

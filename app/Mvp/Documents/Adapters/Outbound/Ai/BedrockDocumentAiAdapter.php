@@ -24,4 +24,14 @@ class BedrockDocumentAiAdapter implements DocumentAiGatewayPort
     {
         return $this->bedrock->extractFields($ocrText);
     }
+
+    public function pageBoundaryMarker(int $page, string $nonce): string
+    {
+        return BedrockService::pageBoundaryMarker($page, $nonce);
+    }
+
+    public function formatUserError(\Throwable $e, string $defaultMessage): string
+    {
+        return BedrockService::formatUserError($e, $defaultMessage);
+    }
 }

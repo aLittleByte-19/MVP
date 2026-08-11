@@ -32,6 +32,7 @@ use App\Mvp\Communications\Application\Listeners\RecordPromptConfigurationDelete
 use App\Mvp\Communications\Application\Listeners\RecordPromptConfigurationSaved;
 use App\Mvp\Communications\Application\UseCases\CommunicationDraftService;
 use App\Mvp\Communications\Application\UseCases\DeleteCommunicationService;
+use App\Mvp\Communications\Application\UseCases\DownloadCommunicationCoverService;
 use App\Mvp\Communications\Application\UseCases\ExportCommunicationService;
 use App\Mvp\Communications\Application\UseCases\FinalizeCommunicationService;
 use App\Mvp\Communications\Application\UseCases\GenerateCommunicationCoverService;
@@ -61,6 +62,7 @@ use App\Mvp\Communications\Domain\Events\PromptConfigurationDeleted;
 use App\Mvp\Communications\Domain\Events\PromptConfigurationSaved;
 use App\Mvp\Communications\Domain\Ports\Inbound\CommunicationDraftUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\DeleteCommunicationUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\DownloadCommunicationCoverUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\ExportCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\FinalizeCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationCoverUseCase;
@@ -100,6 +102,7 @@ use App\Mvp\Documents\Application\Listeners\RecordSubDocumentManuallyValidated;
 use App\Mvp\Documents\Application\UseCases\DeleteDocumentService;
 use App\Mvp\Documents\Application\UseCases\FinalizeDocumentWorkflowService;
 use App\Mvp\Documents\Application\UseCases\ListDocumentsService;
+use App\Mvp\Documents\Application\UseCases\PreviewDocumentService;
 use App\Mvp\Documents\Application\UseCases\ProcessDocumentService;
 use App\Mvp\Documents\Application\UseCases\ReviewDocumentService;
 use App\Mvp\Documents\Application\UseCases\RunOcrService;
@@ -122,6 +125,7 @@ use App\Mvp\Documents\Domain\Events\SubDocumentManuallyValidated;
 use App\Mvp\Documents\Domain\Ports\Inbound\DeleteDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\FinalizeDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\ListDocumentsUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\PreviewDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\ProcessDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\ReviewDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\RunOcrUseCase;
@@ -271,6 +275,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(FinalizeDocumentWorkflowUseCase::class, FinalizeDocumentWorkflowService::class);
         $this->app->bind(ReviewDocumentUseCase::class, ReviewDocumentService::class);
         $this->app->bind(SendMessageUseCase::class, SendMessageService::class);
+        $this->app->bind(PreviewDocumentUseCase::class, PreviewDocumentService::class);
 
         // --- Dominio Communications: porta -> adapter (vedi ADR 0010) ---
         $this->app->singleton(CommunicationAiGatewayPort::class, BedrockCommunicationAiAdapter::class);
@@ -290,6 +295,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(ExportCommunicationUseCase::class, ExportCommunicationService::class);
         $this->app->bind(PromptConfigurationUseCase::class, PromptConfigurationService::class);
         $this->app->bind(FinalizeCommunicationUseCase::class, FinalizeCommunicationService::class);
+        $this->app->bind(DownloadCommunicationCoverUseCase::class, DownloadCommunicationCoverService::class);
 
         // Il prefisso di storage delle copertine e' l'unico parametro di
         // configurazione di cui questi due casi d'uso hanno bisogno: lo

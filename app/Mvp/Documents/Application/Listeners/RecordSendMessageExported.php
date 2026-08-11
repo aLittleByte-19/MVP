@@ -3,8 +3,8 @@
 namespace App\Mvp\Documents\Application\Listeners;
 
 use App\Mvp\Audit\Services\AuditLogger;
-use App\Mvp\Communications\Enums\SendStatus;
 use App\Mvp\Documents\Domain\Events\SendMessageExported;
+use App\Mvp\Documents\Enums\SendStatus;
 
 class RecordSendMessageExported
 {

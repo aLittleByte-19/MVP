@@ -364,8 +364,8 @@ verde ad ogni passaggio (commit separati):
   `RunOcrService`) — `ProcessDocumentService::process()` resta fuori: manipola PDF reali via Fpdi e
   chiama l'helper Laravel `storage_path()`, non testabile in isolamento per lo stesso motivo di
   `FinalizeDocumentWorkflowService`/`StartDocumentWorkflowService` (helper `now()` → facade `Date`,
-  vedi trade-off sotto). 356 test verdi in totale (307 Feature/Unit preesistenti + 32 DomainUnit
-  Communications + 17 DomainUnit Documents), stesso conteggio Feature di prima: nessuna regressione
+  vedi trade-off sotto). 361 test verdi in totale (307 Feature/Unit preesistenti + 35 DomainUnit
+  Communications + 19 DomainUnit Documents), stesso conteggio Feature di prima: nessuna regressione
   di comportamento.
 - **Asimmetria fra domini chiusa**: la prima passata su Communications (10 eventi) non copriva
   `DeleteCommunicationService`, `RateCommunicationService`, `PromptConfigurationService`, mentre la
@@ -414,6 +414,45 @@ verde ad ogni passaggio (commit separati):
   audit/metriche in modo diretto, senza eccezioni. Nessun nuovo test: nessuno dei due comportamenti
   osservabili cambia, la copertura resta a livello Feature (`OpenApiContractTest` e la suite Pest
   esistente).
+- **Fuga di dominio chiusa: `SendStatus` spostato da Communications a Documents**: l'enum viveva in
+  `Communications/Enums/SendStatus.php` ma era usato solo da `Documents` (`SendMessageService`,
+  `RecordSendMessageExported`, il modello `SubDocument`, `PrometheusExporter`,
+  `ListDocumentsRequest`) — zero usi reali dentro Communications. Una dipendenza diretta
+  Documents→Communications, mai dichiarata come eccezione da nessuna parte, e non intercettata da
+  `check-dependency-rule.sh` perché lo script controlla solo Illuminate/Aws/Models, non le
+  dipendenze incrociate fra i due domini principali. Spostato in `Documents/Enums/SendStatus.php`,
+  8 file aggiornati (import + factory + test). Nessun cambio di comportamento: stesso enum, stessi
+  valori, namespace corretto.
+- **`BedrockService` dietro `DocumentAiGatewayPort` anche per `pageBoundaryMarker()`/`formatUserError()`**:
+  `ProcessDocumentService` iniettava correttamente `DocumentAiGatewayPort` per le due operazioni di
+  dominio (`splitDocument`/`extractFields`), ma chiamava `BedrockService::pageBoundaryMarker()` e
+  `BedrockService::formatUserError()` come metodi statici della classe concreta — esattamente il
+  pattern che questo ADR (vedi "Evidenza concreta della mescolanza" sopra) dice di evitare. Aggiunti
+  i due metodi all'interfaccia `DocumentAiGatewayPort`, implementati da `BedrockDocumentAiAdapter`
+  (delega a `BedrockService`, dove la dipendenza concreta è corretta) e da `FakeDocumentAiGateway`
+  nei test. `ProcessDocumentService` non importa più `App\Mvp\Ai\BedrockService`. Fpdi e
+  `storage_path()` nella stessa classe restano l'eccezione dichiarata (vedi docblock della classe):
+  quella è manipolazione di libreria senza alternativa, questa era invece una porta già esistente
+  semplicemente non usata fino in fondo.
+- **Controller primari non toccano più Storage/Eloquent per anteprima e download**:
+  `DocumentPreviewController::preview()` e `CommunicationCoverController::coverImage()` facevano
+  `Storage::disk(...)->exists()/readStream()` direttamente nell'adapter primario — dichiarato come
+  "eccezione accettata (solo I/O di streaming)" nel docblock delle due classi, ma mai passato per
+  una porta esistente ne' salito in questo ADR. Aggiunte due porte primarie
+  (`PreviewDocumentUseCase`/`PreviewDocumentService`, `DownloadCommunicationCoverUseCase`/
+  `DownloadCommunicationCoverService`), un metodo `exists()` su entrambe le porte di storage
+  secondarie (`DocumentStoragePort`, `CommunicationCoverStoragePort`, gia' esistenti per altre
+  operazioni), e un metodo `read()` sulla porta di storage delle copertine (mancava, `read()` su
+  `DocumentStoragePort` c'era gia'). `SubDocumentRecord` guadagna `originalFilename` (gia' letto da
+  `findSendMessageContext` per lo stesso scopo, ora denormalizzato anche qui). Le risposte HTTP
+  passano da `StreamedResponse`+`fpassthru` a `Response` con i byte gia' letti — stessa
+  semplificazione gia' fatta altrove nel dominio (`RenderedSendMessage->pdf` e' una stringa, non uno
+  stream): per PDF/immagini delle dimensioni gestite da questa applicazione non è un problema di
+  memoria, ed evita di far attraversare un `resource` PHP grezzo attraverso un confine di porta. 5
+  nuovi test `DomainUnit` (`PreviewDocumentServiceTest`, `DownloadCommunicationCoverServiceTest`).
+  Comportamento HTTP osservabile invariato (stessi header, stesso corpo, stessi 404/503) —
+  verificato dai test Feature esistenti, aggiornati solo dove asserivano `streamedContent()` (il
+  tipo concreto di risposta e' cambiato, il contenuto no).
 - **Trade-off noto, non risolto**: molti casi d'uso restano legati a `config()` per parametri di
   runtime genuinamente variabili per ambiente (`StartCommunicationWorkflowService`,
   `StartDocumentWorkflowService` in particolare: ARN di state machine, URL di coda, guardia

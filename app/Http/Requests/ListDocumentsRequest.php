@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Mvp\Communications\Enums\SendStatus;
+use App\Mvp\Documents\Enums\SendStatus;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
