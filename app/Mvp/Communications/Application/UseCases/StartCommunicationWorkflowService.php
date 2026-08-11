@@ -15,9 +15,9 @@ use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Enums\CommunicationStatus;
 use App\Mvp\Communications\Enums\CoverImageStatus;
 use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Support\WorkflowContext;
-use Illuminate\Support\Str;
 use Psr\Clock\ClockInterface;
 
 /**
@@ -35,6 +35,7 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
         private readonly CommunicationEventDispatcherPort $events,
         private readonly WorkflowContext $context,
         private readonly ClockInterface $clock,
+        private readonly UniqueIdGeneratorPort $ids,
     ) {}
 
     public function start(int $communicationId, ?string $correlationId, ?string $requestId): void
@@ -57,14 +58,14 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
         $input = [
             'communication_id' => $communicationId,
             'tenant_id' => $communication->tenantId,
-            'correlation_id' => $this->context->correlationId() ?? (string) Str::uuid(),
-            'request_id' => $this->context->requestId() ?? (string) Str::uuid(),
+            'correlation_id' => $this->context->correlationId() ?? $this->ids->generate(),
+            'request_id' => $this->context->requestId() ?? $this->ids->generate(),
             'task_queue_url' => $taskQueueUrl,
             'metadata' => ['valid' => true, 'tone' => $communication->tone, 'style' => $communication->style],
         ];
 
         try {
-            $executionArn = $this->workflowEngine->startExecution($stateMachineArn, 'mvp-comm-'.$communicationId.'-'.Str::uuid(), $input);
+            $executionArn = $this->workflowEngine->startExecution($stateMachineArn, 'mvp-comm-'.$communicationId.'-'.$this->ids->generate(), $input);
 
             $this->communications->updateCommunication($communicationId, [
                 'generation_status' => CommunicationGenerationStatus::Processing,

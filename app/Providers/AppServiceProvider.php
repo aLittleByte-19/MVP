@@ -144,6 +144,8 @@ use App\Mvp\Documents\Domain\Ports\Outbound\OcrGatewayPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\SendMessageRendererPort;
 use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Support\Clock\SystemClock;
+use App\Mvp\Support\Identifiers\RandomUuidGenerator;
+use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use App\Mvp\Workflow\Adapters\Outbound\SfnWorkflowEngineAdapter;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
@@ -244,6 +246,11 @@ class AppServiceProvider extends ServiceProvider
         // binding serve sia Documents sia Communications (vedi ADR 0010).
         $this->app->singleton(ClockInterface::class, SystemClock::class);
 
+        // Generatore di id univoci condiviso: stessa logica del Clock sopra,
+        // nessuno standard PSR esiste per questo quindi l'interfaccia e'
+        // definita in App\Mvp\Support\Identifiers (vedi ADR 0010).
+        $this->app->singleton(UniqueIdGeneratorPort::class, RandomUuidGenerator::class);
+
         // --- Dominio Documents: porta -> adapter (vedi ADR 0010) ---
         $this->app->singleton(OcrGatewayPort::class, TextractOcrAdapter::class);
         $this->app->singleton(DocumentAiGatewayPort::class, BedrockDocumentAiAdapter::class);
@@ -273,6 +280,7 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(DocumentEventDispatcherPort::class),
                 $app->make(WorkflowTaskHeartbeat::class),
                 $app->make(LoggerInterface::class),
+                $app->make(UniqueIdGeneratorPort::class),
                 max(0, min(100, (int) config('services.bedrock.mvp_confidence_threshold', 80))),
             );
         });
@@ -312,6 +320,7 @@ class AppServiceProvider extends ServiceProvider
             return new UpdateCommunicationCoverService(
                 $app->make(CommunicationRepository::class),
                 $app->make(CommunicationCoverStoragePort::class),
+                $app->make(UniqueIdGeneratorPort::class),
                 trim((string) config('mvp.communications.cover_prefix', 'communications/covers'), '/'),
             );
         });
@@ -323,6 +332,7 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(CommunicationAiGatewayPort::class),
                 $app->make(CommunicationEventDispatcherPort::class),
                 $app->make(LoggerInterface::class),
+                $app->make(UniqueIdGeneratorPort::class),
                 trim((string) config('mvp.communications.cover_prefix', 'communications/covers'), '/'),
             );
         });

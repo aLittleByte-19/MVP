@@ -17,8 +17,8 @@ use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
 use App\Mvp\Documents\Enums\ProcessingStatus;
 use App\Mvp\Documents\Enums\ReviewStatus;
+use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
-use Illuminate\Support\Str;
 use Psr\Log\LoggerInterface;
 use setasign\Fpdi\Fpdi;
 
@@ -40,6 +40,7 @@ class ProcessDocumentService implements ProcessDocumentUseCase
         private readonly DocumentEventDispatcherPort $events,
         private readonly WorkflowTaskHeartbeat $heartbeat,
         private readonly LoggerInterface $logger,
+        private readonly UniqueIdGeneratorPort $ids,
         private readonly int $confidenceThreshold = 80,
     ) {}
 
@@ -438,7 +439,7 @@ class ProcessDocumentService implements ProcessDocumentUseCase
             }
 
             $slug = preg_replace('/[^a-z0-9_]/i', '_', $employeeName) ?: 'documento';
-            $relativePath = "sub/{$originalId}_{$slug}_{$startPage}-{$endPage}_".Str::uuid().'.pdf';
+            $relativePath = "sub/{$originalId}_{$slug}_{$startPage}-{$endPage}_".$this->ids->generate().'.pdf';
 
             $pdf->Output($absoluteDest, 'F');
 
