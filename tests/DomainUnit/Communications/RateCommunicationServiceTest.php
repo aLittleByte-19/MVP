@@ -28,7 +28,7 @@ test('rate persists the rating with the injected clock and dispatches Communicat
     (new RateCommunicationService($repository, $events, $clock))
         ->rate(1, 5, 'Ottima bozza.', fakeRateCommunicationActor());
 
-    expect($repository->findCommunication(1)->rating)->toBe(5)
+    expect($repository->findCommunication(1)->rating())->toBe(5)
         ->and($events->hasDispatched(CommunicationRated::class))->toBeTrue();
 });
 

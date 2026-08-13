@@ -2,17 +2,17 @@
 
 namespace App\Mvp\Communications\Application\UseCases;
 
-use App\Mvp\Communications\Domain\Enums\CoverImageSource;
+use App\Mvp\Communications\Domain\Entities\Communication;
 use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverDegraded;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverGenerated;
+use App\Mvp\Communications\Domain\Exceptions\CoverPrecedesTextException;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationCoverUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationAiGatewayPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
-use App\Mvp\Communications\Domain\ValueObjects\CommunicationDraftBuilder;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use Psr\Log\LoggerInterface;
 
@@ -44,7 +44,7 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
     {
         $communication = $this->communications->findCommunication($communicationId);
 
-        if ($communication->coverStatus === CoverImageStatus::Ready->value) {
+        if ($communication->coverStatus() === CoverImageStatus::Ready) {
             return ['skipped' => true, 'coverStatus' => CoverImageStatus::Ready->value];
         }
 
@@ -53,55 +53,57 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
             ->withCoverError(null));
 
         try {
-            $image = $this->ai->generateImage($communication->prompt, $communication->tone, $communication->style, $communication->imagePrompt);
+            $image = $this->ai->generateImage($communication->prompt, $communication->tone, $communication->style, $communication->imagePrompt());
         } catch (\Throwable $e) {
             $this->logger->warning('Communication cover generation failed', ['communication_id' => $communicationId, 'message' => $e->getMessage()]);
-            $this->degrade($communicationId, $communication->tenantId, 'Copertina AI non disponibile per un errore del servizio immagini.', 'model_error');
+            $this->degrade($communication, 'Copertina AI non disponibile per un errore del servizio immagini.', 'model_error');
 
             return ['skipped' => false, 'coverStatus' => CoverImageStatus::Failed->value];
         }
 
         if ($image->bytes === null) {
-            $this->degrade($communicationId, $communication->tenantId, $image->warning ?? 'Copertina AI non disponibile al momento.', $image->reason ?? 'model_error');
+            $this->degrade($communication, $image->warning ?? 'Copertina AI non disponibile al momento.', $image->reason ?? 'model_error');
 
             return ['skipped' => false, 'coverStatus' => CoverImageStatus::Failed->value];
         }
 
-        // L'invariante (il testo precede la copertina) e' verificata dal
-        // Builder qui, fuori dal try/catch di storage: se scattasse
-        // indicherebbe un bug di ordinamento del workflow, non un errore di
-        // storage da degradare silenziosamente.
+        // L'invariante (il testo precede la copertina) e' verificata qui,
+        // fuori dal try/catch di storage: se scattasse indicherebbe un bug
+        // di ordinamento del workflow, non un errore di storage da
+        // degradare silenziosamente.
+        if (! $communication->hasGeneratedText()) {
+            throw new CoverPrecedesTextException;
+        }
+
+        $oldCoverPath = $communication->coverImagePath();
         $path = $this->newPath($communicationId, $image->mime);
-        $content = CommunicationDraftBuilder::fromRecord($communication)->withGeneratedCover($image, $path);
 
         try {
             $this->storage->store($path, $image->bytes);
         } catch (\Throwable $e) {
             $this->logger->error('Communication cover storage failed', ['communication_id' => $communicationId, 'message' => $e->getMessage()]);
-            $this->degrade($communicationId, $communication->tenantId, 'Copertina non disponibile: storage non raggiungibile.', 'storage_error');
+            $this->degrade($communication, 'Copertina non disponibile: storage non raggiungibile.', 'storage_error');
 
             return ['skipped' => false, 'coverStatus' => CoverImageStatus::Failed->value];
         }
 
-        if ($communication->coverImagePath !== null) {
-            $this->storage->delete($communication->coverImagePath);
+        $communication->applyGeneratedCover($image, $path);
+        $this->communications->saveCommunication($communication);
+
+        if ($oldCoverPath !== null) {
+            $this->storage->delete($oldCoverPath);
         }
 
-        $this->communications->updateCommunication($communicationId, CommunicationChanges::fromRawFields($content)
-            ->withCoverImageSource(CoverImageSource::Ai)
-            ->withCoverStatus(CoverImageStatus::Ready)
-            ->withCoverError(null));
         $this->events->dispatch(new CommunicationCoverGenerated($communicationId, $communication->tenantId, $image->mime));
 
         return ['skipped' => false, 'coverStatus' => CoverImageStatus::Ready->value];
     }
 
-    private function degrade(int $communicationId, string $tenantId, string $warning, string $reason): void
+    private function degrade(Communication $communication, string $warning, string $reason): void
     {
-        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
-            ->withCoverStatus(CoverImageStatus::Failed)
-            ->withCoverError($warning));
-        $this->events->dispatch(new CommunicationCoverDegraded($communicationId, $tenantId, $reason, $warning));
+        $communication->degradeCover($warning);
+        $this->communications->saveCommunication($communication);
+        $this->events->dispatch(new CommunicationCoverDegraded($communication->id, $communication->tenantId, $reason, $warning));
     }
 
     private function newPath(int $communicationId, string $mime): string

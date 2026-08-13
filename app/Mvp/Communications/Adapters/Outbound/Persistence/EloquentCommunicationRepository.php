@@ -3,6 +3,7 @@
 namespace App\Mvp\Communications\Adapters\Outbound\Persistence;
 
 use App\Models\Communication;
+use App\Mvp\Communications\Domain\Entities\Communication as CommunicationEntity;
 use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
@@ -21,14 +22,25 @@ class EloquentCommunicationRepository implements CommunicationRepository
         return Communication::create($communication->toArray())->id;
     }
 
-    public function findCommunication(int $id): CommunicationRecord
+    public function findCommunication(int $id): CommunicationEntity
     {
-        return $this->toRecord(Communication::query()->findOrFail($id));
+        return CommunicationEntity::fromRecord($this->toRecord(Communication::query()->findOrFail($id)));
     }
 
     public function updateCommunication(int $id, CommunicationChanges $changes): void
     {
         Communication::query()->whereKey($id)->firstOrFail()->update($this->snakeCaseKeys($changes->toArray()));
+    }
+
+    public function saveCommunication(CommunicationEntity $communication): void
+    {
+        $changes = $communication->pendingChanges();
+
+        if ($changes->isEmpty()) {
+            return;
+        }
+
+        Communication::query()->whereKey($communication->id)->firstOrFail()->update($this->snakeCaseKeys($changes->toArray()));
     }
 
     public function deleteCommunication(int $id): void

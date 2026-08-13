@@ -34,7 +34,7 @@ test('favorite marks the draft and dispatches CommunicationDraftFavorited', func
 
     (new CommunicationDraftService($repository, $events))->favorite(1, fakeActor());
 
-    expect($repository->findCommunication(1)->isFavorite)->toBeTrue()
+    expect($repository->findCommunication(1)->isFavorite())->toBeTrue()
         ->and($events->hasDispatched(CommunicationDraftFavorited::class))->toBeTrue();
 });
 
@@ -55,7 +55,7 @@ test('save approves a draft and dispatches CommunicationDraftApproved', function
 
     (new CommunicationDraftService($repository, $events))->save(1, fakeActor());
 
-    expect($repository->findCommunication(1)->status)->toBe('approved')
+    expect($repository->findCommunication(1)->status()->value)->toBe('approved')
         ->and($events->hasDispatched(CommunicationDraftApproved::class))->toBeTrue();
 });
 
@@ -75,7 +75,7 @@ test('discard marks the draft discarded and dispatches CommunicationDraftDiscard
 
     (new CommunicationDraftService($repository, $events))->discard(1, fakeActor());
 
-    expect($repository->findCommunication(1)->status)->toBe('discarded')
+    expect($repository->findCommunication(1)->status()->value)->toBe('discarded')
         ->and($events->hasDispatched(CommunicationDraftDiscarded::class))->toBeTrue();
 });
 

@@ -881,6 +881,81 @@ verde ad ogni passaggio (commit separati):
     Dependency Rule pulita, DI verificata dal vivo via tinker, `/ready` 200.
   - **Resta da fare**: Fase 2 (`Communication` — rating, favorite, draft, regenerate, export-readiness),
     non pianificata né iniziata in questa fase, da affrontare come proprio checkpoint separato.
+- **Progetto A, Fase 2: terza entità di dominio — `Communication`**: la superficie più larga del
+  progetto (10 Application Service + l'adapter di workflow, contro i 2-3 toccati per aggregato nelle
+  fasi precedenti), perché l'aggregato Communication accumula più responsabilità distinte
+  (approvazione bozza, preferiti, valutazione, copertina manuale/AI, pipeline di generazione,
+  rigenerazione, idoneità all'esportazione) invece delle 1-2 responsabilità di `SubDocument`/
+  `OriginalDocument`. Nuovo `App\Mvp\Communications\Domain\Entities\Communication` governa tutte
+  queste transizioni con lo stesso pattern entità+`pendingChanges()` delle fasi precedenti
+  (`CommunicationChanges` interno, letto da un nuovo `saveCommunication()` su
+  `CommunicationRepository`); `findCommunication()` cambia tipo di ritorno globalmente
+  (`CommunicationRecord` → entità), stessa scelta di Fase 1 per lo stesso motivo (superset
+  strutturale, i consumatori di sola lettura si limitano al type hint).
+  - **Metodi aggiunti, per gruppo di responsabilità**: `favorite()`/`unfavorite()` (guardia:
+    stato preferiti coerente, `CommunicationAlreadyFavoritedException`/
+    `CommunicationNotFavoritedException`); `updateDraft()`/`approve()`/`discard()` (guardie:
+    non scartata, `CommunicationNotDraftException`, `CommunicationAlreadyDiscardedException`);
+    `rate()` (guardia: non già valutata, `CommunicationAlreadyRatedException`); `replaceCover()`/
+    `removeCover()` (guardia condivisa `assertEditable()`/`isEditable()`: non scartata);
+    `applyGeneratedText()`/`applyGeneratedCover()` (guardia: il testo precede la copertina,
+    `CoverPrecedesTextException`); `degradeCover()` (nessuna guardia, unifica una scrittura a due
+    campi duplicata identica in due punti); `startGeneration()`/`failGeneration()`/
+    `completeGeneration()` (stesso tipo di invariante compound di `OriginalDocument::fail()`);
+    `regenerate()` (guardie: non scartata, generazione conclusa,
+    `CommunicationRegenerationUnavailableException`); `isReadyForExport()` come query booleana
+    (sostituisce un metodo privato duplicato di guardia in `ExportCommunicationService`).
+  - **Consolidamento scoperto durante l'implementazione, non pianificato a tavolino**:
+    `CommunicationDraftBuilder` (VO "usa e getta" con `hasGeneratedText()`/`withGeneratedText()`/
+    `withGeneratedCover()`, unica sede della guardia `CoverPrecedesTextException`) è stato
+    **ritirato**, non solo scavalcato: la sua unica invariante non attraversa confini di
+    aggregato (a differenza di `sendStatus`/`SendMessageContext` in Fase 0, dove l'esclusione era
+    l'esito corretto), quindi mantenerlo accanto all'entità avrebbe significato due rappresentazioni
+    della stessa regola. I suoi 4 test sono confluiti in `CommunicationTest.php` (nuovo, sul modello
+    di `SubDocumentTest.php`), che copre anche tutte le altre transizioni/guardie sopra elencate
+    direttamente sull'entità, senza passare da alcun caso d'uso.
+  - **Duplicazione eliminata**: `degrade()` (in `GenerateCommunicationCoverService`, 3 punti di
+    chiamata) e il ramo di timeout copertina in `FinalizeCommunicationService` scrivevano entrambi
+    lo stesso identico paio `coverStatus=Failed`+`coverError` come `updateCommunication()` grezzo,
+    non riusando codice fra loro; ora entrambi chiamano `Communication::degradeCover()`.
+  - **Ordine di scrittura preservato esplicitamente durante la migrazione** (non un dettaglio
+    automatico): in tre punti l'originale eseguiva una guardia o un effetto collaterale di I/O
+    *prima* della scrittura DB — `UpdateCommunicationCoverService::update()` verificava
+    "non scartata" prima di caricare il nuovo file su storage; `GenerateCommunicationCoverService`
+    verificava "il testo precede la copertina" prima dello `storage->store()`, per non lasciare un
+    file orfano su un bug di ordinamento del workflow. Il primo caso ha richiesto un nuovo metodo di
+    query `isEditable(): bool` (oltre alla guardia interna di `replaceCover()`/`removeCover()`) perché
+    il chiamante deve poter verificare la condizione *senza* mutare l'entità prima di aver completato
+    l'I/O; il secondo riusa `hasGeneratedText()` allo stesso scopo, con `applyGeneratedCover()` che
+    ripete la stessa guardia internamente come difesa in profondità.
+  - `CommunicationWorkflowTaskHandler::onFailure()` passa da scrittura diretta a
+    `failGeneration()`, stesso trattamento di `DocumentWorkflowTaskHandler::onFailure()` in Fase 1;
+    guadagna un `ClockInterface $clock` iniettato (mancava, usava `new \DateTimeImmutable()` diretto).
+  - **Deliberatamente NON governato dall'entità** (stesso principio "idempotenza resta
+    nell'Application Service" di tutte le fasi precedenti): il marcatore transitorio
+    `coverStatus=Processing` scritto da `GenerateCommunicationCoverService` prima della chiamata AI
+    (nessun campo collegato); l'`errorMessage` scritto da `GenerateCommunicationTextService` nei
+    propri rami di errore (un singolo campo, riconciliato dal fallback di `failGeneration()` quando
+    interviene `onFailure()`).
+  - **Difetto scoperto durante l'implementazione**: `CommunicationChanges`, come già
+    `OriginalDocumentChanges` in Fase 1, non aveva `isEmpty()` — aggiunto. Il suo metodo
+    `fromRawFields()` (unico consumatore: `CommunicationDraftBuilder`) è diventato dead code dopo il
+    ritiro del builder ed è stato rimosso insieme al privato `toCamelCase()` che lo supportava.
+  - Nuovi/aggiornati test: `CommunicationTest.php` (nuovo, 15 test sull'entità isolata);
+    `CommunicationDraftBuilderTest.php` rimosso (assorbito); asserzioni aggiornate su proprietà →
+    metodi in `RateCommunicationServiceTest`, `CommunicationDraftServiceTest`,
+    `GenerateCommunicationCoverServiceTest`, `FinalizeCommunicationServiceTest`,
+    `GenerateCommunicationTextServiceTest`, `UpdateCommunicationCoverServiceTest`. Un test
+    preesistente di `FinalizeCommunicationServiceTest` seminava `cover_status: 'completed'` — mai un
+    valore valido dell'enum `CoverImageStatus` (`pending/processing/ready/failed/removed`), passava
+    silenziosamente perché il campo era una stringa non tipizzata; l'entità lo valida ora tramite
+    `CoverImageStatus::from()`, il test è stato corretto a `'ready'`. Nessun test dedicato preesisteva
+    per `StartCommunicationWorkflowService`/`CommunicationWorkflowTaskHandler`: coperti dalla suite
+    Feature, che esercita l'intero percorso con Eloquent/DB reali.
+  - **397/397** (eseguita due volte, nessuna flakiness), Pint 374 file, Larastan 277 file, Dependency
+    Rule pulita, DI verificata dal vivo via tinker, `/ready` 200.
+  - **Progetto A concluso**: tutte e tre le fasi pianificate (Fase 0 `SubDocument`, Fase 1
+    `OriginalDocument`, Fase 2 `Communication`) sono complete.
 
 ## Related documents
 

@@ -33,9 +33,9 @@ test('update replaces the cover, cleans up the old file and dispatches Communica
 
     $record = $repository->findCommunication(1);
 
-    expect($record->coverImagePath)->toBe('communications/covers/1/new-id.webp')
-        ->and($record->coverImageMime)->toBe('image/webp')
-        ->and($record->coverStatus)->toBe('ready')
+    expect($record->coverImagePath())->toBe('communications/covers/1/new-id.webp')
+        ->and($record->coverImageMime())->toBe('image/webp')
+        ->and($record->coverStatus()->value)->toBe('ready')
         ->and($storage->has('communications/covers/1/old.png'))->toBeFalse()
         ->and($events->hasDispatched(CommunicationCoverReplaced::class))->toBeTrue();
 });
@@ -64,8 +64,8 @@ test('remove clears the cover, deletes the file and dispatches CommunicationCove
 
     $record = $repository->findCommunication(1);
 
-    expect($record->coverImagePath)->toBeNull()
-        ->and($record->coverStatus)->toBe('removed')
+    expect($record->coverImagePath())->toBeNull()
+        ->and($record->coverStatus()->value)->toBe('removed')
         ->and($storage->has('communications/covers/1/old.png'))->toBeFalse()
         ->and($events->hasDispatched(CommunicationCoverRemoved::class))->toBeTrue();
 });
