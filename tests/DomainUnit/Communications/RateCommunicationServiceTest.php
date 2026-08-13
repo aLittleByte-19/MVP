@@ -3,7 +3,7 @@
 use App\Mvp\Communications\Application\UseCases\RateCommunicationService;
 use App\Mvp\Communications\Domain\Events\CommunicationRated;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationAlreadyRatedException;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 use Tests\DomainUnit\Communications\Fakes\FakeClock;
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
@@ -14,9 +14,9 @@ use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
  * (Psr\Clock\ClockInterface, adapter SystemClock) lo sblocca senza
  * introdurre una porta custom, stesso trattamento di Psr\Log\LoggerInterface.
  */
-function fakeRateCommunicationActor(): MvpUser
+function fakeRateCommunicationActor(): Actor
 {
-    return new MvpUser('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
+    return new Actor('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
 }
 
 test('rate persists the rating with the injected clock and dispatches CommunicationRated', function () {

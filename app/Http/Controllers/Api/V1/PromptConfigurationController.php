@@ -7,7 +7,7 @@ use App\Http\Requests\SavePromptConfigurationRequest;
 use App\Models\PromptConfiguration;
 use App\Mvp\Communications\Domain\Commands\SavePromptConfigurationCommand;
 use App\Mvp\Communications\Domain\Ports\Inbound\PromptConfigurationUseCase;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 use App\Mvp\Support\MvpStateService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
@@ -70,7 +70,7 @@ class PromptConfigurationController
     /**
      * @throws AuthorizationException
      */
-    private function assertOwnership(PromptConfiguration $configuration, MvpUser $actor): void
+    private function assertOwnership(PromptConfiguration $configuration, Actor $actor): void
     {
         if ($configuration->tenant_id !== $actor->tenantId) {
             throw new AuthorizationException('Prompt configuration is outside the authenticated tenant scope.');

@@ -2,7 +2,7 @@
 
 use App\Mvp\Communications\Application\UseCases\DeleteCommunicationService;
 use App\Mvp\Communications\Domain\Events\CommunicationDeleted;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 use Tests\DomainUnit\Communications\Fakes\FakeCommunicationCoverStorage;
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
@@ -13,9 +13,9 @@ use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
  * un sottoinsieme dei file di test, quindi una funzione globale dichiarata
  * altrove puo' non essere disponibile nello stesso processo.
  */
-function fakeDeleteCommunicationActor(): MvpUser
+function fakeDeleteCommunicationActor(): Actor
 {
-    return new MvpUser('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
+    return new Actor('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
 }
 
 test('delete removes the communication and its cover, then dispatches CommunicationDeleted', function () {

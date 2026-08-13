@@ -2,7 +2,7 @@
 
 namespace App\Mvp\Documents\Domain\Ports\Inbound;
 
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 
 /**
  * Porta primaria: elimina un sotto-documento; se era l'ultimo del documento
@@ -10,5 +10,5 @@ use App\Mvp\Identity\MvpUser;
  */
 interface DeleteDocumentUseCase
 {
-    public function delete(int $subDocumentId, ?MvpUser $actor): void;
+    public function delete(int $subDocumentId, ?Actor $actor): void;
 }

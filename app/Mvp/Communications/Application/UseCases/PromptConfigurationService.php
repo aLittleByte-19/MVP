@@ -8,7 +8,7 @@ use App\Mvp\Communications\Domain\Events\PromptConfigurationSaved;
 use App\Mvp\Communications\Domain\Ports\Inbound\PromptConfigurationUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\PromptConfigurationRepository;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 
 class PromptConfigurationService implements PromptConfigurationUseCase
 {
@@ -35,7 +35,7 @@ class PromptConfigurationService implements PromptConfigurationUseCase
         return $configurationId;
     }
 
-    public function delete(int $configurationId, MvpUser $actor): void
+    public function delete(int $configurationId, Actor $actor): void
     {
         $this->configurations->delete($configurationId);
 

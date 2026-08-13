@@ -721,15 +721,49 @@ verde ad ogni passaggio (commit separati):
     dichiaratamente marginale** (il tipo era già verificato staticamente prima), fatto comunque su
     richiesta esplicita — nessun comportamento osservabile cambiato, nessun nuovo test necessario
     (stessa suite, stesso comportamento, solo la rappresentazione interna delle chiavi).
-  - **Non fatto in questo giro**: disaccoppiare `MvpUser` da `Illuminate\Contracts\Auth\Authenticatable`
-    con un "Attore" di dominio. A differenza degli altri cinque punti, l'ampiezza reale (48 file
-    referenziano `MvpUser`, contro le stime iniziali di poche decine) e soprattutto la sua natura — non
-    un rename meccanico ma una traduzione da introdurre ad ogni bordo di adapter primario (controller
-    HTTP, workflow handler) — lo rendono un intervento della stessa taglia del punto "dominio anemico",
-    non un ritocco a basso rischio. Rimane in lista, da fare come intervento a sé.
+  - **Rimandato in questo giro** (fatto subito dopo, vedi punto successivo): disaccoppiare `MvpUser` da
+    `Illuminate\Contracts\Auth\Authenticatable` con un "Attore" di dominio — 48 file referenziano
+    `MvpUser`, contro le stime iniziali di poche decine, e la sua natura non e' un rename meccanico ma
+    una traduzione da introdurre ad ogni bordo di adapter primario.
   - **380/380** (eseguita due volte, nessuna flakiness), Pint 369 file, Larastan 273 file, Dependency
     Rule pulita (col nuovo controllo cross-dominio), `/ready` 200. Nessuna regressione di comportamento
     HTTP osservabile in nessuno dei sei punti.
+- **`MvpUser` disaccoppiato da `Authenticatable` con un nuovo `Actor` di dominio** (il punto rimandato
+  sopra, fatto subito dopo su richiesta esplicita): introdotto `App\Mvp\Support\Identity\Actor`
+  (id/email/name/tenantId/roles + `hasAnyRole()`, gemello strutturale di `MvpUser` ma senza il
+  contratto Laravel), condiviso fra i due domini come Clock/UniqueIdGenerator/TransactionManager. Unico
+  punto di traduzione: `ResolvesActor::actor()` (bordo HTTP, dove `$request->user()` viene verificato
+  `instanceof MvpUser` e tradotto) — da lì in poi porte primarie, eventi, comandi e servizi applicativi
+  vedono solo `Actor`, mai `Authenticatable`.
+  - **Ampiezza reale confermata**: 48 file referenziavano `MvpUser`. 2 restano intoccati per necessità
+    (`AuthorizeMvpAccess`/`ResolveMvpIdentity`, i middleware che costruiscono/autorizzano l'identita'
+    reale prima che esista un `Actor`); 3 sono punti di confine editati a mano perché contengono il
+    controllo `instanceof MvpUser` vero e proprio (`ResolvesActor`, `StateController`,
+    `UploadDocumentRequest`); i restanti 43 (porte primarie, eventi, comandi, servizi applicativi,
+    `AuditLogger`, i due trait `Authorizes*`) erano puro pass-through (nessun `instanceof`, solo accesso
+    a proprietà) — verificato con un controllo mirato prima di procedere, poi sostituiti con una
+    sostituzione di stringa letterale sui 43 file espliciti (non un glob sull'intero repo: `MvpUser` non
+    ha il "backslash finale" che rendeva sicuro il rename degli Enum, quindi la lista doveva essere
+    esplicita per non toccare `App\Mvp\Identity\MvpUser.php` stesso o i due middleware). Aggiunto
+    `MvpUser::toActor()` come unico punto di conversione, usato dai tre file di confine.
+  - **Incidente di percorso, non architetturale**: Larastan segnalava 60 falsi positivi
+    (`class.notFound` su `App\Models\User`) su ogni accesso a proprietà dopo il narrowing
+    `instanceof MvpUser` in codice che tocca `Request::user()`. Causa: `config/auth.php` punta ancora al
+    modello Eloquent di scaffolding Laravel (`App\Models\User`, mai esistito in questo progetto, mai
+    usato a runtime — l'app usa solo la guardia custom `mvp`/`MvpUser`), e Larastan risolve
+    `Request::user()`/`Auth::user()` tramite quel modello di default configurato, non tramite il
+    narrowing reale. Mai emerso prima perché nessun codice precedente accedeva a proprietà nella stessa
+    espressione del narrowing. Non è un problema di `Actor`: riprodotto identico anche accedendo a
+    `$this->id` dentro `MvpUser::toActor()` stesso. Risolto con un `ignoreErrors` mirato in
+    `phpstan.neon` (solo il pattern `unknown class App\\Models\\User`, non un `class.notFound`
+    generico — non nasconde altre classi mancanti reali), non con un cambiamento al codice applicativo.
+  - Verificato dal vivo, non solo dalla suite: `MvpUser('u1', ...)->toActor()` via tinker, e una vera
+    richiesta HTTP a `/api/v1/state` attraverso l'intera catena (`ResolveMvpIdentity` →
+    `ResolvesActor`/`StateController` → `MvpUser::toActor()` → `MvpStateService::forActor(Actor)`) —
+    200 con dati reali dal DB, non solo dai fake di test.
+  - **380/380** (eseguita due volte, nessuna flakiness — stesso numero di prima: nessun test nuovo,
+    solo aggiornamento dei fake `fake*Actor()` nei test `DomainUnit` da `MvpUser` ad `Actor`), Pint 370
+    file, Larastan 274 file, Dependency Rule pulita, `/ready` 200.
 
 ## Related documents
 

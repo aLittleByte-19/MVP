@@ -3,7 +3,7 @@
 use App\Mvp\Documents\Application\UseCases\SendMessageService;
 use App\Mvp\Documents\Domain\Events\SendMessageExported;
 use App\Mvp\Documents\Domain\Events\SendMessageOverridesCorrected;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 use Tests\DomainUnit\Documents\Fakes\FakeSendMessageRenderer;
 use Tests\DomainUnit\Documents\Fakes\InMemoryDocumentRepository;
 use Tests\DomainUnit\Documents\Fakes\RecordingDocumentEventDispatcher;
@@ -13,9 +13,9 @@ use Tests\DomainUnit\Documents\Fakes\RecordingDocumentEventDispatcher;
  * usato internamente ma e' un'utility Illuminate pura (non una facade),
  * funziona senza container ne bootstrap.
  */
-function fakeSendMessageActor(): MvpUser
+function fakeSendMessageActor(): Actor
 {
-    return new MvpUser('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
+    return new Actor('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
 }
 
 test('preview composes the message from extracted data without changing send status', function () {

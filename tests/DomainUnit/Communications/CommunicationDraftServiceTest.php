@@ -7,18 +7,18 @@ use App\Mvp\Communications\Domain\Events\CommunicationDraftFavorited;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationAlreadyDiscardedException;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationAlreadyFavoritedException;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationNotDraftException;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
 
 /**
  * Test di dominio puro (nessun bootstrap Laravel/DB/AWS, vedi refactory.md
- * Compito 3 punto 2): MvpUser e' un value object di dominio, costruibile
+ * Compito 3 punto 2): Actor e' un value object di dominio, costruibile
  * senza autenticazione/middleware reali.
  */
-function fakeActor(): MvpUser
+function fakeActor(): Actor
 {
-    return new MvpUser(
+    return new Actor(
         'user-1',
         'operator@example.test',
         'Operator',

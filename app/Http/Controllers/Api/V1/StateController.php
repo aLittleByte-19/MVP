@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 use App\Mvp\Support\MvpStateService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,14 +15,14 @@ class StateController
         return response()->json($state->forActor($this->actor($request)));
     }
 
-    private function actor(Request $request): MvpUser
+    private function actor(Request $request): Actor
     {
-        $actor = $request->user();
+        $user = $request->user();
 
-        if (! $actor instanceof MvpUser) {
+        if (! $user instanceof MvpUser) {
             throw new \RuntimeException('MVP identity middleware did not provide a structured user.');
         }
 
-        return $actor;
+        return $user->toActor();
     }
 }

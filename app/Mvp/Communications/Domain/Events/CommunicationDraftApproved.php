@@ -2,7 +2,7 @@
 
 namespace App\Mvp\Communications\Domain\Events;
 
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 
 /**
  * Emesso da CommunicationDraftUseCase::save() (UC-9): la bozza entra nello
@@ -12,6 +12,6 @@ final class CommunicationDraftApproved
 {
     public function __construct(
         public readonly int $communicationId,
-        public readonly MvpUser $actor,
+        public readonly Actor $actor,
     ) {}
 }

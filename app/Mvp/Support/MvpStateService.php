@@ -9,14 +9,14 @@ use App\Models\PromptConfiguration;
 use App\Models\SubDocument;
 use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 
 class MvpStateService
 {
     /**
      * @return array<string, mixed>
      */
-    public function forActor(MvpUser $actor): array
+    public function forActor(Actor $actor): array
     {
         return [
             'assistant' => $this->assistantState($actor),
@@ -27,7 +27,7 @@ class MvpStateService
     /**
      * @return array<string, mixed>
      */
-    public function assistantState(MvpUser $actor): array
+    public function assistantState(Actor $actor): array
     {
         $baseQuery = Communication::query()->where('tenant_id', $actor->tenantId);
         $total = (clone $baseQuery)->count();
@@ -90,7 +90,7 @@ class MvpStateService
     /**
      * @return array<string, mixed>
      */
-    public function copilotState(MvpUser $actor): array
+    public function copilotState(Actor $actor): array
     {
         $documents = SubDocument::query()
             ->with(['originalDocument', 'extractedData'])

@@ -11,7 +11,7 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 
 class ReviewDocumentService implements ReviewDocumentUseCase
 {
@@ -20,7 +20,7 @@ class ReviewDocumentService implements ReviewDocumentUseCase
         private readonly DocumentEventDispatcherPort $events,
     ) {}
 
-    public function updateExtractedData(int $subDocumentId, array $fieldUpdates, bool $markAsValidated, ?MvpUser $actor): string
+    public function updateExtractedData(int $subDocumentId, array $fieldUpdates, bool $markAsValidated, ?Actor $actor): string
     {
         if ($fieldUpdates !== [] || ! $this->documents->subDocumentHasExtractedData($subDocumentId)) {
             $this->documents->saveExtractedData($subDocumentId, ExtractedDataChanges::fromRawFields($fieldUpdates));
@@ -37,7 +37,7 @@ class ReviewDocumentService implements ReviewDocumentUseCase
         return $reviewStatus->value;
     }
 
-    public function markReviewed(int $subDocumentId, ?MvpUser $actor): void
+    public function markReviewed(int $subDocumentId, ?Actor $actor): void
     {
         if (! $this->documents->subDocumentHasExtractedData($subDocumentId)) {
             throw new MissingExtractedDataException;

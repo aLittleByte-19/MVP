@@ -8,3 +8,11 @@ parameters:
         - routes
         - config
     tmpDir: storage/framework/cache/phpstan
+    ignoreErrors:
+        # config/auth.php punta al modello Eloquent di default di Laravel per
+        # compatibilita' con lo scaffolding, mai usato a runtime: l'app usa
+        # esclusivamente la guardia custom mvp/MvpUser (vedi ResolveMvpIdentity).
+        # Larastan risolve Request::user()/Auth::user() tramite quel modello di
+        # default, che non esiste come classe: falso positivo, non un errore
+        # reale di tipo (vedi app/Http/Controllers/Api/V1/Concerns/ResolvesActor.php).
+        - '#unknown class App\\Models\\User#'

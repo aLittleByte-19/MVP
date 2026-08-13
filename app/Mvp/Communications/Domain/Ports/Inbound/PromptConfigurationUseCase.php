@@ -3,7 +3,7 @@
 namespace App\Mvp\Communications\Domain\Ports\Inbound;
 
 use App\Mvp\Communications\Domain\Commands\SavePromptConfigurationCommand;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 
 /**
  * Porta primaria: preset di prompt riutilizzabili (UC-19). Il controllo di
@@ -15,5 +15,5 @@ interface PromptConfigurationUseCase
 {
     public function save(SavePromptConfigurationCommand $command): int;
 
-    public function delete(int $configurationId, MvpUser $actor): void;
+    public function delete(int $configurationId, Actor $actor): void;
 }

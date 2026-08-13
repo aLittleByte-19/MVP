@@ -2,7 +2,7 @@
 
 namespace App\Mvp\Communications\Domain\Commands;
 
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 
 final class GenerateCommunicationCommand
 {
@@ -10,6 +10,6 @@ final class GenerateCommunicationCommand
         public readonly string $prompt,
         public readonly string $tone,
         public readonly string $style,
-        public readonly MvpUser $actor,
+        public readonly Actor $actor,
     ) {}
 }

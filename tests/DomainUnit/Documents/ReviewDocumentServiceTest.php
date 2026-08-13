@@ -5,16 +5,16 @@ use App\Mvp\Documents\Domain\Events\SubDocumentExtractedDataCorrected;
 use App\Mvp\Documents\Domain\Events\SubDocumentManuallyValidated;
 use App\Mvp\Documents\Domain\Exceptions\MissingExtractedDataException;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 use Tests\DomainUnit\Documents\Fakes\InMemoryDocumentRepository;
 use Tests\DomainUnit\Documents\Fakes\RecordingDocumentEventDispatcher;
 
 /**
  * Test di dominio puro (nessun bootstrap Laravel/DB/AWS).
  */
-function fakeReviewActor(): MvpUser
+function fakeReviewActor(): Actor
 {
-    return new MvpUser('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
+    return new Actor('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
 }
 
 test('updateExtractedData saves the corrected fields and dispatches SubDocumentExtractedDataCorrected', function () {

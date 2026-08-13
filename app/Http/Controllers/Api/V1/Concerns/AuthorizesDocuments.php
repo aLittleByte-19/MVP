@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\V1\Concerns;
 
 use App\Models\OriginalDocument;
 use App\Models\SubDocument;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 use Illuminate\Auth\Access\AuthorizationException;
 
 /**
@@ -17,7 +17,7 @@ trait AuthorizesDocuments
     /**
      * @throws AuthorizationException
      */
-    private function authorizeOriginalDocument(OriginalDocument $document, MvpUser $actor): void
+    private function authorizeOriginalDocument(OriginalDocument $document, Actor $actor): void
     {
         if ($document->tenant_id !== $actor->tenantId) {
             throw new AuthorizationException('Documento non autorizzato per il tenant corrente.');
@@ -27,7 +27,7 @@ trait AuthorizesDocuments
     /**
      * @throws AuthorizationException
      */
-    private function authorizeSubDocument(SubDocument $subDocument, MvpUser $actor): void
+    private function authorizeSubDocument(SubDocument $subDocument, Actor $actor): void
     {
         if (! $subDocument->originalDocument || $subDocument->originalDocument->tenant_id !== $actor->tenantId) {
             throw new AuthorizationException('Documento non autorizzato per il tenant corrente.');

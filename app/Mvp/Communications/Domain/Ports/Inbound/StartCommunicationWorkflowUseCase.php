@@ -2,7 +2,7 @@
 
 namespace App\Mvp\Communications\Domain\Ports\Inbound;
 
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 
 interface StartCommunicationWorkflowUseCase
 {
@@ -11,5 +11,5 @@ interface StartCommunicationWorkflowUseCase
     /**
      * Azzera testo e copertina generati e rilancia la pipeline sulla stessa riga.
      */
-    public function regenerate(int $communicationId, ?MvpUser $actor, ?string $correlationId, ?string $requestId): void;
+    public function regenerate(int $communicationId, ?Actor $actor, ?string $correlationId, ?string $requestId): void;
 }

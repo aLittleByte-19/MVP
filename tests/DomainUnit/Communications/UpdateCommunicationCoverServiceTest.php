@@ -4,7 +4,7 @@ use App\Mvp\Communications\Application\UseCases\UpdateCommunicationCoverService;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverRemoved;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverReplaced;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationNotEditableException;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 use Tests\DomainUnit\Communications\Fakes\FakeCommunicationCoverStorage;
 use Tests\DomainUnit\Communications\Fakes\FakeUniqueIdGenerator;
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
@@ -16,9 +16,9 @@ use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
  * controller HTTP, un'asimmetria rispetto a ogni altra azione del dominio
  * (vedi ADR 0010).
  */
-function fakeUpdateCoverActor(): MvpUser
+function fakeUpdateCoverActor(): Actor
 {
-    return new MvpUser('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
+    return new Actor('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
 }
 
 test('update replaces the cover, cleans up the old file and dispatches CommunicationCoverReplaced', function () {

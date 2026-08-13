@@ -4,7 +4,7 @@ use App\Mvp\Communications\Application\UseCases\PromptConfigurationService;
 use App\Mvp\Communications\Domain\Commands\SavePromptConfigurationCommand;
 use App\Mvp\Communications\Domain\Events\PromptConfigurationDeleted;
 use App\Mvp\Communications\Domain\Events\PromptConfigurationSaved;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 use Tests\DomainUnit\Communications\Fakes\InMemoryPromptConfigurationRepository;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
 
@@ -14,9 +14,9 @@ use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
  * un sottoinsieme dei file di test, quindi una funzione globale dichiarata
  * altrove puo' non essere disponibile nello stesso processo.
  */
-function fakePromptConfigurationActor(): MvpUser
+function fakePromptConfigurationActor(): Actor
 {
-    return new MvpUser('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
+    return new Actor('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
 }
 test('save keeps a distinct requested name and dispatches PromptConfigurationSaved', function () {
     $configurations = new InMemoryPromptConfigurationRepository;

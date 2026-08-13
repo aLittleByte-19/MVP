@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Concerns;
 
 use App\Models\Communication;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 use Illuminate\Auth\Access\AuthorizationException;
 
 /**
@@ -17,7 +17,7 @@ trait AuthorizesCommunications
     /**
      * @throws AuthorizationException
      */
-    private function assertCommunicationOwnership(Communication $communication, MvpUser $actor): void
+    private function assertCommunicationOwnership(Communication $communication, Actor $actor): void
     {
         if ($communication->tenant_id !== $actor->tenantId) {
             throw new AuthorizationException('Communication is outside the authenticated tenant scope.');

@@ -7,7 +7,7 @@ use App\Mvp\Communications\Domain\Exceptions\CommunicationAlreadyFavoritedExcept
 use App\Mvp\Communications\Domain\Exceptions\CommunicationNotDraftException;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationNotEditableException;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationNotFavoritedException;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 
 /**
  * Porta primaria: mutazioni dirette sul contenuto/stato di una bozza gia'
@@ -22,25 +22,25 @@ interface CommunicationDraftUseCase
     /**
      * @throws CommunicationAlreadyFavoritedException
      */
-    public function favorite(int $communicationId, MvpUser $actor): void;
+    public function favorite(int $communicationId, Actor $actor): void;
 
     /**
      * @throws CommunicationNotFavoritedException
      */
-    public function unfavorite(int $communicationId, MvpUser $actor): void;
+    public function unfavorite(int $communicationId, Actor $actor): void;
 
     /**
      * @throws CommunicationNotEditableException
      */
-    public function update(int $communicationId, string $title, string $body, MvpUser $actor): void;
+    public function update(int $communicationId, string $title, string $body, Actor $actor): void;
 
     /**
      * @throws CommunicationNotDraftException
      */
-    public function save(int $communicationId, MvpUser $actor): void;
+    public function save(int $communicationId, Actor $actor): void;
 
     /**
      * @throws CommunicationAlreadyDiscardedException
      */
-    public function discard(int $communicationId, MvpUser $actor): void;
+    public function discard(int $communicationId, Actor $actor): void;
 }
