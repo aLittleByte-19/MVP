@@ -15,8 +15,8 @@ class PollDocumentProgressService implements PollDocumentProgressUseCase
         $document = $this->documents->findOriginalDocument($documentId);
 
         return new DocumentProgressSnapshot(
-            $document->processingStatus,
-            $document->errorMessage,
+            $document->processingStatus()->value,
+            $document->errorMessage(),
             $this->documents->subDocumentIdsWithExtractedData($documentId),
         );
     }

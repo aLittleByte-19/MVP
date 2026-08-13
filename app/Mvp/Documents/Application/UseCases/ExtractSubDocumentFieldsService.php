@@ -4,6 +4,7 @@ namespace App\Mvp\Documents\Application\UseCases;
 
 use App\Exceptions\InvalidAiOutputException;
 use App\Mvp\Documents\Application\Support\OcrRangeReader;
+use App\Mvp\Documents\Domain\Entities\OriginalDocument;
 use App\Mvp\Documents\Domain\Entities\SubDocument;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Events\AiOutputRejected;
@@ -13,7 +14,6 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentAiGatewayPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
-use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Support\Persistence\TransactionManagerPort;
 use Psr\Log\LoggerInterface;
@@ -46,7 +46,7 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
         $this->extractAndSaveFieldsWithContext($subDocumentId, $this->documents->findOriginalDocument($originalId));
     }
 
-    public function extractAndSaveFieldsWithContext(int $subDocumentId, OriginalDocumentRecord $original): void
+    public function extractAndSaveFieldsWithContext(int $subDocumentId, OriginalDocument $original): void
     {
         $subDocument = $this->documents->findSubDocument($subDocumentId);
 
@@ -105,7 +105,7 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
         }
     }
 
-    private function computeConfidenceScore(array $aiFields, SubDocument $subDocument, OriginalDocumentRecord $original): int
+    private function computeConfidenceScore(array $aiFields, SubDocument $subDocument, OriginalDocument $original): int
     {
         $keyFields = array_values(array_diff(
             ['employee_first_name', 'employee_last_name', 'company_name', 'document_date'],
@@ -133,7 +133,7 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
     /**
      * @return list<string>
      */
-    private function manuallyDeclaredKeyFields(OriginalDocumentRecord $original): array
+    private function manuallyDeclaredKeyFields(OriginalDocument $original): array
     {
         $declared = [];
 
@@ -148,7 +148,7 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
         return $declared;
     }
 
-    private function ocrConfidenceForRange(OriginalDocumentRecord $original, int $startPage, int $endPage): float
+    private function ocrConfidenceForRange(OriginalDocument $original, int $startPage, int $endPage): float
     {
         $pages = $original->ocrPages;
 
@@ -187,7 +187,7 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
     /**
      * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}
      */
-    private function extractFields(SubDocument $subDocument, OriginalDocumentRecord $original): array
+    private function extractFields(SubDocument $subDocument, OriginalDocument $original): array
     {
         $ocrText = $this->ocrRange->textForRange($original, $subDocument->startPage, $subDocument->endPage, $this->ocrRange->nonce());
 
@@ -202,7 +202,7 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
      * @param  array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}  $fields
      * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}
      */
-    private function applyManualMetadataOverrides(array $fields, OriginalDocumentRecord $original): array
+    private function applyManualMetadataOverrides(array $fields, OriginalDocument $original): array
     {
         if (! $original->hasManualUploadMetadata()) {
             return $fields;

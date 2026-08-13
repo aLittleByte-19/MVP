@@ -5,6 +5,7 @@ namespace App\Mvp\Documents\Adapters\Outbound\Persistence;
 use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
 use App\Models\SubDocument;
+use App\Mvp\Documents\Domain\Entities\OriginalDocument as OriginalDocumentEntity;
 use App\Mvp\Documents\Domain\Entities\SubDocument as SubDocumentEntity;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
@@ -31,14 +32,25 @@ class EloquentDocumentRepository implements DocumentRepository
         return OriginalDocument::create($document->toArray())->id;
     }
 
-    public function findOriginalDocument(int $id): OriginalDocumentRecord
+    public function findOriginalDocument(int $id): OriginalDocumentEntity
     {
-        return $this->toOriginalDocumentRecord(OriginalDocument::query()->findOrFail($id));
+        return OriginalDocumentEntity::fromRecord($this->toOriginalDocumentRecord(OriginalDocument::query()->findOrFail($id)));
     }
 
     public function updateOriginalDocument(int $id, OriginalDocumentChanges $changes): void
     {
         OriginalDocument::query()->whereKey($id)->firstOrFail()->update($this->snakeCaseKeys($changes->toArray()));
+    }
+
+    public function saveOriginalDocument(OriginalDocumentEntity $document): void
+    {
+        $changes = $document->pendingChanges();
+
+        if ($changes->isEmpty()) {
+            return;
+        }
+
+        OriginalDocument::query()->whereKey($document->id)->firstOrFail()->update($this->snakeCaseKeys($changes->toArray()));
     }
 
     public function deleteOriginalDocumentWithWorkflowTasks(int $id): void

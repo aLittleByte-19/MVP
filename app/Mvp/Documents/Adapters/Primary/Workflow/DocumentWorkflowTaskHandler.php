@@ -2,14 +2,13 @@
 
 namespace App\Mvp\Documents\Adapters\Primary\Workflow;
 
-use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Ports\Inbound\FinalizeDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\ProcessDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\RunOcrUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
-use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
 use App\Mvp\Workflow\Contracts\WorkflowSubject;
 use App\Mvp\Workflow\Contracts\WorkflowTaskHandler;
+use Psr\Clock\ClockInterface;
 
 /**
  * Adapter primario guidato da Step Functions/SQS (invece che da HTTP):
@@ -32,6 +31,7 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
         private readonly ProcessDocumentUseCase $processDocument,
         private readonly FinalizeDocumentWorkflowUseCase $finalize,
         private readonly DocumentRepository $documents,
+        private readonly ClockInterface $clock,
     ) {}
 
     /**
@@ -96,15 +96,14 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
 
     public function onFailure(WorkflowSubject $subject, string $taskType, \Throwable $e): void
     {
-        $current = $this->documents->findOriginalDocument($subject->id);
+        $document = $this->documents->findOriginalDocument($subject->id);
 
-        $this->documents->updateOriginalDocument($subject->id, OriginalDocumentChanges::none()
-            ->withProcessingStatus(ProcessingStatus::Failed)
-            ->withWorkflowFailedAt(new \DateTimeImmutable)
-            ->withWorkflowFailureReason($e->getMessage())
-            // Il caso d'uso ha gia' scritto un messaggio comprensibile per
-            // l'operatore: quello tecnico resta in workflowFailureReason.
-            ->withErrorMessage($current->errorMessage ?: $e->getMessage()));
+        // Il caso d'uso ha gia' scritto un messaggio comprensibile per
+        // l'operatore (vedi RunOcrService/ProcessDocumentService); questo e'
+        // solo il fallback per i task che possono fallire prima che il caso
+        // d'uso stesso arrivi a scriverne uno (es. errori di dispatch).
+        $document->fail($document->errorMessage() ?: $e->getMessage(), $e->getMessage(), $this->clock->now());
+        $this->documents->saveOriginalDocument($document);
     }
 
     /**
