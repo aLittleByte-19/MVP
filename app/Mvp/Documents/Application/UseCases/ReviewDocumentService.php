@@ -2,7 +2,6 @@
 
 namespace App\Mvp\Documents\Application\UseCases;
 
-use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Events\SubDocumentExtractedDataCorrected;
 use App\Mvp\Documents\Domain\Events\SubDocumentManuallyValidated;
 use App\Mvp\Documents\Domain\Exceptions\MissingExtractedDataException;
@@ -10,7 +9,6 @@ use App\Mvp\Documents\Domain\Ports\Inbound\ReviewDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
-use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Support\Identity\Actor;
 
 class ReviewDocumentService implements ReviewDocumentUseCase
@@ -26,12 +24,17 @@ class ReviewDocumentService implements ReviewDocumentUseCase
             $this->documents->saveExtractedData($subDocumentId, ExtractedDataChanges::fromRawFields($fieldUpdates));
         }
 
-        $reviewStatus = $markAsValidated ? ReviewStatus::ManuallyValidated : ReviewStatus::NeedsReview;
+        $subDocument = $this->documents->findSubDocument($subDocumentId);
 
-        $this->documents->updateSubDocument($subDocumentId, SubDocumentChanges::none()
-            ->withReviewStatus($reviewStatus)
-            ->withErrorMessage(null));
+        if ($markAsValidated) {
+            $subDocument->markManuallyValidated();
+        } else {
+            $subDocument->markNeedsReview();
+        }
 
+        $this->documents->saveSubDocument($subDocument);
+
+        $reviewStatus = $subDocument->reviewStatus();
         $this->events->dispatch(new SubDocumentExtractedDataCorrected($subDocumentId, $actor, array_keys($fieldUpdates), $reviewStatus->value));
 
         return $reviewStatus->value;
@@ -43,9 +46,9 @@ class ReviewDocumentService implements ReviewDocumentUseCase
             throw new MissingExtractedDataException;
         }
 
-        $this->documents->updateSubDocument($subDocumentId, SubDocumentChanges::none()
-            ->withReviewStatus(ReviewStatus::ManuallyValidated)
-            ->withErrorMessage(null));
+        $subDocument = $this->documents->findSubDocument($subDocumentId);
+        $subDocument->markManuallyValidated();
+        $this->documents->saveSubDocument($subDocument);
 
         $this->events->dispatch(new SubDocumentManuallyValidated($subDocumentId, $actor));
     }

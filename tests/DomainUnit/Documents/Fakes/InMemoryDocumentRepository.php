@@ -2,6 +2,8 @@
 
 namespace Tests\DomainUnit\Documents\Fakes;
 
+use App\Mvp\Documents\Domain\Entities\SubDocument;
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Documents\Domain\ValueObjects\NewOriginalDocument;
@@ -86,7 +88,7 @@ final class InMemoryDocumentRepository implements DocumentRepository
         return new SubDocumentPage([], 0, $page, $perPage);
     }
 
-    public function findSubDocument(int $id): SubDocumentRecord
+    public function findSubDocument(int $id): SubDocument
     {
         if (! isset($this->subDocuments[$id])) {
             throw new \RuntimeException("SubDocument {$id} non seminato nel fake repository.");
@@ -94,7 +96,7 @@ final class InMemoryDocumentRepository implements DocumentRepository
 
         $row = $this->subDocuments[$id];
 
-        return new SubDocumentRecord(
+        $record = new SubDocumentRecord(
             id: $row['id'],
             originalDocumentId: $row['original_document_id'],
             filePath: $row['file_path'],
@@ -102,6 +104,19 @@ final class InMemoryDocumentRepository implements DocumentRepository
             endPage: $row['end_page'],
             originalFilename: $row['original_filename'],
         );
+
+        return SubDocument::fromRecord($record, ReviewStatus::from($row['review_status']));
+    }
+
+    public function saveSubDocument(SubDocument $subDocument): void
+    {
+        $changes = $subDocument->pendingChanges();
+
+        if ($changes->isEmpty()) {
+            return;
+        }
+
+        $this->updateSubDocument($subDocument->id, $changes);
     }
 
     public function findSendMessageContext(int $subDocumentId): SendMessageContext
@@ -279,6 +294,7 @@ final class InMemoryDocumentRepository implements DocumentRepository
             'start_page' => 1,
             'end_page' => 1,
             'original_filename' => 'documento.pdf',
+            'review_status' => 'needs_review',
         ];
     }
 

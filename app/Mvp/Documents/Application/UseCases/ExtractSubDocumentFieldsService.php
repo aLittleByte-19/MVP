@@ -4,6 +4,7 @@ namespace App\Mvp\Documents\Application\UseCases;
 
 use App\Exceptions\InvalidAiOutputException;
 use App\Mvp\Documents\Application\Support\OcrRangeReader;
+use App\Mvp\Documents\Domain\Entities\SubDocument;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Events\AiOutputRejected;
 use App\Mvp\Documents\Domain\Events\SubDocumentFieldsExtracted;
@@ -14,7 +15,6 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
-use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
 use App\Mvp\Support\Persistence\TransactionManagerPort;
 use Psr\Log\LoggerInterface;
 
@@ -57,10 +57,13 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
             $confidenceScore = $this->computeConfidenceScore($aiFields, $subDocument, $original);
             $reviewStatus = $this->reviewStatusForConfidence($confidenceScore);
 
-            $this->tx->run(function () use ($subDocumentId, $reviewStatus, $fields, $confidenceScore, $aiFields): void {
-                $this->documents->updateSubDocument($subDocumentId, SubDocumentChanges::none()
-                    ->withReviewStatus($reviewStatus)
-                    ->withErrorMessage(null));
+            $this->tx->run(function () use ($subDocumentId, $subDocument, $reviewStatus, $fields, $confidenceScore, $aiFields): void {
+                if ($reviewStatus === ReviewStatus::AutoValidated) {
+                    $subDocument->markAutoValidated();
+                } else {
+                    $subDocument->markNeedsReview();
+                }
+                $this->documents->saveSubDocument($subDocument);
                 $this->documents->saveExtractedData($subDocumentId, ExtractedDataChanges::none()
                     ->withEmployeeFirstName($fields['employee_first_name'])
                     ->withEmployeeLastName($fields['employee_last_name'])
@@ -87,11 +90,10 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
                 'errors' => $e->errors(),
             ]);
 
-            $this->tx->run(function () use ($subDocumentId, $safeMessage): void {
+            $this->tx->run(function () use ($subDocumentId, $subDocument, $safeMessage): void {
                 $this->documents->deleteExtractedData($subDocumentId);
-                $this->documents->updateSubDocument($subDocumentId, SubDocumentChanges::none()
-                    ->withReviewStatus(ReviewStatus::Quarantined)
-                    ->withErrorMessage($safeMessage));
+                $subDocument->markQuarantined($safeMessage);
+                $this->documents->saveSubDocument($subDocument);
             });
             $this->events->dispatch(new AiOutputRejected($subDocumentId, $original->tenantId, $e->operation(), $e->errors()));
         } catch (\Throwable $e) {
@@ -103,7 +105,7 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
         }
     }
 
-    private function computeConfidenceScore(array $aiFields, SubDocumentRecord $subDocument, OriginalDocumentRecord $original): int
+    private function computeConfidenceScore(array $aiFields, SubDocument $subDocument, OriginalDocumentRecord $original): int
     {
         $keyFields = array_values(array_diff(
             ['employee_first_name', 'employee_last_name', 'company_name', 'document_date'],
@@ -185,7 +187,7 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
     /**
      * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}
      */
-    private function extractFields(SubDocumentRecord $subDocument, OriginalDocumentRecord $original): array
+    private function extractFields(SubDocument $subDocument, OriginalDocumentRecord $original): array
     {
         $ocrText = $this->ocrRange->textForRange($original, $subDocument->startPage, $subDocument->endPage, $this->ocrRange->nonce());
 

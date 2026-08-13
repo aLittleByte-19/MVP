@@ -791,6 +791,43 @@ verde ad ogni passaggio (commit separati):
     prova live equivalente, non serviva ripeterla separatamente.
   - **380/380** (invariato, eseguita due volte, nessuna flakiness), Pint 371 file, Larastan 275 file,
     Dependency Rule pulita, DI verificata dal vivo via tinker.
+- **Progetto A, Fase 0 (spike): prima entità di dominio — `SubDocument`**: prova di concetto per il
+  modello ricco, prima di impegnare tutto il dominio. Nuovo `App\Mvp\Documents\Domain\Entities\SubDocument`
+  (a differenza dei VO `*Record`, mutabile e con comportamento): governa le proprie transizioni di
+  `reviewStatus` (`markAutoValidated()`, `markNeedsReview()`, `markManuallyValidated()`,
+  `markQuarantined()`) invece di lasciare a ogni caso d'uso il compito di scrivere lo status giusto a
+  mano tramite `SubDocumentChanges`. Internamente accumula le modifiche in un `SubDocumentChanges`
+  "sporco" (`pendingChanges()`), riusando il VO esistente invece di introdurre un meccanismo di
+  tracking separato — l'adapter (`saveSubDocument()`, nuovo metodo su `DocumentRepository`) lo legge e
+  lo scrive, esattamente come già faceva `updateSubDocument()`. Tocca `ReviewDocumentService`
+  (entrambi i metodi) ed `ExtractSubDocumentFieldsService` (decisione di confidenza + ramo di
+  quarantena); `DeleteDocumentService`/`PreviewDocumentService` (altri consumatori di
+  `findSubDocument()`) non hanno richiesto modifiche — leggono solo campi strutturali
+  (`filePath`/`originalFilename`/ecc.), rimasti pubblici e readonly sull'entità esattamente come su
+  `SubDocumentRecord`.
+  - **Scoperta reale dello spike, non assunta a tavolino**: `SendMessageService` (governava anche
+    `sendStatus`, candidato iniziale) è stato **deliberatamente escluso**. Il suo flusso legge lo stato
+    tramite `SendMessageContext`, una proiezione cross-aggregato che unisce SubDocument+ExtractedData+
+    OriginalDocument per comporre il messaggio — non ha una casa naturale sull'entità SubDocument senza
+    introdurre una doppia lettura (una per comporre, una per l'entità) o un'architettura scomoda a metà
+    fra le due. Questo è precisamente il tipo di attrito che uno spike serve a scoprire prima di
+    impegnare l'intero dominio: **il pattern entità+`pendingChanges()` si adatta bene alle transizioni
+    interne a un solo aggregato (reviewStatus), non a quelle lette tramite proiezioni cross-aggregato
+    costruite per un altro scopo (sendStatus via SendMessageContext)**. `sendStatus` resta gestito con
+    `SubDocumentChanges` grezzo com'era prima — nessuna regressione, solo non ancora migrato.
+  - Nuovi test: `SubDocumentTest` (5 test, `DomainUnit`, sull'entità isolata, senza alcun caso d'uso —
+    prova diretta che le transizioni funzionano indipendentemente da come vengono chiamate) più 2 nuovi
+    assert/test sui casi d'uso esistenti (`ReviewDocumentServiceTest` guadagna un test per il ramo
+    `NeedsReview` prima scoperto solo indirettamente; `ExtractSubDocumentFieldsServiceTest` guadagna
+    asserzioni dirette su `reviewStatus` nei due path già testati).
+  - **386/386** (eseguita due volte, nessuna flakiness), Pint 373 file, Larastan 276 file, Dependency
+    Rule pulita, DI verificata dal vivo via tinker, `/ready` 200. La suite Feature esistente
+    (`MvpAppRoutesTest`, `DocumentExtractionTest`) già esercita `markReviewed`/`updateExtractedData`
+    attraverso Eloquent e DB reali (non fake) — prova live equivalente per il percorso HTTP.
+  - **Prossimo passo, non fatto qui**: se lo spike viene giudicato valido, Fase 1 (`OriginalDocument`,
+    transizioni di `processingStatus`) e Fase 2 (`Communication`, la superficie più larga) restano da
+    pianificare come interventi a sé, ciascuno con il proprio checkpoint di verifica — vedi il piano
+    originale del Progetto A per l'elenco completo dei candidati.
 
 ## Related documents
 
