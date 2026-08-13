@@ -2,6 +2,7 @@
 
 namespace App\Mvp\Documents\Domain\Ports\Outbound;
 
+use App\Mvp\Documents\Domain\Entities\SubDocument;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Documents\Domain\ValueObjects\NewOriginalDocument;
 use App\Mvp\Documents\Domain\ValueObjects\NewSubDocument;
@@ -10,19 +11,20 @@ use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
 use App\Mvp\Documents\Domain\ValueObjects\SendMessageContext;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentPage;
-use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
 
 /**
  * Porta secondaria verso la persistenza dell'aggregato documentale
  * (OriginalDocument + SubDocument + ExtractedData). Nessun riferimento a
  * Eloquent: i metodi di lettura restituiscono value object di dominio
- * ({@see OriginalDocumentRecord}, {@see SubDocumentRecord},
- * {@see SubDocumentPage}); le scritture prendono value object di dominio
- * ({@see NewOriginalDocument}, {@see OriginalDocumentChanges},
- * {@see NewSubDocument}, {@see SubDocumentChanges},
- * {@see ExtractedDataChanges}) invece di array associativi con chiavi a
- * stringa: il nome della colonna DB resta un dettaglio di quelle classi
- * (Domain), non qualcosa che ogni caso d'uso deve scrivere a mano.
+ * ({@see OriginalDocumentRecord}, {@see SubDocumentPage}) o, per SubDocument,
+ * l'entità {@see SubDocument} (governa le proprie transizioni di
+ * reviewStatus — spike del Progetto A, vedi ADR 0010); le scritture prendono
+ * value object di dominio ({@see NewOriginalDocument},
+ * {@see OriginalDocumentChanges}, {@see NewSubDocument},
+ * {@see SubDocumentChanges}, {@see ExtractedDataChanges}) invece di array
+ * associativi con chiavi a stringa: il nome della colonna DB resta un
+ * dettaglio di quelle classi (Domain), non qualcosa che ogni caso d'uso deve
+ * scrivere a mano.
  *
  * `paginateSubDocuments` restituisce solo identificativi e metadati di
  * paginazione: e' una scelta di perimetro esplicita (vedi ADR 0010) — la
@@ -53,7 +55,16 @@ interface DocumentRepository
      */
     public function paginateSubDocuments(string $tenantId, array $filters, int $page, int $perPage): SubDocumentPage;
 
-    public function findSubDocument(int $id): SubDocumentRecord;
+    public function findSubDocument(int $id): SubDocument;
+
+    /**
+     * Persiste le modifiche accumulate sull'entità (vedi
+     * {@see SubDocument::pendingChanges()}). Coesiste con
+     * updateSubDocument()/SubDocumentChanges per le scritture che non
+     * passano dall'entità (es. sendStatus, gestito da SendMessageService
+     * tramite SendMessageContext — vedi ADR 0010).
+     */
+    public function saveSubDocument(SubDocument $subDocument): void;
 
     public function findSendMessageContext(int $subDocumentId): SendMessageContext;
 

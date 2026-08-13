@@ -1,6 +1,7 @@
 <?php
 
 use App\Mvp\Documents\Application\UseCases\ReviewDocumentService;
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Events\SubDocumentExtractedDataCorrected;
 use App\Mvp\Documents\Domain\Events\SubDocumentManuallyValidated;
 use App\Mvp\Documents\Domain\Exceptions\MissingExtractedDataException;
@@ -31,6 +32,19 @@ test('updateExtractedData saves the corrected fields and dispatches SubDocumentE
         ->and($events->hasDispatched(SubDocumentExtractedDataCorrected::class))->toBeTrue();
 });
 
+test('updateExtractedData marks the sub-document as needing review when not validated', function () {
+    $documents = new InMemoryDocumentRepository;
+    $documents->seedOriginal(1);
+    $documents->seedSubDocument(10, 1, ['review_status' => 'auto_validated']);
+    $events = new RecordingDocumentEventDispatcher;
+
+    $status = (new ReviewDocumentService($documents, $events))
+        ->updateExtractedData(10, ['company_name' => 'Corretta Srl'], markAsValidated: false, actor: fakeReviewActor());
+
+    expect($status)->toBe('needs_review')
+        ->and($documents->findSubDocument(10)->reviewStatus())->toBe(ReviewStatus::NeedsReview);
+});
+
 test('markReviewed refuses a sub-document without extracted data', function () {
     $documents = new InMemoryDocumentRepository;
     $documents->seedOriginal(1);
@@ -51,5 +65,6 @@ test('markReviewed validates a sub-document that already has extracted data', fu
 
     (new ReviewDocumentService($documents, $events))->markReviewed(10, fakeReviewActor());
 
-    expect($events->hasDispatched(SubDocumentManuallyValidated::class))->toBeTrue();
+    expect($events->hasDispatched(SubDocumentManuallyValidated::class))->toBeTrue()
+        ->and($documents->findSubDocument(10)->reviewStatus())->toBe(ReviewStatus::ManuallyValidated);
 });

@@ -3,6 +3,7 @@
 use App\Exceptions\InvalidAiOutputException;
 use App\Mvp\Documents\Application\Support\OcrRangeReader;
 use App\Mvp\Documents\Application\UseCases\ExtractSubDocumentFieldsService;
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Events\AiOutputRejected;
 use App\Mvp\Documents\Domain\Events\SubDocumentFieldsExtracted;
 use Psr\Log\NullLogger;
@@ -57,7 +58,8 @@ test('extractAndSaveFields saves the AI fields and dispatches SubDocumentFieldsE
 
     expect($extracted['company_name'])->toBe('Acme Srl')
         ->and($extracted['confidence_score'])->toBe(95)
-        ->and($events->hasDispatched(SubDocumentFieldsExtracted::class))->toBeTrue();
+        ->and($events->hasDispatched(SubDocumentFieldsExtracted::class))->toBeTrue()
+        ->and($documents->findSubDocument(10)->reviewStatus())->toBe(ReviewStatus::AutoValidated);
 });
 
 test('extractAndSaveFields quarantines the sub-document and dispatches AiOutputRejected on invalid AI output', function () {
@@ -72,7 +74,8 @@ test('extractAndSaveFields quarantines the sub-document and dispatches AiOutputR
 
     expect($documents->extractedDataFor(10))->toBeNull()
         ->and($events->hasDispatched(AiOutputRejected::class))->toBeTrue()
-        ->and($events->hasDispatched(SubDocumentFieldsExtracted::class))->toBeFalse();
+        ->and($events->hasDispatched(SubDocumentFieldsExtracted::class))->toBeFalse()
+        ->and($documents->findSubDocument(10)->reviewStatus())->toBe(ReviewStatus::Quarantined);
 });
 
 test('manual metadata overrides the AI output before computing confidence', function () {

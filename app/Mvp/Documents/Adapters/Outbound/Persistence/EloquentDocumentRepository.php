@@ -5,6 +5,7 @@ namespace App\Mvp\Documents\Adapters\Outbound\Persistence;
 use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
 use App\Models\SubDocument;
+use App\Mvp\Documents\Domain\Entities\SubDocument as SubDocumentEntity;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Documents\Domain\ValueObjects\NewOriginalDocument;
@@ -100,9 +101,22 @@ class EloquentDocumentRepository implements DocumentRepository
         );
     }
 
-    public function findSubDocument(int $id): SubDocumentRecord
+    public function findSubDocument(int $id): SubDocumentEntity
     {
-        return $this->toSubDocumentRecord(SubDocument::query()->with('originalDocument')->findOrFail($id));
+        $subDocument = SubDocument::query()->with('originalDocument')->findOrFail($id);
+
+        return SubDocumentEntity::fromRecord($this->toSubDocumentRecord($subDocument), $subDocument->review_status);
+    }
+
+    public function saveSubDocument(SubDocumentEntity $subDocument): void
+    {
+        $changes = $subDocument->pendingChanges();
+
+        if ($changes->isEmpty()) {
+            return;
+        }
+
+        SubDocument::query()->whereKey($subDocument->id)->firstOrFail()->update($this->snakeCaseKeys($changes->toArray()));
     }
 
     public function findSendMessageContext(int $subDocumentId): SendMessageContext
