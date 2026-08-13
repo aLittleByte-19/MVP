@@ -11,12 +11,19 @@ final class FakeCommunicationCoverStorage implements CommunicationCoverStoragePo
 
     private ?\Throwable $storeException = null;
 
+    private ?\Throwable $deleteException = null;
+
     /** @var list<string> */
     private array $deleted = [];
 
     public function willThrowOnStore(\Throwable $exception): void
     {
         $this->storeException = $exception;
+    }
+
+    public function willThrowOnDelete(\Throwable $exception): void
+    {
+        $this->deleteException = $exception;
     }
 
     public function store(string $path, string $bytes): void
@@ -30,6 +37,10 @@ final class FakeCommunicationCoverStorage implements CommunicationCoverStoragePo
 
     public function delete(string $path): void
     {
+        if ($this->deleteException !== null) {
+            throw $this->deleteException;
+        }
+
         $this->deleted[] = $path;
         unset($this->stored[$path]);
     }
