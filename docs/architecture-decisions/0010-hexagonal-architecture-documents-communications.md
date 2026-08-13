@@ -645,6 +645,30 @@ verde ad ogni passaggio (commit separati):
   Rule pulita, `/ready` 200 dopo rebuild immagine (il container `app` non ha bind mount: ogni
   modifica di questi punti ha richiesto `docker compose build app` prima di rieseguire i controlli,
   altrimenti si verificava codice vecchio).
+- **Stesso trattamento esteso a Communications, chiudendo le ultime due asimmetrie residue**:
+  `GenerateCommunicationTextService::generate()` catturava solo `InvalidAiOutputException` — qualsiasi
+  altro `Throwable` (timeout Bedrock, errore di rete) arrivava non gestito a
+  `CommunicationWorkflowTaskHandler::onFailure()`, stesso gap già chiuso su `RunOcrService`: nessun
+  audit, nessuna metrica. Aggiunto un secondo `catch (\Throwable $e)` dopo quello esistente, che
+  dispatcha il nuovo evento `CommunicationGenerationFailed` (nuovo perché nessun evento esistente
+  aveva la forma giusta: `CommunicationWorkflowStartFailed` è specifico del fallimento di *avvio*
+  dell'esecuzione Step Functions in `StartCommunicationWorkflowService`, semanticamente diverso da un
+  passo della pipeline che fallisce a metà) prima di rilanciare — stesso pattern del ramo
+  `InvalidAiOutputException` immediatamente sopra (solo `error_message`, senza toccare
+  `generation_status`: `onFailure()` continua a occuparsene, esattamente come già faceva per quel
+  ramo). `GenerateCommunicationCoverService` non necessitava lo stesso trattamento: cattura già ogni
+  `Throwable` e degrada senza mai rilanciare (verificato, non modificato).
+  `FinalizeCommunicationService::finalize()` non aveva alcuna guardia di idempotenza — a differenza di
+  `generate_text`/`generate_cover` che la ottengono gratis controllando un campo (`generatedBody`,
+  `coverStatus`), `finalize()` avrebbe ri-dispatchato `CommunicationWorkflowCompleted` su ogni
+  redelivery del task dopo il completamento (`WorkflowTaskRunner` deduplica per token, ma un nuovo
+  token — es. un redrive dell'intera esecuzione Step Functions — lo aggirerebbe). Aggiunta la stessa
+  guardia already-completed di `ProcessDocumentService`, e `FinalizeCommunicationUseCase::finalize()`
+  ora restituisce anche `skipped: bool` (`CommunicationWorkflowTaskHandler::finalizeStep()` lo inoltra
+  invece di restituire sempre `skipped: false`, stesso fix di `processDocumentStep()`). 2 nuovi test
+  `DomainUnit` (`GenerateCommunicationTextServiceTest`, `FinalizeCommunicationServiceTest`) —
+  **375/375** (eseguita due volte, nessuna flakiness), Pint 366 file, Larastan 271 file, Dependency
+  Rule pulita, `/ready` 200.
 
 ## Related documents
 

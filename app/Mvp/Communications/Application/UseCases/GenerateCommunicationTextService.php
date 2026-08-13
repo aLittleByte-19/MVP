@@ -4,6 +4,7 @@ namespace App\Mvp\Communications\Application\UseCases;
 
 use App\Exceptions\InvalidAiOutputException;
 use App\Mvp\Communications\Domain\Events\AiOutputRejected;
+use App\Mvp\Communications\Domain\Events\CommunicationGenerationFailed;
 use App\Mvp\Communications\Domain\Events\CommunicationTextGenerated;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationTextUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationAiGatewayPort;
@@ -18,6 +19,8 @@ use App\Mvp\Communications\Domain\ValueObjects\CommunicationDraftBuilder;
  */
 class GenerateCommunicationTextService implements GenerateCommunicationTextUseCase
 {
+    private const FAILURE_MESSAGE = 'Generazione del testo non disponibile. Riprova più tardi.';
+
     public function __construct(
         private readonly CommunicationRepository $communications,
         private readonly CommunicationAiGatewayPort $ai,
@@ -38,6 +41,12 @@ class GenerateCommunicationTextService implements GenerateCommunicationTextUseCa
             $this->events->dispatch(new AiOutputRejected($communicationId, $communication->tenantId, $e->operation(), $e->errors()));
             $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
                 ->withErrorMessage('La risposta del servizio AI non è valida. Riprova la generazione.'));
+
+            throw $e;
+        } catch (\Throwable $e) {
+            $this->events->dispatch(new CommunicationGenerationFailed($communicationId, $communication->tenantId, self::FAILURE_MESSAGE));
+            $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
+                ->withErrorMessage(self::FAILURE_MESSAGE));
 
             throw $e;
         }

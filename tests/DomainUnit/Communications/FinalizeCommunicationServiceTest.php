@@ -22,7 +22,7 @@ test('finalize completes the workflow with the injected clock and dispatches Com
     $result = (new FinalizeCommunicationService($repository, $events, $clock))->finalize(1);
 
     expect($repository->findCommunication(1)->generationStatus)->toBe('completed')
-        ->and($result)->toBe(['event' => 'CommunicationPipelineCompleted', 'coverStatus' => 'completed'])
+        ->and($result)->toBe(['event' => 'CommunicationPipelineCompleted', 'coverStatus' => 'completed', 'skipped' => false])
         ->and($events->hasDispatched(CommunicationWorkflowCompleted::class))->toBeTrue()
         ->and($events->hasDispatched(CommunicationCoverDegraded::class))->toBeFalse();
 });
@@ -36,6 +36,18 @@ test('finalize degrades a cover stuck pending and dispatches CommunicationCoverD
     $result = (new FinalizeCommunicationService($repository, $events, $clock))->finalize(1);
 
     expect($repository->findCommunication(1)->coverStatus)->toBe('failed')
-        ->and($result)->toBe(['event' => 'CommunicationPipelineCompleted', 'coverStatus' => 'failed'])
+        ->and($result)->toBe(['event' => 'CommunicationPipelineCompleted', 'coverStatus' => 'failed', 'skipped' => false])
         ->and($events->hasDispatched(CommunicationCoverDegraded::class))->toBeTrue();
+});
+
+test('finalize skips a communication already completed without re-dispatching CommunicationWorkflowCompleted', function () {
+    $repository = new InMemoryCommunicationRepository;
+    $repository->seed(1, ['generation_status' => 'completed', 'cover_status' => 'ready']);
+    $events = new RecordingEventDispatcher;
+    $clock = new FakeClock(new DateTimeImmutable);
+
+    $result = (new FinalizeCommunicationService($repository, $events, $clock))->finalize(1);
+
+    expect($result)->toBe(['event' => 'CommunicationPipelineCompleted', 'coverStatus' => 'ready', 'skipped' => true])
+        ->and($events->events())->toBeEmpty();
 });

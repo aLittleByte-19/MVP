@@ -3,6 +3,7 @@
 use App\Exceptions\InvalidAiOutputException;
 use App\Mvp\Communications\Application\UseCases\GenerateCommunicationTextService;
 use App\Mvp\Communications\Domain\Events\AiOutputRejected;
+use App\Mvp\Communications\Domain\Events\CommunicationGenerationFailed;
 use App\Mvp\Communications\Domain\Events\CommunicationTextGenerated;
 use App\Mvp\Communications\Domain\ValueObjects\GeneratedCommunicationText;
 use Tests\DomainUnit\Communications\Fakes\FakeCommunicationAiGateway;
@@ -54,4 +55,19 @@ test('generate dispatches AiOutputRejected and rethrows on invalid AI output', f
     expect(fn () => $service->generate(1))->toThrow(InvalidAiOutputException::class)
         ->and($events->hasDispatched(AiOutputRejected::class))->toBeTrue()
         ->and($repository->findCommunication(1)->generatedBody)->toBeNull();
+});
+
+test('generate dispatches CommunicationGenerationFailed and rethrows on any other failure', function () {
+    $repository = new InMemoryCommunicationRepository;
+    $repository->seed(1);
+    $ai = new FakeCommunicationAiGateway;
+    $ai->willThrowOnText(new RuntimeException('Bedrock non raggiungibile'));
+    $events = new RecordingEventDispatcher;
+
+    $service = new GenerateCommunicationTextService($repository, $ai, $events);
+
+    expect(fn () => $service->generate(1))->toThrow(RuntimeException::class, 'Bedrock non raggiungibile')
+        ->and($events->hasDispatched(CommunicationGenerationFailed::class))->toBeTrue()
+        ->and($events->hasDispatched(AiOutputRejected::class))->toBeFalse()
+        ->and($repository->findCommunication(1)->errorMessage)->toBe('Generazione del testo non disponibile. Riprova più tardi.');
 });

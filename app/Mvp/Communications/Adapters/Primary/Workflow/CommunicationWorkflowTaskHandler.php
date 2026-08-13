@@ -113,7 +113,7 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
         $result = $this->finalize->finalize($communication->id);
 
         return [
-            'skipped' => false,
+            'skipped' => $result['skipped'],
             'event' => $result['event'],
             'cover_status' => $result['coverStatus'],
         ];
