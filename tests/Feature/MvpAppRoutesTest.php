@@ -6,12 +6,12 @@ use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
 use App\Models\SubDocument;
 use App\Mvp\Ai\BedrockService;
+use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
+use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
+use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Communications\Domain\Ports\Inbound\StartCommunicationWorkflowUseCase;
-use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
-use App\Mvp\Communications\Enums\CommunicationStatus;
-use App\Mvp\Communications\Enums\CoverImageStatus;
-use App\Mvp\Documents\Enums\ReviewStatus;
-use App\Mvp\Documents\Enums\SendStatus;
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
+use App\Mvp\Documents\Domain\Enums\SendStatus;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Services\WorkflowTaskRunner;
 use App\Mvp\Workflow\Support\WorkflowContext;
@@ -292,6 +292,17 @@ test('a failed text generation fails the whole communication', function () {
         ->toThrow(RuntimeException::class);
 
     expect($communication->fresh()->generation_status)->toBe(CommunicationGenerationStatus::Failed);
+});
+
+test('workflow runner rejects a message whose tenantId does not match the communication', function () {
+    $communication = Communication::factory()->processing()->create(['tenant_id' => 'tenant-owner']);
+
+    expect(fn () => app(WorkflowTaskRunner::class)->handle([
+        'taskToken' => 'token-tenant-mismatch',
+        'taskType' => 'communication.generate_text',
+        'communicationId' => $communication->id,
+        'tenantId' => 'tenant-intruder',
+    ]))->toThrow(InvalidArgumentException::class, 'tenantId non corrisponde alla comunicazione');
 });
 
 test('workflow audit events keep the correlation id carried by the message', function () {

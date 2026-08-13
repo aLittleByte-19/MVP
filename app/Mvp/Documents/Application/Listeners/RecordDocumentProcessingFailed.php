@@ -3,8 +3,8 @@
 namespace App\Mvp\Documents\Application\Listeners;
 
 use App\Mvp\Audit\Services\AuditLogger;
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Events\DocumentProcessingFailed;
-use App\Mvp\Documents\Enums\ProcessingStatus;
 use App\Mvp\Observability\MetricsRecorder;
 
 class RecordDocumentProcessingFailed

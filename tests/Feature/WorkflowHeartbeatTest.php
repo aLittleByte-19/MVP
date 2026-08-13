@@ -1,7 +1,7 @@
 <?php
 
 use App\Models\OriginalDocument;
-use App\Mvp\Documents\Enums\ProcessingStatus;
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
 use Aws\Command;

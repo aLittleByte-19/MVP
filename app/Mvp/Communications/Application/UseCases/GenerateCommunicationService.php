@@ -4,12 +4,12 @@ namespace App\Mvp\Communications\Application\UseCases;
 
 use App\Mvp\Audit\Services\AuditLogger;
 use App\Mvp\Communications\Domain\Commands\GenerateCommunicationCommand;
+use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
+use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
+use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\NewCommunication;
-use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
-use App\Mvp\Communications\Enums\CommunicationStatus;
-use App\Mvp\Communications\Enums\CoverImageStatus;
 
 class GenerateCommunicationService implements GenerateCommunicationUseCase
 {

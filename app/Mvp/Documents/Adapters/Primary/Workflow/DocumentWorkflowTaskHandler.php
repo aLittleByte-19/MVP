@@ -3,10 +3,10 @@
 namespace App\Mvp\Documents\Adapters\Primary\Workflow;
 
 use App\Models\OriginalDocument;
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Ports\Inbound\FinalizeDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\ProcessDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\RunOcrUseCase;
-use App\Mvp\Documents\Enums\ProcessingStatus;
 use App\Mvp\Workflow\Contracts\WorkflowTaskHandler;
 use Illuminate\Database\Eloquent\Model;
 
@@ -62,7 +62,20 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
             throw new \InvalidArgumentException('Messaggio workflow non valido: documentId e\' obbligatorio.');
         }
 
-        return OriginalDocument::query()->findOrFail($documentId);
+        $document = OriginalDocument::query()->findOrFail($documentId);
+
+        // Difesa in profondita': l'autorizzazione vera vive al bordo HTTP
+        // (i messaggi di workflow sono generati dalla pipeline stessa, non
+        // da input utente diretto), ma se il tenantId nel messaggio non
+        // corrisponde a quello del documento e' un segnale di messaggio
+        // corrotto o malformato che non va eseguito silenziosamente.
+        $tenantId = $message['tenantId'] ?? $message['tenant_id'] ?? null;
+
+        if ($tenantId !== null && $document->tenant_id !== $tenantId) {
+            throw new \InvalidArgumentException("Messaggio workflow non valido: tenantId non corrisponde al documento {$documentId}.");
+        }
+
+        return $document;
     }
 
     /**

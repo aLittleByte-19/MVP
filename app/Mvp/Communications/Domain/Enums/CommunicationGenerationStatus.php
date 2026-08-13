@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Mvp\Communications\Enums;
+namespace App\Mvp\Communications\Domain\Enums;
 
 /**
  * Technical lifecycle of the generation pipeline, kept separate from

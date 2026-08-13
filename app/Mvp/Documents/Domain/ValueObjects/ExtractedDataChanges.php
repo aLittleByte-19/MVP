@@ -5,9 +5,9 @@ namespace App\Mvp\Documents\Domain\ValueObjects;
 /**
  * Campi estratti (o corretti manualmente) da salvare per un sotto-documento,
  * costruiti un campo alla volta invece che come array associativo con
- * chiavi a stringa (vedi ADR 0010 e OriginalDocumentChanges). Usata sia
- * dall'estrazione AI (tutti i campi) sia dalla correzione manuale
- * dell'operatore (solo i campi corretti).
+ * chiavi a stringa (vedi ADR 0010 e OriginalDocumentChanges, incluso il
+ * criterio per le chiavi camelCase). Usata sia dall'estrazione AI (tutti i
+ * campi) sia dalla correzione manuale dell'operatore (solo i campi corretti).
  */
 final class ExtractedDataChanges
 {
@@ -31,34 +31,37 @@ final class ExtractedDataChanges
     public static function fromRawFields(array $fieldUpdates): self
     {
         $instance = new self;
-        $instance->attributes = $fieldUpdates;
+
+        foreach ($fieldUpdates as $key => $value) {
+            $instance->attributes[self::toCamelCase($key)] = $value;
+        }
 
         return $instance;
     }
 
     public function withEmployeeFirstName(?string $value): self
     {
-        return $this->with('employee_first_name', $value);
+        return $this->with('employeeFirstName', $value);
     }
 
     public function withEmployeeLastName(?string $value): self
     {
-        return $this->with('employee_last_name', $value);
+        return $this->with('employeeLastName', $value);
     }
 
     public function withCompanyName(?string $value): self
     {
-        return $this->with('company_name', $value);
+        return $this->with('companyName', $value);
     }
 
     public function withDocumentDate(?string $value): self
     {
-        return $this->with('document_date', $value);
+        return $this->with('documentDate', $value);
     }
 
     public function withDocumentType(?string $value): self
     {
-        return $this->with('document_type', $value);
+        return $this->with('documentType', $value);
     }
 
     public function withDescription(?string $value): self
@@ -68,7 +71,7 @@ final class ExtractedDataChanges
 
     public function withConfidenceScore(?int $value): self
     {
-        return $this->with('confidence_score', $value);
+        return $this->with('confidenceScore', $value);
     }
 
     /**
@@ -76,7 +79,7 @@ final class ExtractedDataChanges
      */
     public function withAiPayload(?array $payload): self
     {
-        return $this->with('ai_payload', $payload);
+        return $this->with('aiPayload', $payload);
     }
 
     private function with(string $attribute, mixed $value): self
@@ -85,6 +88,11 @@ final class ExtractedDataChanges
         $clone->attributes[$attribute] = $value;
 
         return $clone;
+    }
+
+    private static function toCamelCase(string $snakeCase): string
+    {
+        return lcfirst(str_replace('_', '', ucwords($snakeCase, '_')));
     }
 
     /**

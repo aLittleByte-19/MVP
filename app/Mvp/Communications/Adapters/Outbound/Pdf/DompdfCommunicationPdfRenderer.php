@@ -2,9 +2,9 @@
 
 namespace App\Mvp\Communications\Adapters\Outbound\Pdf;
 
+use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationPdfRendererPort;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationPdfContext;
-use App\Mvp\Communications\Enums\CoverImageStatus;
 use App\Mvp\Support\PdfFooterStamper;
 use Dompdf\Dompdf;
 use Dompdf\Options;

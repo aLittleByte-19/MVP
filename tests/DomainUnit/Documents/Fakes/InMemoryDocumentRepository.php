@@ -220,10 +220,18 @@ final class InMemoryDocumentRepository implements DocumentRepository
      */
     private function normalize(array $attributes): array
     {
-        return array_map(
-            static fn (mixed $value): mixed => $value instanceof \BackedEnum ? $value->value : $value,
-            $attributes,
-        );
+        $normalized = [];
+
+        // I *Changes VO usano chiavi camelCase (vedi ADR 0010): questo fake
+        // imita la stessa conversione che l'adapter Eloquent applica prima
+        // di scrivere, per restare fedele alle righe (snake_case) seminate
+        // da seedOriginal()/seedSubDocument().
+        foreach ($attributes as $key => $value) {
+            $snakeKey = strtolower((string) preg_replace('/(?<!^)[A-Z]/', '_$0', $key));
+            $normalized[$snakeKey] = $value instanceof \BackedEnum ? $value->value : $value;
+        }
+
+        return $normalized;
     }
 
     /**

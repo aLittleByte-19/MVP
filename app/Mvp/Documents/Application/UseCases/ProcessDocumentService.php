@@ -4,6 +4,7 @@ namespace App\Mvp\Documents\Application\UseCases;
 
 use App\Exceptions\InvalidAiOutputException;
 use App\Mvp\Documents\Application\Support\OcrRangeReader;
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Events\DocumentProcessingCompleted;
 use App\Mvp\Documents\Domain\Events\DocumentProcessingFailed;
 use App\Mvp\Documents\Domain\Events\DocumentProcessingStarted;
@@ -16,7 +17,6 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
 use App\Mvp\Documents\Domain\ValueObjects\NewSubDocument;
 use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
-use App\Mvp\Documents\Enums\ProcessingStatus;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
 use Psr\Log\LoggerInterface;

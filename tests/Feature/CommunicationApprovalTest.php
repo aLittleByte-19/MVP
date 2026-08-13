@@ -1,7 +1,7 @@
 <?php
 
 use App\Models\Communication;
-use App\Mvp\Communications\Enums\CommunicationStatus;
+use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 
 test('approved is a valid communication status', function () {
     $communication = Communication::factory()->draft()->create();

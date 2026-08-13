@@ -7,8 +7,8 @@ use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
 use App\Models\PromptConfiguration;
 use App\Models\SubDocument;
-use App\Mvp\Communications\Enums\CommunicationStatus;
-use App\Mvp\Documents\Enums\ReviewStatus;
+use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Identity\MvpUser;
 
 class MvpStateService

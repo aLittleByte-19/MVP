@@ -3,10 +3,10 @@
 namespace App\Mvp\Communications\Adapters\Primary\Workflow;
 
 use App\Models\Communication;
+use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Domain\Ports\Inbound\FinalizeCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationCoverUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationTextUseCase;
-use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
 use App\Mvp\Workflow\Contracts\WorkflowTaskHandler;
 use Illuminate\Database\Eloquent\Model;
 
@@ -58,7 +58,20 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
             throw new \InvalidArgumentException('Messaggio workflow non valido: communicationId e\' obbligatorio.');
         }
 
-        return Communication::query()->findOrFail($communicationId);
+        $communication = Communication::query()->findOrFail($communicationId);
+
+        // Difesa in profondita': l'autorizzazione vera vive al bordo HTTP
+        // (i messaggi di workflow sono generati dalla pipeline stessa, non
+        // da input utente diretto), ma se il tenantId nel messaggio non
+        // corrisponde a quello della comunicazione e' un segnale di
+        // messaggio corrotto o malformato che non va eseguito silenziosamente.
+        $tenantId = $message['tenantId'] ?? $message['tenant_id'] ?? null;
+
+        if ($tenantId !== null && $communication->tenant_id !== $tenantId) {
+            throw new \InvalidArgumentException("Messaggio workflow non valido: tenantId non corrisponde alla comunicazione {$communicationId}.");
+        }
+
+        return $communication;
     }
 
     /**

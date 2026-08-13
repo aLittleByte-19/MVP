@@ -3,8 +3,8 @@
 namespace App\Mvp\Documents\Application\Listeners;
 
 use App\Mvp\Audit\Services\AuditLogger;
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Events\SubDocumentManuallyValidated;
-use App\Mvp\Documents\Enums\ReviewStatus;
 
 class RecordSubDocumentManuallyValidated
 {

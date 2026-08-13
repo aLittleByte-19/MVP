@@ -3,6 +3,7 @@
 namespace App\Mvp\Communications\Domain\Ports\Outbound;
 
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationPage;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationRecord;
 use App\Mvp\Communications\Domain\ValueObjects\NewCommunication;
 
@@ -27,7 +28,6 @@ interface CommunicationRepository
 
     /**
      * @param  array{keyword?: ?string, tone?: ?string, style?: ?string, date?: ?string}  $filters
-     * @return array{ids: list<int>, total: int, page: int, perPage: int}
      */
-    public function paginateApprovedCommunications(string $tenantId, array $filters, int $page, int $perPage): array;
+    public function paginateApprovedCommunications(string $tenantId, array $filters, int $page, int $perPage): CommunicationPage;
 }

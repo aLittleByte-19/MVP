@@ -16,6 +16,7 @@ use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentPage;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Adapter secondario: implementa {@see DocumentRepository} sopra Eloquent.
@@ -36,7 +37,7 @@ class EloquentDocumentRepository implements DocumentRepository
 
     public function updateOriginalDocument(int $id, OriginalDocumentChanges $changes): void
     {
-        OriginalDocument::query()->whereKey($id)->firstOrFail()->update($changes->toArray());
+        OriginalDocument::query()->whereKey($id)->firstOrFail()->update($this->snakeCaseKeys($changes->toArray()));
     }
 
     public function deleteOriginalDocumentWithWorkflowTasks(int $id): void
@@ -136,7 +137,7 @@ class EloquentDocumentRepository implements DocumentRepository
 
     public function updateSubDocument(int $id, SubDocumentChanges $changes): void
     {
-        SubDocument::query()->whereKey($id)->firstOrFail()->update($changes->toArray());
+        SubDocument::query()->whereKey($id)->firstOrFail()->update($this->snakeCaseKeys($changes->toArray()));
     }
 
     public function deleteSubDocument(int $id): void
@@ -179,7 +180,7 @@ class EloquentDocumentRepository implements DocumentRepository
 
     public function saveExtractedData(int $subDocumentId, ExtractedDataChanges $changes): void
     {
-        ExtractedData::updateOrCreate(['sub_document_id' => $subDocumentId], $changes->toArray());
+        ExtractedData::updateOrCreate(['sub_document_id' => $subDocumentId], $this->snakeCaseKeys($changes->toArray()));
     }
 
     public function deleteExtractedData(int $subDocumentId): void
@@ -207,6 +208,25 @@ class EloquentDocumentRepository implements DocumentRepository
             workflowExecutionArn: $document->workflow_execution_arn,
             errorMessage: $document->error_message,
         );
+    }
+
+    /**
+     * I *Changes VO usano chiavi camelCase (i nomi dei loro metodi with*()),
+     * non i nomi delle colonne: la traduzione verso lo schema DB e'
+     * responsabilita' di questo adapter, non del dominio.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function snakeCaseKeys(array $attributes): array
+    {
+        $result = [];
+
+        foreach ($attributes as $key => $value) {
+            $result[Str::snake($key)] = $value;
+        }
+
+        return $result;
     }
 
     private function toSubDocumentRecord(SubDocument $subDocument): SubDocumentRecord

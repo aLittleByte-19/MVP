@@ -2,7 +2,7 @@
 
 namespace App\Mvp\Documents\Domain\ValueObjects;
 
-use App\Mvp\Documents\Enums\ProcessingStatus;
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 
 /**
  * Dati per creare un nuovo OriginalDocument. A differenza di

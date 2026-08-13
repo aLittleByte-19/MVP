@@ -12,5 +12,8 @@ test('list delegates straight to the repository, unchanged', function () {
 
     $page = $service->list('tenant-1', ['keyword' => 'ferie'], 2, 15);
 
-    expect($page)->toBe(['ids' => [], 'total' => 0, 'page' => 2, 'perPage' => 15]);
+    expect($page->communicationIds)->toBe([])
+        ->and($page->total)->toBe(0)
+        ->and($page->page)->toBe(2)
+        ->and($page->perPage)->toBe(15);
 });

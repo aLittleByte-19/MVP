@@ -3,8 +3,8 @@
 namespace App\Mvp\Communications\Application\Listeners;
 
 use App\Mvp\Audit\Services\AuditLogger;
+use App\Mvp\Communications\Domain\Enums\CoverImageSource;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverReplaced;
-use App\Mvp\Communications\Enums\CoverImageSource;
 use App\Mvp\Observability\MetricsRecorder;
 
 class RecordCommunicationCoverReplaced

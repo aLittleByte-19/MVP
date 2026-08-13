@@ -669,6 +669,67 @@ verde ad ogni passaggio (commit separati):
   `DomainUnit` (`GenerateCommunicationTextServiceTest`, `FinalizeCommunicationServiceTest`) —
   **375/375** (eseguita due volte, nessuna flakiness), Pint 366 file, Larastan 271 file, Dependency
   Rule pulita, `/ready` 200.
+- **Chiusi in blocco i punti "farei subito, anche gratis" e "basso valore, anche gratis" di una
+  revisione onesta di cosa restava aperto** (sei interventi, nessuno dei quali era un trade-off
+  dichiarato: erano tutti gap reali, semplicemente a impatto/urgenza minori dei cinque punti sopra):
+  - **Script Dependency Rule esteso**: oltre a `Illuminate\*`/`Aws\*`/`App\Models\*`, ora rileva anche
+    riferimenti al namespace dell'*altro* dominio dentro `Domain/` (`App\Mvp\Communications\*` dentro
+    `Documents/Domain`, e viceversa) — i due domini non si conoscono a vicenda, ma prima nessun
+    controllo meccanico lo garantiva.
+  - **Enum spostati dentro `Domain/Enums/`** in entrambi i domini (`Documents\Enums` →
+    `Documents\Domain\Enums`, stesso per Communications): prima vivevano fuori dalla cartella che lo
+    script controlla, quindi erano "puri" solo per disciplina, non per verifica automatica. Rename
+    meccanico di namespace su 7 file enum e ~52 file che li importavano (fatto con una sostituzione
+    letterale di stringa, non un editor a mano: il rischio di un rename così ampio è nella sua
+    ampiezza, non nella sua difficoltà). Nessun comportamento cambiato — verificato dalla suite
+    completa e da Larastan.
+  - **`ValidCodiceFiscale` separato in due**: il checksum vero e proprio è ora una funzione pura
+    (`Documents\Domain\Support\CodiceFiscale::isValid()`, nessuna dipendenza da Laravel) richiamata da
+    `ValidCodiceFiscale` (che resta l'unico pezzo ad implementare l'interfaccia di validazione di
+    Laravel, in `Rules/`, fuori dal perimetro controllato per necessità — non può fare altrimenti).
+    Stesso messaggio d'errore, stesso comportamento osservabile; nuovo test `DomainUnit`
+    (`CodiceFiscaleTest`) che dimostra la logica testabile senza bootstrap Laravel, oltre alla
+    copertura esaustiva preesistente in `tests/Unit/ValidCodiceFiscaleTest.php` attraverso l'adapter.
+  - **Guardia tenant in `resolveSubject()`** su entrambi i `WorkflowTaskHandler`: prima nessuno dei due
+    controllava che il `tenantId` nel messaggio SQS corrispondesse al tenant reale del documento/della
+    comunicazione risolti per id — l'autorizzazione vera resta al bordo HTTP (i messaggi di workflow
+    sono generati dalla pipeline stessa, non da input utente diretto, quindi il rischio pratico era già
+    basso), ma un messaggio corrotto o malformato ora viene rifiutato esplicitamente invece di essere
+    eseguito silenziosamente. Controllo solo-se-presente (non reso obbligatorio, per non rischiare di
+    rompere un chiamante legittimo non ancora mappato con certezza). 2 nuovi test Feature (uno per
+    dominio) che confermano il rifiuto su tenant non corrispondente.
+  - **`ListCommunicationsUseCase` allineato a `ListDocumentsUseCase`**: nuovo VO `CommunicationPage`
+    (stesso taglio di `SubDocumentPage`, solo id e metadati di paginazione), sostituisce l'array con
+    shape `array{ids, total, page, perPage}` che prima era l'unico ritorno-array-invece-che-VO fra le
+    porte primarie di lettura dei due domini. Tocca l'interfaccia, l'adapter Eloquent, il caso d'uso,
+    il fake di test, e `CommunicationController::index()` (accesso a proprietà invece che a chiavi di
+    array) — comportamento HTTP osservabile invariato, stesso JSON di risposta.
+  - **I `*Changes` VO non incorporano più letteralmente lo schema DB**: `OriginalDocumentChanges`,
+    `SubDocumentChanges`, `ExtractedDataChanges`, `CommunicationChanges` usavano internamente chiavi
+    snake_case identiche ai nomi delle colonne (`'processing_status'`, `'error_message'`, ecc.),
+    scritte a mano in ogni metodo `with*()` — il tipo era già sicuro (Larastan), ma il *Domain* sapeva
+    comunque il nome esatto delle colonne. Le chiavi interne sono ora camelCase (`'processingStatus'`,
+    derivate meccanicamente dal nome del metodo `with*()` stesso), e la conversione verso snake_case è
+    stata spostata negli adapter di persistenza (`EloquentDocumentRepository`/
+    `EloquentCommunicationRepository`, via `Illuminate\Support\Str::snake()` — lecito, sono adapter),
+    in un unico metodo privato `snakeCaseKeys()` per adapter. `fromRawFields()` (usato da
+    `ReviewDocumentService` per i campi grezzi da HTTP e da `GenerateCommunicationCoverService`/
+    `GenerateCommunicationTextService` per l'output di `CommunicationDraftBuilder`, entrambi
+    snake_case in ingresso) converte in camelCase al volo con un piccolo helper PHP puro (nessuna
+    dipendenza da Illuminate, resta lecito nel Domain). Aggiornati anche i due fake `InMemory*Repository`
+    (che imitano la stessa conversione per restare fedeli alle righe seminate, già snake_case). **Guadagno
+    dichiaratamente marginale** (il tipo era già verificato staticamente prima), fatto comunque su
+    richiesta esplicita — nessun comportamento osservabile cambiato, nessun nuovo test necessario
+    (stessa suite, stesso comportamento, solo la rappresentazione interna delle chiavi).
+  - **Non fatto in questo giro**: disaccoppiare `MvpUser` da `Illuminate\Contracts\Auth\Authenticatable`
+    con un "Attore" di dominio. A differenza degli altri cinque punti, l'ampiezza reale (48 file
+    referenziano `MvpUser`, contro le stime iniziali di poche decine) e soprattutto la sua natura — non
+    un rename meccanico ma una traduzione da introdurre ad ogni bordo di adapter primario (controller
+    HTTP, workflow handler) — lo rendono un intervento della stessa taglia del punto "dominio anemico",
+    non un ritocco a basso rischio. Rimane in lista, da fare come intervento a sé.
+  - **380/380** (eseguita due volte, nessuna flakiness), Pint 369 file, Larastan 273 file, Dependency
+    Rule pulita (col nuovo controllo cross-dominio), `/ready` 200. Nessuna regressione di comportamento
+    HTTP osservabile in nessuno dei sei punti.
 
 ## Related documents
 

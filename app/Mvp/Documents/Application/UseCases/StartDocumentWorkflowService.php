@@ -2,13 +2,13 @@
 
 namespace App\Mvp\Documents\Application\UseCases;
 
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Events\DocumentWorkflowStarted;
 use App\Mvp\Documents\Domain\Events\DocumentWorkflowStartFailed;
 use App\Mvp\Documents\Domain\Ports\Inbound\StartDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
-use App\Mvp\Documents\Enums\ProcessingStatus;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Support\WorkflowContext;

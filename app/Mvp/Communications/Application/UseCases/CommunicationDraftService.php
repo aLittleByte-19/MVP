@@ -2,6 +2,7 @@
 
 namespace App\Mvp\Communications\Application\UseCases;
 
+use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftApproved;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftDiscarded;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftEdited;
@@ -16,7 +17,6 @@ use App\Mvp\Communications\Domain\Ports\Inbound\CommunicationDraftUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
-use App\Mvp\Communications\Enums\CommunicationStatus;
 use App\Mvp\Identity\MvpUser;
 
 class CommunicationDraftService implements CommunicationDraftUseCase

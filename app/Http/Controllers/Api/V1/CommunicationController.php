@@ -54,11 +54,11 @@ class CommunicationController
         );
 
         $communicationsById = Communication::query()
-            ->whereIn('id', $page['ids'])
+            ->whereIn('id', $page->communicationIds)
             ->get()
             ->keyBy('id');
 
-        $items = collect($page['ids'])
+        $items = collect($page->communicationIds)
             ->map(fn (int $id) => $communicationsById->get($id))
             ->filter()
             ->map(fn (Communication $communication) => $state->communication($communication))
@@ -66,9 +66,9 @@ class CommunicationController
 
         return response()->json([
             'items' => $items->all(),
-            'total' => $page['total'],
-            'page' => $page['page'],
-            'perPage' => $page['perPage'],
+            'total' => $page->total,
+            'page' => $page->page,
+            'perPage' => $page->perPage,
         ]);
     }
 

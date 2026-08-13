@@ -3,10 +3,10 @@
 namespace Database\Factories;
 
 use App\Models\Communication;
-use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
-use App\Mvp\Communications\Enums\CommunicationStatus;
-use App\Mvp\Communications\Enums\CoverImageSource;
-use App\Mvp\Communications\Enums\CoverImageStatus;
+use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
+use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
+use App\Mvp\Communications\Domain\Enums\CoverImageSource;
+use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
