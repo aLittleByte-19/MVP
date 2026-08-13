@@ -2,7 +2,7 @@
 
 use App\Mvp\Documents\Application\UseCases\DeleteDocumentService;
 use App\Mvp\Documents\Domain\Events\SubDocumentDeleted;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 use Tests\DomainUnit\Documents\Fakes\FakeDocumentStorage;
 use Tests\DomainUnit\Documents\Fakes\InMemoryDocumentRepository;
 use Tests\DomainUnit\Documents\Fakes\RecordingDocumentEventDispatcher;
@@ -10,9 +10,9 @@ use Tests\DomainUnit\Documents\Fakes\RecordingDocumentEventDispatcher;
 /**
  * Test di dominio puro (nessun bootstrap Laravel/DB/AWS).
  */
-function fakeDocumentActor(): MvpUser
+function fakeDocumentActor(): Actor
 {
-    return new MvpUser('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
+    return new Actor('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
 }
 
 test('delete removes the sub-document, its file, and dispatches SubDocumentDeleted', function () {

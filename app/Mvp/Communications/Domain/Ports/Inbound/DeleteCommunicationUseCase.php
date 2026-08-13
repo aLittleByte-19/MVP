@@ -2,9 +2,9 @@
 
 namespace App\Mvp\Communications\Domain\Ports\Inbound;
 
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 
 interface DeleteCommunicationUseCase
 {
-    public function delete(int $communicationId, MvpUser $actor): void;
+    public function delete(int $communicationId, Actor $actor): void;
 }

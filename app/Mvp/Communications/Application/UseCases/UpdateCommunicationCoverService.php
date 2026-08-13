@@ -13,8 +13,8 @@ use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
-use App\Mvp\Identity\MvpUser;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
+use App\Mvp\Support\Identity\Actor;
 
 class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
 {
@@ -33,7 +33,7 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
         private readonly string $coverPathPrefix = 'communications/covers',
     ) {}
 
-    public function update(int $communicationId, string $bytes, string $mime, int $size, MvpUser $actor): void
+    public function update(int $communicationId, string $bytes, string $mime, int $size, Actor $actor): void
     {
         $communication = $this->communications->findCommunication($communicationId);
 
@@ -59,7 +59,7 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
         $this->events->dispatch(new CommunicationCoverReplaced($communicationId, $communication->tenantId, $actor, $mime, $size));
     }
 
-    public function remove(int $communicationId, MvpUser $actor): void
+    public function remove(int $communicationId, Actor $actor): void
     {
         $communication = $this->communications->findCommunication($communicationId);
 

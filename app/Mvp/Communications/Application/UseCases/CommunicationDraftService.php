@@ -17,7 +17,7 @@ use App\Mvp\Communications\Domain\Ports\Inbound\CommunicationDraftUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 
 class CommunicationDraftService implements CommunicationDraftUseCase
 {
@@ -26,7 +26,7 @@ class CommunicationDraftService implements CommunicationDraftUseCase
         private readonly CommunicationEventDispatcherPort $events,
     ) {}
 
-    public function favorite(int $communicationId, MvpUser $actor): void
+    public function favorite(int $communicationId, Actor $actor): void
     {
         $communication = $this->communications->findCommunication($communicationId);
 
@@ -38,7 +38,7 @@ class CommunicationDraftService implements CommunicationDraftUseCase
         $this->events->dispatch(new CommunicationDraftFavorited($communicationId, $actor));
     }
 
-    public function unfavorite(int $communicationId, MvpUser $actor): void
+    public function unfavorite(int $communicationId, Actor $actor): void
     {
         $communication = $this->communications->findCommunication($communicationId);
 
@@ -50,7 +50,7 @@ class CommunicationDraftService implements CommunicationDraftUseCase
         $this->events->dispatch(new CommunicationDraftUnfavorited($communicationId, $actor));
     }
 
-    public function update(int $communicationId, string $title, string $body, MvpUser $actor): void
+    public function update(int $communicationId, string $title, string $body, Actor $actor): void
     {
         $communication = $this->communications->findCommunication($communicationId);
 
@@ -64,7 +64,7 @@ class CommunicationDraftService implements CommunicationDraftUseCase
         $this->events->dispatch(new CommunicationDraftEdited($communicationId, $actor));
     }
 
-    public function save(int $communicationId, MvpUser $actor): void
+    public function save(int $communicationId, Actor $actor): void
     {
         $communication = $this->communications->findCommunication($communicationId);
 
@@ -76,7 +76,7 @@ class CommunicationDraftService implements CommunicationDraftUseCase
         $this->events->dispatch(new CommunicationDraftApproved($communicationId, $actor));
     }
 
-    public function discard(int $communicationId, MvpUser $actor): void
+    public function discard(int $communicationId, Actor $actor): void
     {
         $communication = $this->communications->findCommunication($communicationId);
 

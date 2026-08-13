@@ -15,8 +15,8 @@ use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
-use App\Mvp\Identity\MvpUser;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
+use App\Mvp\Support\Identity\Actor;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Support\WorkflowContext;
 use Psr\Clock\ClockInterface;
@@ -104,7 +104,7 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
         }
     }
 
-    public function regenerate(int $communicationId, ?MvpUser $actor, ?string $correlationId, ?string $requestId): void
+    public function regenerate(int $communicationId, ?Actor $actor, ?string $correlationId, ?string $requestId): void
     {
         $communication = $this->communications->findCommunication($communicationId);
 

@@ -13,7 +13,7 @@ use App\Mvp\Documents\Domain\ValueObjects\RenderedSendMessage;
 use App\Mvp\Documents\Domain\ValueObjects\SendMessageComposition;
 use App\Mvp\Documents\Domain\ValueObjects\SendMessageContext;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 use Illuminate\Support\Str;
 
 /**
@@ -29,14 +29,14 @@ class SendMessageService implements SendMessageUseCase
         private readonly DocumentEventDispatcherPort $events,
     ) {}
 
-    public function preview(int $subDocumentId, ?MvpUser $actor): RenderedSendMessage
+    public function preview(int $subDocumentId, ?Actor $actor): RenderedSendMessage
     {
         $composition = $this->compose($this->documents->findSendMessageContext($subDocumentId));
 
         return new RenderedSendMessage($this->renderer->renderPdf($composition), $this->filename($composition, $subDocumentId));
     }
 
-    public function export(int $subDocumentId, ?MvpUser $actor): RenderedSendMessage
+    public function export(int $subDocumentId, ?Actor $actor): RenderedSendMessage
     {
         $context = $this->documents->findSendMessageContext($subDocumentId);
         $composition = $this->compose($context);
@@ -52,7 +52,7 @@ class SendMessageService implements SendMessageUseCase
         return new RenderedSendMessage($this->renderer->renderPdf($composition), $this->filename($composition, $subDocumentId));
     }
 
-    public function updateOverrides(int $subDocumentId, array $overrides, ?MvpUser $actor): void
+    public function updateOverrides(int $subDocumentId, array $overrides, ?Actor $actor): void
     {
         $changes = SubDocumentChanges::none();
 

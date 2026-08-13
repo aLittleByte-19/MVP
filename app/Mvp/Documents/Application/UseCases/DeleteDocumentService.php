@@ -7,7 +7,7 @@ use App\Mvp\Documents\Domain\Ports\Inbound\DeleteDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 
 class DeleteDocumentService implements DeleteDocumentUseCase
 {
@@ -17,7 +17,7 @@ class DeleteDocumentService implements DeleteDocumentUseCase
         private readonly DocumentEventDispatcherPort $events,
     ) {}
 
-    public function delete(int $subDocumentId, ?MvpUser $actor): void
+    public function delete(int $subDocumentId, ?Actor $actor): void
     {
         $subDocument = $this->documents->findSubDocument($subDocumentId);
         $originalDocumentId = $subDocument->originalDocumentId;
