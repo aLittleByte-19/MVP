@@ -15,6 +15,7 @@ use App\Mvp\Documents\Domain\ValueObjects\SendMessageContext;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentPage;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Adapter secondario: implementa {@see DocumentRepository} sopra Eloquent.
@@ -40,11 +41,13 @@ class EloquentDocumentRepository implements DocumentRepository
 
     public function deleteOriginalDocumentWithWorkflowTasks(int $id): void
     {
-        $original = OriginalDocument::query()->findOrFail($id);
-        // I task workflow sono legati da una relazione morph, senza foreign
-        // key: vanno rimossi insieme al documento che li ha generati.
-        $original->workflowTasks()->delete();
-        $original->delete();
+        DB::transaction(function () use ($id): void {
+            $original = OriginalDocument::query()->findOrFail($id);
+            // I task workflow sono legati da una relazione morph, senza foreign
+            // key: vanno rimossi insieme al documento che li ha generati.
+            $original->workflowTasks()->delete();
+            $original->delete();
+        });
     }
 
     public function paginateSubDocuments(string $tenantId, array $filters, int $page, int $perPage): SubDocumentPage
@@ -164,12 +167,14 @@ class EloquentDocumentRepository implements DocumentRepository
 
     public function deleteExistingSubDocuments(int $originalDocumentId): array
     {
-        $splits = SubDocument::query()->where('original_document_id', $originalDocumentId)->get(['id', 'file_path']);
-        $paths = $splits->pluck('file_path')->filter()->values()->all();
+        return DB::transaction(function () use ($originalDocumentId): array {
+            $splits = SubDocument::query()->where('original_document_id', $originalDocumentId)->get(['id', 'file_path']);
+            $paths = $splits->pluck('file_path')->filter()->values()->all();
 
-        $splits->each(fn (SubDocument $split) => $split->delete());
+            $splits->each(fn (SubDocument $split) => $split->delete());
 
-        return $paths;
+            return $paths;
+        });
     }
 
     public function saveExtractedData(int $subDocumentId, ExtractedDataChanges $changes): void

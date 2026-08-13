@@ -13,13 +13,22 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * Adapter primario guidato da Step Functions/SQS (invece che da HTTP):
  * traduce ogni task di callback nella chiamata al caso d'uso corrispondente
- * tramite la sua porta primaria. Nessuna regola di business qui — solo
- * dispatch per tipo di task e traduzione del risultato nella forma che il
+ * tramite la sua porta primaria, e traduce il risultato nella forma che il
  * runner si aspetta. Implementa il contratto condiviso WorkflowTaskHandler
  * (infrastruttura di Workflow, fuori dal perimetro esagonale: vedi ADR 0010),
  * quindi puo' legittimamente risolvere/aggiornare l'aggregato Eloquent per le
  * proprie responsabilita' di adapter (resolveSubject, onFailure) — le
  * decisioni di dominio restano nei casi d'uso iniettati.
+ *
+ * Eccezione dichiarata: la guardia "documento gia' completato" prima del
+ * match, per bedrock.extract/persist.results. E' una regola di idempotenza
+ * verso la ridelivery del task da Step Functions, non una decisione di
+ * dominio — ma vive qui perche' ProcessDocumentUseCase::process() e'
+ * dichiarato void e FinalizeDocumentWorkflowUseCase::currentStatus() e' una
+ * lettura pura: nessuno dei due ha un canale per segnalare "skippato" a
+ * questo adapter. Per textract.ocr la stessa idempotenza vive invece
+ * interamente in RunOcrService, perche' RunOcrUseCase::run() gia' restituisce
+ * un array con 'skipped' — non serviva duplicarla qui.
  */
 class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
 {
@@ -69,7 +78,7 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
     {
         $document = $this->asDocument($subject);
 
-        if ($document->processing_status === ProcessingStatus::Completed && $taskType !== 'dispatch.domain_event') {
+        if ($document->processing_status === ProcessingStatus::Completed && in_array($taskType, ['bedrock.extract', 'persist.results'], true)) {
             return ['skipped' => true, 'reason' => 'document_already_completed'];
         }
 
