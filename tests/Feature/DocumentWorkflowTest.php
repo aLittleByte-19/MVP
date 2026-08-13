@@ -4,6 +4,7 @@ use App\Models\AuditEvent;
 use App\Models\OriginalDocument;
 use App\Models\WorkflowTask;
 use App\Mvp\Documents\Application\UseCases\StartDocumentWorkflowService;
+use App\Mvp\Documents\Domain\Ports\Outbound\DocumentAiGatewayPort;
 use App\Mvp\Documents\Enums\ProcessingStatus;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Services\WorkflowTaskRunner;
@@ -240,4 +241,25 @@ test('workflow runner rejects a task type without a registered handler', functio
         'taskType' => 'unknown.task',
         'documentId' => 1,
     ]))->toThrow(InvalidArgumentException::class, 'Task workflow non supportato: unknown.task');
+});
+
+test('workflow runner skips bedrock.extract on a document already completed without calling the AI gateway', function () {
+    $document = OriginalDocument::factory()->create([
+        'processing_status' => ProcessingStatus::Completed,
+    ]);
+
+    $ai = Mockery::mock(DocumentAiGatewayPort::class);
+    $ai->shouldNotReceive('splitDocument');
+    $ai->shouldNotReceive('extractFields');
+    app()->instance(DocumentAiGatewayPort::class, $ai);
+
+    $runner = app(WorkflowTaskRunner::class);
+    $result = $runner->handle([
+        'taskToken' => 'token-bedrock-skip',
+        'taskType' => 'bedrock.extract',
+        'documentId' => $document->id,
+    ]);
+
+    expect($result['output']['task_result']['status'])->toBe('skipped')
+        ->and(WorkflowTask::query()->sole()->status)->toBe('skipped');
 });

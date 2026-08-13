@@ -614,21 +614,37 @@ verde ad ogni passaggio (commit separati):
   il docblock della classe lo affermava esplicitamente, ma `execute()` conteneva una guardia
   "documento già completato" prima del match — una regola di idempotenza verso la ridelivery del
   task da Step Functions, non pura traduzione. Per `textract.ocr` la guardia è stata rimossa da qui e
-  spostata in `RunOcrService` (punto sopra). Per `bedrock.extract`/`persist.results` è rimasta
-  nell'adapter: `ProcessDocumentUseCase::process()` è dichiarato `void` e
-  `FinalizeDocumentWorkflowUseCase::currentStatus()` è una lettura pura, nessuno dei due ha un canale
-  per segnalare "skippato" a questo adapter senza cambiare la firma dell'interfaccia (fuori dal
-  perimetro di questo intervento). Il docblock è stato riscritto per dichiarare onestamente questa
-  eccezione invece di negarla — nessun comportamento cambiato per questi due task type. Verificato
-  che nessun `ProcessDocumentUseCase` fosse invocato da un trigger manuale di "rielaborazione" (non
-  esiste: l'unico chiamante è questo stesso adapter), quindi nessun rischio di rompere un percorso
-  di reprocess legittimo spostando la guardia sotto forma di lettura in testa a `process()` in futuro.
-- Suite di dominio invariata nella struttura, cresciuta di 2 test (`RunOcrServiceTest`: guardia
-  idempotenza + fallimento con evento) — **372/372** (eseguita due volte, nessuna flakiness), Pint
-  364 file, Larastan 269 file, Dependency Rule pulita, `/ready` 200 dopo rebuild immagine (il
-  container `app` non ha bind mount: ogni modifica di questi tre punti ha richiesto
-  `docker compose build app` prima di rieseguire i controlli, altrimenti si verificava codice
-  vecchio).
+  spostata in `RunOcrService` (punto sopra). Per `bedrock.extract`/`persist.results` inizialmente
+  lasciata nell'adapter (vedi punto successivo per la chiusura).
+- **Asimmetria `bedrock.extract`/`persist.results` chiusa**: `ProcessDocumentUseCase::process()` era
+  dichiarato `void`, quindi non aveva modo di segnalare uno skip al chiamante — motivo per cui la
+  guardia era rimasta centralizzata nell'adapter invece di seguire `textract.ocr` nel punto sopra.
+  Cambiata la firma in `process(int $documentId): array{skipped: bool}` (stesso identico approccio di
+  `RunOcrUseCase::run()`): `ProcessDocumentService::process()` ora legge lo stato per primo e
+  restituisce `['skipped' => true]` senza toccare Fpdi/storage_path()/Bedrock se il documento è già
+  `Completed`, `['skipped' => false]` a fine pipeline altrimenti. Verificato che nessun
+  `ProcessDocumentUseCase` fosse invocato da un trigger manuale di "rielaborazione" (non esiste:
+  l'unico chiamante è `DocumentWorkflowTaskHandler`), quindi nessun rischio di rompere un percorso di
+  reprocess legittimo. `processDocumentStep()` nell'adapter ora inoltra quel flag invece di
+  restituire sempre `skipped: false`. Per `persist.results` la guardia è stata invece rimossa senza
+  sostituzione: `FinalizeDocumentWorkflowUseCase::currentStatus()` è una lettura pura, chiamarla su un
+  documento già completato è innocuo (restituisce lo stato reale, più informativo del segnale
+  sintetico precedente) — verificato sull'ASL (`infra/localstack/state-machines/document-pipeline.asl.json`)
+  che nessuno stato Choice dipende dal campo `skipped` per `bedrock.extract`/`persist.results`, solo
+  `ValidateStructuredOutput` legge `task_result.status === 'failed'`. La guardia centralizzata in
+  `DocumentWorkflowTaskHandler::execute()` è stata quindi rimossa del tutto: il docblock torna a dire
+  "nessuna regola di business qui", ed è di nuovo vero. Nuovo test Feature
+  (`DocumentWorkflowTest`: "workflow runner skips bedrock.extract on a document already completed
+  without calling the AI gateway", con un mock che fallirebbe se Bedrock venisse chiamato) — non un
+  test `DomainUnit` perché costruire `ProcessDocumentService` richiede l'intero grafo di dipendenze
+  (incluso `WorkflowTaskHeartbeat`, il cui fake era stato rimosso come orfano in un punto precedente
+  di questo log), anche se il path di skip stesso non tocca mai Fpdi.
+- Suite di dominio invariata nella struttura, cresciuta di 3 test (`RunOcrServiceTest`: guardia
+  idempotenza + fallimento con evento; `DocumentWorkflowTest`: skip di `bedrock.extract`) —
+  **373/373** (eseguita due volte, nessuna flakiness), Pint 364 file, Larastan 269 file, Dependency
+  Rule pulita, `/ready` 200 dopo rebuild immagine (il container `app` non ha bind mount: ogni
+  modifica di questi punti ha richiesto `docker compose build app` prima di rieseguire i controlli,
+  altrimenti si verificava codice vecchio).
 
 ## Related documents
 

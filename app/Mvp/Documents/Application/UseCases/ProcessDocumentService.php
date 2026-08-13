@@ -48,8 +48,15 @@ class ProcessDocumentService implements ProcessDocumentUseCase
         private readonly ExtractSubDocumentFieldsUseCase $fieldsExtractor,
     ) {}
 
-    public function process(int $documentId): void
+    public function process(int $documentId): array
     {
+        // Idempotenza verso la ridelivery del task workflow: un retry su un
+        // documento gia' completato non deve rilanciare Bedrock ne'
+        // ricreare i sotto-documenti (vedi DocumentWorkflowTaskHandler).
+        if ($this->documents->findOriginalDocument($documentId)->processingStatus === ProcessingStatus::Completed->value) {
+            return ['skipped' => true];
+        }
+
         $absoluteSource = null;
 
         try {
@@ -104,6 +111,8 @@ class ProcessDocumentService implements ProcessDocumentUseCase
                 @unlink($absoluteSource);
             }
         }
+
+        return ['skipped' => false];
     }
 
     private function handleProcessingFailure(int $documentId, \Throwable $e): void

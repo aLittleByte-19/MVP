@@ -12,5 +12,8 @@ namespace App\Mvp\Documents\Domain\Ports\Inbound;
  */
 interface ProcessDocumentUseCase
 {
-    public function process(int $documentId): void;
+    /**
+     * @return array{skipped: bool}
+     */
+    public function process(int $documentId): array;
 }
