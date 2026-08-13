@@ -4,6 +4,7 @@ namespace App\Mvp\Documents\Application\UseCases;
 
 use App\Exceptions\InvalidAiOutputException;
 use App\Mvp\Documents\Application\Support\OcrRangeReader;
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Events\AiOutputRejected;
 use App\Mvp\Documents\Domain\Events\SubDocumentFieldsExtracted;
 use App\Mvp\Documents\Domain\Ports\Inbound\ExtractSubDocumentFieldsUseCase;
@@ -14,7 +15,6 @@ use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
-use App\Mvp\Documents\Enums\ReviewStatus;
 use App\Mvp\Support\Persistence\TransactionManagerPort;
 use Psr\Log\LoggerInterface;
 

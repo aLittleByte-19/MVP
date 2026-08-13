@@ -5,7 +5,7 @@ use App\Models\ExtractedData;
 use App\Models\SubDocument;
 use App\Mvp\Ai\BedrockService;
 use App\Mvp\Documents\Application\UseCases\ExtractSubDocumentFieldsService;
-use App\Mvp\Documents\Enums\ReviewStatus;
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 
 test('extractFields returns all expected keys on success', function () {
     $this->mock(BedrockService::class, function ($mock) {

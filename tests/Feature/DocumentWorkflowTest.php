@@ -4,8 +4,8 @@ use App\Models\AuditEvent;
 use App\Models\OriginalDocument;
 use App\Models\WorkflowTask;
 use App\Mvp\Documents\Application\UseCases\StartDocumentWorkflowService;
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentAiGatewayPort;
-use App\Mvp\Documents\Enums\ProcessingStatus;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Services\WorkflowTaskRunner;
 use Mockery\MockInterface;
@@ -262,4 +262,15 @@ test('workflow runner skips bedrock.extract on a document already completed with
 
     expect($result['output']['task_result']['status'])->toBe('skipped')
         ->and(WorkflowTask::query()->sole()->status)->toBe('skipped');
+});
+
+test('workflow runner rejects a message whose tenantId does not match the document', function () {
+    $document = OriginalDocument::factory()->create(['tenant_id' => 'tenant-owner']);
+
+    expect(fn () => app(WorkflowTaskRunner::class)->handle([
+        'taskToken' => 'token-tenant-mismatch',
+        'taskType' => 'textract.ocr',
+        'documentId' => $document->id,
+        'tenantId' => 'tenant-intruder',
+    ]))->toThrow(InvalidArgumentException::class, 'tenantId non corrisponde al documento');
 });

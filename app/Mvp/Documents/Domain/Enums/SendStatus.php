@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Mvp\Documents\Enums;
+namespace App\Mvp\Documents\Domain\Enums;
 
 enum SendStatus: string
 {

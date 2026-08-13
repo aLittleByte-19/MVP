@@ -2,12 +2,12 @@
 
 namespace App\Mvp\Documents\Application\UseCases;
 
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Events\DocumentWorkflowCompleted;
 use App\Mvp\Documents\Domain\Ports\Inbound\FinalizeDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
-use App\Mvp\Documents\Enums\ProcessingStatus;
 use Psr\Clock\ClockInterface;
 
 class FinalizeDocumentWorkflowService implements FinalizeDocumentWorkflowUseCase

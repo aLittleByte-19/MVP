@@ -1,20 +1,17 @@
 #!/usr/bin/env bash
 # Verifica meccanica della Dependency Rule (ADR 0010): il livello Domain dei
 # domini esagonali (Documents, Communications) non deve importare ne'
-# referenziare Illuminate\*, Aws\*, o modelli Eloquent (App\Models\*). Le
-# violazioni sono cercate su tutto il contenuto del file, non solo sulle
-# istruzioni "use", cosi' da intercettare anche i nomi pienamente
-# qualificati usati inline.
+# referenziare Illuminate\*, Aws\*, o modelli Eloquent (App\Models\*), ne'
+# il namespace dell'altro dominio (i due domini non si conoscono a vicenda:
+# solo Support/Identity/Workflow/Audit/Observability sono infrastruttura
+# condivisa legittima). Le violazioni sono cercate su tutto il contenuto del
+# file, non solo sulle istruzioni "use", cosi' da intercettare anche i nomi
+# pienamente qualificati usati inline.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 
-DOMAIN_DIRS=(
-  "app/Mvp/Documents/Domain"
-  "app/Mvp/Communications/Domain"
-)
-
-FORBIDDEN_PATTERNS=(
+COMMON_FORBIDDEN_PATTERNS=(
   'Illuminate\\'
   'Aws\\'
   'App\\Models\\'
@@ -22,14 +19,18 @@ FORBIDDEN_PATTERNS=(
 
 violations=0
 
-for dir in "${DOMAIN_DIRS[@]}"; do
+check_dir() {
+  local dir="$1"
+  shift
+  local patterns=("$@")
+
   if [ ! -d "$dir" ]; then
     echo "::error::Cartella dominio attesa non trovata: $dir"
     violations=1
-    continue
+    return
   fi
 
-  for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
+  for pattern in "${patterns[@]}"; do
     matches="$(grep -rnE "$pattern" "$dir" --include='*.php' || true)"
 
     if [ -n "$matches" ]; then
@@ -39,11 +40,14 @@ for dir in "${DOMAIN_DIRS[@]}"; do
       violations=1
     fi
   done
-done
+}
+
+check_dir "app/Mvp/Documents/Domain" "${COMMON_FORBIDDEN_PATTERNS[@]}" 'App\\Mvp\\Communications\\'
+check_dir "app/Mvp/Communications/Domain" "${COMMON_FORBIDDEN_PATTERNS[@]}" 'App\\Mvp\\Documents\\'
 
 if [ "$violations" -ne 0 ]; then
-  echo "Il livello Domain non puo' dipendere da Illuminate\\*, Aws\\*, o da modelli Eloquent (vedi ADR 0010)." >&2
+  echo "Il livello Domain non puo' dipendere da Illuminate\\*, Aws\\*, modelli Eloquent, ne' dal namespace dell'altro dominio (vedi ADR 0010)." >&2
   exit 1
 fi
 
-echo "Dependency Rule rispettata: nessun riferimento a Illuminate\\*, Aws\\*, o App\\Models\\* nel livello Domain."
+echo "Dependency Rule rispettata: nessun riferimento a Illuminate\\*, Aws\\*, App\\Models\\*, o al namespace dell'altro dominio nel livello Domain."

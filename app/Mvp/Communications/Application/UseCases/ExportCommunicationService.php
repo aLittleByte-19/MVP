@@ -2,6 +2,8 @@
 
 namespace App\Mvp\Communications\Application\UseCases;
 
+use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
+use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationNotReadyForExportException;
 use App\Mvp\Communications\Domain\Ports\Inbound\ExportCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationPdfRendererPort;
@@ -9,8 +11,6 @@ use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationPdfContext;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationRecord;
 use App\Mvp\Communications\Domain\ValueObjects\RenderedCommunicationPdf;
-use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
-use App\Mvp\Communications\Enums\CommunicationStatus;
 
 class ExportCommunicationService implements ExportCommunicationUseCase
 {

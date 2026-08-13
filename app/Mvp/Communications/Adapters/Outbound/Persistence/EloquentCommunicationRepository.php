@@ -3,11 +3,13 @@
 namespace App\Mvp\Communications\Adapters\Outbound\Persistence;
 
 use App\Models\Communication;
+use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationPage;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationRecord;
 use App\Mvp\Communications\Domain\ValueObjects\NewCommunication;
-use App\Mvp\Communications\Enums\CommunicationStatus;
+use Illuminate\Support\Str;
 
 /**
  * Adapter secondario: implementa {@see CommunicationRepository} sopra Eloquent.
@@ -26,7 +28,7 @@ class EloquentCommunicationRepository implements CommunicationRepository
 
     public function updateCommunication(int $id, CommunicationChanges $changes): void
     {
-        Communication::query()->whereKey($id)->firstOrFail()->update($changes->toArray());
+        Communication::query()->whereKey($id)->firstOrFail()->update($this->snakeCaseKeys($changes->toArray()));
     }
 
     public function deleteCommunication(int $id): void
@@ -34,7 +36,7 @@ class EloquentCommunicationRepository implements CommunicationRepository
         Communication::query()->whereKey($id)->firstOrFail()->delete();
     }
 
-    public function paginateApprovedCommunications(string $tenantId, array $filters, int $page, int $perPage): array
+    public function paginateApprovedCommunications(string $tenantId, array $filters, int $page, int $perPage): CommunicationPage
     {
         $query = Communication::query()
             ->where('tenant_id', $tenantId)
@@ -56,12 +58,31 @@ class EloquentCommunicationRepository implements CommunicationRepository
 
         $paginator = $query->latest()->paginate(perPage: $perPage, page: $page, columns: ['id']);
 
-        return [
-            'ids' => $paginator->pluck('id')->map(fn ($id) => (int) $id)->all(),
-            'total' => $paginator->total(),
-            'page' => $paginator->currentPage(),
-            'perPage' => $paginator->perPage(),
-        ];
+        return new CommunicationPage(
+            communicationIds: $paginator->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            total: $paginator->total(),
+            page: $paginator->currentPage(),
+            perPage: $paginator->perPage(),
+        );
+    }
+
+    /**
+     * CommunicationChanges usa chiavi camelCase (i nomi dei suoi metodi
+     * with*()), non i nomi delle colonne: la traduzione verso lo schema DB
+     * e' responsabilita' di questo adapter, non del dominio.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function snakeCaseKeys(array $attributes): array
+    {
+        $result = [];
+
+        foreach ($attributes as $key => $value) {
+            $result[Str::snake($key)] = $value;
+        }
+
+        return $result;
     }
 
     private function toRecord(Communication $communication): CommunicationRecord

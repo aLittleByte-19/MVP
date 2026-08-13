@@ -2,6 +2,7 @@
 
 namespace App\Mvp\Documents\Application\UseCases;
 
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Events\SubDocumentExtractedDataCorrected;
 use App\Mvp\Documents\Domain\Events\SubDocumentManuallyValidated;
 use App\Mvp\Documents\Domain\Exceptions\MissingExtractedDataException;
@@ -10,7 +11,6 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
-use App\Mvp\Documents\Enums\ReviewStatus;
 use App\Mvp\Identity\MvpUser;
 
 class ReviewDocumentService implements ReviewDocumentUseCase

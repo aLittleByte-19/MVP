@@ -2,14 +2,14 @@
 
 namespace App\Mvp\Communications\Application\UseCases;
 
+use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
+use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverDegraded;
 use App\Mvp\Communications\Domain\Events\CommunicationWorkflowCompleted;
 use App\Mvp\Communications\Domain\Ports\Inbound\FinalizeCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
-use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
-use App\Mvp\Communications\Enums\CoverImageStatus;
 use Psr\Clock\ClockInterface;
 
 class FinalizeCommunicationService implements FinalizeCommunicationUseCase

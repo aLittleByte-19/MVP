@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Mvp\Communications\Enums;
+namespace App\Mvp\Communications\Domain\Enums;
 
 enum CommunicationStatus: string
 {

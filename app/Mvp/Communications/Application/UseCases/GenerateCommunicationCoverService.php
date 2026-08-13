@@ -2,6 +2,8 @@
 
 namespace App\Mvp\Communications\Application\UseCases;
 
+use App\Mvp\Communications\Domain\Enums\CoverImageSource;
+use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverDegraded;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverGenerated;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationCoverUseCase;
@@ -11,8 +13,6 @@ use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPor
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationDraftBuilder;
-use App\Mvp\Communications\Enums\CoverImageSource;
-use App\Mvp\Communications\Enums\CoverImageStatus;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use Psr\Log\LoggerInterface;
 

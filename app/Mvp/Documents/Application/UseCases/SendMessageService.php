@@ -2,6 +2,7 @@
 
 namespace App\Mvp\Documents\Application\UseCases;
 
+use App\Mvp\Documents\Domain\Enums\SendStatus;
 use App\Mvp\Documents\Domain\Events\SendMessageExported;
 use App\Mvp\Documents\Domain\Events\SendMessageOverridesCorrected;
 use App\Mvp\Documents\Domain\Ports\Inbound\SendMessageUseCase;
@@ -12,7 +13,6 @@ use App\Mvp\Documents\Domain\ValueObjects\RenderedSendMessage;
 use App\Mvp\Documents\Domain\ValueObjects\SendMessageComposition;
 use App\Mvp\Documents\Domain\ValueObjects\SendMessageContext;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
-use App\Mvp\Documents\Enums\SendStatus;
 use App\Mvp\Identity\MvpUser;
 use Illuminate\Support\Str;
 

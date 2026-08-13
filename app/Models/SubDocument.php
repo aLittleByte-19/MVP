@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use App\Mvp\Documents\Enums\ReviewStatus;
-use App\Mvp\Documents\Enums\SendStatus;
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
+use App\Mvp\Documents\Domain\Enums\SendStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;

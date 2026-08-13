@@ -2,13 +2,13 @@
 
 namespace App\Mvp\Documents\Domain\ValueObjects;
 
-use App\Mvp\Documents\Enums\ReviewStatus;
-use App\Mvp\Documents\Enums\SendStatus;
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
+use App\Mvp\Documents\Domain\Enums\SendStatus;
 
 /**
  * Modifiche da applicare a un SubDocument, costruite un campo alla volta
  * invece che come array associativo con chiavi a stringa (vedi ADR 0010 e
- * OriginalDocumentChanges).
+ * OriginalDocumentChanges, incluso il criterio per le chiavi camelCase).
  */
 final class SubDocumentChanges
 {
@@ -24,32 +24,32 @@ final class SubDocumentChanges
 
     public function withReviewStatus(ReviewStatus $status): self
     {
-        return $this->with('review_status', $status);
+        return $this->with('reviewStatus', $status);
     }
 
     public function withErrorMessage(?string $message): self
     {
-        return $this->with('error_message', $message);
+        return $this->with('errorMessage', $message);
     }
 
     public function withSendStatus(SendStatus $status): self
     {
-        return $this->with('send_status', $status);
+        return $this->with('sendStatus', $status);
     }
 
     public function withSendRecipientOverride(?string $recipient): self
     {
-        return $this->with('send_recipient_override', $recipient);
+        return $this->with('sendRecipientOverride', $recipient);
     }
 
     public function withSendSubjectOverride(?string $subject): self
     {
-        return $this->with('send_subject_override', $subject);
+        return $this->with('sendSubjectOverride', $subject);
     }
 
     public function withSendBodyOverride(?string $body): self
     {
-        return $this->with('send_body_override', $body);
+        return $this->with('sendBodyOverride', $body);
     }
 
     private function with(string $attribute, mixed $value): self

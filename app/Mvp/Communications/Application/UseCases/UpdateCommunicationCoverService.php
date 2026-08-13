@@ -2,6 +2,9 @@
 
 namespace App\Mvp\Communications\Application\UseCases;
 
+use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
+use App\Mvp\Communications\Domain\Enums\CoverImageSource;
+use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverRemoved;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverReplaced;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationNotEditableException;
@@ -10,9 +13,6 @@ use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
-use App\Mvp\Communications\Enums\CommunicationStatus;
-use App\Mvp\Communications\Enums\CoverImageSource;
-use App\Mvp\Communications\Enums\CoverImageStatus;
 use App\Mvp\Identity\MvpUser;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 

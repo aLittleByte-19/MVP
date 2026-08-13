@@ -4,11 +4,11 @@ namespace App\Mvp\Documents\Application\UseCases;
 
 use App\Mvp\Audit\Services\AuditLogger;
 use App\Mvp\Documents\Domain\Commands\UploadDocumentCommand;
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Ports\Inbound\UploadDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
 use App\Mvp\Documents\Domain\ValueObjects\NewOriginalDocument;
-use App\Mvp\Documents\Enums\ProcessingStatus;
 use App\Mvp\Workflow\Support\WorkflowContext;
 
 /**

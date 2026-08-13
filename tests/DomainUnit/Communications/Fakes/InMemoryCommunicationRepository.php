@@ -4,6 +4,7 @@ namespace Tests\DomainUnit\Communications\Fakes;
 
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationPage;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationRecord;
 use App\Mvp\Communications\Domain\ValueObjects\NewCommunication;
 
@@ -60,9 +61,9 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
         unset($this->rows[$id]);
     }
 
-    public function paginateApprovedCommunications(string $tenantId, array $filters, int $page, int $perPage): array
+    public function paginateApprovedCommunications(string $tenantId, array $filters, int $page, int $perPage): CommunicationPage
     {
-        return ['ids' => [], 'total' => 0, 'page' => $page, 'perPage' => $perPage];
+        return new CommunicationPage(communicationIds: [], total: 0, page: $page, perPage: $perPage);
     }
 
     /**
@@ -71,10 +72,18 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
      */
     private function normalize(array $attributes): array
     {
-        return array_map(
-            static fn (mixed $value): mixed => $value instanceof \BackedEnum ? $value->value : $value,
-            $attributes,
-        );
+        $normalized = [];
+
+        // CommunicationChanges usa chiavi camelCase (vedi ADR 0010): questo
+        // fake imita la stessa conversione che l'adapter Eloquent applica
+        // prima di scrivere, per restare fedele alle righe (snake_case)
+        // seminate da seed().
+        foreach ($attributes as $key => $value) {
+            $snakeKey = strtolower((string) preg_replace('/(?<!^)[A-Z]/', '_$0', $key));
+            $normalized[$snakeKey] = $value instanceof \BackedEnum ? $value->value : $value;
+        }
+
+        return $normalized;
     }
 
     /**

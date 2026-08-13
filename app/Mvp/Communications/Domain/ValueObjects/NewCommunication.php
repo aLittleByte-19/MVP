@@ -2,9 +2,9 @@
 
 namespace App\Mvp\Communications\Domain\ValueObjects;
 
-use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
-use App\Mvp\Communications\Enums\CommunicationStatus;
-use App\Mvp\Communications\Enums\CoverImageStatus;
+use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
+use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
+use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 
 /**
  * Dati per creare una nuova Communication. A differenza di

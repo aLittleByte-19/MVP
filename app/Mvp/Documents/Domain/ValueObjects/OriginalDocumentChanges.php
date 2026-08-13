@@ -2,15 +2,15 @@
 
 namespace App\Mvp\Documents\Domain\ValueObjects;
 
-use App\Mvp\Documents\Enums\ProcessingStatus;
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 
 /**
  * Modifiche da applicare a un OriginalDocument, costruite un campo alla
- * volta invece che come array associativo con chiavi a stringa: il nome
- * della colonna DB resta un dettaglio di questa classe (Domain, non
- * Application), non qualcosa che ogni caso d'uso deve scrivere a mano
- * (vedi ADR 0010). L'adapter di persistenza consuma `toArray()` cosi'
- * com'e' — nessuna seconda traduzione dei nomi dei campi.
+ * volta invece che come array associativo con chiavi a stringa (vedi ADR
+ * 0010). Le chiavi interne sono camelCase, come i nomi dei metodi: la
+ * traduzione verso i nomi delle colonne DB (snake_case) e' responsabilita'
+ * dell'adapter di persistenza, non di questa classe — che quindi non
+ * incorpora lo schema del database.
  */
 final class OriginalDocumentChanges
 {
@@ -26,57 +26,57 @@ final class OriginalDocumentChanges
 
     public function withProcessingStatus(ProcessingStatus $status): self
     {
-        return $this->with('processing_status', $status);
+        return $this->with('processingStatus', $status);
     }
 
     public function withErrorMessage(?string $message): self
     {
-        return $this->with('error_message', $message);
+        return $this->with('errorMessage', $message);
     }
 
     public function withWorkflowExecutionArn(?string $arn): self
     {
-        return $this->with('workflow_execution_arn', $arn);
+        return $this->with('workflowExecutionArn', $arn);
     }
 
     public function withWorkflowStartedAt(\DateTimeImmutable $at): self
     {
-        return $this->with('workflow_started_at', $at);
+        return $this->with('workflowStartedAt', $at);
     }
 
     public function withWorkflowCompletedAt(?\DateTimeImmutable $at): self
     {
-        return $this->with('workflow_completed_at', $at);
+        return $this->with('workflowCompletedAt', $at);
     }
 
     public function withWorkflowFailedAt(?\DateTimeImmutable $at): self
     {
-        return $this->with('workflow_failed_at', $at);
+        return $this->with('workflowFailedAt', $at);
     }
 
     public function withWorkflowFailureReason(?string $reason): self
     {
-        return $this->with('workflow_failure_reason', $reason);
+        return $this->with('workflowFailureReason', $reason);
     }
 
     public function withS3Bucket(?string $bucket): self
     {
-        return $this->with('s3_bucket', $bucket);
+        return $this->with('s3Bucket', $bucket);
     }
 
     public function withS3Key(?string $key): self
     {
-        return $this->with('s3_key', $key);
+        return $this->with('s3Key', $key);
     }
 
     public function withTextractJobId(?string $jobId): self
     {
-        return $this->with('textract_job_id', $jobId);
+        return $this->with('textractJobId', $jobId);
     }
 
     public function withOcrText(?string $text): self
     {
-        return $this->with('ocr_text', $text);
+        return $this->with('ocrText', $text);
     }
 
     /**
@@ -84,12 +84,12 @@ final class OriginalDocumentChanges
      */
     public function withOcrPages(?array $pages): self
     {
-        return $this->with('ocr_pages', $pages);
+        return $this->with('ocrPages', $pages);
     }
 
     public function withOcrConfidenceAvg(?float $avg): self
     {
-        return $this->with('ocr_confidence_avg', $avg);
+        return $this->with('ocrConfidenceAvg', $avg);
     }
 
     private function with(string $attribute, mixed $value): self
