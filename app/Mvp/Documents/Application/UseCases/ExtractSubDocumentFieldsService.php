@@ -15,6 +15,7 @@ use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
 use App\Mvp\Documents\Enums\ReviewStatus;
+use App\Mvp\Support\Persistence\TransactionManagerPort;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -34,6 +35,7 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
         private readonly DocumentEventDispatcherPort $events,
         private readonly LoggerInterface $logger,
         private readonly OcrRangeReader $ocrRange,
+        private readonly TransactionManagerPort $tx,
         private readonly int $confidenceThreshold = 80,
     ) {}
 
@@ -55,18 +57,20 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
             $confidenceScore = $this->computeConfidenceScore($aiFields, $subDocument, $original);
             $reviewStatus = $this->reviewStatusForConfidence($confidenceScore);
 
-            $this->documents->updateSubDocument($subDocumentId, SubDocumentChanges::none()
-                ->withReviewStatus($reviewStatus)
-                ->withErrorMessage(null));
-            $this->documents->saveExtractedData($subDocumentId, ExtractedDataChanges::none()
-                ->withEmployeeFirstName($fields['employee_first_name'])
-                ->withEmployeeLastName($fields['employee_last_name'])
-                ->withCompanyName($fields['company_name'])
-                ->withDocumentDate($fields['document_date'])
-                ->withDocumentType($fields['document_type'])
-                ->withDescription($fields['description'])
-                ->withConfidenceScore($confidenceScore)
-                ->withAiPayload($aiFields));
+            $this->tx->run(function () use ($subDocumentId, $reviewStatus, $fields, $confidenceScore, $aiFields): void {
+                $this->documents->updateSubDocument($subDocumentId, SubDocumentChanges::none()
+                    ->withReviewStatus($reviewStatus)
+                    ->withErrorMessage(null));
+                $this->documents->saveExtractedData($subDocumentId, ExtractedDataChanges::none()
+                    ->withEmployeeFirstName($fields['employee_first_name'])
+                    ->withEmployeeLastName($fields['employee_last_name'])
+                    ->withCompanyName($fields['company_name'])
+                    ->withDocumentDate($fields['document_date'])
+                    ->withDocumentType($fields['document_type'])
+                    ->withDescription($fields['description'])
+                    ->withConfidenceScore($confidenceScore)
+                    ->withAiPayload($aiFields));
+            });
 
             $this->events->dispatch(new SubDocumentFieldsExtracted(
                 $subDocumentId,
@@ -83,10 +87,12 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
                 'errors' => $e->errors(),
             ]);
 
-            $this->documents->deleteExtractedData($subDocumentId);
-            $this->documents->updateSubDocument($subDocumentId, SubDocumentChanges::none()
-                ->withReviewStatus(ReviewStatus::Quarantined)
-                ->withErrorMessage($safeMessage));
+            $this->tx->run(function () use ($subDocumentId, $safeMessage): void {
+                $this->documents->deleteExtractedData($subDocumentId);
+                $this->documents->updateSubDocument($subDocumentId, SubDocumentChanges::none()
+                    ->withReviewStatus(ReviewStatus::Quarantined)
+                    ->withErrorMessage($safeMessage));
+            });
             $this->events->dispatch(new AiOutputRejected($subDocumentId, $original->tenantId, $e->operation(), $e->errors()));
         } catch (\Throwable $e) {
             $this->logger->error('ExtractSubDocumentFieldsService: extraction failed', ['sub_document_id' => $subDocumentId, 'message' => $e->getMessage()]);

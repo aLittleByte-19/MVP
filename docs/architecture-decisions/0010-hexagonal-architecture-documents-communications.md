@@ -581,6 +581,54 @@ verde ad ogni passaggio (commit separati):
   scelta esplicita di perimetro (vedi sopra), e introdurre un value object "Actor" di dominio
   separato da tradurre a ogni confine avrebbe richiesto toccare ogni adapter primario dei due
   domini per un guadagno di purezza marginale, non un problema concreto riscontrato.
+- **Nessuna scrittura DB era transazionale, in nessun punto di `app/Mvp`**: gap reale, non un
+  trade-off dichiarato da nessuna parte. Non risolvibile con un `DB::transaction()` generico attorno
+  a interi casi d'uso come `ProcessDocumentService::process()` — quel metodo intreccia scritture DB a
+  chiamate esterne lente (Bedrock, minuti per segmento, da cui l'heartbeat Step Functions esistente):
+  tenere una transazione aperta per tutta la sua durata avrebbe tenuto lock/connessioni DB aperti
+  troppo a lungo, un problema peggiore di quello che si voleva risolvere. Introdotta invece
+  `TransactionManagerPort` (`App\Mvp\Support\Persistence`, adapter `LaravelTransactionManager` su
+  `DB::transaction()`, binding singleton condiviso fra i due domini come Clock/UniqueIdGenerator: la
+  transazionalità non ha semantica di dominio) e usata solo dove la sequenza di scritture è pura,
+  senza I/O esterno nel mezzo: `EloquentDocumentRepository::deleteExistingSubDocuments()` (elimina N
+  sotto-documenti in loop) e `::deleteOriginalDocumentWithWorkflowTasks()` (2 scritture) avvolte
+  direttamente con `DB::transaction()` nell'adapter, che già dipende da Eloquent; i due punti di
+  scrittura doppia in `ExtractSubDocumentFieldsService::extractAndSaveFieldsWithContext()` (percorso
+  di successo: `updateSubDocument`+`saveExtractedData`; percorso di quarantena:
+  `deleteExtractedData`+`updateSubDocument`) avvolti con la nuova porta, iniettata nel binding del
+  container. Nessun altro punto della codebase aveva scritture multiple pure sullo stesso confine
+  (`CommunicationRepository` non ha metodi multi-statement).
+- **`RunOcrService` non gestiva mai un proprio fallimento**: a differenza di
+  `ProcessDocumentService`/`ExtractSubDocumentFieldsService`, non aveva alcun try/catch — un errore
+  Textract arrivava solo a `DocumentWorkflowTaskHandler::onFailure()`, che scrive lo stato `Failed`
+  con un `Model::update()` grezzo senza dispatch di eventi: nessun audit, nessuna metrica per i
+  fallimenti OCR, a differenza di ogni altro fallimento della pipeline. Aggiunto try/catch che
+  dispatcha `DocumentProcessingFailed` (lo stesso evento già usato da `ProcessDocumentService`, non
+  serviva un evento nuovo) prima di rilanciare; `onFailure()` continua a girare dopo, ridondante ma
+  innocuo, stesso pattern già presente per `bedrock.extract`. Nello stesso metodo spostata anche la
+  guardia "documento già completato" per `textract.ocr`, che prima viveva centralizzata in
+  `DocumentWorkflowTaskHandler::execute()`: `RunOcrUseCase::run()` restituisce già un array con
+  `skipped`, quindi non serviva duplicare la logica nell'adapter — a differenza di
+  `bedrock.extract`/`persist.results`, dove è rimasta (vedi punto successivo).
+- **`DocumentWorkflowTaskHandler` dichiarava "nessuna regola di business qui" pur contenendone una**:
+  il docblock della classe lo affermava esplicitamente, ma `execute()` conteneva una guardia
+  "documento già completato" prima del match — una regola di idempotenza verso la ridelivery del
+  task da Step Functions, non pura traduzione. Per `textract.ocr` la guardia è stata rimossa da qui e
+  spostata in `RunOcrService` (punto sopra). Per `bedrock.extract`/`persist.results` è rimasta
+  nell'adapter: `ProcessDocumentUseCase::process()` è dichiarato `void` e
+  `FinalizeDocumentWorkflowUseCase::currentStatus()` è una lettura pura, nessuno dei due ha un canale
+  per segnalare "skippato" a questo adapter senza cambiare la firma dell'interfaccia (fuori dal
+  perimetro di questo intervento). Il docblock è stato riscritto per dichiarare onestamente questa
+  eccezione invece di negarla — nessun comportamento cambiato per questi due task type. Verificato
+  che nessun `ProcessDocumentUseCase` fosse invocato da un trigger manuale di "rielaborazione" (non
+  esiste: l'unico chiamante è questo stesso adapter), quindi nessun rischio di rompere un percorso
+  di reprocess legittimo spostando la guardia sotto forma di lettura in testa a `process()` in futuro.
+- Suite di dominio invariata nella struttura, cresciuta di 2 test (`RunOcrServiceTest`: guardia
+  idempotenza + fallimento con evento) — **372/372** (eseguita due volte, nessuna flakiness), Pint
+  364 file, Larastan 269 file, Dependency Rule pulita, `/ready` 200 dopo rebuild immagine (il
+  container `app` non ha bind mount: ogni modifica di questi tre punti ha richiesto
+  `docker compose build app` prima di rieseguire i controlli, altrimenti si verificava codice
+  vecchio).
 
 ## Related documents
 

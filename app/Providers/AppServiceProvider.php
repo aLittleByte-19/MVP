@@ -153,6 +153,8 @@ use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Support\Clock\SystemClock;
 use App\Mvp\Support\Identifiers\RandomUuidGenerator;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
+use App\Mvp\Support\Persistence\LaravelTransactionManager;
+use App\Mvp\Support\Persistence\TransactionManagerPort;
 use App\Mvp\Workflow\Adapters\Outbound\SfnWorkflowEngineAdapter;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
@@ -258,6 +260,10 @@ class AppServiceProvider extends ServiceProvider
         // definita in App\Mvp\Support\Identifiers (vedi ADR 0010).
         $this->app->singleton(UniqueIdGeneratorPort::class, RandomUuidGenerator::class);
 
+        // Confine transazionale condiviso: stessa logica di Clock/UniqueId
+        // sopra, nessuna semantica di dominio (vedi ADR 0010).
+        $this->app->singleton(TransactionManagerPort::class, LaravelTransactionManager::class);
+
         // --- Dominio Documents: porta -> adapter (vedi ADR 0010) ---
         $this->app->singleton(OcrGatewayPort::class, TextractOcrAdapter::class);
         $this->app->singleton(DocumentAiGatewayPort::class, BedrockDocumentAiAdapter::class);
@@ -286,6 +292,7 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(DocumentEventDispatcherPort::class),
                 $app->make(LoggerInterface::class),
                 $app->make(OcrRangeReader::class),
+                $app->make(TransactionManagerPort::class),
                 max(0, min(100, (int) config('services.bedrock.mvp_confidence_threshold', 80))),
             );
         });

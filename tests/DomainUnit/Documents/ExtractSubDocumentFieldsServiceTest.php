@@ -8,6 +8,7 @@ use App\Mvp\Documents\Domain\Events\SubDocumentFieldsExtracted;
 use Psr\Log\NullLogger;
 use Tests\DomainUnit\Documents\Fakes\FakeDocumentAiGateway;
 use Tests\DomainUnit\Documents\Fakes\InMemoryDocumentRepository;
+use Tests\DomainUnit\Documents\Fakes\PassthroughTransactionManager;
 use Tests\DomainUnit\Documents\Fakes\RecordingDocumentEventDispatcher;
 
 /**
@@ -29,6 +30,7 @@ function extractSubDocumentFieldsService(
         $events,
         new NullLogger,
         new OcrRangeReader($ai),
+        new PassthroughTransactionManager,
         80,
     );
 }
