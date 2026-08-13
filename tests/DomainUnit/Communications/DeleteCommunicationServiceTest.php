@@ -3,6 +3,7 @@
 use App\Mvp\Communications\Application\UseCases\DeleteCommunicationService;
 use App\Mvp\Communications\Domain\Events\CommunicationDeleted;
 use App\Mvp\Support\Identity\Actor;
+use Psr\Log\NullLogger;
 use Tests\DomainUnit\Communications\Fakes\FakeCommunicationCoverStorage;
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
@@ -25,7 +26,7 @@ test('delete removes the communication and its cover, then dispatches Communicat
     $storage->store('communications/covers/1/x.png', 'bytes');
     $events = new RecordingEventDispatcher;
 
-    (new DeleteCommunicationService($repository, $storage, $events))->delete(1, fakeDeleteCommunicationActor());
+    (new DeleteCommunicationService($repository, $storage, $events, new NullLogger))->delete(1, fakeDeleteCommunicationActor());
 
     expect($storage->deletedPaths())->toContain('communications/covers/1/x.png')
         ->and($events->hasDispatched(CommunicationDeleted::class))->toBeTrue()
@@ -38,8 +39,22 @@ test('delete does not touch storage when there is no cover', function () {
     $storage = new FakeCommunicationCoverStorage;
     $events = new RecordingEventDispatcher;
 
-    (new DeleteCommunicationService($repository, $storage, $events))->delete(1, fakeDeleteCommunicationActor());
+    (new DeleteCommunicationService($repository, $storage, $events, new NullLogger))->delete(1, fakeDeleteCommunicationActor());
 
     expect($storage->deletedPaths())->toBeEmpty()
+        ->and($events->hasDispatched(CommunicationDeleted::class))->toBeTrue();
+});
+
+test('delete succeeds and still dispatches CommunicationDeleted when storage cleanup fails', function () {
+    $repository = new InMemoryCommunicationRepository;
+    $repository->seed(1, ['cover_image_path' => 'communications/covers/1/x.png']);
+    $storage = new FakeCommunicationCoverStorage;
+    $storage->store('communications/covers/1/x.png', 'bytes');
+    $storage->willThrowOnDelete(new RuntimeException('S3 non raggiungibile'));
+    $events = new RecordingEventDispatcher;
+
+    (new DeleteCommunicationService($repository, $storage, $events, new NullLogger))->delete(1, fakeDeleteCommunicationActor());
+
+    expect(fn () => $repository->findCommunication(1))->toThrow(RuntimeException::class)
         ->and($events->hasDispatched(CommunicationDeleted::class))->toBeTrue();
 });

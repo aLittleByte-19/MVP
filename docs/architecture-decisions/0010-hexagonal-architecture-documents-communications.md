@@ -956,6 +956,26 @@ verde ad ogni passaggio (commit separati):
     Rule pulita, DI verificata dal vivo via tinker, `/ready` 200.
   - **Progetto A concluso**: tutte e tre le fasi pianificate (Fase 0 `SubDocument`, Fase 1
     `OriginalDocument`, Fase 2 `Communication`) sono complete.
+- **Resilienza alla cancellazione: cleanup storage non blocca più l'eliminazione**: revisione finale
+  dell'intera architettura, non un progetto pianificato. `DeleteDocumentService`/
+  `DeleteCommunicationService` cancellavano sempre il record DB prima del file su storage (ordine
+  corretto: un guasto di storage lascia un file orfano, non un riferimento pendente — vedi "Trade-off
+  noto" più sotto), ma lasciavano propagare l'eccezione di `storage->delete()` senza catch: un blip
+  di rete verso S3 faceva fallire con 500 un'eliminazione già avvenuta lato DB, mostrando un errore
+  per un'operazione che dal punto di vista dell'utente era riuscita. Il pattern corretto esisteva già
+  nella stessa codebase (`ProcessDocumentService::deleteStoragePaths()`, catch + `logger->warning()`)
+  ma non era stato applicato ai due `Delete*Service`: incoerenza fra due punti dello stesso dominio
+  che fanno la stessa cosa in due modi diversi, non un trade-off dichiarato. Entrambi guadagnano un
+  `LoggerInterface $logger` iniettato; il `storage->delete()` (entrambi i punti di
+  `DeleteDocumentService`, l'unico di `DeleteCommunicationService`) è avvolto in try/catch che logga
+  un warning invece di rilanciare.
+  - Nuovi test: `DeleteDocumentServiceTest`/`DeleteCommunicationServiceTest` guadagnano un caso "storage
+    cleanup fallisce" (nuovo `willThrowOnDelete()` su `FakeDocumentStorage`/`FakeCommunicationCoverStorage`,
+    stesso pattern di `willThrowOnStore()` già esistente su quest'ultimo) che verifica: nessuna
+    eccezione propagata, il record resta cancellato dal repository, l'evento di dominio viene
+    comunque dispatchato.
+  - **399/399** (eseguita due volte, nessuna flakiness), Pint 374 file, Larastan 277 file, Dependency
+    Rule pulita, DI verificata dal vivo via tinker, `/ready` 200.
 
 ## Related documents
 

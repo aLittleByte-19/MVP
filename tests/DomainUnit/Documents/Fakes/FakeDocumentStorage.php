@@ -12,6 +12,13 @@ final class FakeDocumentStorage implements DocumentStoragePort
     /** @var list<string> */
     private array $deleted = [];
 
+    private ?\Throwable $deleteException = null;
+
+    public function willThrowOnDelete(\Throwable $exception): void
+    {
+        $this->deleteException = $exception;
+    }
+
     public function storeFromLocalPath(string $absoluteSourcePath, string $directory): string
     {
         $path = trim($directory, '/').'/fake-'.substr(md5($absoluteSourcePath), 0, 12).'.pdf';
@@ -32,6 +39,10 @@ final class FakeDocumentStorage implements DocumentStoragePort
 
     public function delete(string $path): void
     {
+        if ($this->deleteException !== null) {
+            throw $this->deleteException;
+        }
+
         $this->deleted[] = $path;
         unset($this->files[$path]);
     }
