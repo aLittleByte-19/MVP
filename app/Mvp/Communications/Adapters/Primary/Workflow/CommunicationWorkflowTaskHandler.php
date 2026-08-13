@@ -2,24 +2,25 @@
 
 namespace App\Mvp\Communications\Adapters\Primary\Workflow;
 
-use App\Models\Communication;
 use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Domain\Ports\Inbound\FinalizeCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationCoverUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationTextUseCase;
+use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
+use App\Mvp\Workflow\Contracts\WorkflowSubject;
 use App\Mvp\Workflow\Contracts\WorkflowTaskHandler;
-use Illuminate\Database\Eloquent\Model;
 
 /**
  * Adapter primario guidato da Step Functions/SQS: traduce ogni task di
  * callback nella chiamata al caso d'uso corrispondente tramite la sua porta
  * primaria. Nessuna regola di business qui — solo dispatch per tipo di task
- * e traduzione del risultato nella forma che il runner si aspetta. Implementa
- * il contratto condiviso WorkflowTaskHandler (infrastruttura di Workflow,
- * fuori dal perimetro esagonale: vedi ADR 0010), quindi puo' legittimamente
- * risolvere/aggiornare l'aggregato Eloquent per le proprie responsabilita' di
- * adapter (resolveSubject, onFailure) — le decisioni di dominio restano nei
- * casi d'uso iniettati.
+ * e traduzione del risultato nella forma che il runner si aspetta. Risolve e
+ * aggiorna l'aggregato Communication attraverso {@see CommunicationRepository}
+ * (la stessa porta secondaria usata dai casi d'uso), non attraverso Eloquent
+ * diretto: implementa il contratto condiviso WorkflowTaskHandler passando
+ * solo {@see WorkflowSubject} (id + tenant) al runner, che resta cosi'
+ * domain-agnostic.
  */
 class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
 {
@@ -27,6 +28,7 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
         private readonly GenerateCommunicationTextUseCase $generateText,
         private readonly GenerateCommunicationCoverUseCase $generateCover,
         private readonly FinalizeCommunicationUseCase $finalize,
+        private readonly CommunicationRepository $communications,
     ) {}
 
     /**
@@ -50,7 +52,7 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
     /**
      * @param  array<string, mixed>  $message
      */
-    public function resolveSubject(array $message): Model
+    public function resolveSubject(array $message): WorkflowSubject
     {
         $communicationId = (int) ($message['communicationId'] ?? $message['communication_id'] ?? 0);
 
@@ -58,7 +60,7 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
             throw new \InvalidArgumentException('Messaggio workflow non valido: communicationId e\' obbligatorio.');
         }
 
-        $communication = Communication::query()->findOrFail($communicationId);
+        $communication = $this->communications->findCommunication($communicationId);
 
         // Difesa in profondita': l'autorizzazione vera vive al bordo HTTP
         // (i messaggi di workflow sono generati dalla pipeline stessa, non
@@ -67,25 +69,23 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
         // messaggio corrotto o malformato che non va eseguito silenziosamente.
         $tenantId = $message['tenantId'] ?? $message['tenant_id'] ?? null;
 
-        if ($tenantId !== null && $communication->tenant_id !== $tenantId) {
+        if ($tenantId !== null && $communication->tenantId !== $tenantId) {
             throw new \InvalidArgumentException("Messaggio workflow non valido: tenantId non corrisponde alla comunicazione {$communicationId}.");
         }
 
-        return $communication;
+        return new WorkflowSubject($communication->id, $communication->tenantId);
     }
 
     /**
      * @param  array<string, mixed>  $message
      * @return array<string, mixed>
      */
-    public function execute(string $taskType, Model $subject, array $message): array
+    public function execute(string $taskType, WorkflowSubject $subject, array $message): array
     {
-        $communication = $this->asCommunication($subject);
-
         return match ($taskType) {
-            'communication.generate_text' => $this->generateTextStep($communication),
-            'communication.generate_cover' => $this->generateCoverStep($communication),
-            'communication.finalize' => $this->finalizeStep($communication),
+            'communication.generate_text' => $this->generateTextStep($subject->id),
+            'communication.generate_cover' => $this->generateCoverStep($subject->id),
+            'communication.finalize' => $this->finalizeStep($subject->id),
             default => throw new \InvalidArgumentException("Task workflow non supportato: {$taskType}"),
         };
     }
@@ -93,9 +93,9 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
     /**
      * @return array<string, mixed>
      */
-    private function generateTextStep(Communication $communication): array
+    private function generateTextStep(int $communicationId): array
     {
-        $result = $this->generateText->generate($communication->id);
+        $result = $this->generateText->generate($communicationId);
 
         if ($result['skipped']) {
             return ['skipped' => true, 'reason' => 'text_already_generated'];
@@ -107,9 +107,9 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
     /**
      * @return array<string, mixed>
      */
-    private function generateCoverStep(Communication $communication): array
+    private function generateCoverStep(int $communicationId): array
     {
-        $result = $this->generateCover->generate($communication->id);
+        $result = $this->generateCover->generate($communicationId);
 
         if ($result['skipped']) {
             return ['skipped' => true, 'reason' => 'cover_already_available'];
@@ -121,9 +121,9 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
     /**
      * @return array<string, mixed>
      */
-    private function finalizeStep(Communication $communication): array
+    private function finalizeStep(int $communicationId): array
     {
-        $result = $this->finalize->finalize($communication->id);
+        $result = $this->finalize->finalize($communicationId);
 
         return [
             'skipped' => $result['skipped'],
@@ -132,26 +132,16 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
         ];
     }
 
-    public function onFailure(Model $subject, string $taskType, \Throwable $e): void
+    public function onFailure(WorkflowSubject $subject, string $taskType, \Throwable $e): void
     {
-        $communication = $this->asCommunication($subject);
+        $current = $this->communications->findCommunication($subject->id);
 
-        $communication->update([
-            'generation_status' => CommunicationGenerationStatus::Failed,
-            'workflow_failed_at' => now(),
-            'workflow_failure_reason' => $e->getMessage(),
+        $this->communications->updateCommunication($subject->id, CommunicationChanges::none()
+            ->withGenerationStatus(CommunicationGenerationStatus::Failed)
+            ->withWorkflowFailedAt(new \DateTimeImmutable)
+            ->withWorkflowFailureReason($e->getMessage())
             // Il caso d'uso ha gia' scritto un messaggio comprensibile per
-            // l'operatore: quello tecnico resta in workflow_failure_reason.
-            'error_message' => $communication->error_message ?: $e->getMessage(),
-        ]);
-    }
-
-    private function asCommunication(Model $subject): Communication
-    {
-        if (! $subject instanceof Communication) {
-            throw new \InvalidArgumentException('Il task di generazione richiede una Communication.');
-        }
-
-        return $subject;
+            // l'operatore: quello tecnico resta in workflowFailureReason.
+            ->withErrorMessage($current->errorMessage ?: $e->getMessage()));
     }
 }

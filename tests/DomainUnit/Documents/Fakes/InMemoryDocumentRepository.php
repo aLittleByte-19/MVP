@@ -182,6 +182,14 @@ final class InMemoryDocumentRepository implements DocumentRepository
         return $ids;
     }
 
+    public function countSubDocuments(int $originalDocumentId): int
+    {
+        return count(array_filter(
+            $this->subDocuments,
+            fn (array $row): bool => $row['original_document_id'] === $originalDocumentId,
+        ));
+    }
+
     public function deleteExistingSubDocuments(int $originalDocumentId): array
     {
         $paths = [];
