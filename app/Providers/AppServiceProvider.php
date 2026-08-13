@@ -24,6 +24,7 @@ use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftDiscard
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftEdited;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftFavorited;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftUnfavorited;
+use App\Mvp\Communications\Application\Listeners\RecordCommunicationGenerationFailed;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationRated;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationRegenerationRequested;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationTextGenerated;
@@ -57,6 +58,7 @@ use App\Mvp\Communications\Domain\Events\CommunicationDraftDiscarded;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftEdited;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftFavorited;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftUnfavorited;
+use App\Mvp\Communications\Domain\Events\CommunicationGenerationFailed;
 use App\Mvp\Communications\Domain\Events\CommunicationRated;
 use App\Mvp\Communications\Domain\Events\CommunicationRegenerationRequested;
 use App\Mvp\Communications\Domain\Events\CommunicationTextGenerated;
@@ -421,6 +423,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(CommunicationRegenerationRequested::class, RecordCommunicationRegenerationRequested::class);
         Event::listen(CommunicationWorkflowStarted::class, RecordCommunicationWorkflowStarted::class);
         Event::listen(CommunicationWorkflowStartFailed::class, RecordCommunicationWorkflowStartFailed::class);
+        Event::listen(CommunicationGenerationFailed::class, RecordCommunicationGenerationFailed::class);
         Event::listen(PromptConfigurationSaved::class, RecordPromptConfigurationSaved::class);
         Event::listen(PromptConfigurationDeleted::class, RecordPromptConfigurationDeleted::class);
 

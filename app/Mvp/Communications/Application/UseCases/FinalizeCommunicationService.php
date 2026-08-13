@@ -23,6 +23,15 @@ class FinalizeCommunicationService implements FinalizeCommunicationUseCase
     public function finalize(int $communicationId): array
     {
         $communication = $this->communications->findCommunication($communicationId);
+
+        // Idempotenza verso la ridelivery del task workflow: una comunicazione
+        // gia' completata non deve ri-emettere CommunicationWorkflowCompleted
+        // (vedi CommunicationWorkflowTaskHandler e il trattamento analogo su
+        // ProcessDocumentService).
+        if ($communication->generationStatus === CommunicationGenerationStatus::Completed->value) {
+            return ['event' => 'CommunicationPipelineCompleted', 'coverStatus' => $communication->coverStatus, 'skipped' => true];
+        }
+
         $coverStatus = $communication->coverStatus;
 
         // La copertina resta pending/processing solo se il task e' stato
@@ -45,6 +54,6 @@ class FinalizeCommunicationService implements FinalizeCommunicationUseCase
             ->withWorkflowCompletedAt($this->clock->now()));
         $this->events->dispatch(new CommunicationWorkflowCompleted($communicationId, $communication->tenantId));
 
-        return ['event' => 'CommunicationPipelineCompleted', 'coverStatus' => $coverStatus];
+        return ['event' => 'CommunicationPipelineCompleted', 'coverStatus' => $coverStatus, 'skipped' => false];
     }
 }
