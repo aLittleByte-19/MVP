@@ -100,6 +100,11 @@ final class OriginalDocumentChanges
         return $clone;
     }
 
+    public function isEmpty(): bool
+    {
+        return $this->attributes === [];
+    }
+
     /**
      * @internal consumato solo dall'adapter di persistenza.
      *

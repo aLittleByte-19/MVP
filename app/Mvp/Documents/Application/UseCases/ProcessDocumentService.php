@@ -4,6 +4,7 @@ namespace App\Mvp\Documents\Application\UseCases;
 
 use App\Exceptions\InvalidAiOutputException;
 use App\Mvp\Documents\Application\Support\OcrRangeReader;
+use App\Mvp\Documents\Domain\Entities\OriginalDocument;
 use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Events\DocumentProcessingCompleted;
 use App\Mvp\Documents\Domain\Events\DocumentProcessingFailed;
@@ -16,9 +17,9 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
 use App\Mvp\Documents\Domain\ValueObjects\NewSubDocument;
 use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
-use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
+use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use setasign\Fpdi\Fpdi;
 
@@ -46,14 +47,17 @@ class ProcessDocumentService implements ProcessDocumentUseCase
         private readonly UniqueIdGeneratorPort $ids,
         private readonly OcrRangeReader $ocrRange,
         private readonly ExtractSubDocumentFieldsUseCase $fieldsExtractor,
+        private readonly ClockInterface $clock,
     ) {}
 
     public function process(int $documentId): array
     {
+        $document = $this->documents->findOriginalDocument($documentId);
+
         // Idempotenza verso la ridelivery del task workflow: un retry su un
         // documento gia' completato non deve rilanciare Bedrock ne'
         // ricreare i sotto-documenti (vedi DocumentWorkflowTaskHandler).
-        if ($this->documents->findOriginalDocument($documentId)->processingStatus === ProcessingStatus::Completed->value) {
+        if ($document->processingStatus() === ProcessingStatus::Completed) {
             return ['skipped' => true];
         }
 
@@ -63,10 +67,9 @@ class ProcessDocumentService implements ProcessDocumentUseCase
             $this->documents->updateOriginalDocument($documentId, OriginalDocumentChanges::none()
                 ->withProcessingStatus(ProcessingStatus::Processing)
                 ->withErrorMessage(null));
-            $original = $this->documents->findOriginalDocument($documentId);
-            $this->events->dispatch(new DocumentProcessingStarted($documentId, $original->tenantId));
+            $this->events->dispatch(new DocumentProcessingStarted($documentId, $document->tenantId));
 
-            $absoluteSource = $this->copyStorageFileToTemporaryPath($original->filePath);
+            $absoluteSource = $this->copyStorageFileToTemporaryPath($document->filePath);
             $pdf = new Fpdi;
             $pageCount = max(1, $pdf->setSourceFile($absoluteSource));
 
@@ -75,7 +78,7 @@ class ProcessDocumentService implements ProcessDocumentUseCase
             // HeartbeatSeconds abbastanza ampio da coprirla (240s).
             $this->heartbeat->beat(force: true);
 
-            $segments = $this->normalizeSegments($this->splitDocument($original, $pageCount), $pageCount);
+            $segments = $this->normalizeSegments($this->splitDocument($document, $pageCount), $pageCount);
 
             $oldSplitPaths = $this->documents->deleteExistingSubDocuments($documentId);
             $this->deleteStoragePaths($oldSplitPaths);
@@ -97,13 +100,12 @@ class ProcessDocumentService implements ProcessDocumentUseCase
                     throw $e;
                 }
 
-                $this->fieldsExtractor->extractAndSaveFieldsWithContext($subDocumentId, $original);
+                $this->fieldsExtractor->extractAndSaveFieldsWithContext($subDocumentId, $document);
             }
 
-            $this->documents->updateOriginalDocument($documentId, OriginalDocumentChanges::none()
-                ->withProcessingStatus(ProcessingStatus::Completed)
-                ->withErrorMessage(null));
-            $this->events->dispatch(new DocumentProcessingCompleted($documentId, $original->tenantId));
+            $document->complete();
+            $this->documents->saveOriginalDocument($document);
+            $this->events->dispatch(new DocumentProcessingCompleted($documentId, $document->tenantId));
         } catch (\Throwable $e) {
             $this->handleProcessingFailure($documentId, $e);
         } finally {
@@ -123,20 +125,13 @@ class ProcessDocumentService implements ProcessDocumentUseCase
             ? 'Il classificatore AI ha restituito un output non valido: il documento non può essere elaborato automaticamente.'
             : $this->ai->formatUserError($e, 'Analisi documento non disponibile. Verifica configurazione e permessi Bedrock.');
 
-        $this->documents->updateOriginalDocument($documentId, OriginalDocumentChanges::none()
-            ->withProcessingStatus(ProcessingStatus::Failed)
-            ->withErrorMessage($userMessage));
-
-        $tenantId = null;
-        try {
-            $tenantId = $this->documents->findOriginalDocument($documentId)->tenantId;
-        } catch (\Throwable) {
-            // Il documento potrebbe non essere piu' leggibile: l'audit resta comunque utile senza tenant.
-        }
+        $document = $this->documents->findOriginalDocument($documentId);
+        $document->fail($userMessage, $e->getMessage(), $this->clock->now());
+        $this->documents->saveOriginalDocument($document);
 
         $this->events->dispatch(new DocumentProcessingFailed(
             $documentId,
-            $tenantId,
+            $document->tenantId,
             $userMessage,
             $e instanceof InvalidAiOutputException,
             $e instanceof InvalidAiOutputException ? $e->operation() : null,
@@ -175,7 +170,7 @@ class ProcessDocumentService implements ProcessDocumentUseCase
     /**
      * @return array<int, array{employee_name: string, start_page: int, end_page: int}>
      */
-    private function splitDocument(OriginalDocumentRecord $original, int $pageCount): array
+    private function splitDocument(OriginalDocument $original, int $pageCount): array
     {
         $boundaryNonce = $this->ocrRange->nonce();
         $ocrText = $this->ocrRange->textForRange($original, 1, $pageCount, $boundaryNonce);

@@ -2,7 +2,7 @@
 
 namespace App\Mvp\Documents\Domain\Ports\Inbound;
 
-use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
+use App\Mvp\Documents\Domain\Entities\OriginalDocument;
 
 /**
  * Porta primaria: estrae ed elabora i campi di un singolo sotto-documento
@@ -16,9 +16,9 @@ interface ExtractSubDocumentFieldsUseCase
     public function extractAndSaveFields(int $subDocumentId): void;
 
     /**
-     * Variante che riusa un OriginalDocumentRecord gia' risolto dal
-     * chiamante, per evitare una query duplicata quando invocata da
-     * ProcessDocumentService una volta per destinatario appena creato.
+     * Variante che riusa un OriginalDocument gia' risolto dal chiamante, per
+     * evitare una query duplicata quando invocata da ProcessDocumentService
+     * una volta per destinatario appena creato.
      */
-    public function extractAndSaveFieldsWithContext(int $subDocumentId, OriginalDocumentRecord $original): void;
+    public function extractAndSaveFieldsWithContext(int $subDocumentId, OriginalDocument $original): void;
 }

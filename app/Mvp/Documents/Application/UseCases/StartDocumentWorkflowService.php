@@ -8,7 +8,6 @@ use App\Mvp\Documents\Domain\Events\DocumentWorkflowStartFailed;
 use App\Mvp\Documents\Domain\Ports\Inbound\StartDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
-use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Support\WorkflowContext;
@@ -37,7 +36,7 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
     {
         $document = $this->documents->findOriginalDocument($documentId);
 
-        if ($document->workflowExecutionArn !== null && $document->processingStatus === ProcessingStatus::Processing->value) {
+        if ($document->workflowExecutionArn() !== null && $document->processingStatus() === ProcessingStatus::Processing) {
             return;
         }
 
@@ -57,8 +56,8 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
             throw new \RuntimeException('Textract è abilitato (TEXTRACT_ENABLED=true) ma MVP_DOCUMENT_DISK non è "real_s3": i documenti restano su S3 LocalStack e Textract reale non può leggerli. Imposta MVP_DOCUMENT_DISK=real_s3 ed esegui "make refresh-runtime".');
         }
 
-        $bucket = $document->s3Bucket ?: $this->documentBucket();
-        $key = $document->s3Key ?: $this->documentKey($document->filePath);
+        $bucket = $document->s3Bucket() ?: $this->documentBucket();
+        $key = $document->s3Key() ?: $this->documentKey($document->filePath);
 
         $input = [
             'document_id' => $documentId,
@@ -74,16 +73,8 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
         try {
             $executionArn = $this->workflowEngine->startExecution($stateMachineArn, $this->executionName($documentId), $input);
 
-            $this->documents->updateOriginalDocument($documentId, OriginalDocumentChanges::none()
-                ->withProcessingStatus(ProcessingStatus::Processing)
-                ->withWorkflowExecutionArn($executionArn)
-                ->withWorkflowStartedAt($this->clock->now())
-                ->withWorkflowCompletedAt(null)
-                ->withWorkflowFailedAt(null)
-                ->withWorkflowFailureReason(null)
-                ->withS3Bucket($bucket)
-                ->withS3Key($key)
-                ->withErrorMessage(null));
+            $document->startProcessing($executionArn, $bucket, $key, $this->clock->now());
+            $this->documents->saveOriginalDocument($document);
 
             $this->events->dispatch(new DocumentWorkflowStarted(
                 $documentId,
@@ -94,11 +85,8 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
                 $taskQueueUrl,
             ));
         } catch (\Throwable $e) {
-            $this->documents->updateOriginalDocument($documentId, OriginalDocumentChanges::none()
-                ->withProcessingStatus(ProcessingStatus::Failed)
-                ->withWorkflowFailedAt($this->clock->now())
-                ->withWorkflowFailureReason($e->getMessage())
-                ->withErrorMessage('Avvio workflow documentale non disponibile.'));
+            $document->fail('Avvio workflow documentale non disponibile.', $e->getMessage(), $this->clock->now());
+            $this->documents->saveOriginalDocument($document);
             $this->events->dispatch(new DocumentWorkflowStartFailed(
                 $documentId,
                 $document->tenantId,

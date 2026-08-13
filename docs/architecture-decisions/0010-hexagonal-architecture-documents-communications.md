@@ -828,6 +828,59 @@ verde ad ogni passaggio (commit separati):
     transizioni di `processingStatus`) e Fase 2 (`Communication`, la superficie più larga) restano da
     pianificare come interventi a sé, ciascuno con il proprio checkpoint di verifica — vedi il piano
     originale del Progetto A per l'elenco completo dei candidati.
+- **Progetto A, Fase 1: seconda entità di dominio — `OriginalDocument`**: a differenza di `SubDocument`
+  (Fase 0, invariante "transizione valida sì/no"), l'invariante trovata qui investigando il codice reale
+  è diversa: **"questi campi si muovono sempre insieme"**. Prima di questa entità, tre punti diversi
+  (`StartDocumentWorkflowService`, `RunOcrService`, `ProcessDocumentService`) impostavano
+  `processingStatus = Failed` con sottoinsiemi diversi e incoerenti di `workflowFailedAt`/
+  `workflowFailureReason`/`errorMessage` — mascherato dal fatto che
+  `DocumentWorkflowTaskHandler::onFailure()` li completava comunque come rete di sicurezza. Nuovo
+  `App\Mvp\Documents\Domain\Entities\OriginalDocument`: `startProcessing()`, `fail()`, `complete()`,
+  `markWorkflowCompleted()` consolidano quel comportamento in un solo posto, stesso pattern
+  entità+`pendingChanges()` di Fase 0 (`OriginalDocumentChanges` interno, letto da un nuovo
+  `saveOriginalDocument()` su `DocumentRepository`). **Deliberatamente non governa i campi OCR**
+  (`ocrText`/`ocrPages`/`ocrConfidenceAvg`/`textractJobId`): non sono una transizione di stato, solo dati
+  scritti dal gateway OCR — `RunOcrService` continua a scriverli con `OriginalDocumentChanges` grezzo nel
+  proprio percorso di successo. Allo stesso modo, la scrittura "avvia estrazione" di `ProcessDocumentService`
+  (`processingStatus = Processing`, nessun campo collegato) resta un `updateOriginalDocument()` grezzo: non
+  è la transizione compound-state che l'entità esiste per proteggere.
+  - `findOriginalDocument()` cambia tipo di ritorno globalmente (`OriginalDocumentRecord` → entità) invece
+    di un metodo parallelo: l'entità è un superset strutturale (stessi campi pubblici readonly), quindi i
+    consumatori di sola lettura (`OcrRangeReader`, `ExtractSubDocumentFieldsService`,
+    `DeleteDocumentService`) non richiedono modifiche oltre il type hint, salvo dove confrontavano
+    `processingStatus` come stringa grezza.
+  - `DocumentWorkflowTaskHandler::onFailure()` passa da scrittura diretta (`updateOriginalDocument` con
+    `$current->errorMessage ?: $e->getMessage()` calcolato a mano) a `$document->fail(...)` +
+    `saveOriginalDocument()` — stesso fallback semantico, ora incapsulato nell'entità.
+    `FinalizeDocumentWorkflowService::dispatchCompletionEvent()` passa da un `if` esplicito
+    "completato e non ancora marcato" a `markWorkflowCompleted()`, che è già idempotente internamente
+    (no-op se già `true`), eliminando la guardia duplicata.
+  - `ProcessDocumentService::handleProcessingFailure()` prima leggeva il documento due volte (una scrittura
+    incondizionata, poi una lettura protetta da try/catch solo per il `tenantId` dell'evento, nel caso il
+    documento fosse diventato illeggibile nel frattempo): fuse in un'unica `findOriginalDocument()` +
+    `fail()` + `saveOriginalDocument()`, lo stesso principio "niente letture duplicate" già applicato ai
+    controller nei punti 1-3 di questa sessione. `process()` ora fa una sola `findOriginalDocument()`
+    all'inizio e riusa la stessa entità per la guardia di idempotenza, la lettura di `filePath`/`tenantId`
+    e — via `complete()` — la scrittura finale, invece di ri-recuperare un `$original` separato a metà
+    funzione.
+  - `RunOcrService`, `ProcessDocumentService` e `DocumentWorkflowTaskHandler` guadagnano un
+    `ClockInterface $clock` iniettato (stesso pattern di `StartDocumentWorkflowService`): le entità non
+    chiamano mai `new \DateTimeImmutable()` internamente, il timestamp è sempre un parametro del
+    chiamante — testabile con `FakeClock`.
+  - **Difetto scoperto durante l'implementazione**: `OriginalDocumentChanges`, a differenza di
+    `SubDocumentChanges`, non aveva mai avuto un metodo `isEmpty()` — necessario a
+    `EloquentDocumentRepository::saveOriginalDocument()` per evitare una query di update a vuoto quando
+    l'entità non ha transizioni pendenti (es. `dispatchCompletionEvent()` sul ramo "non ancora
+    completato"). Aggiunto, stesso identico shape di `SubDocumentChanges::isEmpty()`.
+  - Nuovi/aggiornati test: `RunOcrServiceTest` (asserzioni sull'entità invece di proprietà grezze, `FakeClock`
+    iniettato), `FinalizeDocumentWorkflowServiceTest` (`workflowCompleted()` come metodo). Nessun test
+    dedicato preesisteva per `StartDocumentWorkflowService`/`ProcessDocumentService`/
+    `DocumentWorkflowTaskHandler`: coperti dalla suite Feature (`DocumentWorkflowTest`,
+    `MvpAppRoutesTest`), che esercita l'intero percorso con Eloquent/DB reali — prova live equivalente.
+  - **386/386** (invariato, eseguita due volte, nessuna flakiness), Pint 374 file, Larastan 277 file,
+    Dependency Rule pulita, DI verificata dal vivo via tinker, `/ready` 200.
+  - **Resta da fare**: Fase 2 (`Communication` — rating, favorite, draft, regenerate, export-readiness),
+    non pianificata né iniziata in questa fase, da affrontare come proprio checkpoint separato.
 
 ## Related documents
 

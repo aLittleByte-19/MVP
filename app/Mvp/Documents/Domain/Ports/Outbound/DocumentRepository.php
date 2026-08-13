@@ -2,12 +2,12 @@
 
 namespace App\Mvp\Documents\Domain\Ports\Outbound;
 
+use App\Mvp\Documents\Domain\Entities\OriginalDocument;
 use App\Mvp\Documents\Domain\Entities\SubDocument;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Documents\Domain\ValueObjects\NewOriginalDocument;
 use App\Mvp\Documents\Domain\ValueObjects\NewSubDocument;
 use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
-use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
 use App\Mvp\Documents\Domain\ValueObjects\SendMessageContext;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentPage;
@@ -16,15 +16,14 @@ use App\Mvp\Documents\Domain\ValueObjects\SubDocumentPage;
  * Porta secondaria verso la persistenza dell'aggregato documentale
  * (OriginalDocument + SubDocument + ExtractedData). Nessun riferimento a
  * Eloquent: i metodi di lettura restituiscono value object di dominio
- * ({@see OriginalDocumentRecord}, {@see SubDocumentPage}) o, per SubDocument,
- * l'entità {@see SubDocument} (governa le proprie transizioni di
- * reviewStatus — spike del Progetto A, vedi ADR 0010); le scritture prendono
- * value object di dominio ({@see NewOriginalDocument},
- * {@see OriginalDocumentChanges}, {@see NewSubDocument},
- * {@see SubDocumentChanges}, {@see ExtractedDataChanges}) invece di array
- * associativi con chiavi a stringa: il nome della colonna DB resta un
- * dettaglio di quelle classi (Domain), non qualcosa che ogni caso d'uso deve
- * scrivere a mano.
+ * ({@see SubDocumentPage}) o entità che governano le proprie transizioni di
+ * stato ({@see OriginalDocument}, {@see SubDocument} — Progetto A, modello
+ * ricco, vedi ADR 0010); le scritture prendono value object di dominio
+ * ({@see NewOriginalDocument}, {@see OriginalDocumentChanges},
+ * {@see NewSubDocument}, {@see SubDocumentChanges},
+ * {@see ExtractedDataChanges}) invece di array associativi con chiavi a
+ * stringa: il nome della colonna DB resta un dettaglio di quelle classi
+ * (Domain), non qualcosa che ogni caso d'uso deve scrivere a mano.
  *
  * `paginateSubDocuments` restituisce solo identificativi e metadati di
  * paginazione: e' una scelta di perimetro esplicita (vedi ADR 0010) — la
@@ -37,9 +36,18 @@ interface DocumentRepository
 {
     public function createOriginalDocument(NewOriginalDocument $document): int;
 
-    public function findOriginalDocument(int $id): OriginalDocumentRecord;
+    public function findOriginalDocument(int $id): OriginalDocument;
 
     public function updateOriginalDocument(int $id, OriginalDocumentChanges $changes): void;
+
+    /**
+     * Persiste le modifiche accumulate sull'entità (vedi
+     * {@see OriginalDocument::pendingChanges()}). Coesiste con
+     * updateOriginalDocument()/OriginalDocumentChanges per le scritture che
+     * non passano da una transizione governata (es. i campi OCR, scritti da
+     * RunOcrService — vedi ADR 0010).
+     */
+    public function saveOriginalDocument(OriginalDocument $document): void;
 
     public function deleteOriginalDocumentWithWorkflowTasks(int $id): void;
 

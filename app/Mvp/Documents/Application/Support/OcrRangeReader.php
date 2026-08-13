@@ -2,8 +2,8 @@
 
 namespace App\Mvp\Documents\Application\Support;
 
+use App\Mvp\Documents\Domain\Entities\OriginalDocument;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentAiGatewayPort;
-use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
 
 /**
  * Costruisce il testo OCR di un intervallo di pagine, con i marcatori di
@@ -16,7 +16,7 @@ final class OcrRangeReader
 {
     public function __construct(private readonly DocumentAiGatewayPort $ai) {}
 
-    public function textForRange(OriginalDocumentRecord $original, int $startPage, int $endPage, string $boundaryNonce): string
+    public function textForRange(OriginalDocument $original, int $startPage, int $endPage, string $boundaryNonce): string
     {
         $pages = $original->ocrPages;
 

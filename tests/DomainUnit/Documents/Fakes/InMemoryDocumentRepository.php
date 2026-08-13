@@ -2,6 +2,7 @@
 
 namespace Tests\DomainUnit\Documents\Fakes;
 
+use App\Mvp\Documents\Domain\Entities\OriginalDocument;
 use App\Mvp\Documents\Domain\Entities\SubDocument;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
@@ -60,13 +61,13 @@ final class InMemoryDocumentRepository implements DocumentRepository
         return $id;
     }
 
-    public function findOriginalDocument(int $id): OriginalDocumentRecord
+    public function findOriginalDocument(int $id): OriginalDocument
     {
         if (! isset($this->originals[$id])) {
             throw new \RuntimeException("OriginalDocument {$id} non seminato nel fake repository.");
         }
 
-        return $this->toOriginalRecord($this->originals[$id]);
+        return OriginalDocument::fromRecord($this->toOriginalRecord($this->originals[$id]));
     }
 
     public function updateOriginalDocument(int $id, OriginalDocumentChanges $changes): void
@@ -76,6 +77,17 @@ final class InMemoryDocumentRepository implements DocumentRepository
         }
 
         $this->originals[$id] = array_merge($this->originals[$id], $this->normalize($changes->toArray()));
+    }
+
+    public function saveOriginalDocument(OriginalDocument $document): void
+    {
+        $changes = $document->pendingChanges();
+
+        if ($changes->isEmpty()) {
+            return;
+        }
+
+        $this->updateOriginalDocument($document->id, $changes);
     }
 
     public function deleteOriginalDocumentWithWorkflowTasks(int $id): void

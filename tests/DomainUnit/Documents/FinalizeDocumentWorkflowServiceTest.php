@@ -20,7 +20,7 @@ test('dispatchCompletionEvent stamps workflow_completed_at with the injected clo
 
     $result = (new FinalizeDocumentWorkflowService($repository, $events, $clock))->dispatchCompletionEvent(1);
 
-    expect($repository->findOriginalDocument(1)->workflowCompleted)->toBeTrue()
+    expect($repository->findOriginalDocument(1)->workflowCompleted())->toBeTrue()
         ->and($result)->toBe(['event' => 'DocumentPipelineCompleted'])
         ->and($events->hasDispatched(DocumentWorkflowCompleted::class))->toBeTrue();
 });
@@ -33,7 +33,7 @@ test('dispatchCompletionEvent does not stamp workflow_completed_at when processi
 
     $result = (new FinalizeDocumentWorkflowService($repository, $events, $clock))->dispatchCompletionEvent(1);
 
-    expect($repository->findOriginalDocument(1)->workflowCompleted)->toBeFalse()
+    expect($repository->findOriginalDocument(1)->workflowCompleted())->toBeFalse()
         ->and($result)->toBe(['event' => 'DocumentPipelineProgressed'])
         ->and($events->hasDispatched(DocumentWorkflowCompleted::class))->toBeTrue();
 });
