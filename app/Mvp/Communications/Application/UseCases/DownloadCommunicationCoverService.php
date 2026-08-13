@@ -18,12 +18,12 @@ class DownloadCommunicationCoverService implements DownloadCommunicationCoverUse
     public function download(int $communicationId): DownloadableCoverImage
     {
         $communication = $this->communications->findCommunication($communicationId);
-        $path = $communication->coverImagePath;
+        $path = $communication->coverImagePath();
 
         if ($path === null || $path === '' || ! $this->storage->exists($path)) {
             throw new CommunicationCoverUnavailableException;
         }
 
-        return new DownloadableCoverImage($this->storage->read($path), $communication->coverImageMime ?: 'image/png');
+        return new DownloadableCoverImage($this->storage->read($path), $communication->coverImageMime() ?: 'image/png');
     }
 }

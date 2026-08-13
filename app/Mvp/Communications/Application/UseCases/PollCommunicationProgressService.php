@@ -15,12 +15,12 @@ class PollCommunicationProgressService implements PollCommunicationProgressUseCa
         $communication = $this->communications->findCommunication($communicationId);
 
         return new CommunicationProgressSnapshot(
-            $communication->generationStatus,
-            $communication->coverStatus,
-            $communication->generatedTitle,
-            $communication->generatedBody,
-            $communication->coverError,
-            $communication->errorMessage,
+            $communication->generationStatus()->value,
+            $communication->coverStatus()->value,
+            $communication->generatedTitle(),
+            $communication->generatedBody(),
+            $communication->coverError(),
+            $communication->errorMessage(),
         );
     }
 }

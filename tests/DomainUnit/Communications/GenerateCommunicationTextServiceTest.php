@@ -26,8 +26,8 @@ test('generate persists the AI output and dispatches CommunicationTextGenerated'
     $result = $service->generate(1);
 
     expect($result)->toBe(['skipped' => false, 'title' => 'Titolo AI'])
-        ->and($repository->findCommunication(1)->generatedBody)->toBe('Corpo AI')
-        ->and($repository->findCommunication(1)->imagePrompt)->toBe('Direzione visiva')
+        ->and($repository->findCommunication(1)->generatedBody())->toBe('Corpo AI')
+        ->and($repository->findCommunication(1)->imagePrompt())->toBe('Direzione visiva')
         ->and($events->hasDispatched(CommunicationTextGenerated::class))->toBeTrue();
 });
 
@@ -54,7 +54,7 @@ test('generate dispatches AiOutputRejected and rethrows on invalid AI output', f
 
     expect(fn () => $service->generate(1))->toThrow(InvalidAiOutputException::class)
         ->and($events->hasDispatched(AiOutputRejected::class))->toBeTrue()
-        ->and($repository->findCommunication(1)->generatedBody)->toBeNull();
+        ->and($repository->findCommunication(1)->generatedBody())->toBeNull();
 });
 
 test('generate dispatches CommunicationGenerationFailed and rethrows on any other failure', function () {
@@ -69,5 +69,5 @@ test('generate dispatches CommunicationGenerationFailed and rethrows on any othe
     expect(fn () => $service->generate(1))->toThrow(RuntimeException::class, 'Bedrock non raggiungibile')
         ->and($events->hasDispatched(CommunicationGenerationFailed::class))->toBeTrue()
         ->and($events->hasDispatched(AiOutputRejected::class))->toBeFalse()
-        ->and($repository->findCommunication(1)->errorMessage)->toBe('Generazione del testo non disponibile. Riprova più tardi.');
+        ->and($repository->findCommunication(1)->errorMessage())->toBe('Generazione del testo non disponibile. Riprova più tardi.');
 });

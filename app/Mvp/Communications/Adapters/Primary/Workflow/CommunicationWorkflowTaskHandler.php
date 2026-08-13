@@ -2,14 +2,13 @@
 
 namespace App\Mvp\Communications\Adapters\Primary\Workflow;
 
-use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Domain\Ports\Inbound\FinalizeCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationCoverUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationTextUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
-use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
 use App\Mvp\Workflow\Contracts\WorkflowSubject;
 use App\Mvp\Workflow\Contracts\WorkflowTaskHandler;
+use Psr\Clock\ClockInterface;
 
 /**
  * Adapter primario guidato da Step Functions/SQS: traduce ogni task di
@@ -29,6 +28,7 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
         private readonly GenerateCommunicationCoverUseCase $generateCover,
         private readonly FinalizeCommunicationUseCase $finalize,
         private readonly CommunicationRepository $communications,
+        private readonly ClockInterface $clock,
     ) {}
 
     /**
@@ -134,14 +134,13 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
 
     public function onFailure(WorkflowSubject $subject, string $taskType, \Throwable $e): void
     {
-        $current = $this->communications->findCommunication($subject->id);
+        $communication = $this->communications->findCommunication($subject->id);
 
-        $this->communications->updateCommunication($subject->id, CommunicationChanges::none()
-            ->withGenerationStatus(CommunicationGenerationStatus::Failed)
-            ->withWorkflowFailedAt(new \DateTimeImmutable)
-            ->withWorkflowFailureReason($e->getMessage())
-            // Il caso d'uso ha gia' scritto un messaggio comprensibile per
-            // l'operatore: quello tecnico resta in workflowFailureReason.
-            ->withErrorMessage($current->errorMessage ?: $e->getMessage()));
+        // Il caso d'uso ha gia' scritto un messaggio comprensibile per
+        // l'operatore (vedi GenerateCommunicationTextService); questo e'
+        // solo il fallback per i task che possono fallire prima che il caso
+        // d'uso stesso arrivi a scriverne uno.
+        $communication->failGeneration($communication->errorMessage() ?: $e->getMessage(), $e->getMessage(), $this->clock->now());
+        $this->communications->saveCommunication($communication);
     }
 }

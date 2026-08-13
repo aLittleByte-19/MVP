@@ -23,8 +23,8 @@ class DeleteCommunicationService implements DeleteCommunicationUseCase
 
         $this->communications->deleteCommunication($communicationId);
 
-        if ($communication->coverImagePath !== null) {
-            $this->coverStorage->delete($communication->coverImagePath);
+        if ($communication->coverImagePath() !== null) {
+            $this->coverStorage->delete($communication->coverImagePath());
         }
 
         $this->events->dispatch(new CommunicationDeleted($communicationId, $actor));

@@ -24,24 +24,6 @@ final class CommunicationChanges
         return new self;
     }
 
-    /**
-     * Unico punto di conversione da array grezzo: CommunicationDraftBuilder
-     * (Domain/ValueObjects/) restituisce gia' array snake_case per i passi
-     * generate_text/generate_cover — non un pattern da riusare altrove.
-     *
-     * @param  array<string, mixed>  $fields
-     */
-    public static function fromRawFields(array $fields): self
-    {
-        $instance = new self;
-
-        foreach ($fields as $key => $value) {
-            $instance->attributes[self::toCamelCase($key)] = $value;
-        }
-
-        return $instance;
-    }
-
     public function withGeneratedTitle(?string $title): self
     {
         return $this->with('generatedTitle', $title);
@@ -160,9 +142,9 @@ final class CommunicationChanges
         return $clone;
     }
 
-    private static function toCamelCase(string $snakeCase): string
+    public function isEmpty(): bool
     {
-        return lcfirst(str_replace('_', '', ucwords($snakeCase, '_')));
+        return $this->attributes === [];
     }
 
     /**

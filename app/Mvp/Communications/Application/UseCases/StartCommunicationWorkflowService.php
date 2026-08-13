@@ -3,18 +3,13 @@
 namespace App\Mvp\Communications\Application\UseCases;
 
 use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
-use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
-use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Communications\Domain\Events\CommunicationRegenerationRequested;
 use App\Mvp\Communications\Domain\Events\CommunicationWorkflowStarted;
 use App\Mvp\Communications\Domain\Events\CommunicationWorkflowStartFailed;
-use App\Mvp\Communications\Domain\Exceptions\CommunicationAlreadyDiscardedException;
-use App\Mvp\Communications\Domain\Exceptions\CommunicationRegenerationUnavailableException;
 use App\Mvp\Communications\Domain\Ports\Inbound\StartCommunicationWorkflowUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
-use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use App\Mvp\Support\Identity\Actor;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
@@ -43,7 +38,7 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
     {
         $communication = $this->communications->findCommunication($communicationId);
 
-        if ($communication->workflowExecutionArn !== null && $communication->generationStatus === CommunicationGenerationStatus::Processing->value) {
+        if ($communication->workflowExecutionArn() !== null && $communication->generationStatus() === CommunicationGenerationStatus::Processing) {
             return;
         }
 
@@ -68,16 +63,8 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
         try {
             $executionArn = $this->workflowEngine->startExecution($stateMachineArn, 'mvp-comm-'.$communicationId.'-'.$this->ids->generate(), $input);
 
-            $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
-                ->withGenerationStatus(CommunicationGenerationStatus::Processing)
-                ->withCoverStatus(CoverImageStatus::Pending)
-                ->withWorkflowExecutionArn($executionArn)
-                ->withWorkflowStartedAt($this->clock->now())
-                ->withWorkflowCompletedAt(null)
-                ->withWorkflowFailedAt(null)
-                ->withWorkflowFailureReason(null)
-                ->withErrorMessage(null)
-                ->withCoverError(null));
+            $communication->startGeneration($executionArn, $this->clock->now());
+            $this->communications->saveCommunication($communication);
 
             $this->events->dispatch(new CommunicationWorkflowStarted(
                 $communicationId,
@@ -88,11 +75,8 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
                 $taskQueueUrl,
             ));
         } catch (\Throwable $e) {
-            $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
-                ->withGenerationStatus(CommunicationGenerationStatus::Failed)
-                ->withWorkflowFailedAt($this->clock->now())
-                ->withWorkflowFailureReason($e->getMessage())
-                ->withErrorMessage('Avvio della generazione non disponibile.'));
+            $communication->failGeneration('Avvio della generazione non disponibile.', $e->getMessage(), $this->clock->now());
+            $this->communications->saveCommunication($communication);
             $this->events->dispatch(new CommunicationWorkflowStartFailed(
                 $communicationId,
                 $communication->tenantId,
@@ -107,31 +91,15 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
     public function regenerate(int $communicationId, ?Actor $actor, ?string $correlationId, ?string $requestId): void
     {
         $communication = $this->communications->findCommunication($communicationId);
+        $oldCoverPath = $communication->coverImagePath();
 
-        if ($communication->status === CommunicationStatus::Discarded->value) {
-            throw new CommunicationAlreadyDiscardedException('Una bozza scartata non puo essere rigenerata.');
+        $communication->regenerate();
+
+        if ($oldCoverPath !== null) {
+            $this->coverStorage->delete($oldCoverPath);
         }
 
-        if (! in_array($communication->generationStatus, [CommunicationGenerationStatus::Completed->value, CommunicationGenerationStatus::Failed->value], true)) {
-            throw new CommunicationRegenerationUnavailableException;
-        }
-
-        if ($communication->coverImagePath !== null) {
-            $this->coverStorage->delete($communication->coverImagePath);
-        }
-
-        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
-            ->withGeneratedTitle(null)
-            ->withGeneratedBody(null)
-            ->withImagePrompt(null)
-            ->withGenerationStatus(CommunicationGenerationStatus::Pending)
-            ->withWorkflowExecutionArn(null)
-            ->withErrorMessage(null)
-            ->withCoverImagePath(null)
-            ->withCoverImageMime(null)
-            ->withCoverImageSize(null)
-            ->withCoverImageSource(null)
-            ->withCoverError(null));
+        $this->communications->saveCommunication($communication);
 
         $this->events->dispatch(new CommunicationRegenerationRequested($communicationId, $communication->tenantId, $actor));
 

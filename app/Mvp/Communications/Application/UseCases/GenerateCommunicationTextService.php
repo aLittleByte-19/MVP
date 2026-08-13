@@ -11,7 +11,6 @@ use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationAiGatewayPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
-use App\Mvp\Communications\Domain\ValueObjects\CommunicationDraftBuilder;
 
 /**
  * Il testo e' la comunicazione: se fallisce, l'esecuzione fallisce
@@ -31,7 +30,7 @@ class GenerateCommunicationTextService implements GenerateCommunicationTextUseCa
     {
         $communication = $this->communications->findCommunication($communicationId);
 
-        if ($communication->generatedBody) {
+        if ($communication->generatedBody()) {
             return ['skipped' => true, 'title' => null];
         }
 
@@ -51,8 +50,8 @@ class GenerateCommunicationTextService implements GenerateCommunicationTextUseCa
             throw $e;
         }
 
-        $builder = CommunicationDraftBuilder::fromRecord($communication);
-        $this->communications->updateCommunication($communicationId, CommunicationChanges::fromRawFields($builder->withGeneratedText($generated)));
+        $communication->applyGeneratedText($generated);
+        $this->communications->saveCommunication($communication);
         $this->events->dispatch(new CommunicationTextGenerated($communicationId, $communication->tenantId, $communication->tone, $communication->style));
 
         return ['skipped' => false, 'title' => $generated->title];

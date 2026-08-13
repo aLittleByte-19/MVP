@@ -31,9 +31,9 @@ test('generate stores the image and dispatches CommunicationCoverGenerated', fun
     $record = $repository->findCommunication(1);
 
     expect($result)->toBe(['skipped' => false, 'coverStatus' => 'ready'])
-        ->and($record->coverStatus)->toBe('ready')
-        ->and($record->coverImagePath)->toStartWith('communications/covers/1/')
-        ->and($storage->has($record->coverImagePath))->toBeTrue()
+        ->and($record->coverStatus()->value)->toBe('ready')
+        ->and($record->coverImagePath())->toStartWith('communications/covers/1/')
+        ->and($storage->has($record->coverImagePath()))->toBeTrue()
         ->and($events->hasDispatched(CommunicationCoverGenerated::class))->toBeTrue();
 });
 
@@ -60,7 +60,7 @@ test('generate degrades and dispatches CommunicationCoverDegraded when the model
     $result = $service->generate(1);
 
     expect($result)->toBe(['skipped' => false, 'coverStatus' => 'failed'])
-        ->and($repository->findCommunication(1)->coverStatus)->toBe('failed')
+        ->and($repository->findCommunication(1)->coverStatus()->value)->toBe('failed')
         ->and($events->hasDispatched(CommunicationCoverDegraded::class))->toBeTrue();
 });
 
@@ -77,6 +77,6 @@ test('generate degrades when storage fails, without persisting the image', funct
     $result = $service->generate(1);
 
     expect($result)->toBe(['skipped' => false, 'coverStatus' => 'failed'])
-        ->and($repository->findCommunication(1)->coverImagePath)->toBeNull()
+        ->and($repository->findCommunication(1)->coverImagePath())->toBeNull()
         ->and($events->hasDispatched(CommunicationCoverDegraded::class))->toBeTrue();
 });

@@ -2,9 +2,6 @@
 
 namespace App\Mvp\Communications\Application\UseCases;
 
-use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
-use App\Mvp\Communications\Domain\Enums\CoverImageSource;
-use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverRemoved;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverReplaced;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationNotEditableException;
@@ -12,7 +9,6 @@ use App\Mvp\Communications\Domain\Ports\Inbound\UpdateCommunicationCoverUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
-use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use App\Mvp\Support\Identity\Actor;
 
@@ -36,24 +32,20 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
     public function update(int $communicationId, string $bytes, string $mime, int $size, Actor $actor): void
     {
         $communication = $this->communications->findCommunication($communicationId);
+        $oldCoverPath = $communication->coverImagePath();
 
-        if ($communication->status === CommunicationStatus::Discarded->value) {
+        if (! $communication->isEditable()) {
             throw new CommunicationNotEditableException;
         }
 
         $path = $this->newPath($communicationId, $mime);
         $this->storage->store($path, $bytes);
 
-        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
-            ->withCoverImagePath($path)
-            ->withCoverImageMime($mime)
-            ->withCoverImageSize($size)
-            ->withCoverImageSource(CoverImageSource::Manual)
-            ->withCoverStatus(CoverImageStatus::Ready)
-            ->withCoverError(null));
+        $communication->replaceCover($path, $mime, $size);
+        $this->communications->saveCommunication($communication);
 
-        if ($communication->coverImagePath !== null) {
-            $this->storage->delete($communication->coverImagePath);
+        if ($oldCoverPath !== null) {
+            $this->storage->delete($oldCoverPath);
         }
 
         $this->events->dispatch(new CommunicationCoverReplaced($communicationId, $communication->tenantId, $actor, $mime, $size));
@@ -62,21 +54,13 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
     public function remove(int $communicationId, Actor $actor): void
     {
         $communication = $this->communications->findCommunication($communicationId);
+        $oldCoverPath = $communication->coverImagePath();
 
-        if ($communication->status === CommunicationStatus::Discarded->value) {
-            throw new CommunicationNotEditableException;
-        }
+        $communication->removeCover();
+        $this->communications->saveCommunication($communication);
 
-        $this->communications->updateCommunication($communicationId, CommunicationChanges::none()
-            ->withCoverImagePath(null)
-            ->withCoverImageMime(null)
-            ->withCoverImageSize(null)
-            ->withCoverImageSource(null)
-            ->withCoverStatus(CoverImageStatus::Removed)
-            ->withCoverError(null));
-
-        if ($communication->coverImagePath !== null) {
-            $this->storage->delete($communication->coverImagePath);
+        if ($oldCoverPath !== null) {
+            $this->storage->delete($oldCoverPath);
         }
 
         $this->events->dispatch(new CommunicationCoverRemoved($communicationId, $communication->tenantId, $actor));

@@ -2,6 +2,7 @@
 
 namespace Tests\DomainUnit\Communications\Fakes;
 
+use App\Mvp\Communications\Domain\Entities\Communication;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationPage;
@@ -38,13 +39,13 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
         return $id;
     }
 
-    public function findCommunication(int $id): CommunicationRecord
+    public function findCommunication(int $id): Communication
     {
         if (! isset($this->rows[$id])) {
             throw new \RuntimeException("Communication {$id} non seminata nel fake repository.");
         }
 
-        return $this->toRecord($this->rows[$id]);
+        return Communication::fromRecord($this->toRecord($this->rows[$id]));
     }
 
     public function updateCommunication(int $id, CommunicationChanges $changes): void
@@ -54,6 +55,17 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
         }
 
         $this->rows[$id] = array_merge($this->rows[$id], $this->normalize($changes->toArray()));
+    }
+
+    public function saveCommunication(Communication $communication): void
+    {
+        $changes = $communication->pendingChanges();
+
+        if ($changes->isEmpty()) {
+            return;
+        }
+
+        $this->updateCommunication($communication->id, $changes);
     }
 
     public function deleteCommunication(int $id): void
