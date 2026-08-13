@@ -41,7 +41,7 @@ class WorkflowTaskRunner
             ['task_token_hash' => $tokenHash],
             [
                 'subject_type' => $handler->subjectType(),
-                'subject_id' => $subject->getKey(),
+                'subject_id' => $subject->id,
                 'task_type' => $taskType,
                 'status' => 'pending',
                 'input_payload' => $this->redactTaskToken($message),
@@ -80,7 +80,13 @@ class WorkflowTaskRunner
         $this->metrics->recordDomainCounter('sqs_messages_received_total', ['task_type' => $taskType]);
 
         try {
-            $result = $handler->execute($taskType, $subject->refresh(), $message);
+            // Ri-risolve il subject invece di un semplice refresh: tra il
+            // claim e l'esecuzione puo' essere passato tempo (worker
+            // riconquistato dopo uno stale claim), e il subject serve
+            // comunque aggiornato. Stesso numero di letture DB di prima,
+            // solo attraverso il repository di dominio invece di Eloquent.
+            $subject = $handler->resolveSubject($message);
+            $result = $handler->execute($taskType, $subject, $message);
             $status = ($result['skipped'] ?? false) ? 'skipped' : 'succeeded';
             $output = array_merge($this->baseOutput($message), [
                 'task_result' => array_merge($result, [
@@ -97,9 +103,9 @@ class WorkflowTaskRunner
             $this->audit->record(
                 $handler->auditEventPrefix().$status,
                 resourceType: $handler->subjectType(),
-                resourceId: (string) $subject->getKey(),
+                resourceId: (string) $subject->id,
                 metadata: ['task_type' => $taskType],
-                tenantId: $subject->getAttribute('tenant_id'),
+                tenantId: $subject->tenantId,
             );
 
             return ['callback_required' => true, 'output' => $output];
@@ -109,13 +115,14 @@ class WorkflowTaskRunner
                 'error_message' => $e->getMessage(),
                 'failed_at' => now(),
             ]);
-            $handler->onFailure($subject->refresh(), $taskType, $e);
+            $subject = $handler->resolveSubject($message);
+            $handler->onFailure($subject, $taskType, $e);
 
             $this->metrics->recordDomainCounter('sqs_messages_failed_total', ['task_type' => $taskType]);
             $this->metrics->recordDomainCounter('stepfunctions_executions_failed_total', ['reason' => 'task_failure']);
             Log::error('Workflow task failed', [
                 'subject_type' => $handler->subjectType(),
-                'subject_id' => $subject->getKey(),
+                'subject_id' => $subject->id,
                 'task_type' => $taskType,
                 'message' => $e->getMessage(),
             ]);

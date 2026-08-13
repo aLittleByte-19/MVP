@@ -2,13 +2,14 @@
 
 namespace App\Mvp\Documents\Adapters\Primary\Workflow;
 
-use App\Models\OriginalDocument;
 use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Ports\Inbound\FinalizeDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\ProcessDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\RunOcrUseCase;
+use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
+use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
+use App\Mvp\Workflow\Contracts\WorkflowSubject;
 use App\Mvp\Workflow\Contracts\WorkflowTaskHandler;
-use Illuminate\Database\Eloquent\Model;
 
 /**
  * Adapter primario guidato da Step Functions/SQS (invece che da HTTP):
@@ -18,12 +19,11 @@ use Illuminate\Database\Eloquent\Model;
  * ridelivery del task ("documento gia' completato") vive nei singoli casi
  * d'uso (RunOcrService, ProcessDocumentService), non in questo adapter —
  * ciascuno la segnala nel proprio valore di ritorno invece che con una
- * guardia centralizzata qui. Implementa il contratto condiviso
- * WorkflowTaskHandler (infrastruttura di Workflow, fuori dal perimetro
- * esagonale: vedi ADR 0010), quindi puo' legittimamente risolvere/aggiornare
- * l'aggregato Eloquent per le proprie responsabilita' di adapter
- * (resolveSubject, onFailure) — le decisioni di dominio restano nei casi
- * d'uso iniettati.
+ * guardia centralizzata qui. Risolve e aggiorna l'aggregato documentale
+ * attraverso {@see DocumentRepository} (la stessa porta secondaria usata dai
+ * casi d'uso), non attraverso Eloquent diretto: implementa il contratto
+ * condiviso WorkflowTaskHandler passando solo {@see WorkflowSubject} (id +
+ * tenant) al runner, che resta cosi' domain-agnostic.
  */
 class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
 {
@@ -31,6 +31,7 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
         private readonly RunOcrUseCase $runOcr,
         private readonly ProcessDocumentUseCase $processDocument,
         private readonly FinalizeDocumentWorkflowUseCase $finalize,
+        private readonly DocumentRepository $documents,
     ) {}
 
     /**
@@ -54,7 +55,7 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
     /**
      * @param  array<string, mixed>  $message
      */
-    public function resolveSubject(array $message): Model
+    public function resolveSubject(array $message): WorkflowSubject
     {
         $documentId = (int) ($message['documentId'] ?? $message['document_id'] ?? 0);
 
@@ -62,7 +63,7 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
             throw new \InvalidArgumentException('Messaggio workflow non valido: documentId e\' obbligatorio.');
         }
 
-        $document = OriginalDocument::query()->findOrFail($documentId);
+        $document = $this->documents->findOriginalDocument($documentId);
 
         // Difesa in profondita': l'autorizzazione vera vive al bordo HTTP
         // (i messaggi di workflow sono generati dalla pipeline stessa, non
@@ -71,54 +72,51 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
         // corrotto o malformato che non va eseguito silenziosamente.
         $tenantId = $message['tenantId'] ?? $message['tenant_id'] ?? null;
 
-        if ($tenantId !== null && $document->tenant_id !== $tenantId) {
+        if ($tenantId !== null && $document->tenantId !== $tenantId) {
             throw new \InvalidArgumentException("Messaggio workflow non valido: tenantId non corrisponde al documento {$documentId}.");
         }
 
-        return $document;
+        return new WorkflowSubject($document->id, $document->tenantId);
     }
 
     /**
      * @param  array<string, mixed>  $message
      * @return array<string, mixed>
      */
-    public function execute(string $taskType, Model $subject, array $message): array
+    public function execute(string $taskType, WorkflowSubject $subject, array $message): array
     {
-        $document = $this->asDocument($subject);
-
         return match ($taskType) {
-            'textract.ocr' => $this->runOcrStep($document, $message),
-            'bedrock.extract' => $this->processDocumentStep($document),
-            'persist.results' => ['skipped' => false, 'processing_status' => $this->finalize->currentStatus($document->id)],
-            'dispatch.domain_event' => array_merge(['skipped' => false], $this->finalize->dispatchCompletionEvent($document->id)),
+            'textract.ocr' => $this->runOcrStep($subject->id, $message),
+            'bedrock.extract' => $this->processDocumentStep($subject->id),
+            'persist.results' => ['skipped' => false, 'processing_status' => $this->finalize->currentStatus($subject->id)],
+            'dispatch.domain_event' => array_merge(['skipped' => false], $this->finalize->dispatchCompletionEvent($subject->id)),
             default => throw new \InvalidArgumentException("Task workflow non supportato: {$taskType}"),
         };
     }
 
-    public function onFailure(Model $subject, string $taskType, \Throwable $e): void
+    public function onFailure(WorkflowSubject $subject, string $taskType, \Throwable $e): void
     {
-        $document = $this->asDocument($subject);
+        $current = $this->documents->findOriginalDocument($subject->id);
 
-        $document->update([
-            'processing_status' => ProcessingStatus::Failed,
-            'workflow_failed_at' => now(),
-            'workflow_failure_reason' => $e->getMessage(),
+        $this->documents->updateOriginalDocument($subject->id, OriginalDocumentChanges::none()
+            ->withProcessingStatus(ProcessingStatus::Failed)
+            ->withWorkflowFailedAt(new \DateTimeImmutable)
+            ->withWorkflowFailureReason($e->getMessage())
             // Il caso d'uso ha gia' scritto un messaggio comprensibile per
-            // l'operatore: quello tecnico resta in workflow_failure_reason.
-            'error_message' => $document->error_message ?: $e->getMessage(),
-        ]);
+            // l'operatore: quello tecnico resta in workflowFailureReason.
+            ->withErrorMessage($current->errorMessage ?: $e->getMessage()));
     }
 
     /**
      * @param  array<string, mixed>  $message
      * @return array<string, mixed>
      */
-    private function runOcrStep(OriginalDocument $document, array $message): array
+    private function runOcrStep(int $documentId, array $message): array
     {
         $bucket = $message['s3Bucket'] ?? $message['s3_bucket'] ?? null;
         $key = $message['s3Key'] ?? $message['s3_key'] ?? null;
 
-        $result = $this->runOcr->run($document->id, $bucket !== null ? (string) $bucket : null, $key !== null ? (string) $key : null);
+        $result = $this->runOcr->run($documentId, $bucket !== null ? (string) $bucket : null, $key !== null ? (string) $key : null);
 
         return [
             'skipped' => $result['skipped'],
@@ -130,9 +128,9 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
     /**
      * @return array<string, mixed>
      */
-    private function processDocumentStep(OriginalDocument $document): array
+    private function processDocumentStep(int $documentId): array
     {
-        $result = $this->processDocument->process($document->id);
+        $result = $this->processDocument->process($documentId);
 
         if ($result['skipped']) {
             return ['skipped' => true, 'reason' => 'document_already_completed'];
@@ -140,16 +138,7 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
 
         return [
             'skipped' => false,
-            'sub_documents' => $document->refresh()->subDocuments()->count(),
+            'sub_documents' => $this->documents->countSubDocuments($documentId),
         ];
-    }
-
-    private function asDocument(Model $subject): OriginalDocument
-    {
-        if (! $subject instanceof OriginalDocument) {
-            throw new \InvalidArgumentException('Il task documentale richiede un OriginalDocument.');
-        }
-
-        return $subject;
     }
 }

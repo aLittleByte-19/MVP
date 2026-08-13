@@ -183,6 +183,11 @@ class EloquentDocumentRepository implements DocumentRepository
         ExtractedData::updateOrCreate(['sub_document_id' => $subDocumentId], $this->snakeCaseKeys($changes->toArray()));
     }
 
+    public function countSubDocuments(int $originalDocumentId): int
+    {
+        return SubDocument::query()->where('original_document_id', $originalDocumentId)->count();
+    }
+
     public function deleteExtractedData(int $subDocumentId): void
     {
         ExtractedData::query()->where('sub_document_id', $subDocumentId)->delete();

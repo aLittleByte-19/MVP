@@ -85,6 +85,13 @@ interface DocumentRepository
     public function subDocumentIdsWithExtractedData(int $originalDocumentId): array;
 
     /**
+     * Numero di sotto-documenti di un originale (indipendentemente dai dati
+     * estratti): campo diagnostico nella risposta del task workflow
+     * "bedrock.extract".
+     */
+    public function countSubDocuments(int $originalDocumentId): int;
+
+    /**
      * Elimina i sotto-documenti esistenti di un originale (rielaborazione) e
      * restituisce i percorsi storage da ripulire.
      *

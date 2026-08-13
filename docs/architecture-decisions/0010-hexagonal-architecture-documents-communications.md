@@ -764,6 +764,33 @@ verde ad ogni passaggio (commit separati):
   - **380/380** (eseguita due volte, nessuna flakiness — stesso numero di prima: nessun test nuovo,
     solo aggiornamento dei fake `fake*Actor()` nei test `DomainUnit` da `MvpUser` ad `Actor`), Pint 370
     file, Larastan 274 file, Dependency Rule pulita, `/ready` 200.
+- **`WorkflowTaskHandler` non dipende più da `Illuminate\Database\Eloquent\Model`**: era l'ultimo punto
+  rimasto, classificato inizialmente come "progetto a sé" per riportare tutta l'infrastruttura di
+  orchestrazione Step Functions dietro porte proprie — un'indagine mirata (non solo stima) ha mostrato
+  che la superficie reale era molto più piccola: `resolveSubject()`/`execute()`/`onFailure()` usavano
+  l'aggregato Eloquent solo per `->id`, `->tenant_id`, e (un solo punto) `->refresh()->subDocuments()->count()`
+  come campo diagnostico — nessuna vera logica di business sul Model stesso.
+  - Nuovo `App\Mvp\Workflow\Contracts\WorkflowSubject` (id + tenantId, VO immutabile) sostituisce `Model`
+    nella firma dei tre metodi del contratto `WorkflowTaskHandler`. `WorkflowTaskRunner` (il layer
+    condiviso, domain-agnostic) ora legge `$subject->id`/`$subject->tenantId` invece di
+    `getKey()`/`getAttribute('tenant_id')`, e ri-chiama `resolveSubject()` invece di `$subject->refresh()`
+    prima di `execute()`/`onFailure()` (stesso numero di letture DB, stessa garanzia di freschezza,
+    solo attraverso il repository di dominio invece che Eloquent diretto).
+  - `DocumentWorkflowTaskHandler`/`CommunicationWorkflowTaskHandler` ora iniettano `DocumentRepository`/
+    `CommunicationRepository` (la stessa porta secondaria già usata dai casi d'uso) invece di interrogare
+    `OriginalDocument::query()`/`Communication::query()` direttamente. `onFailure()` scrive tramite
+    `updateOriginalDocument()`/`updateCommunication()` con i VO `*Changes` già esistenti, invece di
+    `$model->update([...])` grezzo. Nuovo metodo `DocumentRepository::countSubDocuments()` sostituisce
+    l'unico punto che leggeva una relazione Eloquent per un campo diagnostico.
+  - Il meccanismo di claim/dedup (`WorkflowTask` + UPDATE...WHERE atomico) **non è stato toccato**: è
+    infrastruttura pura che non ha mai referenziato i modelli Documents/Communications, e resta
+    un'operazione SQL atomica per natura — non un candidato realistico a spostarsi dietro una porta di
+    dominio (confermato durante l'indagine, non solo assunto).
+  - Nessun test nuovo: la suite Feature esistente (`DocumentWorkflowTest`, `MvpAppRoutesTest`) già
+    esercita l'intero percorso `WorkflowTaskRunner::handle()` end-to-end con dati reali, non fake —
+    prova live equivalente, non serviva ripeterla separatamente.
+  - **380/380** (invariato, eseguita due volte, nessuna flakiness), Pint 371 file, Larastan 275 file,
+    Dependency Rule pulita, DI verificata dal vivo via tinker.
 
 ## Related documents
 
