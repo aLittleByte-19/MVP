@@ -31,13 +31,14 @@ const MONTHS = [
 ];
 
 /**
- * View del Co-Pilot documentale (MVVM in senso classico): nessuna logica di
- * business qui, solo collante col template e procacciamento delle
- * dipendenze via `inject()` per costruire {@link CopilotPageViewModel}. Le
- * uniche eccezioni sono `effect()`/`takeUntilDestroyed()` nel costruttore,
- * che richiedono un injection context che il ViewModel (classe pura) non
- * ha per costruzione — la logica che innescano vive comunque nel
- * ViewModel (`setFilteredDocuments()`/`handleDocumentsError()`), non qui.
+ * View del Co-Pilot documentale: nessuna logica di business qui, solo
+ * collante col template e procacciamento delle dipendenze via `inject()`
+ * per costruire {@link CopilotPageViewModel} (Presentation Model, Fowler).
+ * Le uniche eccezioni sono `effect()`/`takeUntilDestroyed()` nel
+ * costruttore, che richiedono un injection context che il ViewModel
+ * (classe pura) non ha per costruzione — la logica che innescano vive
+ * comunque nel ViewModel (`setFilteredDocuments()`/`handleDocumentsError()`),
+ * non qui.
  */
 @Component({
   selector: "mvp-copilot-page",

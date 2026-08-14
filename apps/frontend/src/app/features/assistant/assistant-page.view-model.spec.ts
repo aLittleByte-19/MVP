@@ -45,7 +45,7 @@ describe("AssistantPageViewModel", () => {
   let history: ReturnType<typeof signal<Communication[]>>;
   let promptConfigurations: ReturnType<typeof signal<PromptConfiguration[]>>;
   let assistant: Record<string, jest.Mock>;
-  let animation: jest.SpyInstance;
+  let scrollTo: jest.Mock;
 
   beforeEach(() => {
     history = signal<Communication[]>([]);
@@ -66,17 +66,12 @@ describe("AssistantPageViewModel", () => {
       favorite: jest.fn(),
       unfavorite: jest.fn()
     };
-    animation = jest.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      callback(0);
-      return 1;
-    });
+    scrollTo = jest.fn();
   });
-
-  afterEach(() => animation.mockRestore());
 
   function createViewModel(): AssistantPageViewModel {
     const store = { history, promptConfigurations } as unknown as MvpStateStore;
-    return new AssistantPageViewModel(assistant as unknown as AssistantService, store);
+    return new AssistantPageViewModel(assistant as unknown as AssistantService, store, scrollTo);
   }
 
   function setDraft(vm: AssistantPageViewModel, overrides: Partial<GeneratedDraft> = {}): GeneratedDraft {
@@ -242,6 +237,7 @@ describe("AssistantPageViewModel", () => {
 
     expect(vm.selectedDraftId()).toBe(12);
     expect(vm.rateError()).toBeNull();
+    expect(scrollTo).toHaveBeenCalledWith("assistant-review");
   });
 
   it("carica e rimuove la copertina aggiornando sempre lo stato busy", () => {

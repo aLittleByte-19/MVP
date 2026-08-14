@@ -23,10 +23,10 @@ describe("OverviewPageViewModel", () => {
     );
   });
 
-  function createViewModel(): OverviewPageViewModel {
+  function createViewModel(scrollTo: jest.Mock = jest.fn()): OverviewPageViewModel {
     const store = { metric, history: () => [] } as unknown as MvpStateStore;
     const router = { navigate } as unknown as Router;
-    return new OverviewPageViewModel(store, router);
+    return new OverviewPageViewModel(store, router, scrollTo);
   }
 
   it("legge i conteggi autorevoli dallo store", () => {
@@ -42,23 +42,14 @@ describe("OverviewPageViewModel", () => {
     ]);
   });
 
-  it("naviga e scorre alla sezione richiesta", async () => {
-    const vm = createViewModel();
-    const target = document.createElement("div");
-    target.id = "assistant-compose";
-    target.scrollIntoView = jest.fn();
-    document.body.appendChild(target);
-    const animation = jest.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      callback(0);
-      return 1;
-    });
+  it("naviga e delega lo scroll alla View dopo la navigazione", async () => {
+    const scrollTo = jest.fn();
+    const vm = createViewModel(scrollTo);
 
     vm.navigate("assistant", "assistant-compose");
     await Promise.resolve();
 
     expect(navigate).toHaveBeenCalledWith(["assistant"]);
-    expect(target.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
-    animation.mockRestore();
-    target.remove();
+    expect(scrollTo).toHaveBeenCalledWith("assistant-compose");
   });
 });

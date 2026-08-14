@@ -10,6 +10,7 @@ import { ErrorStateComponent } from "../../shared/components/error-state/error-s
 import { SectionComponent } from "../../layout/section/section";
 import { StatusBadgeComponent } from "../../shared/components/status-badge/status-badge";
 import { formatDateForDisplay, formatFallback } from "../../shared/util/formatters";
+import { scrollToElement } from "../../shared/util/scroll";
 import { CommunicationGeneratorPanelComponent } from "./components/communication-generator-panel";
 import { GeneratedCommunicationPreviewComponent } from "./components/generated-communication-preview";
 import { communicationStyles, communicationTones } from "./assistant.model";
@@ -17,13 +18,15 @@ import { AssistantService } from "./data/assistant.service";
 import { AssistantPageViewModel } from "./assistant-page.view-model";
 
 /**
- * View dell'AI Assistant (MVVM in senso classico): nessuna logica di
- * business qui, solo collante col template e procacciamento delle
- * dipendenze via `inject()` per costruire {@link AssistantPageViewModel}.
+ * View dell'AI Assistant: nessuna logica di business qui, solo collante
+ * col template e procacciamento delle dipendenze via `inject()` per
+ * costruire {@link AssistantPageViewModel} — incluso `scrollToElement`,
+ * l'unica operazione DOM richiesta dal ViewModel, che qui resta un'unità
+ * separata (`shared/util/scroll.ts`) invece di un metodo del ViewModel.
  * Le uniche eccezioni sono `effect()`/`takeUntilDestroyed()` nel
  * costruttore, che richiedono un injection context che il ViewModel
- * (classe pura) non ha per costruzione — la logica che innescano vive
- * comunque nel ViewModel (`setFilteredCommunications()`/`handleHistoryError()`).
+ * (Presentation Model) non ha per costruzione — la logica che innescano
+ * vive comunque nel ViewModel (`setFilteredCommunications()`/`handleHistoryError()`).
  */
 @Component({
   selector: "mvp-assistant-page",
@@ -350,7 +353,7 @@ export class AssistantPage {
   private readonly destroyRef = inject(DestroyRef);
 
   constructor() {
-    this.vm = new AssistantPageViewModel(this.assistant, this.store);
+    this.vm = new AssistantPageViewModel(this.assistant, this.store, scrollToElement);
 
     this.filterForm.valueChanges
       .pipe(
