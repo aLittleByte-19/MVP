@@ -1,5 +1,5 @@
 import { signal } from "@angular/core";
-import { of, throwError } from "rxjs";
+import { Subject, of, throwError } from "rxjs";
 import type { Communication, PromptConfiguration } from "../../../api/generated/model";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { AssistantPageViewModel } from "./assistant-page.view-model";
@@ -128,6 +128,19 @@ describe("AssistantPageViewModel", () => {
 
     vm.selectedDraftId.set(404);
     expect(vm.previewDraft()).toBe(latest);
+  });
+
+  it("reload annulla la ricerca precedente ancora in volo: una risposta tardiva non sovrascrive quella nuova", () => {
+    const stale = new Subject<Communication[]>();
+    const fresh = communication({ id: 99 });
+    assistant["searchCommunications"].mockReturnValueOnce(stale).mockReturnValueOnce(of([fresh]));
+    const vm = createViewModel();
+
+    vm.reload();
+    vm.reload();
+    stale.next([communication({ id: 1 })]);
+
+    expect(vm.filteredCommunications()).toEqual([fresh]);
   });
 
   it("reload segnala un errore nel caricamento dello storico", () => {

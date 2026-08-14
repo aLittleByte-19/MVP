@@ -112,10 +112,6 @@ class DocumentController
         $documentId = $originalDocument->id;
 
         return response()->stream(function () use ($documentId, $actor, $state, $poll): void {
-            if (app()->runningUnitTests()) {
-                return;
-            }
-
             set_time_limit(0);
 
             $send = function (string $event, array $data): void {
@@ -196,10 +192,6 @@ class DocumentController
                 if (time() - $startedAt >= $timeoutSeconds) {
                     $send('error', ['message' => 'Timeout elaborazione.']);
 
-                    return;
-                }
-
-                if (app()->runningUnitTests()) {
                     return;
                 }
 

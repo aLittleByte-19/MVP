@@ -21,6 +21,17 @@ use Psr\Clock\ClockInterface;
  * Functions della pipeline comunicazioni. Sostituisce
  * CommunicationWorkflowService: stessa logica, orchestrata attraverso le
  * porte del dominio invece che Eloquent/SfnClient diretti.
+ *
+ * ARN e coda sono risolti una volta sola nel service provider e passati al
+ * costruttore, invece di leggere `config()` qui dentro — stesso pattern
+ * gia' usato per la soglia di confidenza di ExtractSubDocumentFieldsService
+ * e per il prefisso di storage di UpdateCommunicationCoverService/
+ * GenerateCommunicationCoverService (vedi ADR 0010).
+ *
+ * Non basta a rendere `start()` testabile in DomainUnit: `WorkflowContext::bind()`
+ * chiama la facade `Log`, che richiede un container Laravel booted. Il
+ * blocco residuo per un test di dominio puro è questo, non più `config()` —
+ * non risolto in questo giro.
  */
 class StartCommunicationWorkflowService implements StartCommunicationWorkflowUseCase
 {
@@ -32,6 +43,8 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
         private readonly WorkflowContext $context,
         private readonly ClockInterface $clock,
         private readonly UniqueIdGeneratorPort $ids,
+        private readonly string $stateMachineArn,
+        private readonly string $taskQueueUrl,
     ) {}
 
     public function start(int $communicationId, ?string $correlationId, ?string $requestId): void
@@ -44,8 +57,8 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
 
         $this->context->bind($requestId, $correlationId, $communication->tenantId);
 
-        $stateMachineArn = (string) config('services.workflow.communications_state_machine_arn');
-        $taskQueueUrl = (string) config('services.workflow.communications_task_queue_url');
+        $stateMachineArn = $this->stateMachineArn;
+        $taskQueueUrl = $this->taskQueueUrl;
 
         if ($stateMachineArn === '' || $taskQueueUrl === '') {
             throw new \RuntimeException('Pipeline comunicazioni non configurata: COMMUNICATION_PIPELINE_STATE_MACHINE_ARN e COMMUNICATION_PIPELINE_TASK_QUEUE_URL sono obbligatori. Esegui "make refresh-runtime" per rileggere i parametri runtime.');

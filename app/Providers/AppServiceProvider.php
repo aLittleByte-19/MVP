@@ -279,7 +279,34 @@ class AppServiceProvider extends ServiceProvider
 
         // Documents: porta primaria -> caso d'uso applicativo.
         $this->app->bind(UploadDocumentUseCase::class, UploadDocumentService::class);
-        $this->app->bind(StartDocumentWorkflowUseCase::class, StartDocumentWorkflowService::class);
+        // Configurazione della pipeline (ARN, coda, flag Textract, disco/bucket
+        // documentale) risolta qui (confine container) invece che con config()
+        // dentro la classe applicativa, cosi' StartDocumentWorkflowService resta
+        // istanziabile in un test Pest puro senza bootstrap Laravel.
+        $this->app->bind(StartDocumentWorkflowUseCase::class, function ($app) {
+            $disk = (string) config('mvp.documents.storage_disk', config('filesystems.default'));
+            $configuredTaskQueueUrl = (string) config('services.workflow.task_queue_url');
+            $sqsPrefix = rtrim((string) config('queue.connections.sqs.prefix'), '/');
+            $sqsQueue = (string) config('queue.connections.sqs.queue');
+            $taskQueueUrl = $configuredTaskQueueUrl !== ''
+                ? $configuredTaskQueueUrl
+                : ($sqsPrefix !== '' && $sqsQueue !== '' ? "{$sqsPrefix}/{$sqsQueue}" : '');
+
+            return new StartDocumentWorkflowService(
+                $app->make(DocumentRepository::class),
+                $app->make(WorkflowEnginePort::class),
+                $app->make(DocumentEventDispatcherPort::class),
+                $app->make(WorkflowContext::class),
+                $app->make(ClockInterface::class),
+                $app->make(UniqueIdGeneratorPort::class),
+                (string) config('services.workflow.state_machine_arn'),
+                $taskQueueUrl,
+                (bool) config('services.textract.enabled'),
+                $disk,
+                (string) config("filesystems.disks.{$disk}.bucket", config('services.textract.s3_bucket')),
+                trim((string) config("filesystems.disks.{$disk}.root", ''), '/'),
+            );
+        });
         $this->app->bind(ListDocumentsUseCase::class, ListDocumentsService::class);
         $this->app->bind(DeleteDocumentUseCase::class, DeleteDocumentService::class);
         $this->app->bind(RunOcrUseCase::class, RunOcrService::class);
@@ -315,7 +342,22 @@ class AppServiceProvider extends ServiceProvider
 
         // Communications: porta primaria -> caso d'uso applicativo.
         $this->app->bind(GenerateCommunicationUseCase::class, GenerateCommunicationService::class);
-        $this->app->bind(StartCommunicationWorkflowUseCase::class, StartCommunicationWorkflowService::class);
+        // ARN e coda della pipeline risolti qui (confine container) invece che
+        // con config() dentro la classe applicativa, cosi' StartCommunicationWorkflowService
+        // resta istanziabile in un test Pest puro senza bootstrap Laravel.
+        $this->app->bind(StartCommunicationWorkflowUseCase::class, function ($app) {
+            return new StartCommunicationWorkflowService(
+                $app->make(CommunicationRepository::class),
+                $app->make(CommunicationCoverStoragePort::class),
+                $app->make(WorkflowEnginePort::class),
+                $app->make(CommunicationEventDispatcherPort::class),
+                $app->make(WorkflowContext::class),
+                $app->make(ClockInterface::class),
+                $app->make(UniqueIdGeneratorPort::class),
+                (string) config('services.workflow.communications_state_machine_arn'),
+                (string) config('services.workflow.communications_task_queue_url'),
+            );
+        });
         $this->app->bind(ListCommunicationsUseCase::class, ListCommunicationsService::class);
         $this->app->bind(PollCommunicationProgressUseCase::class, PollCommunicationProgressService::class);
         $this->app->bind(CommunicationDraftUseCase::class, CommunicationDraftService::class);

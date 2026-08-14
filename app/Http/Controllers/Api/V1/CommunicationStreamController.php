@@ -35,10 +35,6 @@ class CommunicationStreamController
         $communicationId = $communication->id;
 
         return response()->stream(function () use ($communicationId, $actor, $state, $poll): void {
-            if (app()->runningUnitTests()) {
-                return;
-            }
-
             set_time_limit(0);
 
             $send = function (string $event, array $data): void {

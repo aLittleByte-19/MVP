@@ -20,6 +20,18 @@ use Psr\Clock\ClockInterface;
  * stessa logica (guard di configurazione, idempotenza, tracciamento
  * fallimenti), orchestrata attraverso le porte del dominio invece che
  * Eloquent/SfnClient diretti.
+ *
+ * I parametri di configurazione (ARN, code, flag Textract, disco/bucket
+ * documentale) sono risolti una volta sola nel service provider e passati
+ * al costruttore, invece di leggere `config()` qui dentro — stesso pattern
+ * gia' usato per la soglia di confidenza di ExtractSubDocumentFieldsService
+ * e per il prefisso di storage di UpdateCommunicationCoverService/
+ * GenerateCommunicationCoverService (vedi ADR 0010).
+ *
+ * Non basta a rendere `start()` testabile in DomainUnit: `WorkflowContext::bind()`
+ * chiama la facade `Log`, che richiede un container Laravel booted. Il
+ * blocco residuo per un test di dominio puro è questo, non più `config()` —
+ * non risolto in questo giro.
  */
 class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
 {
@@ -30,6 +42,12 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
         private readonly WorkflowContext $context,
         private readonly ClockInterface $clock,
         private readonly UniqueIdGeneratorPort $ids,
+        private readonly string $stateMachineArn,
+        private readonly string $taskQueueUrl,
+        private readonly bool $textractEnabled,
+        private readonly string $storageDisk,
+        private readonly string $documentBucketFallback,
+        private readonly string $documentKeyPrefix,
     ) {}
 
     public function start(int $documentId, ?string $correlationId, ?string $requestId): void
@@ -42,8 +60,8 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
 
         $this->context->bind($requestId, $correlationId, $document->tenantId);
 
-        $stateMachineArn = (string) config('services.workflow.state_machine_arn');
-        $taskQueueUrl = $this->taskQueueUrl();
+        $stateMachineArn = $this->stateMachineArn;
+        $taskQueueUrl = $this->taskQueueUrl;
 
         if ($stateMachineArn === '' || $taskQueueUrl === '') {
             throw new \RuntimeException('Workflow documentale non configurato: DOCUMENT_PIPELINE_STATE_MACHINE_ARN e DOCUMENT_PIPELINE_TASK_QUEUE_URL sono obbligatori.');
@@ -52,11 +70,11 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
         // Real Textract can only read objects from real S3. If OCR is enabled while
         // documents live on the LocalStack disk, Textract fails with a cryptic
         // InvalidS3ObjectException, so fail fast with an actionable message instead.
-        if ((bool) config('services.textract.enabled') && config('mvp.documents.storage_disk') !== 'real_s3') {
+        if ($this->textractEnabled && $this->storageDisk !== 'real_s3') {
             throw new \RuntimeException('Textract è abilitato (TEXTRACT_ENABLED=true) ma MVP_DOCUMENT_DISK non è "real_s3": i documenti restano su S3 LocalStack e Textract reale non può leggerli. Imposta MVP_DOCUMENT_DISK=real_s3 ed esegui "make refresh-runtime".');
         }
 
-        $bucket = $document->s3Bucket() ?: $this->documentBucket();
+        $bucket = $document->s3Bucket() ?: $this->documentBucketFallback;
         $key = $document->s3Key() ?: $this->documentKey($document->filePath);
 
         $input = [
@@ -105,33 +123,9 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
         return 'mvp-doc-'.$documentId.'-'.$this->ids->generate();
     }
 
-    private function taskQueueUrl(): string
-    {
-        $configured = (string) config('services.workflow.task_queue_url');
-
-        if ($configured !== '') {
-            return $configured;
-        }
-
-        $prefix = rtrim((string) config('queue.connections.sqs.prefix'), '/');
-        $queue = (string) config('queue.connections.sqs.queue');
-
-        return $prefix !== '' && $queue !== '' ? "{$prefix}/{$queue}" : '';
-    }
-
-    private function documentBucket(): string
-    {
-        $disk = (string) config('mvp.documents.storage_disk', config('filesystems.default'));
-
-        return (string) config("filesystems.disks.{$disk}.bucket", config('services.textract.s3_bucket'));
-    }
-
     private function documentKey(string $filePath): string
     {
-        $disk = (string) config('mvp.documents.storage_disk', config('filesystems.default'));
-        $root = trim((string) config("filesystems.disks.{$disk}.root", ''), '/');
-
-        return $root === '' ? $filePath : $root.'/'.$filePath;
+        return $this->documentKeyPrefix === '' ? $filePath : $this->documentKeyPrefix.'/'.$filePath;
     }
 
     private function shortName(string $arn): string

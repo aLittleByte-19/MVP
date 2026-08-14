@@ -3,7 +3,11 @@
 namespace App\Mvp\Documents\Domain\ValueObjects;
 
 /**
- * Proiezione di dominio di un SubDocument. Nessun riferimento a Eloquent.
+ * Proiezione di dominio di un SubDocument. Nessun riferimento a Eloquent:
+ * e' il contratto di idratazione condiviso fra SubDocument::fromRecord()
+ * consumato dall'adapter reale (EloquentDocumentRepository) *e* dal fake
+ * usato nei test di dominio puro (InMemoryDocumentRepository) — non un
+ * doppione ridondante di SubDocument.
  */
 final class SubDocumentRecord
 {

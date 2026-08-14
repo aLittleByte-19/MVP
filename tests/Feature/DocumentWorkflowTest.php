@@ -3,8 +3,8 @@
 use App\Models\AuditEvent;
 use App\Models\OriginalDocument;
 use App\Models\WorkflowTask;
-use App\Mvp\Documents\Application\UseCases\StartDocumentWorkflowService;
 use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
+use App\Mvp\Documents\Domain\Ports\Inbound\StartDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentAiGatewayPort;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Services\WorkflowTaskRunner;
@@ -14,14 +14,18 @@ use Mockery\MockInterface;
  * Testa StartDocumentWorkflowService (adapter secondario WorkflowEnginePort
  * mockato, resto reale) invece del vecchio DocumentWorkflowService: stessa
  * copertura, ma al confine della porta invece che dell'SDK AWS diretto.
+ * Risolto tramite la porta primaria, non la classe concreta: la
+ * configurazione (ARN, coda, disco/bucket) e' risolta nel binding del
+ * service provider, che rilegge `config()` a ogni resolve() — la classe
+ * concreta non legge piu' `config()` internamente (vedi ADR 0010).
  */
-function mvpStartDocumentWorkflowService(?MockInterface $workflowEngine = null): StartDocumentWorkflowService
+function mvpStartDocumentWorkflowService(?MockInterface $workflowEngine = null): StartDocumentWorkflowUseCase
 {
     if ($workflowEngine !== null) {
         app()->instance(WorkflowEnginePort::class, $workflowEngine);
     }
 
-    return app(StartDocumentWorkflowService::class);
+    return app(StartDocumentWorkflowUseCase::class);
 }
 
 test('start document workflow service starts a Step Functions execution and stores metadata', function () {

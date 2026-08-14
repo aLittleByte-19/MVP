@@ -1,5 +1,5 @@
 import { type Signal, type WritableSignal, computed, signal } from "@angular/core";
-import { finalize } from "rxjs";
+import { type Subscription, finalize } from "rxjs";
 import type {
   Communication,
   GenerateCommunicationRequestStyle,
@@ -115,6 +115,8 @@ export class AssistantPageViewModel {
 
   readonly error: Signal<string | null> = computed(() => this.store.error());
 
+  private searchSubscription: Subscription | null = null;
+
   constructor(
     private readonly assistant: AssistantService,
     private readonly store: MvpStateStore,
@@ -125,9 +127,15 @@ export class AssistantPageViewModel {
     this.activeFilters.set(filters);
   }
 
-  /** Rilettura dello storico comunicazioni: stessa forma di generate/discard/..., non solo un setter. */
+  /**
+   * Rilettura dello storico comunicazioni: stessa forma di generate/discard/...,
+   * non solo un setter. Annulla la ricerca precedente ancora in volo prima di
+   * avviarne una nuova, cosi' una risposta arrivata in ritardo non sovrascrive
+   * mai un risultato piu' recente.
+   */
   reload(): void {
-    this.assistant.searchCommunications(this.activeFilters()).subscribe({
+    this.searchSubscription?.unsubscribe();
+    this.searchSubscription = this.assistant.searchCommunications(this.activeFilters()).subscribe({
       next: (communications) => this.setFilteredCommunications(communications),
       error: (error: unknown) => this.handleHistoryError(error)
     });

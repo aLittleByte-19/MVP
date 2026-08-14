@@ -1,5 +1,5 @@
 import { type Signal, type WritableSignal, computed, signal } from "@angular/core";
-import { finalize } from "rxjs";
+import { type Subscription, finalize } from "rxjs";
 import type {
   SubDocument,
   UpdateExtractedDataRequest,
@@ -63,6 +63,8 @@ export class CopilotPageViewModel {
   readonly loading: Signal<boolean> = computed(() => this.store.loading());
   readonly metrics = computed(() => this.store.copilotMetrics());
 
+  private searchSubscription: Subscription | null = null;
+
   constructor(
     private readonly workflow: DocumentWorkflowService,
     private readonly store: MvpStateStore
@@ -72,9 +74,15 @@ export class CopilotPageViewModel {
     this.activeFilters.set(filters);
   }
 
-  /** Rilettura dello storico documenti: stessa forma di upload/deleteDocument/..., non solo un setter. */
+  /**
+   * Rilettura dello storico documenti: stessa forma di upload/deleteDocument/...,
+   * non solo un setter. Annulla la ricerca precedente ancora in volo prima di
+   * avviarne una nuova, cosi' una risposta arrivata in ritardo non sovrascrive
+   * mai un risultato piu' recente.
+   */
   reload(): void {
-    this.workflow.searchDocuments(this.activeFilters()).subscribe({
+    this.searchSubscription?.unsubscribe();
+    this.searchSubscription = this.workflow.searchDocuments(this.activeFilters()).subscribe({
       next: (documents) => this.setFilteredDocuments(documents),
       error: (error: unknown) => this.handleDocumentsError(error)
     });
