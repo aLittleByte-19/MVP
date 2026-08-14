@@ -1,6 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from "@angular/core";
+import { ChangeDetectionStrategy, Component, inject } from "@angular/core";
 import { Router } from "@angular/router";
-import type { MvpView } from "../../core/navigation/app-views";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { ButtonComponent } from "../../shared/components/button/button";
 import { EmptyStateComponent } from "../../shared/components/empty-state/empty-state";
@@ -10,7 +9,16 @@ import { MetricsPanelComponent } from "../../shared/components/metrics-panel/met
 import { StatusBadgeComponent } from "../../shared/components/status-badge/status-badge";
 import { SectionComponent } from "../../layout/section/section";
 import { formatFallback } from "../../shared/util/formatters";
+import { OverviewPageViewModel } from "./overview-page.view-model";
 
+/**
+ * View della Overview (MVVM in senso classico): nessuna logica di business
+ * qui, solo collante col template e procacciamento delle dipendenze via
+ * `inject()` per costruire {@link OverviewPageViewModel}. Lo stato
+ * condiviso non specifico della pagina (`store.error()`, `store.loading()`,
+ * `store.state()` per le metriche degli strumenti) resta legato
+ * direttamente allo store, come nelle altre pagine.
+ */
 @Component({
   selector: "mvp-overview-page",
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -37,8 +45,8 @@ import { formatFallback } from "../../shared/util/formatters";
           classificazione documentale, verifica degli esiti e tracciamento delle consegne.
         </p>
         <div class="buttonRow">
-          <button mvpButton type="button" (click)="navigate('assistant', 'assistant-compose')">Crea contenuto</button>
-          <button mvpButton variant="secondary" type="button" (click)="navigate('copilot', 'copilot-upload')">
+          <button mvpButton type="button" (click)="vm.navigate('assistant', 'assistant-compose')">Crea contenuto</button>
+          <button mvpButton variant="secondary" type="button" (click)="vm.navigate('copilot', 'copilot-upload')">
             Carica documenti
           </button>
         </div>
@@ -63,9 +71,9 @@ import { formatFallback } from "../../shared/util/formatters";
 
       <mvp-section id="overview-priorities" title="Priorità essenziali">
         <div class="priorityGrid">
-          <mvp-metric-card label="Bozze generate" [value]="generatedDrafts()" />
-          <mvp-metric-card label="Documenti da verificare" [value]="documentsToReview()" />
-          <mvp-metric-card label="Documenti pronti" [value]="readyDocuments()" />
+          <mvp-metric-card label="Bozze generate" [value]="vm.generatedDrafts()" />
+          <mvp-metric-card label="Documenti da verificare" [value]="vm.documentsToReview()" />
+          <mvp-metric-card label="Documenti pronti" [value]="vm.readyDocuments()" />
         </div>
       </mvp-section>
 
@@ -83,7 +91,7 @@ import { formatFallback } from "../../shared/util/formatters";
       </mvp-section>
 
       <mvp-section title="Attività recenti">
-        @if (communications().length) {
+        @if (vm.communications().length) {
           <div class="tableWrapper">
             <table class="table">
               <thead>
@@ -94,7 +102,7 @@ import { formatFallback } from "../../shared/util/formatters";
                 </tr>
               </thead>
               <tbody>
-                @for (communication of communications(); track communication.id) {
+                @for (communication of vm.communications(); track communication.id) {
                   <tr>
                     <td data-column="title" data-label="Titolo"><strong>{{ communication.title }}</strong></td>
                     <td data-column="status" data-label="Stato">
@@ -118,22 +126,11 @@ import { formatFallback } from "../../shared/util/formatters";
 })
 export class OverviewPage {
   protected readonly store = inject(MvpStateStore);
-  protected readonly communications = this.store.history;
-  // Conteggi sull'intero tenant, non sulle finestre di elenco: `history` si
-  // ferma a 10 e `documents` a 40, quindi ricalcolarli qui darebbe numeri
-  // silenziosamente sbagliati appena i dati superano quelle soglie.
-  protected readonly generatedDrafts = computed(() => this.store.metric("assistant.drafts"));
-  protected readonly documentsToReview = computed(() => this.store.metric("copilot.needs_review"));
-  protected readonly readyDocuments = computed(() => this.store.metric("copilot.validated"));
   protected readonly formatFallback = formatFallback;
 
-  private readonly router = inject(Router);
+  protected readonly vm: OverviewPageViewModel;
 
-  protected navigate(view: MvpView, targetId: string): void {
-    void this.router.navigate([view]).then(() => {
-      window.requestAnimationFrame(() => {
-        document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    });
+  constructor() {
+    this.vm = new OverviewPageViewModel(this.store, inject(Router));
   }
 }

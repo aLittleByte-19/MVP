@@ -1,28 +1,19 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from "@angular/core";
+import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ReactiveFormsModule } from "@angular/forms";
-import { debounceTime, distinctUntilChanged, finalize } from "rxjs";
-import {
-  SubDocumentSendStatus,
-  type SubDocument,
-  type UpdateExtractedDataRequest,
-  type UpdateSendMessageRequest
-} from "../../../api/generated/model";
+import { debounceTime, distinctUntilChanged } from "rxjs";
+import { SubDocumentSendStatus } from "../../../api/generated/model";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
-import { extractFieldErrors, getApiErrorMessage } from "../../core/errors/api-error";
 import { ButtonComponent } from "../../shared/components/button/button";
 import { ErrorStateComponent } from "../../shared/components/error-state/error-state";
 import { MetricsPanelComponent } from "../../shared/components/metrics-panel/metrics-panel";
 import { SectionComponent } from "../../layout/section/section";
-import {
-  DocumentWorkflowService,
-  type DocumentFilters,
-  type DocumentUploadPhase
-} from "./data/document-workflow.service";
+import { DocumentWorkflowService } from "./data/document-workflow.service";
 import { createDocumentFilterForm, toDocumentFilters } from "./data/document-filters";
 import { DocumentListComponent } from "./components/document-list";
-import { DocumentUploadPanelComponent, type DocumentUploadRequest } from "./components/document-upload-panel";
+import { DocumentUploadPanelComponent } from "./components/document-upload-panel";
 import { SubDocumentListComponent } from "./components/sub-document-list";
+import { CopilotPageViewModel } from "./copilot-page.view-model";
 
 const MONTHS = [
   { value: 1, label: "Gennaio" },
@@ -39,6 +30,15 @@ const MONTHS = [
   { value: 12, label: "Dicembre" }
 ];
 
+/**
+ * View del Co-Pilot documentale (MVVM in senso classico): nessuna logica di
+ * business qui, solo collante col template e procacciamento delle
+ * dipendenze via `inject()` per costruire {@link CopilotPageViewModel}. Le
+ * uniche eccezioni sono `effect()`/`takeUntilDestroyed()` nel costruttore,
+ * che richiedono un injection context che il ViewModel (classe pura) non
+ * ha per costruzione — la logica che innescano vive comunque nel
+ * ViewModel (`setFilteredDocuments()`/`handleDocumentsError()`), non qui.
+ */
 @Component({
   selector: "mvp-copilot-page",
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -59,16 +59,16 @@ const MONTHS = [
       }
 
       <mvp-document-upload-panel
-        [isUploading]="isUploading()"
-        [status]="uploadStatus()"
-        [phase]="uploadPhase()"
-        (upload)="upload($event)"
+        [isUploading]="vm.isUploading()"
+        [status]="vm.uploadStatus()"
+        [phase]="vm.uploadPhase()"
+        (upload)="vm.upload($event)"
       />
 
       <mvp-section id="copilot-documents" title="Storico documenti analizzati">
-        <span actions>{{ filteredDocuments().length }} record</span>
+        <span actions>{{ vm.filteredDocuments().length }} record</span>
 
-        @if (documentsError(); as error) {
+        @if (vm.documentsError(); as error) {
           <mvp-error-state [message]="error" />
         }
 
@@ -120,29 +120,29 @@ const MONTHS = [
         </form>
 
         <mvp-document-list
-          [documents]="filteredDocuments()"
-          [selectedDocumentId]="selectedDocumentIdForList()"
+          [documents]="vm.filteredDocuments()"
+          [selectedDocumentId]="vm.selectedDocumentIdForList()"
           [emptyMessage]="
-            hasActiveFilters()
+            vm.hasActiveFilters()
               ? 'Nessun documento corrisponde ai filtri selezionati.'
               : 'I documenti caricati compariranno qui.'
           "
-          (selectDocument)="selectDocument($event)"
+          (selectDocument)="vm.selectDocument($event)"
         />
       </mvp-section>
 
       <mvp-sub-document-list
-        [documentItem]="selectedDocument()"
-        [isDeleting]="isDeleting()"
-        [isSavingReview]="isSavingReview()"
-        [reviewError]="reviewError()"
-        [isSavingSendMessage]="isSavingSendMessage()"
-        [sendMessageError]="sendMessageError()"
-        [fieldErrors]="reviewFieldErrors()"
-        (deleteDocument)="deleteDocument($event)"
-        (markReviewed)="markReviewed($event)"
-        (saveReviewRequested)="saveReview($event)"
-        (saveSendMessageRequested)="saveSendMessage($event)"
+        [documentItem]="vm.selectedDocument()"
+        [isDeleting]="vm.isDeleting()"
+        [isSavingReview]="vm.isSavingReview()"
+        [reviewError]="vm.reviewError()"
+        [isSavingSendMessage]="vm.isSavingSendMessage()"
+        [sendMessageError]="vm.sendMessageError()"
+        [fieldErrors]="vm.reviewFieldErrors()"
+        (deleteDocument)="vm.deleteDocument($event)"
+        (markReviewed)="vm.markReviewed($event)"
+        (saveReviewRequested)="vm.saveReview($event)"
+        (saveSendMessageRequested)="vm.saveSendMessage($event)"
       />
 
       <mvp-section id="copilot-metrics" title="Qualità e performance OCR">
@@ -194,42 +194,19 @@ const MONTHS = [
 })
 export class CopilotPage {
   protected readonly store = inject(MvpStateStore);
-  protected readonly documents = this.store.documents;
-  protected readonly selectedDocumentId = signal<string | null>(null);
-  // La selezione si risolve sulla stessa lista che l'utente vede: risolverla
-  // sullo store (finestra da 40 alimentata da /api/v1/state) aprirebbe il
-  // documento sbagliato per ogni risultato filtrato fuori da quella finestra.
-  protected readonly selectedDocument = computed(() => {
-    const documents = this.filteredDocuments();
-    const selectedId = this.selectedDocumentId();
-
-    return documents.find((documentItem) => documentItem.id === selectedId) ?? documents[0] ?? null;
-  });
-  protected readonly selectedDocumentIdForList = computed(() => this.selectedDocument()?.id ?? null);
-  protected readonly isUploading = signal(false);
-  protected readonly uploadStatus = signal("Nessun caricamento in corso.");
-  protected readonly uploadPhase = signal<DocumentUploadPhase | null>(null);
-  protected readonly isDeleting = signal(false);
-  protected readonly isSavingReview = signal(false);
-  protected readonly reviewError = signal<string | null>(null);
-  protected readonly isSavingSendMessage = signal(false);
-  protected readonly sendMessageError = signal<string | null>(null);
-  protected readonly reviewFieldErrors = signal<Record<string, string> | null>(null);
   protected readonly months = MONTHS;
   protected readonly sendStatuses = SubDocumentSendStatus;
 
   protected readonly filterForm = createDocumentFilterForm();
 
-  protected readonly activeFilters = signal<DocumentFilters>({});
-  protected readonly hasActiveFilters = computed(() => Object.keys(this.activeFilters()).length > 0);
-  protected readonly filteredDocuments = signal<SubDocument[]>([]);
-  protected readonly documentsError = signal<string | null>(null);
-
-  private readonly destroyRef = inject(DestroyRef);
+  protected readonly vm: CopilotPageViewModel;
 
   private readonly workflow = inject(DocumentWorkflowService);
+  private readonly destroyRef = inject(DestroyRef);
 
   constructor() {
+    this.vm = new CopilotPageViewModel(this.workflow, this.store);
+
     this.filterForm.valueChanges
       .pipe(
         debounceTime(300),
@@ -244,120 +221,28 @@ export class CopilotPage {
         ),
         takeUntilDestroyed()
       )
-      .subscribe((value) => this.activeFilters.set(toDocumentFilters(value)));
+      .subscribe((value) => this.vm.setActiveFilters(toDocumentFilters(value)));
 
     // Una sola sorgente per l'elenco: i filtri e ogni mutazione dello stato
     // (upload, revisione, eliminazione) provocano una rilettura dal backend.
+    // Eccezione documentata: l'effect() richiede un injection context che
+    // CopilotPageViewModel (classe pura) non ha per costruzione — la logica
+    // vera vive in vm.setFilteredDocuments()/handleDocumentsError().
     effect(() => {
       this.store.documents();
-      const filters = this.activeFilters();
+      const filters = this.vm.activeFilters();
 
       this.workflow
         .searchDocuments(filters)
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
-          next: (documents) => {
-            this.filteredDocuments.set(documents);
-            this.documentsError.set(null);
-          },
-          error: (error: unknown) =>
-            this.documentsError.set(getApiErrorMessage(error, "Storico documenti non disponibile."))
+          next: (documents) => this.vm.setFilteredDocuments(documents),
+          error: (error: unknown) => this.vm.handleDocumentsError(error)
         });
     });
   }
 
   protected resetFilters(): void {
     this.filterForm.reset();
-  }
-
-
-  protected selectDocument(documentId: string | null): void {
-    this.selectedDocumentId.set(documentId);
-  }
-
-  protected upload(request: DocumentUploadRequest): void {
-    this.isUploading.set(true);
-    this.uploadPhase.set("uploading");
-    this.uploadStatus.set("Caricamento documento in corso.");
-
-    this.workflow
-      .upload(request.file, request.metadata)
-      .pipe(finalize(() => this.isUploading.set(false)))
-      .subscribe({
-        next: (progress) => {
-          this.uploadStatus.set(progress.status);
-          this.uploadPhase.set(progress.phase);
-
-          if (progress.receivedDocumentId) {
-            this.selectedDocumentId.set(progress.receivedDocumentId);
-          }
-        },
-        error: (error: unknown) => {
-          this.uploadPhase.set("failed");
-          this.uploadStatus.set(getApiErrorMessage(error, "Upload non disponibile."));
-          this.store.reload();
-        }
-      });
-  }
-
-  protected deleteDocument(documentId: string): void {
-    this.isDeleting.set(true);
-
-    this.workflow
-      .deleteSubDocument(documentId)
-      .pipe(finalize(() => this.isDeleting.set(false)))
-      .subscribe({
-        next: () => this.selectedDocumentId.set(null),
-        error: (error: unknown) => {
-          this.reviewError.set(getApiErrorMessage(error, "Eliminazione non disponibile."));
-        }
-      });
-  }
-
-  protected markReviewed(documentId: string): void {
-    this.reviewError.set(null);
-    this.isSavingReview.set(true);
-
-    this.workflow
-      .markReviewed(documentId)
-      .pipe(finalize(() => this.isSavingReview.set(false)))
-      .subscribe({
-        next: () => this.selectedDocumentId.set(documentId),
-        error: (error: unknown) => {
-          this.reviewError.set(getApiErrorMessage(error, "Validazione non disponibile."));
-        }
-      });
-  }
-
-  protected saveReview(event: { documentId: string; payload: UpdateExtractedDataRequest }): void {
-    this.reviewError.set(null);
-    this.reviewFieldErrors.set(null);
-    this.isSavingReview.set(true);
-
-    this.workflow
-      .saveExtractedData(event.documentId, event.payload)
-      .pipe(finalize(() => this.isSavingReview.set(false)))
-      .subscribe({
-        next: () => this.selectedDocumentId.set(event.documentId),
-        error: (error: unknown) => {
-          this.reviewError.set(getApiErrorMessage(error, "Salvataggio revisione non disponibile."));
-          this.reviewFieldErrors.set(extractFieldErrors(error));
-        }
-      });
-  }
-
-  protected saveSendMessage(event: { documentId: string; payload: UpdateSendMessageRequest }): void {
-    this.sendMessageError.set(null);
-    this.isSavingSendMessage.set(true);
-
-    this.workflow
-      .saveSendMessage(event.documentId, event.payload)
-      .pipe(finalize(() => this.isSavingSendMessage.set(false)))
-      .subscribe({
-        next: () => this.selectedDocumentId.set(event.documentId),
-        error: (error: unknown) => {
-          this.sendMessageError.set(getApiErrorMessage(error, "Salvataggio messaggio di invio non disponibile."));
-        }
-      });
   }
 }
