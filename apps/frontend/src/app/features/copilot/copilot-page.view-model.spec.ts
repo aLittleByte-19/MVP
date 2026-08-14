@@ -1,3 +1,4 @@
+import { signal } from "@angular/core";
 import { of, throwError } from "rxjs";
 import type { SubDocument, UpdateExtractedDataRequest, UpdateSendMessageRequest } from "../../../api/generated/model";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
@@ -28,9 +29,15 @@ function subDocument(id: string): SubDocument {
 describe("CopilotPageViewModel", () => {
   let workflow: Record<string, jest.Mock>;
   let reload: jest.Mock;
+  let error: ReturnType<typeof signal<string | null>>;
+  let loading: ReturnType<typeof signal<boolean>>;
+  let copilotMetrics: ReturnType<typeof signal<unknown[]>>;
 
   beforeEach(() => {
     reload = jest.fn();
+    error = signal<string | null>(null);
+    loading = signal(false);
+    copilotMetrics = signal<unknown[]>([]);
     workflow = {
       searchDocuments: jest.fn(() => of([])),
       upload: jest.fn(),
@@ -42,17 +49,33 @@ describe("CopilotPageViewModel", () => {
   });
 
   function createViewModel(): CopilotPageViewModel {
-    const store = { reload } as unknown as MvpStateStore;
+    const store = { reload, error, loading, copilotMetrics } as unknown as MvpStateStore;
     return new CopilotPageViewModel(workflow as unknown as DocumentWorkflowService, store);
   }
 
-  it("risolve selezione e fallback sulla lista visibile quando arrivano risultati filtrati", () => {
-    const first = subDocument("sub-1");
-    const second = subDocument("sub-2");
+  it("espone error/loading/metrics come pass-through dello store, senza che la View lo legga direttamente", () => {
     const vm = createViewModel();
 
-    vm.setFilteredDocuments([first, second]);
+    expect(vm.error()).toBeNull();
+    expect(vm.loading()).toBe(false);
+    expect(vm.metrics()).toEqual([]);
 
+    error.set("errore autorevole");
+    loading.set(true);
+    expect(vm.error()).toBe("errore autorevole");
+    expect(vm.loading()).toBe(true);
+  });
+
+  it("reload cerca con i filtri attivi e popola la lista filtrata", () => {
+    const first = subDocument("sub-1");
+    const second = subDocument("sub-2");
+    workflow["searchDocuments"].mockReturnValue(of([first, second]));
+    const vm = createViewModel();
+    vm.setActiveFilters({ search: "rossi" });
+
+    vm.reload();
+
+    expect(workflow["searchDocuments"]).toHaveBeenCalledWith({ search: "rossi" });
     expect(vm.selectedDocument()).toBe(first);
     expect(vm.selectedDocumentIdForList()).toBe("sub-1");
 
@@ -63,10 +86,11 @@ describe("CopilotPageViewModel", () => {
     expect(vm.selectedDocument()).toBe(first);
   });
 
-  it("espone l'errore dello storico e gestisce lista vuota", () => {
+  it("reload espone l'errore dello storico e gestisce lista vuota", () => {
+    workflow["searchDocuments"].mockReturnValue(throwError(() => new Error("ricerca fallita")));
     const vm = createViewModel();
 
-    vm.handleDocumentsError(new Error("ricerca fallita"));
+    vm.reload();
 
     expect(vm.documentsError()).toBe("ricerca fallita");
     expect(vm.selectedDocument()).toBeNull();

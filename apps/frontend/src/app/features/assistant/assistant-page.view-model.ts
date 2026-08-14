@@ -34,12 +34,14 @@ import { AssistantService, type CommunicationFilters } from "./data/assistant.se
  * DOM: si procura le dipendenze con `inject()`, costruisce questa istanza
  * e le passa `scrollToElement` — l'unica operazione che deve toccare
  * `document`/`window` (vedi `shared/util/scroll.ts`) — come funzione,
- * cosicché il ViewModel possa *chiedere* uno scroll senza *eseguirlo*.
+ * cosicché il ViewModel possa *chiedere* uno scroll senza *eseguirlo*. Il
+ * template legge solo `vm.*` — anche `error`/`loading`, pass-through sullo
+ * store condiviso, non `store.*` direttamente.
  *
  * `effect()`/`takeUntilDestroyed()` restano nella View perché richiedono un
- * injection context che questa classe non ha per costruzione — vedi
- * `setFilteredCommunications()`/`handleHistoryError()`, che ricevono il
- * risultato già calcolato invece di gestire loro stessi la sottoscrizione.
+ * injection context che questa classe non ha per costruzione, ma l'effect si
+ * limita a leggere i segnali sorgente e chiamare `reload()`: la chiamata di
+ * ricerca vera e propria vive qui, come per ogni altra azione del VM.
  */
 export class AssistantPageViewModel {
   readonly phase: WritableSignal<CommunicationGenerationPhase | "idle"> = signal("idle");
@@ -111,6 +113,8 @@ export class AssistantPageViewModel {
   readonly filteredCommunications: WritableSignal<Communication[]> = signal([]);
   readonly historyError: WritableSignal<string | null> = signal(null);
 
+  readonly error: Signal<string | null> = computed(() => this.store.error());
+
   constructor(
     private readonly assistant: AssistantService,
     private readonly store: MvpStateStore,
@@ -121,12 +125,20 @@ export class AssistantPageViewModel {
     this.activeFilters.set(filters);
   }
 
-  setFilteredCommunications(communications: Communication[]): void {
+  /** Rilettura dello storico comunicazioni: stessa forma di generate/discard/..., non solo un setter. */
+  reload(): void {
+    this.assistant.searchCommunications(this.activeFilters()).subscribe({
+      next: (communications) => this.setFilteredCommunications(communications),
+      error: (error: unknown) => this.handleHistoryError(error)
+    });
+  }
+
+  private setFilteredCommunications(communications: Communication[]): void {
     this.filteredCommunications.set(communications);
     this.historyError.set(null);
   }
 
-  handleHistoryError(error: unknown): void {
+  private handleHistoryError(error: unknown): void {
     this.historyError.set(getApiErrorMessage(error, "Storico comunicazioni non disponibile."));
   }
 

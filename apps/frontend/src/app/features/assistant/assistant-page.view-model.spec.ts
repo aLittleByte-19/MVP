@@ -44,12 +44,14 @@ describe("AssistantPageViewModel", () => {
   };
   let history: ReturnType<typeof signal<Communication[]>>;
   let promptConfigurations: ReturnType<typeof signal<PromptConfiguration[]>>;
+  let error: ReturnType<typeof signal<string | null>>;
   let assistant: Record<string, jest.Mock>;
   let scrollTo: jest.Mock;
 
   beforeEach(() => {
     history = signal<Communication[]>([]);
     promptConfigurations = signal<PromptConfiguration[]>([]);
+    error = signal<string | null>(null);
     assistant = {
       searchCommunications: jest.fn(() => of([])),
       generate: jest.fn(),
@@ -70,7 +72,7 @@ describe("AssistantPageViewModel", () => {
   });
 
   function createViewModel(): AssistantPageViewModel {
-    const store = { history, promptConfigurations } as unknown as MvpStateStore;
+    const store = { history, promptConfigurations, error } as unknown as MvpStateStore;
     return new AssistantPageViewModel(assistant as unknown as AssistantService, store, scrollTo);
   }
 
@@ -89,12 +91,24 @@ describe("AssistantPageViewModel", () => {
     return draft;
   }
 
-  it("imposta i risultati filtrati e azzera l'errore dello storico", () => {
-    const record = communication();
+  it("espone error come pass-through dello store, senza che la View lo legga direttamente", () => {
     const vm = createViewModel();
 
-    vm.setFilteredCommunications([record]);
+    expect(vm.error()).toBeNull();
 
+    error.set("errore autorevole");
+    expect(vm.error()).toBe("errore autorevole");
+  });
+
+  it("reload cerca con i filtri attivi, imposta i risultati e azzera l'errore dello storico", () => {
+    const record = communication();
+    assistant["searchCommunications"].mockReturnValue(of([record]));
+    const vm = createViewModel();
+    vm.setActiveFilters({ keyword: "ferie" });
+
+    vm.reload();
+
+    expect(assistant["searchCommunications"]).toHaveBeenCalledWith({ keyword: "ferie" });
     expect(vm.filteredCommunications()).toEqual([record]);
     expect(vm.historyError()).toBeNull();
   });
@@ -116,10 +130,11 @@ describe("AssistantPageViewModel", () => {
     expect(vm.previewDraft()).toBe(latest);
   });
 
-  it("segnala un errore nel caricamento dello storico", () => {
+  it("reload segnala un errore nel caricamento dello storico", () => {
+    assistant["searchCommunications"].mockReturnValue(throwError(() => new Error("storico offline")));
     const vm = createViewModel();
 
-    vm.handleHistoryError(new Error("storico offline"));
+    vm.reload();
 
     expect(vm.historyError()).toBe("storico offline");
   });

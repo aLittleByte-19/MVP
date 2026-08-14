@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject } from "@angular/core";
+import { ChangeDetectionStrategy, Component, effect, inject } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
 import { LucideStar, LucideTrash2 } from "@lucide/angular";
@@ -23,10 +23,11 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
  * costruire {@link AssistantPageViewModel} — incluso `scrollToElement`,
  * l'unica operazione DOM richiesta dal ViewModel, che qui resta un'unità
  * separata (`shared/util/scroll.ts`) invece di un metodo del ViewModel.
- * Le uniche eccezioni sono `effect()`/`takeUntilDestroyed()` nel
- * costruttore, che richiedono un injection context che il ViewModel
- * (Presentation Model) non ha per costruzione — la logica che innescano
- * vive comunque nel ViewModel (`setFilteredCommunications()`/`handleHistoryError()`).
+ * Il template legge solo `vm.*`, mai `store.*` direttamente. Le uniche
+ * eccezioni sono `effect()`/`takeUntilDestroyed()` nel costruttore, che
+ * richiedono un injection context che il ViewModel (Presentation Model)
+ * non ha per costruzione — l'effect si limita a leggere i segnali sorgente
+ * e chiamare `vm.reload()`, che possiede la vera chiamata di ricerca.
  */
 @Component({
   selector: "mvp-assistant-page",
@@ -45,7 +46,7 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
   ],
   template: `
     <section class="view" aria-label="AI Assistant Generativo">
-      @if (store.error(); as error) {
+      @if (vm.error(); as error) {
         <mvp-error-state [message]="error" />
       }
 
@@ -334,7 +335,7 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
   ]
 })
 export class AssistantPage {
-  protected readonly store = inject(MvpStateStore);
+  private readonly store = inject(MvpStateStore);
   protected readonly tones = communicationTones;
   protected readonly styles = communicationStyles;
   protected readonly formatFallback = formatFallback;
@@ -349,11 +350,8 @@ export class AssistantPage {
 
   protected readonly vm: AssistantPageViewModel;
 
-  private readonly assistant = inject(AssistantService);
-  private readonly destroyRef = inject(DestroyRef);
-
   constructor() {
-    this.vm = new AssistantPageViewModel(this.assistant, this.store, scrollToElement);
+    this.vm = new AssistantPageViewModel(inject(AssistantService), this.store, scrollToElement);
 
     this.filterForm.valueChanges
       .pipe(
@@ -372,19 +370,12 @@ export class AssistantPage {
     // Una sola sorgente per lo storico: i filtri e ogni mutazione dello stato
     // (generazione, scarto, eliminazione, valutazione) rileggono dal backend.
     // Eccezione documentata: l'effect() richiede un injection context che
-    // AssistantPageViewModel (classe pura) non ha per costruzione — la
-    // logica vera vive in vm.setFilteredCommunications()/handleHistoryError().
+    // AssistantPageViewModel (classe pura) non ha per costruzione — legge
+    // solo i segnali sorgente, la chiamata di ricerca vera vive in vm.reload().
     effect(() => {
       this.store.history();
-      const filters = this.vm.activeFilters();
-
-      this.assistant
-        .searchCommunications(filters)
-        .pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe({
-          next: (communications) => this.vm.setFilteredCommunications(communications),
-          error: (error: unknown) => this.vm.handleHistoryError(error)
-        });
+      this.vm.activeFilters();
+      this.vm.reload();
     });
   }
 
