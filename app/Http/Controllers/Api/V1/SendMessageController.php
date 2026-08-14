@@ -22,11 +22,10 @@ class SendMessageController
 
     public function sendPreview(Request $request, SubDocument $subDocument, SendMessageUseCase $sendMessage): Response
     {
-        if ($subDocument->originalDocument) {
-            $this->authorizeOriginalDocument($subDocument->originalDocument, $this->actor($request));
-        }
+        $actor = $this->actor($request);
+        $this->authorizeSubDocument($subDocument, $actor);
 
-        $rendered = $sendMessage->preview($subDocument->id, $this->actor($request));
+        $rendered = $sendMessage->preview($subDocument->id, $actor);
 
         return response($rendered->pdf, 200, [
             'Content-Type' => 'application/pdf',
@@ -37,10 +36,7 @@ class SendMessageController
     public function sendExport(Request $request, SubDocument $subDocument, SendMessageUseCase $sendMessage): Response
     {
         $actor = $this->actor($request);
-
-        if ($subDocument->originalDocument) {
-            $this->authorizeOriginalDocument($subDocument->originalDocument, $actor);
-        }
+        $this->authorizeSubDocument($subDocument, $actor);
 
         $rendered = $sendMessage->export($subDocument->id, $actor);
 

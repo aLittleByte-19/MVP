@@ -3,6 +3,7 @@
 use App\Mvp\Documents\Application\UseCases\SendMessageService;
 use App\Mvp\Documents\Domain\Events\SendMessageExported;
 use App\Mvp\Documents\Domain\Events\SendMessageOverridesCorrected;
+use App\Mvp\Documents\Domain\Exceptions\DocumentNotAuthorizedException;
 use App\Mvp\Support\Identity\Actor;
 use Tests\DomainUnit\Documents\Fakes\FakeSendMessageRenderer;
 use Tests\DomainUnit\Documents\Fakes\InMemoryDocumentRepository;
@@ -15,7 +16,7 @@ use Tests\DomainUnit\Documents\Fakes\RecordingDocumentEventDispatcher;
  */
 function fakeSendMessageActor(): Actor
 {
-    return new Actor('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
+    return new Actor('user-1', 'operator@example.test', 'Operator', 'tenant-test', ['mvp-operator']);
 }
 
 test('preview composes the message from extracted data without changing send status', function () {
@@ -50,7 +51,20 @@ test('export marks the message sent once, and dispatches SendMessageExported onl
     (new SendMessageService($documents, new FakeSendMessageRenderer, $eventsSecondCall))->export(10, fakeSendMessageActor());
 
     // Transizione a senso unico: il secondo export non re-invia l'evento.
-    expect($eventsSecondCall->events())->toBeEmpty();
+    expect($eventsSecondCall->events())->toBeEmpty()
+        ->and($documents->findSubDocument(10)->sendStatus()->value)->toBe('sent');
+});
+
+test('export refuses a sub-document that belongs to another tenant', function () {
+    $documents = new InMemoryDocumentRepository;
+    $documents->seedOriginal(1);
+    $documents->seedSubDocument(10, 1, ['send_status' => 'pending']);
+    $events = new RecordingDocumentEventDispatcher;
+    $intruder = new Actor('user-2', 'other@example.test', 'Other', 'altro-tenant', ['mvp-operator']);
+
+    expect(fn () => (new SendMessageService($documents, new FakeSendMessageRenderer, $events))->export(10, $intruder))
+        ->toThrow(DocumentNotAuthorizedException::class)
+        ->and($events->events())->toBeEmpty();
 });
 
 test('updateOverrides persists the provided fields and dispatches SendMessageOverridesCorrected', function () {

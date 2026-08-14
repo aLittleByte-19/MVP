@@ -2,7 +2,7 @@
 
 > Documento aggiornato tramite analisi diretta della codebase.
 > Branch analizzato: integration/develop_merge.
-> Ultimo aggiornamento: 2026-08-06.
+> Ultimo aggiornamento: 2026-08-15.
 
 ---
 
@@ -249,7 +249,7 @@ scrape. Sono gauge, in particolare, le distribuzioni per stato:
 
 ```mermaid
 sequenceDiagram
-    participant FE as SPA (EventSource)
+    participant FE as SPA (SseClient)
     participant API as Laravel API
     participant SFN as Step Functions
     participant SQS as SQS communications queue
@@ -281,7 +281,7 @@ sequenceDiagram
 1. `POST /api/v1/communications` (throttle 20/min) → middleware `mvp.identity` (risolve `MvpUser` da config locale o trusted header) e `mvp.authorize` (tenant + ruolo `mvp-operator|mvp-admin`).
 2. `GenerateCommunicationRequest` valida `prompt` (12-5000 char), `tone` e `style` su whitelist chiuse.
 3. `CommunicationController::store()` persiste la `Communication` con `generation_status=pending` e stato `Draft` (`GenerateCommunicationService`), registra l'audit event `mvp-communication-generation-requested` e avvia l'esecuzione (`StartCommunicationWorkflowService::start()`).
-4. Risposta **202** con `communicationId` e `streamUrl` relativo; la SPA apre l'`EventSource`.
+4. Risposta **202** con `communicationId` e `streamUrl` relativo; la SPA apre lo stream SSE via `fetch` (`SseClient`, con header di correlazione).
 5. `communication.generate_text` chiama Bedrock e persiste titolo, corpo e `image_prompt` (audit `mvp-communication-generated`). Lo stesso modello testuale scrive la direzione visiva della copertina avendo davanti il testo appena generato, quindi l'immagine segue la comunicazione reale e non il solo prompt dell'operatore. Un fallimento qui porta `generation_status=failed`: il testo è la comunicazione.
 6. `communication.generate_cover` passa `image_prompt` al modello immagini, scrive il risultato sul disco copertine (`MVP_COMMUNICATION_COVER_DISK`, l'S3 emulato per default) sotto `communications/covers/` e valorizza `cover_status=ready`. Senza direzione visiva dal modello si usa un soggetto corporate generico. Se il modello non è configurato, nega l'accesso o filtra il contenuto, il task registra `cover_status=failed` con `cover_error` e **chiude comunque con successo**.
 7. `communication.finalize` porta `generation_status=completed`, chiude una copertina rimasta pendente e registra `communication_workflow_completed_total`.
@@ -295,7 +295,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant FE as SPA (EventSource)
+    participant FE as SPA (SseClient)
     participant API as Laravel API
     participant S3 as S3 (LocalStack)
     participant SFN as Step Functions
@@ -520,7 +520,7 @@ Coperte in §5 (Bedrock, Textract) e §6. Punti trasversali:
 
 Coperto in §5; valutazione sintetica:
 
-- **Solido**: data layer uniforme (servizi Angular + client generato), feedback espliciti (loading con `aria-live`, error, empty), SSE per progress reale dell'elaborazione (`DocumentWorkflowService` con EventSource), design token centralizzati con dark mode, test Jest mirati e audit a11y automatizzati in CI.
+- **Solido**: data layer uniforme (servizi Angular + client generato), feedback espliciti (loading con `aria-live`, error, empty), SSE per progress reale dell'elaborazione (`DocumentWorkflowService` / `AssistantService` via `SseClient`), design token centralizzati con dark mode, test Jest mirati e audit a11y automatizzati in CI.
 - **Limiti**: l'emulatore CDN locale (Nginx) valida il flusso build → S3 locale → distribuzione edge, ma non copre OAC, invalidation e propagazione edge reali (in produzione: AWS CloudFront). La coverage frontend supera ampiamente i minimi globali; manca ancora uno smoke SSE completo attraverso il proxy.
 
 ---
@@ -531,7 +531,7 @@ Coperto in §5; valutazione sintetica:
 - **Validazione**: sempre via FormRequest, whitelist chiuse per valori enumerabili.
 - **Middleware chain**: `mvp.identity` → `mvp.authorize` → `throttle` (60/min lettura, 20/min operazioni costose: generazione AI e upload).
 - **Service layer / esagonale**: `Documents` e `Communications` seguono ports & adapters ([ADR 0010](architecture-decisions/0010-hexagonal-architecture-documents-communications.md)); gli altri domini vivono in `app/Mvp/{Ai,Workflow,Identity,Audit,Observability,Support}` come service layer per dominio; confini netti, dipendenze inject-ate, nessun helper globale.
-- **SSE**: lo stream `documents/{id}/stream` ha timeout esplicito (300s) e eventi tipizzati (`document`, `done`, `error`).
+- **SSE**: gli stream `documents/{id}/stream` e `communications/{id}/stream` hanno timeout allineati alla somma dei `TimeoutSeconds` ASL (1800s documenti, 900s comunicazioni). Allo scadere emettono `still_running` invece di `error`, perché la pipeline può ancora concludere. La SPA usa `SseClient` (fetch + header di correlazione) e distingue l'evento nominato `error` dal drop di connessione.
 - **Da rifattorizzare/completare**: il ciclo della bozza comunicazione è esposto dalle rotte di aggiornamento, rigenerazione, scarto ed eliminazione descritte in §6.5. Restano migliorabili il throttle, che non dispone di quote differenziate per tenant, e la verifica completa degli stream SSE attraverso il proxy.
 
 ---
@@ -597,7 +597,7 @@ Area più matura della MVP (dettagli §5):
 | Throttle differenziato per costo | `routes/api.php` (20/min su AI/upload, 60/min lettura) | protegge le operazioni costose (LLM) con limiti più severi |
 | Setup riproducibile one-shot | `make setup` (cert→build→infra→migrate→up) | onboarding e demo senza passi manuali |
 | Prompt/payload redatti nei task | `input_payload` redacted | meno dati sensibili persistiti nei log di workflow |
-| SSE invece di polling | `documents/{id}/stream` + EventSource | progress reale senza martellare l'API |
+| SSE invece di polling | stream documentale e comunicazioni via `SseClient` | progress reale senza martellare l'API; timeout allineati ad ASL |
 
 ---
 

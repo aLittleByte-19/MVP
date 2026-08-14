@@ -3,20 +3,20 @@
 namespace App\Mvp\Documents\Domain\Entities;
 
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
+use App\Mvp\Documents\Domain\Enums\SendStatus;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
 
 /**
  * Entità (non solo VO): a differenza di SubDocumentRecord (proiezione di
- * sola lettura), governa le proprie transizioni di reviewStatus invece di
- * lasciare a ogni caso d'uso il compito di scriverlo correttamente a mano —
+ * sola lettura), governa le proprie transizioni di reviewStatus e sendStatus
+ * invece di lasciare a ogni caso d'uso il compito di scriverle a mano —
  * spike del Progetto A (modello ricco), vedi ADR 0010.
  *
- * Deliberatamente NON governa sendStatus/gli override di invio: quel flusso
- * (SendMessageService) legge lo stato tramite SendMessageContext, una
- * proiezione cross-aggregato (unisce SubDocument+ExtractedData+
- * OriginalDocument per comporre il messaggio) che non ha una casa naturale
- * qui — vedi ADR 0010 per il ragionamento completo.
+ * Gli override di invio restano fuori: quel flusso (SendMessageService)
+ * legge lo stato tramite SendMessageContext, una proiezione cross-aggregato
+ * (unisce SubDocument+ExtractedData+OriginalDocument per comporre il
+ * messaggio) che non ha una casa naturale qui — vedi ADR 0010.
  */
 final class SubDocument
 {
@@ -30,6 +30,7 @@ final class SubDocument
         public readonly int $endPage,
         public readonly string $originalFilename,
         private ReviewStatus $reviewStatus,
+        private SendStatus $sendStatus,
     ) {
         $this->pending = SubDocumentChanges::none();
     }
@@ -44,12 +45,18 @@ final class SubDocument
             $record->endPage,
             $record->originalFilename,
             $reviewStatus,
+            SendStatus::from($record->sendStatus),
         );
     }
 
     public function reviewStatus(): ReviewStatus
     {
         return $this->reviewStatus;
+    }
+
+    public function sendStatus(): SendStatus
+    {
+        return $this->sendStatus;
     }
 
     public function markAutoValidated(): void
@@ -78,6 +85,19 @@ final class SubDocument
     public function markManuallyValidated(): void
     {
         $this->transitionReviewStatus(ReviewStatus::ManuallyValidated);
+    }
+
+    /**
+     * Transizione a senso unico: un secondo export non cambia lo stato.
+     */
+    public function markSent(): void
+    {
+        if ($this->sendStatus === SendStatus::Sent) {
+            return;
+        }
+
+        $this->sendStatus = SendStatus::Sent;
+        $this->pending = $this->pending->withSendStatus(SendStatus::Sent);
     }
 
     private function transitionReviewStatus(ReviewStatus $status): void

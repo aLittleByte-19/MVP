@@ -7,6 +7,7 @@ export type CommunicationGenerationPhase =
   | "queued"
   | "generating-text"
   | "generating-cover"
+  | "still_running"
   | "completed"
   | "failed";
 

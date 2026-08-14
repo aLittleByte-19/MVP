@@ -46,6 +46,8 @@ function progressValue(phase: DocumentUploadPhase | null): number {
       return 60;
     case "extracting":
       return 85;
+    case "still_running":
+      return 90;
     case "completed":
     case "failed":
       return 100;

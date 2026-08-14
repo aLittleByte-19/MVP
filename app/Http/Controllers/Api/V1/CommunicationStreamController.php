@@ -56,7 +56,7 @@ class CommunicationStreamController
             };
 
             $startedAt = time();
-            $timeoutSeconds = 300;
+            $timeoutSeconds = max(60, (int) config('mvp.communications.stream_timeout_seconds', 900));
             $lastSignature = null;
             $textSent = false;
             $coverSent = false;
@@ -122,7 +122,9 @@ class CommunicationStreamController
                 }
 
                 if (time() - $startedAt >= $timeoutSeconds) {
-                    $send('error', ['message' => 'Timeout generazione.']);
+                    $send('still_running', [
+                        'message' => 'Generazione ancora in corso. Lo stato verrà aggiornato.',
+                    ]);
 
                     return;
                 }

@@ -4,6 +4,7 @@ namespace App\Mvp\Documents\Domain\Ports\Outbound;
 
 use App\Mvp\Documents\Domain\Entities\OriginalDocument;
 use App\Mvp\Documents\Domain\Entities\SubDocument;
+use App\Mvp\Documents\Domain\ValueObjects\DocumentListFilters;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Documents\Domain\ValueObjects\NewOriginalDocument;
 use App\Mvp\Documents\Domain\ValueObjects\NewSubDocument;
@@ -51,17 +52,7 @@ interface DocumentRepository
 
     public function deleteOriginalDocumentWithWorkflowTasks(int $id): void;
 
-    /**
-     * @param  array{
-     *     search?: ?string,
-     *     sendStatus?: ?string,
-     *     confidenceThreshold?: ?int,
-     *     confidenceCriterion?: ?string,
-     *     month?: ?int,
-     *     year?: ?int,
-     * }  $filters
-     */
-    public function paginateSubDocuments(string $tenantId, array $filters, int $page, int $perPage): SubDocumentPage;
+    public function paginateSubDocuments(string $tenantId, DocumentListFilters $filters, int $page, int $perPage): SubDocumentPage;
 
     public function findSubDocument(int $id): SubDocument;
 
@@ -69,8 +60,8 @@ interface DocumentRepository
      * Persiste le modifiche accumulate sull'entità (vedi
      * {@see SubDocument::pendingChanges()}). Coesiste con
      * updateSubDocument()/SubDocumentChanges per le scritture che non
-     * passano dall'entità (es. sendStatus, gestito da SendMessageService
-     * tramite SendMessageContext — vedi ADR 0010).
+     * passano dall'entità (es. gli override di invio, gestiti da
+     * SendMessageService tramite SendMessageContext — vedi ADR 0010).
      */
     public function saveSubDocument(SubDocument $subDocument): void;
 

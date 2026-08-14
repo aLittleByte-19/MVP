@@ -62,18 +62,6 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
 
         $stateMachineArn = $this->stateMachineArn;
         $taskQueueUrl = $this->taskQueueUrl;
-
-        if ($stateMachineArn === '' || $taskQueueUrl === '') {
-            throw new \RuntimeException('Workflow documentale non configurato: DOCUMENT_PIPELINE_STATE_MACHINE_ARN e DOCUMENT_PIPELINE_TASK_QUEUE_URL sono obbligatori.');
-        }
-
-        // Real Textract can only read objects from real S3. If OCR is enabled while
-        // documents live on the LocalStack disk, Textract fails with a cryptic
-        // InvalidS3ObjectException, so fail fast with an actionable message instead.
-        if ($this->textractEnabled && $this->storageDisk !== 'real_s3') {
-            throw new \RuntimeException('Textract è abilitato (TEXTRACT_ENABLED=true) ma MVP_DOCUMENT_DISK non è "real_s3": i documenti restano su S3 LocalStack e Textract reale non può leggerli. Imposta MVP_DOCUMENT_DISK=real_s3 ed esegui "make refresh-runtime".');
-        }
-
         $bucket = $document->s3Bucket() ?: $this->documentBucketFallback;
         $key = $document->s3Key() ?: $this->documentKey($document->filePath);
 
@@ -89,6 +77,17 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
         ];
 
         try {
+            if ($stateMachineArn === '' || $taskQueueUrl === '') {
+                throw new \RuntimeException('Workflow documentale non configurato: DOCUMENT_PIPELINE_STATE_MACHINE_ARN e DOCUMENT_PIPELINE_TASK_QUEUE_URL sono obbligatori.');
+            }
+
+            // Real Textract can only read objects from real S3. If OCR is enabled while
+            // documents live on the LocalStack disk, Textract fails with a cryptic
+            // InvalidS3ObjectException, so fail fast with an actionable message instead.
+            if ($this->textractEnabled && $this->storageDisk !== 'real_s3') {
+                throw new \RuntimeException('Textract è abilitato (TEXTRACT_ENABLED=true) ma MVP_DOCUMENT_DISK non è "real_s3": i documenti restano su S3 LocalStack e Textract reale non può leggerli. Imposta MVP_DOCUMENT_DISK=real_s3 ed esegui "make refresh-runtime".');
+            }
+
             $executionArn = $this->workflowEngine->startExecution($stateMachineArn, $this->executionName($documentId), $input);
 
             $document->startProcessing($executionArn, $bucket, $key, $this->clock->now());

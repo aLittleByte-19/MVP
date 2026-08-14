@@ -18,5 +18,6 @@ final class SubDocumentRecord
         public readonly int $startPage,
         public readonly int $endPage,
         public readonly string $originalFilename,
+        public readonly string $sendStatus = 'pending',
     ) {}
 }

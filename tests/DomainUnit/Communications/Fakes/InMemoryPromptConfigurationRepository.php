@@ -2,7 +2,9 @@
 
 namespace Tests\DomainUnit\Communications\Fakes;
 
+use App\Mvp\Communications\Domain\Exceptions\PromptConfigurationNameTakenException;
 use App\Mvp\Communications\Domain\Ports\Outbound\PromptConfigurationRepository;
+use App\Mvp\Communications\Domain\ValueObjects\NewPromptConfiguration;
 
 final class InMemoryPromptConfigurationRepository implements PromptConfigurationRepository
 {
@@ -22,10 +24,14 @@ final class InMemoryPromptConfigurationRepository implements PromptConfiguration
         return false;
     }
 
-    public function create(array $attributes): int
+    public function create(NewPromptConfiguration $configuration): int
     {
+        if ($this->nameExists($configuration->tenantId, $configuration->name)) {
+            throw new PromptConfigurationNameTakenException;
+        }
+
         $id = $this->nextId++;
-        $this->rows[$id] = $attributes;
+        $this->rows[$id] = $configuration->toArray();
 
         return $id;
     }

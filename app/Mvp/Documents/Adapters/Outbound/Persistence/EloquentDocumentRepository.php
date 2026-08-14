@@ -8,6 +8,7 @@ use App\Models\SubDocument;
 use App\Mvp\Documents\Domain\Entities\OriginalDocument as OriginalDocumentEntity;
 use App\Mvp\Documents\Domain\Entities\SubDocument as SubDocumentEntity;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
+use App\Mvp\Documents\Domain\ValueObjects\DocumentListFilters;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Documents\Domain\ValueObjects\NewOriginalDocument;
 use App\Mvp\Documents\Domain\ValueObjects\NewSubDocument;
@@ -64,13 +65,13 @@ class EloquentDocumentRepository implements DocumentRepository
         });
     }
 
-    public function paginateSubDocuments(string $tenantId, array $filters, int $page, int $perPage): SubDocumentPage
+    public function paginateSubDocuments(string $tenantId, DocumentListFilters $filters, int $page, int $perPage): SubDocumentPage
     {
         $query = SubDocument::query()
             ->whereHas('originalDocument', fn ($documents) => $documents->where('tenant_id', $tenantId));
 
         // UC-35: ricerca su nome, cognome e azienda dei dati estratti.
-        if ($search = trim((string) ($filters['search'] ?? ''))) {
+        if ($search = trim((string) ($filters->search ?? ''))) {
             $query->whereHas('extractedData', function ($data) use ($search): void {
                 $like = '%'.$search.'%';
                 $data->where('employee_first_name', 'like', $like)
@@ -80,27 +81,27 @@ class EloquentDocumentRepository implements DocumentRepository
         }
 
         // UC-36: lo stato di invio coincide con l'avvenuto scaricamento del PDF.
-        if ($sendStatus = $filters['sendStatus'] ?? null) {
+        if ($sendStatus = $filters->sendStatus) {
             $query->where('send_status', $sendStatus);
         }
 
         // UC-37: soglia di confidenza, sopra o sotto il valore indicato.
-        $threshold = $filters['confidenceThreshold'] ?? null;
+        $threshold = $filters->confidenceThreshold;
         if ($threshold !== null) {
-            $operator = ($filters['confidenceCriterion'] ?? 'below') === 'above' ? '>=' : '<';
+            $operator = ($filters->confidenceCriterion ?? 'below') === 'above' ? '>=' : '<';
             $query->whereHas(
                 'extractedData',
-                fn ($data) => $data->whereNotNull('confidence_score')->where('confidence_score', $operator, (int) $threshold),
+                fn ($data) => $data->whereNotNull('confidence_score')->where('confidence_score', $operator, $threshold),
             );
         }
 
         // UC-38: mese e anno del documento, indipendenti fra loro.
-        if (($month = $filters['month'] ?? null) !== null) {
-            $query->whereHas('extractedData', fn ($data) => $data->whereMonth('document_date', (int) $month));
+        if (($month = $filters->month) !== null) {
+            $query->whereHas('extractedData', fn ($data) => $data->whereMonth('document_date', $month));
         }
 
-        if (($year = $filters['year'] ?? null) !== null) {
-            $query->whereHas('extractedData', fn ($data) => $data->whereYear('document_date', (int) $year));
+        if (($year = $filters->year) !== null) {
+            $query->whereHas('extractedData', fn ($data) => $data->whereYear('document_date', $year));
         }
 
         $paginator = $query->latest()->paginate(perPage: $perPage, page: $page, columns: ['id']);
@@ -269,6 +270,7 @@ class EloquentDocumentRepository implements DocumentRepository
             startPage: $subDocument->start_page,
             endPage: $subDocument->end_page,
             originalFilename: $subDocument->originalDocument?->original_filename ?: 'documento.pdf',
+            sendStatus: $subDocument->send_status->value,
         );
     }
 }

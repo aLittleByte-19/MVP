@@ -36,7 +36,7 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
   template: `
     <section class="view" aria-label="Overview operativa">
       @if (store.error(); as error) {
-        <mvp-error-state [message]="error" />
+        <mvp-error-state [message]="error" [canRetry]="true" (retry)="store.reload()" />
       }
 
       <mvp-section class="hero">

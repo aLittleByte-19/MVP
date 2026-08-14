@@ -10,6 +10,7 @@ import type {
   UpdateSendMessageRequest,
   UpdateSubDocumentReviewResponse
 } from "../../../../api/generated/model";
+import { SseClient } from "../../../core/http/sse-client";
 import { MvpStateStore } from "../../../core/state/mvp-state.store";
 import { getSubDocumentNumericId } from "../../../shared/util/formatters";
 import type { DOCUMENT_TYPE_OPTIONS } from "../../../shared/util/document-field-validators";
@@ -31,6 +32,7 @@ export type DocumentUploadPhase =
   | "queued"
   | "processing"
   | "extracting"
+  | "still_running"
   | "completed"
   | "failed";
 
@@ -81,6 +83,7 @@ export interface DocumentUploadMetadata {
 export class DocumentWorkflowService {
   private readonly api = inject(AlittlebyteMVPAPIService);
   private readonly store = inject(MvpStateStore);
+  private readonly sse = inject(SseClient);
 
   /**
    * Carica il documento e segue lo stream di elaborazione (Server-Sent Events).
@@ -92,7 +95,7 @@ export class DocumentWorkflowService {
    */
   upload(file: File, metadata: DocumentUploadMetadata = {}): Observable<DocumentUploadProgress> {
     return new Observable<DocumentUploadProgress>((observer) => {
-      let eventSource: EventSource | null = null;
+      let closeStream: (() => void) | null = null;
 
       const subscription = this.api
         .uploadMvpDocument({
@@ -106,46 +109,63 @@ export class DocumentWorkflowService {
           next: (response) => {
             observer.next({ status: response.message, phase: "queued" });
 
-            eventSource = new EventSource(response.streamUrl);
+            closeStream = this.sse.connect(response.streamUrl, {
+              onEvent: (event, data) => {
+                if (event === "progress") {
+                  const progress = data as ProcessingProgressEvent;
+                  observer.next({
+                    status: progressStatusLabel(progress),
+                    phase: progressPhase(progress)
+                  });
+                  return;
+                }
 
-            eventSource.addEventListener("progress", (event) => {
-              const progress = JSON.parse((event as MessageEvent).data) as ProcessingProgressEvent;
-              observer.next({
-                status: progressStatusLabel(progress),
-                phase: progressPhase(progress)
-              });
-            });
+                if (event === "document") {
+                  const document = data as SubDocument;
+                  this.store.upsertDocument(document);
+                  observer.next({
+                    status: "Estrazione dati dai sotto-documenti in corso.",
+                    phase: "extracting",
+                    receivedDocumentId: document.id
+                  });
+                  return;
+                }
 
-            eventSource.addEventListener("document", (event) => {
-              const document = JSON.parse((event as MessageEvent).data) as SubDocument;
-              this.store.upsertDocument(document);
-              observer.next({
-                status: "Estrazione dati dai sotto-documenti in corso.",
-                phase: "extracting",
-                receivedDocumentId: document.id
-              });
-            });
+                if (event === "still_running") {
+                  const payload = data as { message?: string };
+                  observer.next({
+                    status: payload.message ?? "Elaborazione ancora in corso. Lo stato verrà aggiornato.",
+                    phase: "still_running"
+                  });
+                  return;
+                }
 
-            eventSource.addEventListener("done", (event) => {
-              const payload = JSON.parse((event as MessageEvent).data) as { state?: MvpState };
+                if (event === "done") {
+                  const payload = data as { state?: MvpState };
 
-              if (payload.state) {
-                this.store.setState(payload.state);
+                  if (payload.state) {
+                    this.store.setState(payload.state);
+                  }
+
+                  observer.next({ status: "Elaborazione completata.", phase: "completed" });
+                  closeStream?.();
+                  observer.complete();
+                }
+              },
+              onNamedError: (message) => {
+                observer.next({
+                  status: message || "Elaborazione non disponibile. Controlla lo stato del documento.",
+                  phase: "failed"
+                });
+                closeStream?.();
+                this.store.reload();
+                observer.complete();
+              },
+              onConnectionError: () => {
+                closeStream?.();
+                this.store.reload();
+                observer.complete();
               }
-
-              observer.next({ status: "Elaborazione completata.", phase: "completed" });
-              eventSource?.close();
-              observer.complete();
-            });
-
-            eventSource.addEventListener("error", () => {
-              observer.next({
-                status: "Elaborazione non disponibile. Controlla lo stato del documento.",
-                phase: "failed"
-              });
-              eventSource?.close();
-              this.store.reload();
-              observer.complete();
             });
           },
           error: (error: unknown) => observer.error(error)
@@ -153,7 +173,7 @@ export class DocumentWorkflowService {
 
       return () => {
         subscription.unsubscribe();
-        eventSource?.close();
+        closeStream?.();
       };
     });
   }

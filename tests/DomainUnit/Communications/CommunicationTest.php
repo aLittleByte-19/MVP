@@ -179,7 +179,8 @@ test('regenerate resets the generated content once available for a concluded gen
     expect($communication->generatedTitle())->toBeNull()
         ->and($communication->generatedBody())->toBeNull()
         ->and($communication->coverImagePath())->toBeNull()
-        ->and($communication->generationStatus())->toBe(CommunicationGenerationStatus::Pending);
+        ->and($communication->generationStatus())->toBe(CommunicationGenerationStatus::Pending)
+        ->and($communication->coverStatus())->toBe(CoverImageStatus::Pending);
 });
 
 test('isReadyForExport reflects generationStatus and status together', function () {

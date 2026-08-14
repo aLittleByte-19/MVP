@@ -86,10 +86,7 @@ test('consumer completes the task even when heartbeat and callback are rejected'
     $sqs->shouldReceive('receiveMessage')
         ->once()
         ->andReturn(new Result(['Messages' => [['Body' => $body, 'ReceiptHandle' => 'rh-1']]]));
-    $sqs->shouldReceive('deleteMessage')
-        ->once()
-        ->with(Mockery::on(fn (array $args): bool => $args['ReceiptHandle'] === 'rh-1'))
-        ->andReturn(new Result([]));
+    $sqs->shouldNotReceive('deleteMessage');
 
     $sfn = Mockery::mock(SfnClient::class);
     $sfn->shouldReceive('sendTaskHeartbeat')

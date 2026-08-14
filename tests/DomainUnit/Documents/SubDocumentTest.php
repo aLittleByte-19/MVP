@@ -2,6 +2,7 @@
 
 use App\Mvp\Documents\Domain\Entities\SubDocument;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
+use App\Mvp\Documents\Domain\Enums\SendStatus;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
 
 /**
@@ -71,4 +72,17 @@ test('pendingChanges accumulates only the fields actually changed, not the untou
     expect($subDocument->pendingChanges()->isEmpty())->toBeFalse()
         ->and($subDocument->id)->toBe(10)
         ->and($subDocument->filePath)->toBe('documents/sub/10.pdf');
+});
+
+test('markSent transitions sendStatus once and is a no-op the second time', function () {
+    $subDocument = SubDocument::fromRecord(fakeSubDocumentRecord(), ReviewStatus::NeedsReview);
+
+    $subDocument->markSent();
+
+    expect($subDocument->sendStatus())->toBe(SendStatus::Sent)
+        ->and($subDocument->pendingChanges()->toArray())->toHaveKey('sendStatus');
+
+    $subDocument->markSent();
+
+    expect($subDocument->sendStatus())->toBe(SendStatus::Sent);
 });

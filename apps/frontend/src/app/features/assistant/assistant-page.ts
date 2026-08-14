@@ -47,7 +47,7 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
   template: `
     <section class="view" aria-label="AI Assistant Generativo">
       @if (vm.error(); as error) {
-        <mvp-error-state [message]="error" />
+        <mvp-error-state [message]="error" [canRetry]="true" (retry)="store.reload()" />
       }
 
       <mvp-communication-generator-panel
@@ -335,7 +335,7 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
   ]
 })
 export class AssistantPage {
-  private readonly store = inject(MvpStateStore);
+  protected readonly store = inject(MvpStateStore);
   protected readonly tones = communicationTones;
   protected readonly styles = communicationStyles;
   protected readonly formatFallback = formatFallback;

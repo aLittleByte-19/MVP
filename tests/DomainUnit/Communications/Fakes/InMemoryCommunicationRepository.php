@@ -5,6 +5,7 @@ namespace Tests\DomainUnit\Communications\Fakes;
 use App\Mvp\Communications\Domain\Entities\Communication;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationListFilters;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationPage;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationRecord;
 use App\Mvp\Communications\Domain\ValueObjects\NewCommunication;
@@ -48,6 +49,11 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
         return Communication::fromRecord($this->toRecord($this->rows[$id]));
     }
 
+    public function findCommunicationForUpdate(int $id): Communication
+    {
+        return $this->findCommunication($id);
+    }
+
     public function updateCommunication(int $id, CommunicationChanges $changes): void
     {
         if (! isset($this->rows[$id])) {
@@ -73,7 +79,7 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
         unset($this->rows[$id]);
     }
 
-    public function paginateApprovedCommunications(string $tenantId, array $filters, int $page, int $perPage): CommunicationPage
+    public function paginateApprovedCommunications(string $tenantId, CommunicationListFilters $filters, int $page, int $perPage): CommunicationPage
     {
         return new CommunicationPage(communicationIds: [], total: 0, page: $page, perPage: $perPage);
     }

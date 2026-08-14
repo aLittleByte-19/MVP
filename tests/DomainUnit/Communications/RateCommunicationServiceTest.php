@@ -6,6 +6,7 @@ use App\Mvp\Communications\Domain\Exceptions\CommunicationAlreadyRatedException;
 use App\Mvp\Support\Identity\Actor;
 use Tests\DomainUnit\Communications\Fakes\FakeClock;
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
+use Tests\DomainUnit\Communications\Fakes\PassthroughTransactionManager;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
 
 /**
@@ -25,7 +26,7 @@ test('rate persists the rating with the injected clock and dispatches Communicat
     $events = new RecordingEventDispatcher;
     $clock = new FakeClock(new DateTimeImmutable('2026-01-15 10:00:00'));
 
-    (new RateCommunicationService($repository, $events, $clock))
+    (new RateCommunicationService($repository, $events, $clock, new PassthroughTransactionManager))
         ->rate(1, 5, 'Ottima bozza.', fakeRateCommunicationActor());
 
     expect($repository->findCommunication(1)->rating())->toBe(5)
@@ -38,7 +39,7 @@ test('rate refuses a communication already rated', function () {
     $events = new RecordingEventDispatcher;
     $clock = new FakeClock(new DateTimeImmutable);
 
-    expect(fn () => (new RateCommunicationService($repository, $events, $clock))->rate(1, 5, null, fakeRateCommunicationActor()))
+    expect(fn () => (new RateCommunicationService($repository, $events, $clock, new PassthroughTransactionManager))->rate(1, 5, null, fakeRateCommunicationActor()))
         ->toThrow(CommunicationAlreadyRatedException::class)
         ->and($events->events())->toBeEmpty();
 });
@@ -49,7 +50,7 @@ test('rate normalizes a blank comment to no comment', function () {
     $events = new RecordingEventDispatcher;
     $clock = new FakeClock(new DateTimeImmutable);
 
-    (new RateCommunicationService($repository, $events, $clock))->rate(1, 4, '   ', fakeRateCommunicationActor());
+    (new RateCommunicationService($repository, $events, $clock, new PassthroughTransactionManager))->rate(1, 4, '   ', fakeRateCommunicationActor());
 
     /** @var CommunicationRated $dispatched */
     $dispatched = $events->events()[0];

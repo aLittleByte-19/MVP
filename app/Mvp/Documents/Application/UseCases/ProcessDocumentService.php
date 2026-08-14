@@ -18,7 +18,7 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
 use App\Mvp\Documents\Domain\ValueObjects\NewSubDocument;
 use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentChanges;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
-use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
+use App\Mvp\Workflow\Ports\Outbound\WorkflowHeartbeatPort;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use setasign\Fpdi\Fpdi;
@@ -42,12 +42,13 @@ class ProcessDocumentService implements ProcessDocumentUseCase
         private readonly DocumentStoragePort $storage,
         private readonly DocumentAiGatewayPort $ai,
         private readonly DocumentEventDispatcherPort $events,
-        private readonly WorkflowTaskHeartbeat $heartbeat,
+        private readonly WorkflowHeartbeatPort $heartbeat,
         private readonly LoggerInterface $logger,
         private readonly UniqueIdGeneratorPort $ids,
         private readonly OcrRangeReader $ocrRange,
         private readonly ExtractSubDocumentFieldsUseCase $fieldsExtractor,
         private readonly ClockInterface $clock,
+        private readonly string $tempDirectory,
     ) {}
 
     public function process(int $documentId): array
@@ -232,7 +233,7 @@ class ProcessDocumentService implements ProcessDocumentUseCase
 
     private function temporaryPath(string $prefix): string
     {
-        $directory = storage_path('app/tmp/mvp-processing');
+        $directory = $this->tempDirectory;
 
         if (! is_dir($directory)) {
             mkdir($directory, recursive: true);

@@ -1,6 +1,7 @@
 <?php
 
 use App\Mvp\Documents\Application\UseCases\ListDocumentsService;
+use App\Mvp\Documents\Domain\ValueObjects\DocumentListFilters;
 use Tests\DomainUnit\Documents\Fakes\InMemoryDocumentRepository;
 
 /**
@@ -10,7 +11,7 @@ use Tests\DomainUnit\Documents\Fakes\InMemoryDocumentRepository;
 test('list delegates straight to the repository, unchanged', function () {
     $service = new ListDocumentsService(new InMemoryDocumentRepository);
 
-    $page = $service->list('tenant-1', ['search' => 'Rossi'], 3, 25);
+    $page = $service->list('tenant-1', new DocumentListFilters(search: 'Rossi'), 3, 25);
 
     expect($page->subDocumentIds)->toBe([])
         ->and($page->total)->toBe(0)

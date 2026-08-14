@@ -20,6 +20,7 @@ use App\Mvp\Communications\Domain\Ports\Inbound\DeleteCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\ListCommunicationsUseCase;
 use App\Mvp\Communications\Domain\Ports\Inbound\StartCommunicationWorkflowUseCase;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationListFilters;
 use App\Mvp\Support\MvpStateService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
@@ -48,7 +49,12 @@ class CommunicationController
 
         $page = $list->list(
             $actor->tenantId,
-            $filters,
+            new CommunicationListFilters(
+                keyword: isset($filters['keyword']) ? (string) $filters['keyword'] : null,
+                tone: isset($filters['tone']) ? (string) $filters['tone'] : null,
+                style: isset($filters['style']) ? (string) $filters['style'] : null,
+                date: isset($filters['date']) ? (string) $filters['date'] : null,
+            ),
             (int) ($filters['page'] ?? 1),
             (int) ($filters['perPage'] ?? 10),
         );

@@ -4,6 +4,7 @@ use App\Mvp\Communications\Application\UseCases\PromptConfigurationService;
 use App\Mvp\Communications\Domain\Commands\SavePromptConfigurationCommand;
 use App\Mvp\Communications\Domain\Events\PromptConfigurationDeleted;
 use App\Mvp\Communications\Domain\Events\PromptConfigurationSaved;
+use App\Mvp\Communications\Domain\Exceptions\PromptConfigurationNotAuthorizedException;
 use App\Mvp\Support\Identity\Actor;
 use Tests\DomainUnit\Communications\Fakes\InMemoryPromptConfigurationRepository;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
@@ -73,4 +74,16 @@ test('delete removes the configuration and dispatches PromptConfigurationDeleted
 
     expect($configurations->has($id))->toBeFalse()
         ->and($events->hasDispatched(PromptConfigurationDeleted::class))->toBeTrue();
+});
+
+test('delete refuses a configuration that belongs to another tenant', function () {
+    $configurations = new InMemoryPromptConfigurationRepository;
+    $events = new RecordingEventDispatcher;
+    $service = new PromptConfigurationService($configurations, $events);
+    $id = $service->save(new SavePromptConfigurationCommand('Ferie', 'prompt', 'tono', 'stile', fakePromptConfigurationActor()));
+    $intruder = new Actor('user-2', 'other@example.test', 'Other', 'altro-tenant', ['mvp-operator']);
+
+    expect(fn () => $service->delete($id, $intruder))
+        ->toThrow(PromptConfigurationNotAuthorizedException::class)
+        ->and($configurations->has($id))->toBeTrue();
 });

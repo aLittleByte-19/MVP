@@ -381,6 +381,8 @@ final class Communication
         $this->errorMessage = null;
         $this->coverImagePath = null;
         $this->coverImageMime = null;
+        $this->coverStatus = CoverImageStatus::Pending;
+        $this->coverError = null;
         $this->pending = $this->pending
             ->withGeneratedTitle(null)
             ->withGeneratedBody(null)
@@ -392,6 +394,7 @@ final class Communication
             ->withCoverImageMime(null)
             ->withCoverImageSize(null)
             ->withCoverImageSource(null)
+            ->withCoverStatus(CoverImageStatus::Pending)
             ->withCoverError(null);
     }
 
