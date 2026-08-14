@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject } from "@angular/core";
+import { ChangeDetectionStrategy, Component, effect, inject } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ReactiveFormsModule } from "@angular/forms";
 import { debounceTime, distinctUntilChanged } from "rxjs";
@@ -34,11 +34,11 @@ const MONTHS = [
  * View del Co-Pilot documentale: nessuna logica di business qui, solo
  * collante col template e procacciamento delle dipendenze via `inject()`
  * per costruire {@link CopilotPageViewModel} (Presentation Model, Fowler).
- * Le uniche eccezioni sono `effect()`/`takeUntilDestroyed()` nel
- * costruttore, che richiedono un injection context che il ViewModel
- * (classe pura) non ha per costruzione — la logica che innescano vive
- * comunque nel ViewModel (`setFilteredDocuments()`/`handleDocumentsError()`),
- * non qui.
+ * Il template legge solo `vm.*`, mai `store.*` direttamente. Le uniche
+ * eccezioni sono `effect()`/`takeUntilDestroyed()` nel costruttore, che
+ * richiedono un injection context che il ViewModel (classe pura) non ha
+ * per costruzione — l'effect si limita a leggere i segnali sorgente e
+ * chiamare `vm.reload()`, che possiede la vera chiamata di ricerca.
  */
 @Component({
   selector: "mvp-copilot-page",
@@ -55,7 +55,7 @@ const MONTHS = [
   ],
   template: `
     <section class="view" aria-label="AI Co-Pilot per i CdL">
-      @if (store.error(); as error) {
+      @if (vm.error(); as error) {
         <mvp-error-state [message]="error" />
       }
 
@@ -147,7 +147,7 @@ const MONTHS = [
       />
 
       <mvp-section id="copilot-metrics" title="Qualità e performance OCR">
-        <mvp-metrics-panel [isLoading]="store.loading()" [metrics]="store.copilotMetrics()" />
+        <mvp-metrics-panel [isLoading]="vm.loading()" [metrics]="vm.metrics()" />
       </mvp-section>
     </section>
   `,
@@ -194,7 +194,7 @@ const MONTHS = [
   ]
 })
 export class CopilotPage {
-  protected readonly store = inject(MvpStateStore);
+  private readonly store = inject(MvpStateStore);
   protected readonly months = MONTHS;
   protected readonly sendStatuses = SubDocumentSendStatus;
 
@@ -202,11 +202,8 @@ export class CopilotPage {
 
   protected readonly vm: CopilotPageViewModel;
 
-  private readonly workflow = inject(DocumentWorkflowService);
-  private readonly destroyRef = inject(DestroyRef);
-
   constructor() {
-    this.vm = new CopilotPageViewModel(this.workflow, this.store);
+    this.vm = new CopilotPageViewModel(inject(DocumentWorkflowService), this.store);
 
     this.filterForm.valueChanges
       .pipe(
@@ -227,19 +224,12 @@ export class CopilotPage {
     // Una sola sorgente per l'elenco: i filtri e ogni mutazione dello stato
     // (upload, revisione, eliminazione) provocano una rilettura dal backend.
     // Eccezione documentata: l'effect() richiede un injection context che
-    // CopilotPageViewModel (classe pura) non ha per costruzione — la logica
-    // vera vive in vm.setFilteredDocuments()/handleDocumentsError().
+    // CopilotPageViewModel (classe pura) non ha per costruzione — legge solo
+    // i segnali sorgente, la chiamata di ricerca vera vive in vm.reload().
     effect(() => {
       this.store.documents();
-      const filters = this.vm.activeFilters();
-
-      this.workflow
-        .searchDocuments(filters)
-        .pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe({
-          next: (documents) => this.vm.setFilteredDocuments(documents),
-          error: (error: unknown) => this.vm.handleDocumentsError(error)
-        });
+      this.vm.activeFilters();
+      this.vm.reload();
     });
   }
 

@@ -26,12 +26,14 @@ import {
  * `@angular/core`".
  *
  * `CopilotPage` (la View) resta l'unico punto accoppiato ad Angular: si
- * procura le dipendenze con `inject()` e costruisce questa istanza.
+ * procura le dipendenze con `inject()` e costruisce questa istanza. Il
+ * template legge solo `vm.*` — anche `error`/`loading`/`metrics`, pass-through
+ * sullo store condiviso, non `store.*` direttamente.
  *
  * `effect()`/`takeUntilDestroyed()` restano nella View perché richiedono un
- * injection context che questa classe non ha per costruzione — vedi
- * `setFilteredDocuments()`/`handleDocumentsError()`, che ricevono il
- * risultato già calcolato invece di gestire loro stessi la sottoscrizione.
+ * injection context che questa classe non ha per costruzione, ma l'effect si
+ * limita a leggere i segnali sorgente e chiamare `reload()`: la chiamata di
+ * ricerca vera e propria vive qui, come per ogni altra azione del VM.
  */
 export class CopilotPageViewModel {
   readonly selectedDocumentId: WritableSignal<string | null> = signal(null);
@@ -57,6 +59,10 @@ export class CopilotPageViewModel {
   readonly filteredDocuments: WritableSignal<SubDocument[]> = signal([]);
   readonly documentsError: WritableSignal<string | null> = signal(null);
 
+  readonly error: Signal<string | null> = computed(() => this.store.error());
+  readonly loading: Signal<boolean> = computed(() => this.store.loading());
+  readonly metrics = computed(() => this.store.copilotMetrics());
+
   constructor(
     private readonly workflow: DocumentWorkflowService,
     private readonly store: MvpStateStore
@@ -66,12 +72,20 @@ export class CopilotPageViewModel {
     this.activeFilters.set(filters);
   }
 
-  setFilteredDocuments(documents: SubDocument[]): void {
+  /** Rilettura dello storico documenti: stessa forma di upload/deleteDocument/..., non solo un setter. */
+  reload(): void {
+    this.workflow.searchDocuments(this.activeFilters()).subscribe({
+      next: (documents) => this.setFilteredDocuments(documents),
+      error: (error: unknown) => this.handleDocumentsError(error)
+    });
+  }
+
+  private setFilteredDocuments(documents: SubDocument[]): void {
     this.filteredDocuments.set(documents);
     this.documentsError.set(null);
   }
 
-  handleDocumentsError(error: unknown): void {
+  private handleDocumentsError(error: unknown): void {
     this.documentsError.set(getApiErrorMessage(error, "Storico documenti non disponibile."));
   }
 
