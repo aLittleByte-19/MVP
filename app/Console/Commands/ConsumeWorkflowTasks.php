@@ -10,6 +10,7 @@ use Aws\Exception\AwsException;
 use Aws\Sfn\SfnClient;
 use Aws\Sqs\SqsClient;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 class ConsumeWorkflowTasks extends Command
 {
@@ -60,11 +61,19 @@ class ConsumeWorkflowTasks extends Command
 
                 // Il worker non ha una request HTTP: gli id di correlazione
                 // viaggiano nel messaggio e vanno riagganciati a log e audit.
+                // Il tagging dei log e' qui (adapter), non dentro WorkflowContext
+                // (classe pura, vedi il suo docblock) — stesso posto in cui
+                // App\Http\Middleware\CorrelateRequests lo fa per l'HTTP.
                 $context->bind(
                     isset($body['requestId']) ? (string) $body['requestId'] : (isset($body['request_id']) ? (string) $body['request_id'] : null),
                     isset($body['correlationId']) ? (string) $body['correlationId'] : (isset($body['correlation_id']) ? (string) $body['correlation_id'] : null),
                     isset($body['tenantId']) ? (string) $body['tenantId'] : (isset($body['tenant_id']) ? (string) $body['tenant_id'] : null),
                 );
+
+                Log::withContext(array_filter([
+                    'request_id' => $context->requestId(),
+                    'correlation_id' => $context->correlationId(),
+                ]));
 
                 try {
                     $taskResult = $runner->handle($body);
@@ -92,6 +101,7 @@ class ConsumeWorkflowTasks extends Command
                 } finally {
                     $heartbeat->deactivate();
                     $context->clear();
+                    Log::withoutContext();
                 }
 
                 if ($maxMessages > 0 && $processed >= $maxMessages) {

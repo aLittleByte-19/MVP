@@ -1,5 +1,5 @@
 import { signal } from "@angular/core";
-import { of, throwError } from "rxjs";
+import { Subject, of, throwError } from "rxjs";
 import type { SubDocument, UpdateExtractedDataRequest, UpdateSendMessageRequest } from "../../../api/generated/model";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { CopilotPageViewModel } from "./copilot-page.view-model";
@@ -84,6 +84,19 @@ describe("CopilotPageViewModel", () => {
 
     vm.selectDocument("non-visibile");
     expect(vm.selectedDocument()).toBe(first);
+  });
+
+  it("reload annulla la ricerca precedente ancora in volo: una risposta tardiva non sovrascrive quella nuova", () => {
+    const stale = new Subject<SubDocument[]>();
+    const fresh = subDocument("sub-fresh");
+    workflow["searchDocuments"].mockReturnValueOnce(stale).mockReturnValueOnce(of([fresh]));
+    const vm = createViewModel();
+
+    vm.reload();
+    vm.reload();
+    stale.next([subDocument("sub-stale")]);
+
+    expect(vm.filteredDocuments()).toEqual([fresh]);
   });
 
   it("reload espone l'errore dello storico e gestisce lista vuota", () => {

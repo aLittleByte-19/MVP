@@ -118,6 +118,21 @@ adapter guidato da Step Functions". Le sue due implementazioni (`DocumentWorkflo
 loro interno smettono di toccare Eloquent/SDK direttamente: delegano ai casi d'uso di dominio
 tramite le stesse porte primarie usate dai Controller HTTP dello stesso dominio.
 
+`App\Mvp\Support\MvpStateService` è un'eccezione di natura diversa dalle precedenti, e va nominata
+come tale invece di infilarla nello stesso cesto di Identity/Audit/Observability: non è
+infrastruttura senza bisogno di sostituibilità, è un **read model** (CQRS-lite). Le *scritture* sui
+due domini principali passano sempre dalle porte primarie e dai casi d'uso applicativi, senza
+eccezioni. Le *letture* destinate a comporre la UI (`GET /state`, le liste, gli endpoint di
+streaming) sono invece intenzionalmente servite da `MvpStateService`, che interroga Eloquent
+direttamente e assembla lo shape JSON già pronto per il frontend (conteggi cross-entità, join fra
+`SubDocument`/`OriginalDocument`/`ExtractedData`, formattazione di presentazione). Passare queste
+letture attraverso `DocumentRepository`/`CommunicationRepository` non le renderebbe più "esagonali"
+in un senso che conta: quei repository esistono per servire i casi d'uso di scrittura con
+value object di dominio, non per proiettare uno shape di presentazione ottimizzato per una singola
+schermata — usarli per questo accoppierebbe la porta di persistenza del dominio ai bisogni di
+visualizzazione del frontend, il problema opposto a quello che l'esagonale vuole risolvere. La
+separazione lettura/scrittura è quindi una scelta esplicita, non un buco lasciato aperto.
+
 ## Struttura di package (come implementata)
 
 I Controller HTTP restano in `app/Http/Controllers/Api/V1/` (convenzione Laravel per il
@@ -246,6 +261,28 @@ una scelta esplicita (raggruppare transizioni correlate sullo stesso aggregato i
 classe per transizione), non un Command puro: se in sede di discussione viene chiesto "dov'è il
 Command pattern", la risposta onesta è che si applica a metà dei casi d'uso, non a tutti.
 
+Nota di onestà sui casi d'uso pass-through: `ListDocumentsService`/`ListCommunicationsService`
+sono una riga che delega al repository (`return $this->documents->paginateSubDocuments(...)`), con
+tanto di interfaccia (`ListDocumentsUseCase`) e fake dedicato nei test. Non c'è nessuna regola di
+business da isolare lì dentro — l'argomento per tenerli comunque come classe è **uniformità del
+confine**: ogni porta primaria ha sempre un caso d'uso dietro, mai un controller che chiama
+`DocumentRepository` direttamente, così chi legge il codice non deve ricordare quali endpoint
+"fanno eccezione". Non è un argomento di sostituibilità (non c'è nulla da sostituire in una riga di
+delega) — se in sede di discussione viene chiesto perché esiste una classe per un pass-through, la
+risposta onesta è questa, non "incapsula logica di dominio".
+
+Nota di onestà sulla sostituibilità degli adapter: ogni porta secondaria di questo perimetro ha
+oggi **un solo** adapter di produzione (`BedrockDocumentAiAdapter`, `TextractOcrAdapter`,
+`SfnWorkflowEngineAdapter`, `EloquentDocumentRepository`/`EloquentCommunicationRepository`, ecc.).
+L'argomento solido per l'esagonale qui non è "possiamo cambiare provider Bedrock/Textract senza
+toccare i casi d'uso" — nessuno lo ha mai fatto, sarebbe una promessa non verificata. L'argomento
+dimostrato è la **testabilità**: ogni porta ha anche un secondo implementatore reale, il fake usato
+nei test di dominio (`FakeDocumentAiGateway`, `InMemoryDocumentRepository`, `FakeWorkflowEngine`,
+...) — stesso binding concettuale di un secondo adapter di produzione, mai esercitato con un
+provider AWS diverso ma esercitato davvero ad ogni test. Se in sede di discussione si chiede di
+"dimostrare" la sostituibilità con un secondo provider reale, la risposta onesta è che non è mai
+stata costruita: è strutturalmente possibile (stesso binding, stessa interfaccia), non provata.
+
 Pattern valutati e **scartati esplicitamente** (nessuna finzione che "andrebbero comunque bene"):
 
 - **Proxy** (caching/circuit-breaking davanti al gateway Bedrock/Textract): **scartato**. L'ADR
@@ -269,9 +306,27 @@ Pattern valutati e **scartati esplicitamente** (nessuna finzione che "andrebbero
 - Il numero di classi aumenta (un'interfaccia + un'implementazione per ogni porta, invece di un
   service unico): è un costo esplicito e accettato in cambio della sostituibilità e della
   testabilità, non un effetto collaterale.
+- Le liste paginate (`ListDocumentsUseCase`/`ListCommunicationsUseCase`) costano un round-trip in
+  più per richiesta: la porta primaria restituisce solo gli id della pagina corrente (VO
+  `SubDocumentPage`/`CommunicationPage`, nessun riferimento Eloquent), poi il Controller ricarica
+  gli stessi record con le relazioni necessarie per `MvpStateService` (vedi read model sopra) e li
+  riordina secondo l'ordine degli id restituiti dalla porta. Stesso pattern nel loop di polling SSE
+  (`DocumentController::stream()`/`CommunicationStreamController::stream()`): ogni iterazione legge
+  uno snapshot di dominio dalla porta di poll, poi ricarica dal modello Eloquent solo i
+  sotto-documenti nuovi da quest'ultimo giro. Accettato perché tiene la porta di lettura libera da
+  Eloquent senza duplicare lo shaping di `MvpStateService` in due punti: il costo è un secondo giro
+  di query per pagina/iterazione, non per singolo record.
 - I Controller e i `WorkflowTaskHandler` si riducono a traduzione pura (richiesta → chiamata al
   caso d'uso → risposta): le regole oggi nei controller (favorite idempotente, filtri
   documento, transizione one-way di `send_status`) migrano nei casi d'uso.
+- `DocumentController::store()`/`CommunicationController::store()` orchestrano comunque due porte
+  primarie in sequenza (`upload`/`generate`, poi `startWorkflow->start()`): un residuo di logica
+  applicativa nell'adapter, dello stesso tipo che questo ADR dichiara di aver spostato altrove.
+  Deliberatamente non fuso in un unico caso d'uso "carica e avvia": `StartDocumentWorkflowUseCase`/
+  `StartCommunicationWorkflowUseCase` devono restare invocabili da soli — `regenerate()` in
+  `CommunicationController` chiama `startWorkflow->regenerate()` senza mai passare da `generate()`.
+  Fondere i due punti di ingresso in un solo caso d'uso comprometterebbe questo riuso per chiudere
+  un'eccezione piccola: accettato come costo esplicito, non un buco non visto.
 - Il contratto OpenAPI pubblico e il comportamento osservabile (endpoint, payload, status HTTP)
   **non cambiano**: è un refactor architetturale interno, non una riscrittura funzionale (vincolo
   esplicito del brief).

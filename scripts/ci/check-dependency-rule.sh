@@ -7,6 +7,12 @@
 # condivisa legittima). Le violazioni sono cercate su tutto il contenuto del
 # file, non solo sulle istruzioni "use", cosi' da intercettare anche i nomi
 # pienamente qualificati usati inline.
+#
+# Il livello Application ha un vincolo piu' permissivo, non lo stesso di
+# Domain: puo' usare Illuminate\* (es. Illuminate\Support\Str per
+# trasformazioni pure, gia' cosi' per scelta esplicita), ma mai un model
+# Eloquent o l'SDK AWS diretto ("orchestra esclusivamente attraverso le
+# porte", vedi Decision) ne' il namespace dell'altro dominio.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -45,9 +51,17 @@ check_dir() {
 check_dir "app/Mvp/Documents/Domain" "${COMMON_FORBIDDEN_PATTERNS[@]}" 'App\\Mvp\\Communications\\'
 check_dir "app/Mvp/Communications/Domain" "${COMMON_FORBIDDEN_PATTERNS[@]}" 'App\\Mvp\\Documents\\'
 
+APPLICATION_FORBIDDEN_PATTERNS=(
+  'Aws\\'
+  'App\\Models\\'
+)
+
+check_dir "app/Mvp/Documents/Application" "${APPLICATION_FORBIDDEN_PATTERNS[@]}" 'App\\Mvp\\Communications\\'
+check_dir "app/Mvp/Communications/Application" "${APPLICATION_FORBIDDEN_PATTERNS[@]}" 'App\\Mvp\\Documents\\'
+
 if [ "$violations" -ne 0 ]; then
-  echo "Il livello Domain non puo' dipendere da Illuminate\\*, Aws\\*, modelli Eloquent, ne' dal namespace dell'altro dominio (vedi ADR 0010)." >&2
+  echo "Il livello Domain non puo' dipendere da Illuminate\\*, Aws\\*, modelli Eloquent, ne' dal namespace dell'altro dominio; Application non puo' dipendere da Aws\\*, modelli Eloquent, ne' dal namespace dell'altro dominio (vedi ADR 0010)." >&2
   exit 1
 fi
 
-echo "Dependency Rule rispettata: nessun riferimento a Illuminate\\*, Aws\\*, App\\Models\\*, o al namespace dell'altro dominio nel livello Domain."
+echo "Dependency Rule rispettata: Domain libero da Illuminate\\*/Aws\\*/App\\Models\\*/altro dominio; Application libera da Aws\\*/App\\Models\\*/altro dominio."

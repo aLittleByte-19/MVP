@@ -2,14 +2,15 @@
 
 namespace App\Mvp\Workflow\Support;
 
-use Illuminate\Support\Facades\Log;
-
 /**
- * Correlation ids carried by an SQS task message.
- *
- * The worker has no HTTP request to read them from: binding them here keeps
- * log context and audit events attached to the request that started the
- * execution.
+ * Correlation ids carried through a use case execution (HTTP request or SQS
+ * task message). Puro contenitore di stato, nessuna dipendenza da Illuminate:
+ * istanziabile con `new` in un test di dominio puro. Il tagging dei log
+ * (`Log::withContext()`) non vive più qui — per l'HTTP è già ridondante
+ * (`App\Http\Middleware\CorrelateRequests` lo fa per ogni richiesta, stesse
+ * chiavi `request_id`/`correlation_id`); per il worker SQS, che non ha quel
+ * middleware, la stessa chiamata vive ora in `ConsumeWorkflowTasks` (adapter
+ * primario, può legittimamente toccare la facade).
  */
 class WorkflowContext
 {
@@ -24,11 +25,6 @@ class WorkflowContext
         $this->requestId = $requestId !== '' ? $requestId : null;
         $this->correlationId = $correlationId !== '' ? $correlationId : null;
         $this->tenantId = $tenantId !== '' ? $tenantId : null;
-
-        Log::withContext(array_filter([
-            'request_id' => $this->requestId,
-            'correlation_id' => $this->correlationId,
-        ]));
     }
 
     public function clear(): void
@@ -36,8 +32,6 @@ class WorkflowContext
         $this->requestId = null;
         $this->correlationId = null;
         $this->tenantId = null;
-
-        Log::withoutContext();
     }
 
     public function requestId(): ?string
