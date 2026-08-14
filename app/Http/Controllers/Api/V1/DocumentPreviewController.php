@@ -19,12 +19,11 @@ class DocumentPreviewController
 
     public function preview(Request $request, SubDocument $subDocument, PreviewDocumentUseCase $preview): Response
     {
-        if ($subDocument->originalDocument) {
-            $this->authorizeOriginalDocument($subDocument->originalDocument, $this->actor($request));
-        }
+        $actor = $this->actor($request);
+        $this->authorizeSubDocument($subDocument, $actor);
 
         try {
-            $document = $preview->preview($subDocument->id);
+            $document = $preview->preview($subDocument->id, $actor);
         } catch (DocumentPreviewUnavailableException $exception) {
             abort(404, $exception->getMessage());
         } catch (\RuntimeException $exception) {

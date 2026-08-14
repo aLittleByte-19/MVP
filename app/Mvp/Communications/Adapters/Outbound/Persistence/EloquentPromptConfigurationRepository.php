@@ -3,7 +3,10 @@
 namespace App\Mvp\Communications\Adapters\Outbound\Persistence;
 
 use App\Models\PromptConfiguration;
+use App\Mvp\Communications\Domain\Exceptions\PromptConfigurationNameTakenException;
 use App\Mvp\Communications\Domain\Ports\Outbound\PromptConfigurationRepository;
+use App\Mvp\Communications\Domain\ValueObjects\NewPromptConfiguration;
+use Illuminate\Database\UniqueConstraintViolationException;
 
 class EloquentPromptConfigurationRepository implements PromptConfigurationRepository
 {
@@ -15,9 +18,13 @@ class EloquentPromptConfigurationRepository implements PromptConfigurationReposi
             ->exists();
     }
 
-    public function create(array $attributes): int
+    public function create(NewPromptConfiguration $configuration): int
     {
-        return PromptConfiguration::create($attributes)->id;
+        try {
+            return PromptConfiguration::create($configuration->toArray())->id;
+        } catch (UniqueConstraintViolationException) {
+            throw new PromptConfigurationNameTakenException;
+        }
     }
 
     public function tenantIdOf(int $id): string

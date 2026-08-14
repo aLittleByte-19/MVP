@@ -5,9 +5,12 @@ namespace App\Mvp\Communications\Application\UseCases;
 use App\Mvp\Communications\Domain\Commands\SavePromptConfigurationCommand;
 use App\Mvp\Communications\Domain\Events\PromptConfigurationDeleted;
 use App\Mvp\Communications\Domain\Events\PromptConfigurationSaved;
+use App\Mvp\Communications\Domain\Exceptions\PromptConfigurationNameTakenException;
+use App\Mvp\Communications\Domain\Exceptions\PromptConfigurationNotAuthorizedException;
 use App\Mvp\Communications\Domain\Ports\Inbound\PromptConfigurationUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\PromptConfigurationRepository;
+use App\Mvp\Communications\Domain\ValueObjects\NewPromptConfiguration;
 use App\Mvp\Support\Identity\Actor;
 
 class PromptConfigurationService implements PromptConfigurationUseCase
@@ -19,24 +22,38 @@ class PromptConfigurationService implements PromptConfigurationUseCase
 
     public function save(SavePromptConfigurationCommand $command): int
     {
-        $name = $this->resolveName($command->actor->tenantId, $command->name);
+        $maxAttempts = 8;
 
-        $configurationId = $this->configurations->create([
-            'tenant_id' => $command->actor->tenantId,
-            'created_by' => $command->actor->id,
-            'name' => $name,
-            'prompt' => $command->prompt,
-            'tone' => $command->tone,
-            'style' => $command->style,
-        ]);
+        for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+            $name = $this->resolveName($command->actor->tenantId, $attempt === 0 ? $command->name : null);
 
-        $this->events->dispatch(new PromptConfigurationSaved($configurationId, $command->actor, $name));
+            try {
+                $configurationId = $this->configurations->create(new NewPromptConfiguration(
+                    tenantId: $command->actor->tenantId,
+                    createdBy: $command->actor->id,
+                    name: $name,
+                    prompt: $command->prompt,
+                    tone: $command->tone,
+                    style: $command->style,
+                ));
 
-        return $configurationId;
+                $this->events->dispatch(new PromptConfigurationSaved($configurationId, $command->actor, $name));
+
+                return $configurationId;
+            } catch (PromptConfigurationNameTakenException) {
+                continue;
+            }
+        }
+
+        throw new PromptConfigurationNameTakenException;
     }
 
     public function delete(int $configurationId, Actor $actor): void
     {
+        if ($this->configurations->tenantIdOf($configurationId) !== $actor->tenantId) {
+            throw new PromptConfigurationNotAuthorizedException;
+        }
+
         $this->configurations->delete($configurationId);
 
         $this->events->dispatch(new PromptConfigurationDeleted($configurationId, $actor));

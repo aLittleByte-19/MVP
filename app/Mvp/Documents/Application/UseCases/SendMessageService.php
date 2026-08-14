@@ -5,6 +5,7 @@ namespace App\Mvp\Documents\Application\UseCases;
 use App\Mvp\Documents\Domain\Enums\SendStatus;
 use App\Mvp\Documents\Domain\Events\SendMessageExported;
 use App\Mvp\Documents\Domain\Events\SendMessageOverridesCorrected;
+use App\Mvp\Documents\Domain\Exceptions\DocumentNotAuthorizedException;
 use App\Mvp\Documents\Domain\Ports\Inbound\SendMessageUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
@@ -29,31 +30,35 @@ class SendMessageService implements SendMessageUseCase
         private readonly DocumentEventDispatcherPort $events,
     ) {}
 
-    public function preview(int $subDocumentId, ?Actor $actor): RenderedSendMessage
+    public function preview(int $subDocumentId, Actor $actor): RenderedSendMessage
     {
+        $this->assertActorOwnsSubDocument($subDocumentId, $actor);
         $composition = $this->compose($this->documents->findSendMessageContext($subDocumentId));
 
         return new RenderedSendMessage($this->renderer->renderPdf($composition), $this->filename($composition, $subDocumentId));
     }
 
-    public function export(int $subDocumentId, ?Actor $actor): RenderedSendMessage
+    public function export(int $subDocumentId, Actor $actor): RenderedSendMessage
     {
-        $context = $this->documents->findSendMessageContext($subDocumentId);
-        $composition = $this->compose($context);
+        $this->assertActorOwnsSubDocument($subDocumentId, $actor);
+        $subDocument = $this->documents->findSubDocument($subDocumentId);
+        $composition = $this->compose($this->documents->findSendMessageContext($subDocumentId));
 
         // Il recapito avviene fuori dalla piattaforma: il download del PDF e'
         // l'ultimo evento osservabile, quindi e' quello che marca l'invio.
         // Transizione a senso unico: un secondo download non cambia lo stato.
-        if ($context->sendStatus === SendStatus::Pending->value) {
-            $this->documents->updateSubDocument($subDocumentId, SubDocumentChanges::none()->withSendStatus(SendStatus::Sent));
+        if ($subDocument->sendStatus() === SendStatus::Pending) {
+            $subDocument->markSent();
+            $this->documents->saveSubDocument($subDocument);
             $this->events->dispatch(new SendMessageExported($subDocumentId, $actor));
         }
 
         return new RenderedSendMessage($this->renderer->renderPdf($composition), $this->filename($composition, $subDocumentId));
     }
 
-    public function updateOverrides(int $subDocumentId, array $overrides, ?Actor $actor): void
+    public function updateOverrides(int $subDocumentId, array $overrides, Actor $actor): void
     {
+        $this->assertActorOwnsSubDocument($subDocumentId, $actor);
         $changes = SubDocumentChanges::none();
 
         if (array_key_exists('recipient', $overrides)) {
@@ -73,6 +78,16 @@ class SendMessageService implements SendMessageUseCase
         }
 
         $this->events->dispatch(new SendMessageOverridesCorrected($subDocumentId, $actor, array_keys($overrides)));
+    }
+
+    private function assertActorOwnsSubDocument(int $subDocumentId, Actor $actor): void
+    {
+        $subDocument = $this->documents->findSubDocument($subDocumentId);
+        $original = $this->documents->findOriginalDocument($subDocument->originalDocumentId);
+
+        if ($original->tenantId !== $actor->tenantId) {
+            throw new DocumentNotAuthorizedException;
+        }
     }
 
     private function compose(SendMessageContext $context): SendMessageComposition

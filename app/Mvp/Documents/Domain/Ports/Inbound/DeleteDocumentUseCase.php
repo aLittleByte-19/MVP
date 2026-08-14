@@ -2,6 +2,7 @@
 
 namespace App\Mvp\Documents\Domain\Ports\Inbound;
 
+use App\Mvp\Documents\Domain\Exceptions\DocumentNotAuthorizedException;
 use App\Mvp\Support\Identity\Actor;
 
 /**
@@ -10,5 +11,8 @@ use App\Mvp\Support\Identity\Actor;
  */
 interface DeleteDocumentUseCase
 {
-    public function delete(int $subDocumentId, ?Actor $actor): void;
+    /**
+     * @throws DocumentNotAuthorizedException
+     */
+    public function delete(int $subDocumentId, Actor $actor): void;
 }

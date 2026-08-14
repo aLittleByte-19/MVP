@@ -8,6 +8,8 @@ use App\Http\Middleware\AuthorizeMvpAccess;
 use App\Http\Middleware\CorrelateRequests;
 use App\Http\Middleware\RecordHttpMetrics;
 use App\Http\Middleware\ResolveMvpIdentity;
+use App\Mvp\Communications\Domain\Exceptions\PromptConfigurationNotAuthorizedException;
+use App\Mvp\Documents\Domain\Exceptions\DocumentNotAuthorizedException;
 use App\Mvp\Support\RuntimeConfigurationLoader;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
@@ -109,7 +111,7 @@ return (new ApplicationBuilder($app))
             return null;
         });
 
-        $exceptions->render(function (AuthorizationException $exception, Request $request) use ($expectsApiJson, $jsonError) {
+        $exceptions->render(function (AuthorizationException|DocumentNotAuthorizedException|PromptConfigurationNotAuthorizedException $exception, Request $request) use ($expectsApiJson, $jsonError) {
             if ($expectsApiJson($request)) {
                 return $jsonError($request, 'forbidden', 'Operazione non autorizzata.', 403);
             }

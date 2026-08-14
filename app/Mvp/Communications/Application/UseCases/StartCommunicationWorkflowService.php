@@ -60,10 +60,6 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
         $stateMachineArn = $this->stateMachineArn;
         $taskQueueUrl = $this->taskQueueUrl;
 
-        if ($stateMachineArn === '' || $taskQueueUrl === '') {
-            throw new \RuntimeException('Pipeline comunicazioni non configurata: COMMUNICATION_PIPELINE_STATE_MACHINE_ARN e COMMUNICATION_PIPELINE_TASK_QUEUE_URL sono obbligatori. Esegui "make refresh-runtime" per rileggere i parametri runtime.');
-        }
-
         $input = [
             'communication_id' => $communicationId,
             'tenant_id' => $communication->tenantId,
@@ -74,6 +70,10 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
         ];
 
         try {
+            if ($stateMachineArn === '' || $taskQueueUrl === '') {
+                throw new \RuntimeException('Pipeline comunicazioni non configurata: COMMUNICATION_PIPELINE_STATE_MACHINE_ARN e COMMUNICATION_PIPELINE_TASK_QUEUE_URL sono obbligatori. Esegui "make refresh-runtime" per rileggere i parametri runtime.');
+            }
+
             $executionArn = $this->workflowEngine->startExecution($stateMachineArn, 'mvp-comm-'.$communicationId.'-'.$this->ids->generate(), $input);
 
             $communication->startGeneration($executionArn, $this->clock->now());

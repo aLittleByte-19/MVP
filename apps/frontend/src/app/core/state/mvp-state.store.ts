@@ -18,7 +18,6 @@ export class MvpStateStore {
   private readonly _state = signal<MvpState | null>(null);
   private readonly _loading = signal(false);
   private readonly _error = signal<string | null>(null);
-  private loadRequested = false;
 
   readonly state = this._state.asReadonly();
   readonly loading = this._loading.asReadonly();
@@ -42,13 +41,12 @@ export class MvpStateStore {
     return typeof found?.value === "number" ? found.value : 0;
   }
 
-  /** Carica lo stato una sola volta (al primo montaggio della shell). */
+  /** Carica lo stato al primo montaggio; ritenta se il primo tentativo e' fallito. */
   loadOnce(): void {
-    if (this.loadRequested) {
+    if (this._loading() || this._state() !== null) {
       return;
     }
 
-    this.loadRequested = true;
     this.reload();
   }
 

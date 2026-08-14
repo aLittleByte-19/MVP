@@ -7,6 +7,7 @@ use App\Mvp\Communications\Domain\Entities\Communication as CommunicationEntity;
 use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationListFilters;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationPage;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationRecord;
 use App\Mvp\Communications\Domain\ValueObjects\NewCommunication;
@@ -25,6 +26,13 @@ class EloquentCommunicationRepository implements CommunicationRepository
     public function findCommunication(int $id): CommunicationEntity
     {
         return CommunicationEntity::fromRecord($this->toRecord(Communication::query()->findOrFail($id)));
+    }
+
+    public function findCommunicationForUpdate(int $id): CommunicationEntity
+    {
+        return CommunicationEntity::fromRecord($this->toRecord(
+            Communication::query()->lockForUpdate()->findOrFail($id),
+        ));
     }
 
     public function updateCommunication(int $id, CommunicationChanges $changes): void
@@ -48,23 +56,23 @@ class EloquentCommunicationRepository implements CommunicationRepository
         Communication::query()->whereKey($id)->firstOrFail()->delete();
     }
 
-    public function paginateApprovedCommunications(string $tenantId, array $filters, int $page, int $perPage): CommunicationPage
+    public function paginateApprovedCommunications(string $tenantId, CommunicationListFilters $filters, int $page, int $perPage): CommunicationPage
     {
         $query = Communication::query()
             ->where('tenant_id', $tenantId)
             ->where('status', CommunicationStatus::Approved);
 
-        if ($keyword = trim((string) ($filters['keyword'] ?? ''))) {
+        if ($keyword = trim((string) ($filters->keyword ?? ''))) {
             $query->where('prompt', 'like', '%'.$keyword.'%');
         }
 
         foreach (['tone', 'style'] as $exact) {
-            if ($value = trim((string) ($filters[$exact] ?? ''))) {
+            if ($value = trim((string) ($filters->{$exact} ?? ''))) {
                 $query->where($exact, $value);
             }
         }
 
-        if ($date = $filters['date'] ?? null) {
+        if ($date = $filters->date) {
             $query->whereDate('created_at', $date);
         }
 

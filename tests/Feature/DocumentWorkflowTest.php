@@ -179,7 +179,8 @@ test('workflow runner processes textract task idempotently when textract is disa
 
     expect($first['callback_required'])->toBeTrue()
         ->and($first['output']['task_result']['status'])->toBe('skipped')
-        ->and($second['callback_required'])->toBeFalse()
+        ->and($second['callback_required'])->toBeTrue()
+        ->and($second['callback'])->toBe('success')
         ->and(WorkflowTask::query()->count())->toBe(1)
         ->and(WorkflowTask::query()->first()->status)->toBe('skipped')
         ->and(WorkflowTask::query()->first()->subject_type)->toBe('original_document');

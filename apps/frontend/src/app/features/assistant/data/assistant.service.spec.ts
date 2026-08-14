@@ -1,31 +1,38 @@
 import { Injector } from "@angular/core";
 import { Observable, of, throwError } from "rxjs";
 import { AlittlebyteMVPAPIService } from "../../../../api/generated/mvp-api";
+import { SseClient, type SseHandlers } from "../../../core/http/sse-client";
 import { MvpStateStore } from "../../../core/state/mvp-state.store";
 import { AssistantService } from "./assistant.service";
 import type { CommunicationGenerationProgress } from "../assistant.model";
 
-/** EventSource minimale: registra i listener e li lascia scatenare dal test. */
-class FakeEventSource {
-  static last: FakeEventSource | null = null;
+class FakeSseClient {
+  static last: FakeSseClient | null = null;
 
-  readonly listeners = new Map<string, (event: MessageEvent) => void>();
+  url = "";
+  handlers: SseHandlers | null = null;
   closed = false;
 
-  constructor(readonly url: string) {
-    FakeEventSource.last = this;
+  connect(url: string, handlers: SseHandlers): () => void {
+    this.url = url;
+    this.handlers = handlers;
+    FakeSseClient.last = this;
+
+    return () => {
+      this.closed = true;
+    };
   }
 
-  addEventListener(type: string, listener: (event: MessageEvent) => void): void {
-    this.listeners.set(type, listener);
+  emit(event: string, data: unknown): void {
+    this.handlers?.onEvent(event, data);
   }
 
-  close(): void {
-    this.closed = true;
+  emitNamedError(message: string): void {
+    this.handlers?.onNamedError(message);
   }
 
-  emit(type: string, data: unknown): void {
-    this.listeners.get(type)?.({ data: JSON.stringify(data) } as MessageEvent);
+  emitConnectionError(): void {
+    this.handlers?.onConnectionError();
   }
 }
 
@@ -36,8 +43,7 @@ describe("AssistantService", () => {
   let api: Record<string, jest.Mock>;
 
   beforeEach(() => {
-    (globalThis as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
-    FakeEventSource.last = null;
+    FakeSseClient.last = null;
     setState = jest.fn();
     reload = jest.fn();
 
@@ -66,6 +72,7 @@ describe("AssistantService", () => {
       providers: [
         { provide: AlittlebyteMVPAPIService, useValue: api },
         { provide: MvpStateStore, useValue: { setState, reload } },
+        { provide: SseClient, useClass: FakeSseClient },
         { provide: AssistantService, useClass: AssistantService, deps: [] }
       ]
     });
@@ -80,7 +87,7 @@ describe("AssistantService", () => {
       .generate({ prompt: "Comunicazione di prova sufficientemente lunga", tone: "Chiaro e diretto", style: "Testo informativo" })
       .subscribe((progress) => emissions.push(progress));
 
-    const stream = FakeEventSource.last!;
+    const stream = FakeSseClient.last!;
     stream.emit("progress", { generationStatus: "processing", coverStatus: "pending" });
     stream.emit("text", { title: "Titolo", body: "Corpo" });
     stream.emit("cover", { coverImageUrl: "/api/v1/communications/7/cover-image", coverStatus: "ready", coverError: null });
@@ -105,7 +112,7 @@ describe("AssistantService", () => {
       .generate({ prompt: "Comunicazione di prova sufficientemente lunga", tone: "Chiaro e diretto", style: "Testo informativo" })
       .subscribe((progress) => emissions.push(progress));
 
-    const stream = FakeEventSource.last!;
+    const stream = FakeSseClient.last!;
     stream.emit("text", { title: "Titolo", body: "Corpo" });
     stream.emit("cover", { coverImageUrl: null, coverStatus: "failed", coverError: "Copertina non disponibile." });
     stream.emit("done", { communication: { id: 7 }, state: { assistant: {}, copilot: {} } });
@@ -122,7 +129,7 @@ describe("AssistantService", () => {
 
     service.regenerate(7).subscribe((progress) => emissions.push(progress));
 
-    const stream = FakeEventSource.last!;
+    const stream = FakeSseClient.last!;
     stream.emit("text", { title: "Titolo nuovo", body: "Corpo nuovo" });
     stream.emit("done", { communication: { id: 7 }, state: { assistant: {}, copilot: {} } });
 
@@ -142,24 +149,46 @@ describe("AssistantService", () => {
     service.generate({ prompt: "Comunicazione di prova sufficientemente lunga", tone: "Chiaro e diretto", style: "Testo informativo" })
       .subscribe((progress) => emissions.push(progress));
 
-    FakeEventSource.last!.emit("progress", event);
+    FakeSseClient.last!.emit("progress", event);
 
     expect(emissions.at(-1)).toMatchObject({ phase, status, communicationId: 7 });
   });
 
-  it("completa con errore controllato quando lo stream fallisce", () => {
+  it("completa con errore controllato quando lo stream emette un errore nominato", () => {
     const emissions: CommunicationGenerationProgress[] = [];
     let completed = false;
     service.generate({ prompt: "Comunicazione di prova sufficientemente lunga", tone: "Chiaro e diretto", style: "Testo informativo" })
       .subscribe({ next: (progress) => emissions.push(progress), complete: () => { completed = true; } });
 
-    const stream = FakeEventSource.last!;
-    stream.emit("error", null);
+    const stream = FakeSseClient.last!;
+    stream.emitNamedError("Generazione non disponibile.");
 
     expect(emissions.at(-1)?.phase).toBe("failed");
     expect(reload).toHaveBeenCalledTimes(1);
     expect(stream.closed).toBe(true);
     expect(completed).toBe(true);
+  });
+
+  it("su caduta della connessione ricarica lo stato senza marcare la pipeline come fallita", () => {
+    const emissions: CommunicationGenerationProgress[] = [];
+    service.generate({ prompt: "Comunicazione di prova sufficientemente lunga", tone: "Chiaro e diretto", style: "Testo informativo" })
+      .subscribe((progress) => emissions.push(progress));
+
+    FakeSseClient.last!.emitConnectionError();
+
+    expect(emissions.at(-1)?.phase).toBe("queued");
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("segnala still_running senza chiudere lo stream", () => {
+    const emissions: CommunicationGenerationProgress[] = [];
+    service.generate({ prompt: "Comunicazione di prova sufficientemente lunga", tone: "Chiaro e diretto", style: "Testo informativo" })
+      .subscribe((progress) => emissions.push(progress));
+
+    FakeSseClient.last!.emit("still_running", { message: "Generazione ancora in corso. Lo stato verrà aggiornato." });
+
+    expect(emissions.at(-1)).toMatchObject({ phase: "still_running" });
+    expect(FakeSseClient.last!.closed).toBe(false);
   });
 
   it("propaga un errore della richiesta iniziale senza aprire lo stream", () => {
@@ -171,7 +200,7 @@ describe("AssistantService", () => {
       .subscribe({ error: (value: unknown) => { received = value; } });
 
     expect(received).toBe(error);
-    expect(FakeEventSource.last).toBeNull();
+    expect(FakeSseClient.last).toBeNull();
   });
 
   it("chiude lo stream e annulla la richiesta quando il consumer si disiscrive", () => {
@@ -182,7 +211,7 @@ describe("AssistantService", () => {
     }));
 
     const subscription = service.generate({ prompt: "Comunicazione di prova sufficientemente lunga", tone: "Chiaro e diretto", style: "Testo informativo" }).subscribe();
-    const stream = FakeEventSource.last!;
+    const stream = FakeSseClient.last!;
     subscription.unsubscribe();
 
     expect(unsubscribed).toBe(true);
@@ -194,7 +223,7 @@ describe("AssistantService", () => {
     service.generate({ prompt: "Comunicazione di prova sufficientemente lunga", tone: "Chiaro e diretto", style: "Testo informativo" })
       .subscribe((progress) => emissions.push(progress));
 
-    FakeEventSource.last!.emit("done", {});
+    FakeSseClient.last!.emit("done", {});
 
     expect(setState).not.toHaveBeenCalled();
     expect(emissions.at(-1)).toMatchObject({ phase: "completed", communication: undefined });

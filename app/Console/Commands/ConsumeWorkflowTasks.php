@@ -78,22 +78,47 @@ class ConsumeWorkflowTasks extends Command
                 try {
                     $taskResult = $runner->handle($body);
 
-                    if ($taskResult['callback_required']) {
-                        $this->sendCallback($metrics, fn () => $stepFunctions->sendTaskSuccess([
-                            'taskToken' => $taskToken,
-                            'output' => json_encode($taskResult['output'], JSON_THROW_ON_ERROR),
-                        ]), 'sendTaskSuccess');
+                    if ($taskResult['duplicate_in_flight'] ?? false) {
+                        $this->info('Workflow task already in flight; message left on queue.');
+
+                        continue;
                     }
 
-                    $this->deleteMessage($sqs, $queueUrl, $receiptHandle);
-                    $this->info('Workflow task handled: '.($body['taskType'] ?? $body['task_type'] ?? 'unknown'));
+                    $callbackOk = true;
+
+                    if ($taskResult['callback_required']) {
+                        if (($taskResult['callback'] ?? 'success') === 'failure') {
+                            $callbackOk = $this->sendCallback($metrics, fn () => $stepFunctions->sendTaskFailure([
+                                'taskToken' => $taskToken,
+                                'error' => 'WorkflowTaskFailed',
+                                'cause' => substr((string) ($taskResult['error'] ?? 'Workflow task failed'), 0, 32000),
+                            ]), 'sendTaskFailure');
+                        } else {
+                            $callbackOk = $this->sendCallback($metrics, fn () => $stepFunctions->sendTaskSuccess([
+                                'taskToken' => $taskToken,
+                                'output' => json_encode($taskResult['output'], JSON_THROW_ON_ERROR),
+                            ]), 'sendTaskSuccess');
+                        }
+                    }
+
+                    if ($callbackOk) {
+                        $this->deleteMessage($sqs, $queueUrl, $receiptHandle);
+                        $this->info('Workflow task handled: '.($body['taskType'] ?? $body['task_type'] ?? 'unknown'));
+                    } else {
+                        $this->warn('Callback Step Functions non confermato: il messaggio resta in coda.');
+                    }
                 } catch (\Throwable $e) {
+                    $callbackOk = false;
+
                     if ($taskToken !== '') {
-                        $this->sendCallback($metrics, fn () => $stepFunctions->sendTaskFailure([
+                        $callbackOk = $this->sendCallback($metrics, fn () => $stepFunctions->sendTaskFailure([
                             'taskToken' => $taskToken,
                             'error' => 'WorkflowTaskFailed',
                             'cause' => substr($e->getMessage(), 0, 32000),
                         ]), 'sendTaskFailure');
+                    }
+
+                    if ($callbackOk) {
                         $this->deleteMessage($sqs, $queueUrl, $receiptHandle);
                     }
 
@@ -120,18 +145,24 @@ class ConsumeWorkflowTasks extends Command
     /**
      * Un callback rifiutato (token gia' consumato, esecuzione scaduta per
      * heartbeat/timeout, emulatore non allineato ad AWS) non deve abbattere
-     * il loop di consumo: l'esito di business resta tracciato a database.
+     * il loop di consumo: l'esito di business resta tracciato a database, ma
+     * il messaggio SQS resta in coda finche' Step Functions non accetta il
+     * callback (un token nuovo arrivera' al retry ASL).
      */
-    private function sendCallback(MetricsRecorder $metrics, callable $callback, string $operation): void
+    private function sendCallback(MetricsRecorder $metrics, callable $callback, string $operation): bool
     {
         try {
             $callback();
+
+            return true;
         } catch (AwsException $e) {
             $metrics->recordDomainCounter('stepfunctions_callbacks_failed_total', [
                 'operation' => $operation,
                 'error' => $e->getAwsErrorCode() ?: 'aws_error',
             ]);
             $this->warn("{$operation} rifiutato da Step Functions: ".($e->getAwsErrorMessage() ?: $e->getMessage()));
+
+            return false;
         }
     }
 

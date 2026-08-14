@@ -15,6 +15,7 @@ use App\Mvp\Documents\Domain\Ports\Inbound\ListDocumentsUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\PollDocumentProgressUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\StartDocumentWorkflowUseCase;
 use App\Mvp\Documents\Domain\Ports\Inbound\UploadDocumentUseCase;
+use App\Mvp\Documents\Domain\ValueObjects\DocumentListFilters;
 use App\Mvp\Support\MvpStateService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -43,7 +44,14 @@ class DocumentController
 
         $page = $list->list(
             $actor->tenantId,
-            $filters,
+            new DocumentListFilters(
+                search: isset($filters['search']) ? (string) $filters['search'] : null,
+                sendStatus: isset($filters['sendStatus']) ? (string) $filters['sendStatus'] : null,
+                confidenceThreshold: isset($filters['confidenceThreshold']) ? (int) $filters['confidenceThreshold'] : null,
+                confidenceCriterion: isset($filters['confidenceCriterion']) ? (string) $filters['confidenceCriterion'] : null,
+                month: isset($filters['month']) ? (int) $filters['month'] : null,
+                year: isset($filters['year']) ? (int) $filters['year'] : null,
+            ),
             (int) ($filters['page'] ?? 1),
             (int) ($filters['perPage'] ?? 40),
         );
@@ -134,7 +142,7 @@ class DocumentController
 
             $sentDocumentIds = [];
             $startedAt = time();
-            $timeoutSeconds = 300;
+            $timeoutSeconds = max(60, (int) config('mvp.documents.stream_timeout_seconds', 1800));
             $lastSignature = null;
 
             while (! connection_aborted()) {
@@ -190,7 +198,9 @@ class DocumentController
                 }
 
                 if (time() - $startedAt >= $timeoutSeconds) {
-                    $send('error', ['message' => 'Timeout elaborazione.']);
+                    $send('still_running', [
+                        'message' => 'Elaborazione ancora in corso. Lo stato verrà aggiornato.',
+                    ]);
 
                     return;
                 }
@@ -207,10 +217,7 @@ class DocumentController
     public function destroy(Request $request, SubDocument $subDocument, DeleteDocumentUseCase $delete, MvpStateService $state): JsonResponse
     {
         $actor = $this->actor($request);
-
-        if ($subDocument->originalDocument) {
-            $this->authorizeOriginalDocument($subDocument->originalDocument, $actor);
-        }
+        $this->authorizeSubDocument($subDocument, $actor);
 
         $delete->delete($subDocument->id, $actor);
 

@@ -6,6 +6,7 @@ use App\Mvp\Documents\Domain\Entities\OriginalDocument;
 use App\Mvp\Documents\Domain\Entities\SubDocument;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
+use App\Mvp\Documents\Domain\ValueObjects\DocumentListFilters;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Documents\Domain\ValueObjects\NewOriginalDocument;
 use App\Mvp\Documents\Domain\ValueObjects\NewSubDocument;
@@ -95,7 +96,7 @@ final class InMemoryDocumentRepository implements DocumentRepository
         unset($this->originals[$id]);
     }
 
-    public function paginateSubDocuments(string $tenantId, array $filters, int $page, int $perPage): SubDocumentPage
+    public function paginateSubDocuments(string $tenantId, DocumentListFilters $filters, int $page, int $perPage): SubDocumentPage
     {
         return new SubDocumentPage([], 0, $page, $perPage);
     }
@@ -115,6 +116,7 @@ final class InMemoryDocumentRepository implements DocumentRepository
             startPage: $row['start_page'],
             endPage: $row['end_page'],
             originalFilename: $row['original_filename'],
+            sendStatus: $row['send_status'] ?? 'pending',
         );
 
         return SubDocument::fromRecord($record, ReviewStatus::from($row['review_status']));
@@ -307,6 +309,7 @@ final class InMemoryDocumentRepository implements DocumentRepository
             'end_page' => 1,
             'original_filename' => 'documento.pdf',
             'review_status' => 'needs_review',
+            'send_status' => 'pending',
         ];
     }
 

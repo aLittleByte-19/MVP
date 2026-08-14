@@ -11,30 +11,34 @@ use App\Mvp\Communications\Domain\Ports\Inbound\CommunicationDraftUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Support\Identity\Actor;
+use App\Mvp\Support\Persistence\TransactionManagerPort;
 
 class CommunicationDraftService implements CommunicationDraftUseCase
 {
     public function __construct(
         private readonly CommunicationRepository $communications,
         private readonly CommunicationEventDispatcherPort $events,
+        private readonly TransactionManagerPort $transactions,
     ) {}
 
     public function favorite(int $communicationId, Actor $actor): void
     {
-        $communication = $this->communications->findCommunication($communicationId);
-
-        $communication->favorite();
-        $this->communications->saveCommunication($communication);
+        $this->transactions->run(function () use ($communicationId): void {
+            $communication = $this->communications->findCommunicationForUpdate($communicationId);
+            $communication->favorite();
+            $this->communications->saveCommunication($communication);
+        });
 
         $this->events->dispatch(new CommunicationDraftFavorited($communicationId, $actor));
     }
 
     public function unfavorite(int $communicationId, Actor $actor): void
     {
-        $communication = $this->communications->findCommunication($communicationId);
-
-        $communication->unfavorite();
-        $this->communications->saveCommunication($communication);
+        $this->transactions->run(function () use ($communicationId): void {
+            $communication = $this->communications->findCommunicationForUpdate($communicationId);
+            $communication->unfavorite();
+            $this->communications->saveCommunication($communication);
+        });
 
         $this->events->dispatch(new CommunicationDraftUnfavorited($communicationId, $actor));
     }

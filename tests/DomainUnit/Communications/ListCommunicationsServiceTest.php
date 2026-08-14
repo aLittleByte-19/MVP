@@ -1,6 +1,7 @@
 <?php
 
 use App\Mvp\Communications\Application\UseCases\ListCommunicationsService;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationListFilters;
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 
 /**
@@ -10,7 +11,7 @@ use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 test('list delegates straight to the repository, unchanged', function () {
     $service = new ListCommunicationsService(new InMemoryCommunicationRepository);
 
-    $page = $service->list('tenant-1', ['keyword' => 'ferie'], 2, 15);
+    $page = $service->list('tenant-1', new CommunicationListFilters(keyword: 'ferie'), 2, 15);
 
     expect($page->communicationIds)->toBe([])
         ->and($page->total)->toBe(0)

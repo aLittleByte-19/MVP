@@ -56,7 +56,7 @@ const MONTHS = [
   template: `
     <section class="view" aria-label="AI Co-Pilot per i CdL">
       @if (vm.error(); as error) {
-        <mvp-error-state [message]="error" />
+        <mvp-error-state [message]="error" [canRetry]="true" (retry)="store.reload()" />
       }
 
       <mvp-document-upload-panel
@@ -194,7 +194,7 @@ const MONTHS = [
   ]
 })
 export class CopilotPage {
-  private readonly store = inject(MvpStateStore);
+  protected readonly store = inject(MvpStateStore);
   protected readonly months = MONTHS;
   protected readonly sendStatuses = SubDocumentSendStatus;
 

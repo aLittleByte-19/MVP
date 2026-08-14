@@ -2,6 +2,7 @@
 
 namespace App\Mvp\Documents\Domain\Ports\Inbound;
 
+use App\Mvp\Documents\Domain\Exceptions\DocumentNotAuthorizedException;
 use App\Mvp\Documents\Domain\ValueObjects\RenderedSendMessage;
 use App\Mvp\Support\Identity\Actor;
 
@@ -12,12 +13,20 @@ use App\Mvp\Support\Identity\Actor;
  */
 interface SendMessageUseCase
 {
-    public function preview(int $subDocumentId, ?Actor $actor): RenderedSendMessage;
+    /**
+     * @throws DocumentNotAuthorizedException
+     */
+    public function preview(int $subDocumentId, Actor $actor): RenderedSendMessage;
 
-    public function export(int $subDocumentId, ?Actor $actor): RenderedSendMessage;
+    /**
+     * @throws DocumentNotAuthorizedException
+     */
+    public function export(int $subDocumentId, Actor $actor): RenderedSendMessage;
 
     /**
      * @param  array{recipient?: ?string, subject?: ?string, body?: ?string}  $overrides  Solo le chiavi presenti vengono aggiornate.
+     *
+     * @throws DocumentNotAuthorizedException
      */
-    public function updateOverrides(int $subDocumentId, array $overrides, ?Actor $actor): void;
+    public function updateOverrides(int $subDocumentId, array $overrides, Actor $actor): void;
 }

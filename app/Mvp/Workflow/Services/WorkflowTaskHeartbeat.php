@@ -3,6 +3,7 @@
 namespace App\Mvp\Workflow\Services;
 
 use App\Mvp\Observability\MetricsRecorder;
+use App\Mvp\Workflow\Ports\Outbound\WorkflowHeartbeatPort;
 use Aws\Exception\AwsException;
 use Aws\Sfn\SfnClient;
 use Illuminate\Support\Facades\Log;
@@ -15,7 +16,7 @@ use Illuminate\Support\Facades\Log;
  * a worker context the service stays inactive and beat() is a no-op, so the
  * web request path never talks to Step Functions.
  */
-class WorkflowTaskHeartbeat
+class WorkflowTaskHeartbeat implements WorkflowHeartbeatPort
 {
     private ?string $taskToken = null;
 

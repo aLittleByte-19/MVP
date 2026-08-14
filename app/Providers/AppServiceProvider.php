@@ -25,6 +25,7 @@ use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftEdited;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftFavorited;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationDraftUnfavorited;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationGenerationFailed;
+use App\Mvp\Communications\Application\Listeners\RecordCommunicationGenerationRequested;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationRated;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationRegenerationRequested;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationTextGenerated;
@@ -59,6 +60,7 @@ use App\Mvp\Communications\Domain\Events\CommunicationDraftEdited;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftFavorited;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftUnfavorited;
 use App\Mvp\Communications\Domain\Events\CommunicationGenerationFailed;
+use App\Mvp\Communications\Domain\Events\CommunicationGenerationRequested;
 use App\Mvp\Communications\Domain\Events\CommunicationRated;
 use App\Mvp\Communications\Domain\Events\CommunicationRegenerationRequested;
 use App\Mvp\Communications\Domain\Events\CommunicationTextGenerated;
@@ -98,6 +100,7 @@ use App\Mvp\Documents\Application\Listeners\RecordAiOutputRejected as RecordDocu
 use App\Mvp\Documents\Application\Listeners\RecordDocumentProcessingCompleted;
 use App\Mvp\Documents\Application\Listeners\RecordDocumentProcessingFailed;
 use App\Mvp\Documents\Application\Listeners\RecordDocumentProcessingStarted;
+use App\Mvp\Documents\Application\Listeners\RecordDocumentUploadAccepted;
 use App\Mvp\Documents\Application\Listeners\RecordDocumentWorkflowCompleted;
 use App\Mvp\Documents\Application\Listeners\RecordDocumentWorkflowStarted;
 use App\Mvp\Documents\Application\Listeners\RecordDocumentWorkflowStartFailed;
@@ -124,6 +127,7 @@ use App\Mvp\Documents\Domain\Events\AiOutputRejected as DocumentAiOutputRejected
 use App\Mvp\Documents\Domain\Events\DocumentProcessingCompleted;
 use App\Mvp\Documents\Domain\Events\DocumentProcessingFailed;
 use App\Mvp\Documents\Domain\Events\DocumentProcessingStarted;
+use App\Mvp\Documents\Domain\Events\DocumentUploadAccepted;
 use App\Mvp\Documents\Domain\Events\DocumentWorkflowCompleted;
 use App\Mvp\Documents\Domain\Events\DocumentWorkflowStarted;
 use App\Mvp\Documents\Domain\Events\DocumentWorkflowStartFailed;
@@ -159,6 +163,7 @@ use App\Mvp\Support\Persistence\LaravelTransactionManager;
 use App\Mvp\Support\Persistence\TransactionManagerPort;
 use App\Mvp\Workflow\Adapters\Outbound\SfnWorkflowEngineAdapter;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
+use App\Mvp\Workflow\Ports\Outbound\WorkflowHeartbeatPort;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
 use App\Mvp\Workflow\Services\WorkflowTaskRegistry;
 use App\Mvp\Workflow\Support\WorkflowContext;
@@ -251,6 +256,7 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(MetricsRecorder::class),
             );
         });
+        $this->app->singleton(WorkflowHeartbeatPort::class, fn ($app) => $app->make(WorkflowTaskHeartbeat::class));
 
         // Orologio condiviso (PSR-20): a differenza degli eventi di dominio,
         // il tempo non ha semantica specifica di un dominio, quindi un solo
@@ -325,7 +331,21 @@ class AppServiceProvider extends ServiceProvider
                 max(0, min(100, (int) config('services.bedrock.mvp_confidence_threshold', 80))),
             );
         });
-        $this->app->bind(ProcessDocumentUseCase::class, ProcessDocumentService::class);
+        $this->app->bind(ProcessDocumentUseCase::class, function ($app) {
+            return new ProcessDocumentService(
+                $app->make(DocumentRepository::class),
+                $app->make(DocumentStoragePort::class),
+                $app->make(DocumentAiGatewayPort::class),
+                $app->make(DocumentEventDispatcherPort::class),
+                $app->make(WorkflowHeartbeatPort::class),
+                $app->make(LoggerInterface::class),
+                $app->make(UniqueIdGeneratorPort::class),
+                $app->make(OcrRangeReader::class),
+                $app->make(ExtractSubDocumentFieldsUseCase::class),
+                $app->make(ClockInterface::class),
+                storage_path('app/tmp/mvp-processing'),
+            );
+        });
         $this->app->bind(FinalizeDocumentWorkflowUseCase::class, FinalizeDocumentWorkflowService::class);
         $this->app->bind(ReviewDocumentUseCase::class, ReviewDocumentService::class);
         $this->app->bind(SendMessageUseCase::class, SendMessageService::class);
@@ -448,6 +468,7 @@ class AppServiceProvider extends ServiceProvider
         // fatto avvenuto senza sapere chi reagisce; aggiungere una reazione (es.
         // una notifica futura) significa aggiungere un listener, non toccare
         // ogni caso d'uso che genera l'evento.
+        Event::listen(CommunicationGenerationRequested::class, RecordCommunicationGenerationRequested::class);
         Event::listen(CommunicationTextGenerated::class, RecordCommunicationTextGenerated::class);
         Event::listen(AiOutputRejected::class, RecordAiOutputRejected::class);
         Event::listen(CommunicationCoverGenerated::class, RecordCommunicationCoverGenerated::class);
@@ -472,6 +493,7 @@ class AppServiceProvider extends ServiceProvider
         // Documents: stesso trattamento Observer di Communications, porta ed
         // eventi separati (non condivisi) perche' gli eventi sono specifici
         // del dominio, come le porte di persistenza (vedi ADR 0010).
+        Event::listen(DocumentUploadAccepted::class, RecordDocumentUploadAccepted::class);
         Event::listen(DocumentProcessingStarted::class, RecordDocumentProcessingStarted::class);
         Event::listen(DocumentProcessingCompleted::class, RecordDocumentProcessingCompleted::class);
         Event::listen(DocumentProcessingFailed::class, RecordDocumentProcessingFailed::class);

@@ -15,6 +15,7 @@ import type {
   UpdateCommunicationRequest,
   UpdateCommunicationResponse
 } from "../../../../api/generated/model";
+import { SseClient } from "../../../core/http/sse-client";
 import { MvpStateStore } from "../../../core/state/mvp-state.store";
 import type { CommunicationDraftForm, CommunicationGenerationProgress } from "../assistant.model";
 
@@ -57,6 +58,7 @@ export interface CommunicationFilters {
 export class AssistantService {
   private readonly api = inject(AlittlebyteMVPAPIService);
   private readonly store = inject(MvpStateStore);
+  private readonly sse = inject(SseClient);
 
   generate(payload: CommunicationDraftForm): Observable<CommunicationGenerationProgress> {
     return this.trackGeneration(this.api.generateMvpCommunication(payload));
@@ -70,7 +72,7 @@ export class AssistantService {
     start$: Observable<StartCommunicationGenerationResponse>
   ): Observable<CommunicationGenerationProgress> {
     return new Observable<CommunicationGenerationProgress>((observer) => {
-      let eventSource: EventSource | null = null;
+      let closeStream: (() => void) | null = null;
 
       const subscription = start$.subscribe({
         next: (response) => {
@@ -80,66 +82,82 @@ export class AssistantService {
             communicationId: response.communicationId
           });
 
-          eventSource = new EventSource(response.streamUrl);
+          closeStream = this.sse.connect(response.streamUrl, {
+            onEvent: (event, data) => {
+              if (event === "progress") {
+                const progress = data as GenerationProgressEvent;
+                observer.next({
+                  status: progressStatusLabel(progress),
+                  phase: progressPhase(progress),
+                  communicationId: response.communicationId
+                });
+                return;
+              }
 
-          eventSource.addEventListener("progress", (event) => {
-            const progress = JSON.parse((event as MessageEvent).data) as GenerationProgressEvent;
-            observer.next({
-              status: progressStatusLabel(progress),
-              phase: progressPhase(progress),
-              communicationId: response.communicationId
-            });
-          });
+              if (event === "text") {
+                const text = data as GenerationTextEvent;
+                observer.next({
+                  status: "Testo generato. Generazione copertina in corso.",
+                  phase: "generating-cover",
+                  communicationId: response.communicationId,
+                  text
+                });
+                return;
+              }
 
-          eventSource.addEventListener("text", (event) => {
-            const text = JSON.parse((event as MessageEvent).data) as GenerationTextEvent;
-            observer.next({
-              status: "Testo generato. Generazione copertina in corso.",
-              phase: "generating-cover",
-              communicationId: response.communicationId,
-              text
-            });
-          });
+              if (event === "cover") {
+                const cover = data as GenerationCoverEvent;
+                observer.next({
+                  status: cover.coverStatus === "ready" ? "Copertina generata." : "Copertina non disponibile.",
+                  phase: "generating-cover",
+                  communicationId: response.communicationId,
+                  cover
+                });
+                return;
+              }
 
-          eventSource.addEventListener("cover", (event) => {
-            const cover = JSON.parse((event as MessageEvent).data) as GenerationCoverEvent;
-            observer.next({
-              status: cover.coverStatus === "ready" ? "Copertina generata." : "Copertina non disponibile.",
-              phase: "generating-cover",
-              communicationId: response.communicationId,
-              cover
-            });
-          });
+              if (event === "still_running") {
+                const payload = data as { message?: string };
+                observer.next({
+                  status: payload.message ?? "Generazione ancora in corso. Lo stato verrà aggiornato.",
+                  phase: "still_running",
+                  communicationId: response.communicationId
+                });
+                return;
+              }
 
-          eventSource.addEventListener("done", (event) => {
-            const payload = JSON.parse((event as MessageEvent).data) as {
-              communication?: Communication;
-              state?: MvpState;
-            };
+              if (event === "done") {
+                const payload = data as { communication?: Communication; state?: MvpState };
 
-            if (payload.state) {
-              this.store.setState(payload.state);
+                if (payload.state) {
+                  this.store.setState(payload.state);
+                }
+
+                observer.next({
+                  status: "Bozza generata correttamente.",
+                  phase: "completed",
+                  communicationId: response.communicationId,
+                  communication: payload.communication
+                });
+                closeStream?.();
+                observer.complete();
+              }
+            },
+            onNamedError: (message) => {
+              observer.next({
+                status: message || "Generazione non disponibile. Controlla lo stato della bozza.",
+                phase: "failed",
+                communicationId: response.communicationId
+              });
+              closeStream?.();
+              this.store.reload();
+              observer.complete();
+            },
+            onConnectionError: () => {
+              closeStream?.();
+              this.store.reload();
+              observer.complete();
             }
-
-            observer.next({
-              status: "Bozza generata correttamente.",
-              phase: "completed",
-              communicationId: response.communicationId,
-              communication: payload.communication
-            });
-            eventSource?.close();
-            observer.complete();
-          });
-
-          eventSource.addEventListener("error", () => {
-            observer.next({
-              status: "Generazione non disponibile. Controlla lo stato della bozza.",
-              phase: "failed",
-              communicationId: response.communicationId
-            });
-            eventSource?.close();
-            this.store.reload();
-            observer.complete();
           });
         },
         error: (error: unknown) => observer.error(error)
@@ -147,7 +165,7 @@ export class AssistantService {
 
       return () => {
         subscription.unsubscribe();
-        eventSource?.close();
+        closeStream?.();
       };
     });
   }

@@ -4,6 +4,7 @@ namespace App\Mvp\Communications\Domain\Ports\Outbound;
 
 use App\Mvp\Communications\Domain\Entities\Communication;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationChanges;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationListFilters;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationPage;
 use App\Mvp\Communications\Domain\ValueObjects\NewCommunication;
 
@@ -23,6 +24,12 @@ interface CommunicationRepository
 
     public function findCommunication(int $id): Communication;
 
+    /**
+     * Come findCommunication(), ma con lock pessimistico sulla riga
+     * (SELECT ... FOR UPDATE). Da usare solo dentro TransactionManagerPort.
+     */
+    public function findCommunicationForUpdate(int $id): Communication;
+
     public function updateCommunication(int $id, CommunicationChanges $changes): void;
 
     /**
@@ -38,8 +45,5 @@ interface CommunicationRepository
 
     public function deleteCommunication(int $id): void;
 
-    /**
-     * @param  array{keyword?: ?string, tone?: ?string, style?: ?string, date?: ?string}  $filters
-     */
-    public function paginateApprovedCommunications(string $tenantId, array $filters, int $page, int $perPage): CommunicationPage;
+    public function paginateApprovedCommunications(string $tenantId, CommunicationListFilters $filters, int $page, int $perPage): CommunicationPage;
 }

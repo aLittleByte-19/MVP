@@ -2,11 +2,13 @@
 
 namespace App\Mvp\Documents\Application\UseCases;
 
+use App\Mvp\Documents\Domain\Exceptions\DocumentNotAuthorizedException;
 use App\Mvp\Documents\Domain\Exceptions\DocumentPreviewUnavailableException;
 use App\Mvp\Documents\Domain\Ports\Inbound\PreviewDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
 use App\Mvp\Documents\Domain\ValueObjects\PreviewableDocument;
+use App\Mvp\Support\Identity\Actor;
 
 class PreviewDocumentService implements PreviewDocumentUseCase
 {
@@ -15,9 +17,14 @@ class PreviewDocumentService implements PreviewDocumentUseCase
         private readonly DocumentStoragePort $storage,
     ) {}
 
-    public function preview(int $subDocumentId): PreviewableDocument
+    public function preview(int $subDocumentId, Actor $actor): PreviewableDocument
     {
         $subDocument = $this->documents->findSubDocument($subDocumentId);
+        $original = $this->documents->findOriginalDocument($subDocument->originalDocumentId);
+
+        if ($original->tenantId !== $actor->tenantId) {
+            throw new DocumentNotAuthorizedException;
+        }
 
         if (! $this->storage->exists($subDocument->filePath)) {
             throw new DocumentPreviewUnavailableException;
