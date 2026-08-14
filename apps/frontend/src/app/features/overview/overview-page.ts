@@ -9,12 +9,14 @@ import { MetricsPanelComponent } from "../../shared/components/metrics-panel/met
 import { StatusBadgeComponent } from "../../shared/components/status-badge/status-badge";
 import { SectionComponent } from "../../layout/section/section";
 import { formatFallback } from "../../shared/util/formatters";
+import { scrollToElement } from "../../shared/util/scroll";
 import { OverviewPageViewModel } from "./overview-page.view-model";
 
 /**
- * View della Overview (MVVM in senso classico): nessuna logica di business
- * qui, solo collante col template e procacciamento delle dipendenze via
- * `inject()` per costruire {@link OverviewPageViewModel}. Lo stato
+ * View della Overview: nessuna logica di business qui, solo collante col
+ * template e procacciamento delle dipendenze via `inject()` per costruire
+ * {@link OverviewPageViewModel} — incluso `scrollToElement`, l'unica
+ * operazione DOM richiesta dal ViewModel dopo la navigazione. Lo stato
  * condiviso non specifico della pagina (`store.error()`, `store.loading()`,
  * `store.state()` per le metriche degli strumenti) resta legato
  * direttamente allo store, come nelle altre pagine.
@@ -131,6 +133,6 @@ export class OverviewPage {
   protected readonly vm: OverviewPageViewModel;
 
   constructor() {
-    this.vm = new OverviewPageViewModel(this.store, inject(Router));
+    this.vm = new OverviewPageViewModel(this.store, inject(Router), scrollToElement);
   }
 }

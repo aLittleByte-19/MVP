@@ -15,10 +15,16 @@ import {
 } from "./data/document-workflow.service";
 
 /**
- * ViewModel puro del Co-Pilot documentale (MVVM in senso classico): nessun
- * riferimento ad Angular (niente `inject()`, decoratori, injection
- * context) — le dipendenze arrivano dal costruttore, non da `inject()`,
- * quindi la classe è istanziabile con `new` e testabile senza `TestBed`.
+ * ViewModel (Presentation Model, Fowler) del Co-Pilot documentale: non tocca
+ * il DOM né l'infrastruttura di rendering di Angular (niente `@Component`,
+ * `inject()`, decoratori, injection context) — le dipendenze arrivano dal
+ * costruttore, non da `inject()`, quindi la classe è istanziabile con `new`
+ * e testabile senza `TestBed`. Usa `signal`/`computed` come primitiva
+ * reattiva di piattaforma (analogo a `INotifyPropertyChanged` in WPF), non
+ * come parte del motore di rendering — la distinzione conta: è quello che
+ * rende la classe testabile senza avviare Angular, non "zero import da
+ * `@angular/core`".
+ *
  * `CopilotPage` (la View) resta l'unico punto accoppiato ad Angular: si
  * procura le dipendenze con `inject()` e costruisce questa istanza.
  *

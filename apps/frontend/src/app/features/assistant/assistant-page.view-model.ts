@@ -20,12 +20,21 @@ import type {
 import { AssistantService, type CommunicationFilters } from "./data/assistant.service";
 
 /**
- * ViewModel puro dell'AI Assistant (MVVM in senso classico): nessun
- * riferimento ad Angular (niente `inject()`, decoratori, injection
- * context) — le dipendenze arrivano dal costruttore, non da `inject()`,
- * quindi la classe è istanziabile con `new` e testabile senza `TestBed`.
- * `AssistantPage` (la View) resta l'unico punto accoppiato ad Angular: si
- * procura le dipendenze con `inject()` e costruisce questa istanza.
+ * ViewModel (Presentation Model, Fowler) dell'AI Assistant: non tocca il
+ * DOM né l'infrastruttura di rendering di Angular (niente `@Component`,
+ * `inject()`, decoratori, injection context, `document`/`window` diretti)
+ * — le dipendenze arrivano dal costruttore, non da `inject()`, quindi la
+ * classe è istanziabile con `new` e testabile senza `TestBed`. Usa
+ * `signal`/`computed` come primitiva reattiva di piattaforma (analogo a
+ * `INotifyPropertyChanged` in WPF), non come parte del motore di
+ * rendering — la distinzione conta: è quello che rende la classe
+ * testabile senza avviare Angular, non "zero import da `@angular/core`".
+ *
+ * `AssistantPage` (la View) resta l'unico punto accoppiato ad Angular e al
+ * DOM: si procura le dipendenze con `inject()`, costruisce questa istanza
+ * e le passa `scrollToElement` — l'unica operazione che deve toccare
+ * `document`/`window` (vedi `shared/util/scroll.ts`) — come funzione,
+ * cosicché il ViewModel possa *chiedere* uno scroll senza *eseguirlo*.
  *
  * `effect()`/`takeUntilDestroyed()` restano nella View perché richiedono un
  * injection context che questa classe non ha per costruzione — vedi
@@ -104,7 +113,8 @@ export class AssistantPageViewModel {
 
   constructor(
     private readonly assistant: AssistantService,
-    private readonly store: MvpStateStore
+    private readonly store: MvpStateStore,
+    private readonly scrollTo: (elementId: string) => void
   ) {}
 
   setActiveFilters(filters: CommunicationFilters): void {
@@ -453,9 +463,4 @@ export class AssistantPageViewModel {
     };
   }
 
-  private scrollTo(elementId: string): void {
-    window.requestAnimationFrame(() => {
-      document.getElementById(elementId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }
 }
