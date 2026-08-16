@@ -38,6 +38,7 @@ RUN apt-get update \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/zz-opcache.ini
+COPY docker/php/www-pool.conf /usr/local/etc/php-fpm.d/zz-www-pool.conf
 
 ARG COMPOSER_ALLOW_SUPERUSER=1
 

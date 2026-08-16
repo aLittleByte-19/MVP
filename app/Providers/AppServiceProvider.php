@@ -155,6 +155,7 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
 use App\Mvp\Documents\Domain\Ports\Outbound\OcrGatewayPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\SendMessageRendererPort;
+use App\Mvp\Identity\MvpUserProvider;
 use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Support\Clock\SystemClock;
 use App\Mvp\Support\Identifiers\RandomUuidGenerator;
@@ -172,6 +173,7 @@ use Aws\Sfn\SfnClient;
 use Aws\Sqs\SqsClient;
 use Aws\Textract\TextractClient;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Psr\Clock\ClockInterface;
@@ -456,6 +458,13 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Provider esplicito per il guard 'mvp' (vedi config/auth.php):
+        // MvpUser non e' un model Eloquent, quindi il driver 'eloquent'
+        // di default fallirebbe silenziosamente male se mai risolto
+        // (ResolveMvpIdentity lo bypassa con Auth::setUser(), ma un
+        // Auth::check() prima di quel middleware o il password broker no).
+        Auth::provider('mvp', fn () => new MvpUserProvider);
+
         // Alias morph stabili: workflow_tasks.subject_type conserva queste
         // stringhe invece dei FQCN, che cambierebbero a ogni refactor.
         Relation::morphMap([

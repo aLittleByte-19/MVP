@@ -18,6 +18,17 @@ class ConsumeWorkflowTasks extends Command
 
     protected $description = 'Consume Step Functions callback-token tasks from SQS and report completion back to Step Functions.';
 
+    /**
+     * Codici di errore Step Functions per cui un retry con lo stesso token
+     * non puo' mai riuscire (token gia' consumato, scaduto per heartbeat, o
+     * malformato). Il lavoro di business e' gia' tracciato a database:
+     * lasciare il messaggio in coda produrrebbe solo retry inutili fino alla
+     * DLQ, popolandola di falsi fallimenti per un task gia' concluso.
+     *
+     * @var list<string>
+     */
+    private const PERMANENT_CALLBACK_ERRORS = ['TaskTimedOut', 'TaskDoesNotExist', 'InvalidToken'];
+
     public function handle(SqsClient $sqs, SfnClient $stepFunctions, WorkflowTaskRunner $runner, WorkflowTaskHeartbeat $heartbeat, WorkflowContext $context, MetricsRecorder $metrics): int
     {
         $pipeline = (string) $this->option('queue');
@@ -143,11 +154,13 @@ class ConsumeWorkflowTasks extends Command
     }
 
     /**
-     * Un callback rifiutato (token gia' consumato, esecuzione scaduta per
-     * heartbeat/timeout, emulatore non allineato ad AWS) non deve abbattere
-     * il loop di consumo: l'esito di business resta tracciato a database, ma
-     * il messaggio SQS resta in coda finche' Step Functions non accetta il
-     * callback (un token nuovo arrivera' al retry ASL).
+     * Un callback rifiutato da un errore transitorio (throttling, servizio
+     * non disponibile, emulatore non allineato ad AWS) non deve abbattere il
+     * loop di consumo: l'esito di business resta tracciato a database, ma il
+     * messaggio SQS resta in coda finche' Step Functions non accetta il
+     * callback (un token nuovo arrivera' al retry ASL). Un errore permanente
+     * (vedi PERMANENT_CALLBACK_ERRORS) e' invece trattato come successo ai
+     * fini della coda: nessun retry con lo stesso token puo' riuscire.
      */
     private function sendCallback(MetricsRecorder $metrics, callable $callback, string $operation): bool
     {
@@ -156,11 +169,18 @@ class ConsumeWorkflowTasks extends Command
 
             return true;
         } catch (AwsException $e) {
+            $errorCode = $e->getAwsErrorCode() ?: 'aws_error';
             $metrics->recordDomainCounter('stepfunctions_callbacks_failed_total', [
                 'operation' => $operation,
-                'error' => $e->getAwsErrorCode() ?: 'aws_error',
+                'error' => $errorCode,
             ]);
             $this->warn("{$operation} rifiutato da Step Functions: ".($e->getAwsErrorMessage() ?: $e->getMessage()));
+
+            if (in_array($errorCode, self::PERMANENT_CALLBACK_ERRORS, true)) {
+                $this->warn("Errore permanente ({$errorCode}): il messaggio viene rimosso dalla coda, un retry con lo stesso token non potrebbe riuscire.");
+
+                return true;
+            }
 
             return false;
         }

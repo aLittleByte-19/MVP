@@ -819,6 +819,19 @@ verde ad ogni passaggio (commit separati):
   - **380/380** (eseguita due volte, nessuna flakiness — stesso numero di prima: nessun test nuovo,
     solo aggiornamento dei fake `fake*Actor()` nei test `DomainUnit` da `MvpUser` ad `Actor`), Pint 370
     file, Larastan 274 file, Dependency Rule pulita, `/ready` 200.
+- **`ignoreErrors` di Larastan sostituito con un provider utente vero (non solo rimosso)**: un giro
+  successivo ha corretto `config/auth.php` per puntare a `MvpUser::class` invece del fantasma
+  `App\Models\User`, facendo sparire il `class.notFound` e permettendo di togliere l'`ignoreErrors`
+  sopra — ma la correzione era a metà: il provider restava dichiarato `driver: eloquent`, e `MvpUser`
+  non estende `Illuminate\Database\Eloquent\Model`. Un `Auth::check()` eseguito prima che
+  `ResolveMvpIdentity` giri (o il password broker, mai usato ma comunque configurato) avrebbe
+  risolto quel provider e fallito con un errore Eloquent poco leggibile. Aggiunto
+  `App\Mvp\Identity\MvpUserProvider implements UserProvider`, registrato con
+  `Auth::provider('mvp', ...)` in `AppServiceProvider::boot()`, dichiarato in `config/auth.php` come
+  `driver: mvp`: rende esplicito che questa app non ha un archivio utenti persistente (l'identita' e'
+  ricostruita ad ogni richiesta, mai recuperata per id/credenziali) invece di simularne uno con un
+  driver che non corrisponde alla classe. Se mai risolto per errore, fallisce con un messaggio che
+  dice esattamente perché, non con un metodo Eloquent mancante.
 - **`WorkflowTaskHandler` non dipende più da `Illuminate\Database\Eloquent\Model`**: era l'ultimo punto
   rimasto, classificato inizialmente come "progetto a sé" per riportare tutta l'infrastruttura di
   orchestrazione Step Functions dietro porte proprie — un'indagine mirata (non solo stima) ha mostrato
@@ -1031,6 +1044,76 @@ verde ad ogni passaggio (commit separati):
     comunque dispatchato.
   - **399/399** (eseguita due volte, nessuna flakiness), Pint 374 file, Larastan 277 file, Dependency
     Rule pulita, DI verificata dal vivo via tinker, `/ready` 200.
+- **Giro di hardening da revisione esterna** (timeout, autorizzazione, atomicità, filtri come VO,
+  eventi mancanti): commit unico, chiuso in blocco perché le sette categorie di cambiamento erano
+  interdipendenti a livello di test (stessa suite li copre tutti insieme).
+  - **Filtri lista come VO, non più array**: `ListDocumentsUseCase::list()`/`ListCommunicationsUseCase::list()`
+    prendevano `array $filters` con chiavi HTTP grezze (`sendStatus`, `confidenceThreshold`) nella
+    porta di dominio — la Form Request validata arrivava fino al caso d'uso senza una traduzione,
+    esattamente il tipo di fuga che i `*Changes` VO (vedi sopra) avevano già chiuso lato scrittura.
+    Aggiunti `DocumentListFilters`/`CommunicationListFilters` (`Domain/ValueObjects/`), costruiti
+    dall'adapter HTTP dalla Form Request validata: il dominio non vede più chiavi HTTP.
+  - **Ultima asimmetria Observer chiusa**: `UploadDocumentService`/`GenerateCommunicationService`
+    restavano gli unici due casi d'uso con "un solo audit" diretto invece di un evento (scelta
+    dichiarata sopra). Aggiunti `DocumentUploadAccepted`/`CommunicationGenerationRequested` con i
+    listener `RecordDocumentUploadAccepted`/`RecordCommunicationGenerationRequested`: ora ogni caso
+    d'uso di entrambi i domini dispatcha eventi, senza eccezioni residue.
+  - **Timeout SSE allineato ai timeout ASL**: `DocumentController::stream()`/`CommunicationStreamController::stream()`
+    tagliavano a 300s fissi contro pipeline che possono superare i 1000s (Textract 420s + Bedrock
+    720s + persist/dispatch/retry). Timeout ora configurabile (`mvp.documents.stream_timeout_seconds`,
+    default 1800s; `mvp.communications.stream_timeout_seconds`, default 900s) ed emette `still_running`
+    invece di `error` quando scade: la SPA non mostra più "fallito" per un worker che sta ancora
+    lavorando. Pool PHP-FPM ridimensionato in parallelo (`docker/php/www-pool.conf`,
+    `pm.max_children` da 5 default a 20): con lo stream che ora tiene occupato un worker fino a 30
+    minuti, il pool di default avrebbe permesso a 3-5 utenti concorrenti di esaurirlo, bloccando
+    anche `/health`/`/ready` per tutti.
+  - **Autorizzazione unificata su `authorizeSubDocument()`**: preview/export/delete usavano
+    `if ($subDocument->originalDocument) { authorizeOriginalDocument(...) }`, che salta il check
+    (invece di negarlo) quando la relazione è assente — comportamento opposto ad
+    `authorizeSubDocument()`, che nega esplicitamente. Con vincoli FK il ramo è morto, ma è
+    un'incoerenza reale nello stesso file. Tutti e quattro i punti (preview, send-preview,
+    send-export, delete) ora passano da `authorizeSubDocument()`; `PreviewDocumentUseCase`/
+    `SendMessageUseCase` prendono `Actor` come parametro per il controllo tenant anche a livello di
+    caso d'uso, non solo nel controller.
+  - **Callback Step Functions non perde più messaggi SQS**: `ConsumeWorkflowTasks::sendCallback()`
+    ingoiava ogni `AwsException` e il messaggio veniva comunque cancellato dalla coda anche quando
+    `SendTaskSuccess`/`SendTaskFailure` erano stati rifiutati — un blip transitorio perdeva
+    silenziosamente il lavoro invece di lasciarlo per un retry. `sendCallback()` ora ritorna
+    l'esito; `deleteMessage()` viene chiamato solo se il callback è stato accettato o l'errore è
+    permanente (`PERMANENT_CALLBACK_ERRORS`: `TaskTimedOut`, `TaskDoesNotExist`, `InvalidToken` —
+    un retry con lo stesso token non potrebbe comunque riuscire). `WorkflowTaskRunner::handle()`
+    cattura `UniqueConstraintViolationException` sul claim invece di un `firstOrCreate` non atomico
+    (check-then-insert), e distingue `duplicate_in_flight` dal caso "già concluso".
+  - **`ProcessDocumentService` non dipende più da `WorkflowTaskHeartbeat` concreto**: iniettava la
+    classe concreta, non una porta — nuovo `WorkflowHeartbeatPort` (`App\Mvp\Workflow\Ports\Outbound`),
+    bindato al service provider su `WorkflowTaskHeartbeat`. `storage_path('app/tmp/mvp-processing')`
+    risolto anch'esso al confine del container invece che con l'helper globale dentro la classe,
+    stesso pattern già usato per `config()`.
+  - **`prompt_configurations` unique per tenant**: era un indice semplice `(tenant_id, name)`,
+    `resolveName()` deduplica solo a livello applicativo — due POST paralleli potevano creare due
+    configurazioni con lo stesso nome. Migrazione a `unique(['tenant_id', 'name'])`.
+  - **`UploadDocumentCommand::$actor` reso obbligatorio**: era nullable con un fallback implicito
+    `'mvp-local-tenant'` nel dominio se l'attore mancava — il dominio non dovrebbe inventare un
+    tenant. Ora `Actor $actor` non nullable.
+  - **`PromptConfigurationService::delete()` verifica il tenant anche nel caso d'uso**: prima solo
+    il controller lo faceva (stesso gap di difesa in profondità delle preview, chiuso sopra).
+  - **Frontend: `EventSource` sostituito da un client SSE su `fetch`** (`SseClient`,
+    `core/http/sse-client.ts`): `EventSource` non può inviare header custom (rotto in modalità
+    identità `trusted_headers`, dove il middleware richiede `X-Mvp-*`) e collassa l'evento nominato
+    `error` con la caduta di connessione nello stesso listener — un blip di rete veniva mostrato come
+    fallimento definitivo della pipeline. Il nuovo client manda gli header di correlazione, distingue
+    `onNamedError` da `onConnectionError` (quest'ultimo ricarica lo stato senza mostrare un errore),
+    e avvolge `JSON.parse` in try/catch. Pulsante "Riprova" aggiunto a `mvp-error-state` per il
+    fallimento del primo `GET /state`, che prima restava senza recupero automatico né manuale.
+  - Nessun nuovo test `DomainUnit`/Feature quantificato qui singolarmente: la suite esistente più
+    `WorkflowHeartbeatTest`/i test dei singoli casi d'uso toccati coprono il giro nel suo insieme —
+    vedi commit history per il dettaglio file per file.
+- **Teardown dei ViewModel frontend**: `CopilotPageViewModel`/`AssistantPageViewModel` annullavano
+  la propria ricerca in lettura solo fra due chiamate consecutive (`reload()`), non alla distruzione
+  del componente — navigando via con una ricerca in volo, la sottoscrizione restava attiva fino al
+  completamento. Aggiunto `destroy()` su entrambi, chiamato dalla View via `DestroyRef.onDestroy()`:
+  annulla solo la ricerca in lettura, non le azioni di scrittura (upload, generate, ...), che devono
+  completare lato server anche se l'utente ha già navigato altrove.
 
 ## Related documents
 

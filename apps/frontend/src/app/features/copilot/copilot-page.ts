@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, effect, inject } from "@angular/core";
+import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ReactiveFormsModule } from "@angular/forms";
 import { debounceTime, distinctUntilChanged } from "rxjs";
@@ -231,6 +231,8 @@ export class CopilotPage {
       this.vm.activeFilters();
       this.vm.reload();
     });
+
+    inject(DestroyRef).onDestroy(() => this.vm.destroy());
   }
 
   protected resetFilters(): void {

@@ -105,6 +105,10 @@ Purge the materialized copies (they are rebuilt on the next request):
 docker compose exec app php artisan tinker --execute="Storage::disk(config('mvp.communications.pdf_disk'))->deleteDirectory(config('mvp.communications.pdf_prefix'));"
 ```
 
+## SSE Stream Timeout and PHP-FPM Pool
+
+`CommunicationStreamController::stream()` reports progress over SSE for up to `mvp.communications.stream_timeout_seconds` (default 900s). On timeout it sends `still_running`, not `error`: the frontend keeps the progress UI active instead of showing a failure — the worker is still processing. See the Document Pipeline runbook's equivalent section for why the PHP-FPM pool (`docker/php/www-pool.conf`, shared by both pipelines' streams on the same `app` service) was resized alongside this change.
+
 ## Failure States
 
 | Failure | Observable signal | Operator action |
@@ -117,3 +121,4 @@ docker compose exec app php artisan tinker --execute="Storage::disk(config('mvp.
 | Stuck communication | `mvp_communication_stuck_processing_total` | Check worker, SQS queue and Step Functions execution. |
 | PDF cache unavailable | Reported exception from `DompdfCommunicationPdfRenderer`, no 5xx to the user | Preview and export still work but re-render every time: check `MVP_COMMUNICATION_PDF_DISK`, bucket and credentials. |
 | Stale PDF layout after a template change | Exported PDF still shows the old layout | `RENDER_VERSION` was not bumped: increment it, or purge the prefix as shown above. |
+| SSE stream timed out (`still_running`) | Frontend keeps polling state, no error shown | Not a failure by itself — check `mvp_communication_stuck_processing_total` before assuming otherwise. |

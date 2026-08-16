@@ -99,6 +99,18 @@ describe("CopilotPageViewModel", () => {
     expect(vm.filteredDocuments()).toEqual([fresh]);
   });
 
+  it("destroy annulla la ricerca in volo: una risposta arrivata dopo la distruzione del componente non aggiorna piu' lo stato", () => {
+    const inFlight = new Subject<SubDocument[]>();
+    workflow["searchDocuments"].mockReturnValue(inFlight);
+    const vm = createViewModel();
+
+    vm.reload();
+    vm.destroy();
+    inFlight.next([subDocument("sub-tardiva")]);
+
+    expect(vm.filteredDocuments()).toEqual([]);
+  });
+
   it("reload espone l'errore dello storico e gestisce lista vuota", () => {
     workflow["searchDocuments"].mockReturnValue(throwError(() => new Error("ricerca fallita")));
     const vm = createViewModel();
