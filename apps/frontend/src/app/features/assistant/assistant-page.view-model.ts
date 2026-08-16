@@ -141,6 +141,17 @@ export class AssistantPageViewModel {
     });
   }
 
+  /**
+   * Chiamato dalla View alla distruzione del componente (via `DestroyRef`):
+   * annulla solo la ricerca in lettura, non le azioni di scrittura (generate,
+   * discard, ...) — quelle devono completare lato server anche se l'utente
+   * ha gia' navigato altrove, esattamente come si aspetta di vederle
+   * riflesse al ritorno sulla pagina.
+   */
+  destroy(): void {
+    this.searchSubscription?.unsubscribe();
+  }
+
   private setFilteredCommunications(communications: Communication[]): void {
     this.filteredCommunications.set(communications);
     this.historyError.set(null);

@@ -28,10 +28,9 @@ use Psr\Clock\ClockInterface;
  * e per il prefisso di storage di UpdateCommunicationCoverService/
  * GenerateCommunicationCoverService (vedi ADR 0010).
  *
- * Non basta a rendere `start()` testabile in DomainUnit: `WorkflowContext::bind()`
- * chiama la facade `Log`, che richiede un container Laravel booted. Il
- * blocco residuo per un test di dominio puro è questo, non più `config()` —
- * non risolto in questo giro.
+ * `WorkflowContext` e' una classe pura (nessuna dipendenza da Illuminate,
+ * vedi il suo docblock): `start()` e' istanziabile ed eseguibile in un test
+ * Pest puro, vedi StartDocumentWorkflowServiceTest.
  */
 class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
 {

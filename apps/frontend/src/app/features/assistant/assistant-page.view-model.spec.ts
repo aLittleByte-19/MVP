@@ -143,6 +143,18 @@ describe("AssistantPageViewModel", () => {
     expect(vm.filteredCommunications()).toEqual([fresh]);
   });
 
+  it("destroy annulla la ricerca in volo: una risposta arrivata dopo la distruzione del componente non aggiorna piu' lo stato", () => {
+    const inFlight = new Subject<Communication[]>();
+    assistant["searchCommunications"].mockReturnValue(inFlight);
+    const vm = createViewModel();
+
+    vm.reload();
+    vm.destroy();
+    inFlight.next([communication({ id: 1 })]);
+
+    expect(vm.filteredCommunications()).toEqual([]);
+  });
+
   it("reload segnala un errore nel caricamento dello storico", () => {
     assistant["searchCommunications"].mockReturnValue(throwError(() => new Error("storico offline")));
     const vm = createViewModel();

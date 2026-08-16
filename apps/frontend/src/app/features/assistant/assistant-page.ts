@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, effect, inject } from "@angular/core";
+import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
 import { LucideStar, LucideTrash2 } from "@lucide/angular";
@@ -377,6 +377,8 @@ export class AssistantPage {
       this.vm.activeFilters();
       this.vm.reload();
     });
+
+    inject(DestroyRef).onDestroy(() => this.vm.destroy());
   }
 
   protected resetFilters(): void {

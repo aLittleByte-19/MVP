@@ -15,6 +15,8 @@ Step Functions sends callback-token work to SQS. Each pipeline owns its queue, s
 
 The workers record every task in `workflow_tasks` by `task_token_hash`, whatever the domain. Successful or skipped tasks are idempotent and are not reprocessed when the same token is seen again.
 
+`ConsumeWorkflowTasks::sendCallback()` classifies a rejected `SendTaskSuccess`/`SendTaskFailure` before deciding whether to delete the SQS message: on a **transient** AWS error (throttling, service unavailable, ...) the message stays queued for a normal SQS redelivery/retry. On a **permanent** error (`TaskTimedOut`, `TaskDoesNotExist`, `InvalidToken` — a retry with the same token can never succeed) the message is deleted immediately even though the callback was rejected, because the business outcome is already tracked in `workflow_tasks`/the domain record; leaving it queued would only produce `maxReceiveCount` retries that populate the DLQ with false failures for work that already finished. A message that does reach the DLQ today is therefore always a transient-error case repeated 3 times, not a permanent one.
+
 ```mermaid
 flowchart TD
   task["SQS callback-token task"]
