@@ -1,37 +1,37 @@
 import { TestBed } from "@angular/core/testing";
 import { of, throwError } from "rxjs";
 import { AlittlebyteMVPAPIService } from "../../../../api/generated/mvp-api";
+import { SseClient, type SseHandlers } from "../../../core/http/sse-client";
 import { MvpStateStore } from "../../../core/state/mvp-state.store";
 import { DocumentWorkflowService, type DocumentUploadProgress } from "./document-workflow.service";
 
-/**
- * EventSource non esiste in jsdom e comunque non va aperta una connessione
- * vera: questo doppio registra i listener e permette al test di far arrivare
- * gli eventi della pipeline quando vuole.
- */
-class FakeEventSource {
-  static last: FakeEventSource | null = null;
+class FakeSseClient {
+  static last: FakeSseClient | null = null;
 
-  readonly listeners = new Map<string, ((event: MessageEvent) => void)[]>();
+  url = "";
+  handlers: SseHandlers | null = null;
   closed = false;
 
-  constructor(readonly url: string) {
-    FakeEventSource.last = this;
+  connect(url: string, handlers: SseHandlers): () => void {
+    this.url = url;
+    this.handlers = handlers;
+    FakeSseClient.last = this;
+
+    return () => {
+      this.closed = true;
+    };
   }
 
-  addEventListener(type: string, handler: (event: MessageEvent) => void): void {
-    this.listeners.set(type, [...(this.listeners.get(type) ?? []), handler]);
+  emit(event: string, data: unknown): void {
+    this.handlers?.onEvent(event, data);
   }
 
-  close(): void {
-    this.closed = true;
+  emitNamedError(message: string): void {
+    this.handlers?.onNamedError(message);
   }
 
-  /** Simula un evento SSE del backend. */
-  emit(type: string, data: unknown): void {
-    for (const handler of this.listeners.get(type) ?? []) {
-      handler(new MessageEvent(type, { data: JSON.stringify(data) }));
-    }
+  emitConnectionError(): void {
+    this.handlers?.onConnectionError();
   }
 }
 
@@ -63,13 +63,13 @@ describe("DocumentWorkflowService", () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: AlittlebyteMVPAPIService, useValue: api },
-        { provide: MvpStateStore, useValue: store }
+        { provide: MvpStateStore, useValue: store },
+        { provide: SseClient, useClass: FakeSseClient }
       ]
     });
     service = TestBed.inject(DocumentWorkflowService);
 
-    FakeEventSource.last = null;
-    (globalThis as { EventSource?: unknown }).EventSource = FakeEventSource;
+    FakeSseClient.last = null;
   });
 
   describe("upload", () => {
@@ -102,7 +102,7 @@ describe("DocumentWorkflowService", () => {
 
       expect(api.uploadMvpDocument).toHaveBeenCalledWith({ document: file });
       expect(result.emissions[0]).toEqual({ status: "Documento ricevuto.", phase: "queued" });
-      expect(FakeEventSource.last?.url).toBe("/api/v1/documents/1/stream");
+      expect(FakeSseClient.last?.url).toBe("/api/v1/documents/1/stream");
     });
 
     it("inoltra i metadati manuali insieme al file", () => {
@@ -145,7 +145,7 @@ describe("DocumentWorkflowService", () => {
     ])("traduce lo stato %s con %i sotto-documenti nella fase %s", (status, subDocuments, phase, label) => {
       const result = startUpload();
 
-      FakeEventSource.last?.emit("progress", { status, subDocuments });
+      FakeSseClient.last?.emit("progress", { status, subDocuments });
 
       expect(result.emissions.at(-1)).toEqual({ status: label, phase });
     });
@@ -154,7 +154,7 @@ describe("DocumentWorkflowService", () => {
       const result = startUpload();
       const subDocument = { id: "sub-7", employeeName: "Mario Rossi" };
 
-      FakeEventSource.last?.emit("document", subDocument);
+      FakeSseClient.last?.emit("document", subDocument);
 
       expect(store.upsertDocument).toHaveBeenCalledWith(subDocument);
       expect(result.emissions.at(-1)).toEqual({
@@ -167,36 +167,57 @@ describe("DocumentWorkflowService", () => {
     it("alla fine adotta lo stato autorevole, chiude lo stream e completa", () => {
       const result = startUpload();
 
-      FakeEventSource.last?.emit("done", { state });
+      FakeSseClient.last?.emit("done", { state });
 
       expect(store.setState).toHaveBeenCalledWith(state);
       expect(result.emissions.at(-1)).toEqual({ status: "Elaborazione completata.", phase: "completed" });
-      expect(FakeEventSource.last?.closed).toBe(true);
+      expect(FakeSseClient.last?.closed).toBe(true);
       expect(result.done).toBe(true);
     });
 
     it("completa anche se l'evento done non porta con se' lo stato", () => {
       const result = startUpload();
 
-      FakeEventSource.last?.emit("done", {});
+      FakeSseClient.last?.emit("done", {});
 
       expect(store.setState).not.toHaveBeenCalled();
       expect(result.done).toBe(true);
     });
 
-    it("su errore dello stream ricarica lo stato invece di inventarne uno", () => {
-      // Nessun fallback automatico: si va a chiedere al backend com'e' andata.
+    it("su errore nominato dello stream ricarica lo stato invece di inventarne uno", () => {
       const result = startUpload();
 
-      FakeEventSource.last?.emit("error", {});
+      FakeSseClient.last?.emitNamedError("Elaborazione non disponibile. Controlla lo stato del documento.");
 
       expect(result.emissions.at(-1)).toEqual({
         status: "Elaborazione non disponibile. Controlla lo stato del documento.",
         phase: "failed"
       });
       expect(store.reload).toHaveBeenCalled();
-      expect(FakeEventSource.last?.closed).toBe(true);
+      expect(FakeSseClient.last?.closed).toBe(true);
       expect(result.done).toBe(true);
+    });
+
+    it("su caduta della connessione ricarica lo stato senza marcare la pipeline come fallita", () => {
+      const result = startUpload();
+
+      FakeSseClient.last?.emitConnectionError();
+
+      expect(result.emissions.at(-1)?.phase).toBe("queued");
+      expect(store.reload).toHaveBeenCalled();
+      expect(result.done).toBe(true);
+    });
+
+    it("segnala still_running senza chiudere lo stream", () => {
+      const result = startUpload();
+
+      FakeSseClient.last?.emit("still_running", { message: "Elaborazione ancora in corso." });
+
+      expect(result.emissions.at(-1)).toEqual({
+        status: "Elaborazione ancora in corso.",
+        phase: "still_running"
+      });
+      expect(FakeSseClient.last?.closed).toBe(false);
     });
 
     it("propaga l'errore quando l'upload stesso fallisce", () => {
@@ -206,7 +227,7 @@ describe("DocumentWorkflowService", () => {
       const result = startUpload();
 
       expect(result.error).toBe(failure);
-      expect(FakeEventSource.last).toBeNull();
+      expect(FakeSseClient.last).toBeNull();
     });
 
     it("chiude lo stream quando il chiamante annulla la sottoscrizione", () => {
@@ -216,7 +237,7 @@ describe("DocumentWorkflowService", () => {
 
       subscription.unsubscribe();
 
-      expect(FakeEventSource.last?.closed).toBe(true);
+      expect(FakeSseClient.last?.closed).toBe(true);
     });
   });
 

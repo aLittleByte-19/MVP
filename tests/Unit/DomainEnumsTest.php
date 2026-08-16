@@ -1,11 +1,11 @@
 <?php
 
-use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
-use App\Mvp\Communications\Enums\CoverImageSource;
-use App\Mvp\Communications\Enums\CoverImageStatus;
-use App\Mvp\Communications\Enums\SendStatus;
-use App\Mvp\Documents\Enums\ProcessingStatus;
-use App\Mvp\Documents\Enums\ReviewStatus;
+use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
+use App\Mvp\Communications\Domain\Enums\CoverImageSource;
+use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
+use App\Mvp\Documents\Domain\Enums\SendStatus;
 
 /**
  * Gli enum di dominio alimentano etichette e colori mostrati all'operatore.

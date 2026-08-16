@@ -8,124 +8,118 @@ use App\Http\Requests\ListDocumentsRequest;
 use App\Http\Requests\UploadDocumentRequest;
 use App\Models\OriginalDocument;
 use App\Models\SubDocument;
-use App\Mvp\Audit\Services\AuditLogger;
-use App\Mvp\Documents\Enums\ProcessingStatus;
-use App\Mvp\Documents\Services\DocumentProcessingService;
-use App\Mvp\Documents\Services\DocumentWorkflowService;
+use App\Mvp\Documents\Domain\Commands\UploadDocumentCommand;
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
+use App\Mvp\Documents\Domain\Ports\Inbound\DeleteDocumentUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\ListDocumentsUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\PollDocumentProgressUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\StartDocumentWorkflowUseCase;
+use App\Mvp\Documents\Domain\Ports\Inbound\UploadDocumentUseCase;
+use App\Mvp\Documents\Domain\ValueObjects\DocumentListFilters;
 use App\Mvp\Support\MvpStateService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Storico filtrabile, upload, avanzamento SSE ed eliminazione dei sotto-documenti.
+ * Adapter primario HTTP: traduce le richieste nei casi d'uso del dominio
+ * Documents tramite le loro porte primarie. Nessuna regola di business qui —
+ * quella vive in Domain/Application (vedi ADR 0010). `stream()` legge lo
+ * stato tramite PollDocumentProgressUseCase (porta primaria): il controller
+ * resta responsabile solo del protocollo SSE e dello shaping via
+ * MvpStateService (infrastruttura condivisa fuori perimetro), ricaricando
+ * dal modello Eloquent solo i sotto-documenti nuovi da quest'ultimo poll.
  */
 class DocumentController
 {
     use AuthorizesDocuments, ResolvesActor;
 
-    /**
-     * Storico dei sotto-documenti del tenant, filtrabile (UC-35..UC-38).
-     * La forma di ogni elemento e' la stessa di `state.copilot.documents`:
-     * la SPA non deve conoscere due rappresentazioni dello stesso oggetto.
-     */
-    public function index(ListDocumentsRequest $request, MvpStateService $state): JsonResponse
-    {
+    public function index(
+        ListDocumentsRequest $request,
+        ListDocumentsUseCase $list,
+        MvpStateService $state,
+    ): JsonResponse {
         $actor = $this->actor($request);
         $filters = $request->validated();
 
-        $query = SubDocument::query()
-            ->with(['originalDocument', 'extractedData'])
-            ->whereHas('originalDocument', fn ($documents) => $documents->where('tenant_id', $actor->tenantId));
-
-        // UC-35: ricerca su nome, cognome e azienda dei dati estratti.
-        if ($search = trim((string) ($filters['search'] ?? ''))) {
-            $query->whereHas('extractedData', function ($data) use ($search): void {
-                $like = '%'.$search.'%';
-                $data->where('employee_first_name', 'like', $like)
-                    ->orWhere('employee_last_name', 'like', $like)
-                    ->orWhere('company_name', 'like', $like);
-            });
-        }
-
-        // UC-36: lo stato di invio coincide con l'avvenuto scaricamento del PDF.
-        if ($sendStatus = $filters['sendStatus'] ?? null) {
-            $query->where('send_status', $sendStatus);
-        }
-
-        // UC-37: soglia di confidenza, sopra o sotto il valore indicato.
-        $threshold = $filters['confidenceThreshold'] ?? null;
-        if ($threshold !== null) {
-            $operator = ($filters['confidenceCriterion'] ?? 'below') === 'above' ? '>=' : '<';
-            $query->whereHas(
-                'extractedData',
-                fn ($data) => $data->whereNotNull('confidence_score')->where('confidence_score', $operator, (int) $threshold),
-            );
-        }
-
-        // UC-38: mese e anno del documento, indipendenti fra loro.
-        if (($month = $filters['month'] ?? null) !== null) {
-            $query->whereHas('extractedData', fn ($data) => $data->whereMonth('document_date', (int) $month));
-        }
-
-        if (($year = $filters['year'] ?? null) !== null) {
-            $query->whereHas('extractedData', fn ($data) => $data->whereYear('document_date', (int) $year));
-        }
-
-        $paginator = $query->latest()->paginate(
-            perPage: (int) ($filters['perPage'] ?? 40),
-            page: (int) ($filters['page'] ?? 1),
+        $page = $list->list(
+            $actor->tenantId,
+            new DocumentListFilters(
+                search: isset($filters['search']) ? (string) $filters['search'] : null,
+                sendStatus: isset($filters['sendStatus']) ? (string) $filters['sendStatus'] : null,
+                confidenceThreshold: isset($filters['confidenceThreshold']) ? (int) $filters['confidenceThreshold'] : null,
+                confidenceCriterion: isset($filters['confidenceCriterion']) ? (string) $filters['confidenceCriterion'] : null,
+                month: isset($filters['month']) ? (int) $filters['month'] : null,
+                year: isset($filters['year']) ? (int) $filters['year'] : null,
+            ),
+            (int) ($filters['page'] ?? 1),
+            (int) ($filters['perPage'] ?? 40),
         );
 
+        // La ricerca/filtro passa dalla porta (sopra); la forma di
+        // presentazione HTTP richiede le relazioni Eloquent caricate per
+        // MvpStateService, che resta fuori dal perimetro esagonale (ADR 0010).
+        $documentsById = SubDocument::query()
+            ->with(['originalDocument', 'extractedData'])
+            ->whereIn('id', $page->subDocumentIds)
+            ->get()
+            ->keyBy('id');
+
+        $items = collect($page->subDocumentIds)
+            ->map(fn (int $id) => $documentsById->get($id))
+            ->filter()
+            ->map(fn (SubDocument $document) => $state->document($document))
+            ->values();
+
         return response()->json([
-            'items' => collect($paginator->items())->map(fn ($document) => $state->document($document))->values()->all(),
-            'total' => $paginator->total(),
-            'page' => $paginator->currentPage(),
-            'perPage' => $paginator->perPage(),
+            'items' => $items->all(),
+            'total' => $page->total,
+            'page' => $page->page,
+            'perPage' => $page->perPage,
         ]);
     }
 
-    public function store(UploadDocumentRequest $request, DocumentProcessingService $documents, DocumentWorkflowService $workflow, AuditLogger $audit): JsonResponse
-    {
+    public function store(
+        UploadDocumentRequest $request,
+        UploadDocumentUseCase $upload,
+        StartDocumentWorkflowUseCase $startWorkflow,
+    ): JsonResponse {
         $validated = $request->validated();
         $actor = $this->actor($request);
-        $manualMetadata = $request->manualMetadata();
+        $file = $validated['document'];
+        $correlationId = $request->attributes->get('correlation_id');
+        $requestId = $request->attributes->get('request_id');
 
-        $original = $documents->storeUpload($validated['document'], $actor, $manualMetadata);
-        $audit->record(
-            'mvp-document-upload-accepted',
-            $actor,
-            'original_document',
-            (string) $original->id,
-            [
-                'filename' => $original->original_filename,
-                'manual_metadata' => array_filter($manualMetadata, static fn ($value) => $value !== null),
-            ],
-            $request,
-        );
+        $documentId = $upload->upload(new UploadDocumentCommand(
+            absoluteSourcePath: $file->getRealPath(),
+            originalFilename: $file->getClientOriginalName(),
+            actor: $actor,
+            manualDocumentType: $request->manualMetadata()['document_type'],
+            manualCompanyName: $request->manualMetadata()['company_name'],
+            manualReferenceMonth: $request->manualMetadata()['reference_month'],
+            manualReferenceYear: $request->manualMetadata()['reference_year'],
+            correlationId: $correlationId,
+            requestId: $requestId,
+        ));
 
-        $workflow->start($original, $actor, $request);
+        $startWorkflow->start($documentId, $correlationId, $requestId);
 
         return response()->json([
             'message' => 'Documento caricato. Workflow documentale avviato.',
             // URL relativo: la SPA e' servita in HTTPS dietro Traefik, che termina il
             // TLS e inoltra in HTTP. Un URL assoluto verrebbe generato con schema
             // "http://" e bloccato dal browser come mixed-content / CSP connect-src.
-            'streamUrl' => route('api.v1.documents.stream', $original, false),
+            'streamUrl' => route('api.v1.documents.stream', ['originalDocument' => $documentId], false),
         ], 202);
     }
 
-    public function stream(Request $request, OriginalDocument $originalDocument, MvpStateService $state): StreamedResponse
+    public function stream(Request $request, OriginalDocument $originalDocument, MvpStateService $state, PollDocumentProgressUseCase $poll): StreamedResponse
     {
         $actor = $this->actor($request);
         $this->authorizeOriginalDocument($originalDocument, $actor);
+        $documentId = $originalDocument->id;
 
-        return response()->stream(function () use ($originalDocument, $actor, $state): void {
-            if (app()->runningUnitTests()) {
-                return;
-            }
-
+        return response()->stream(function () use ($documentId, $actor, $state, $poll): void {
             set_time_limit(0);
 
             $send = function (string $event, array $data): void {
@@ -148,40 +142,42 @@ class DocumentController
 
             $sentDocumentIds = [];
             $startedAt = time();
-            $timeoutSeconds = 300;
+            $timeoutSeconds = max(60, (int) config('mvp.documents.stream_timeout_seconds', 1800));
             $lastSignature = null;
 
             while (! connection_aborted()) {
-                $freshDocument = OriginalDocument::query()
-                    ->with(['subDocuments' => fn ($query) => $query
-                        ->with(['originalDocument', 'extractedData'])
-                        ->orderBy('id')])
-                    ->find($originalDocument->id);
-
-                if (! $freshDocument) {
+                try {
+                    $snapshot = $poll->poll($documentId);
+                } catch (\Throwable) {
                     $send('error', ['message' => 'Documento non trovato.']);
 
                     return;
                 }
 
-                foreach ($freshDocument->subDocuments as $subDocument) {
-                    if (in_array($subDocument->id, $sentDocumentIds, true) || ! $subDocument->extractedData) {
-                        continue;
-                    }
+                $newSubDocumentIds = array_values(array_diff($snapshot->extractedSubDocumentIds, $sentDocumentIds));
 
-                    $sentDocumentIds[] = $subDocument->id;
-                    $send('document', $state->document($subDocument));
+                if ($newSubDocumentIds !== []) {
+                    $freshSubDocuments = SubDocument::query()
+                        ->with(['originalDocument', 'extractedData'])
+                        ->whereIn('id', $newSubDocumentIds)
+                        ->orderBy('id')
+                        ->get();
+
+                    foreach ($freshSubDocuments as $subDocument) {
+                        $sentDocumentIds[] = $subDocument->id;
+                        $send('document', $state->document($subDocument));
+                    }
                 }
 
                 // Avanzamento a step per la barra di progressione della SPA: stato
                 // del workflow + numero di sotto-documenti gia' estratti. Si emette
                 // solo quando qualcosa cambia; altrimenti un heartbeat tiene viva la
                 // connessione senza generare rumore.
-                $signature = $freshDocument->processing_status->value.':'.count($sentDocumentIds);
+                $signature = $snapshot->processingStatus.':'.count($sentDocumentIds);
 
                 if ($signature !== $lastSignature) {
                     $send('progress', [
-                        'status' => $freshDocument->processing_status->value,
+                        'status' => $snapshot->processingStatus,
                         'subDocuments' => count($sentDocumentIds),
                     ]);
                     $lastSignature = $signature;
@@ -189,25 +185,23 @@ class DocumentController
                     $heartbeat();
                 }
 
-                if ($freshDocument->processing_status === ProcessingStatus::Completed) {
+                if ($snapshot->processingStatus === ProcessingStatus::Completed->value) {
                     $send('done', ['state' => $state->forActor($actor)]);
 
                     return;
                 }
 
-                if ($freshDocument->processing_status === ProcessingStatus::Failed) {
-                    $send('error', ['message' => $freshDocument->error_message ?: 'Analisi documento non disponibile.']);
+                if ($snapshot->processingStatus === ProcessingStatus::Failed->value) {
+                    $send('error', ['message' => $snapshot->errorMessage ?: 'Analisi documento non disponibile.']);
 
                     return;
                 }
 
                 if (time() - $startedAt >= $timeoutSeconds) {
-                    $send('error', ['message' => 'Timeout elaborazione.']);
+                    $send('still_running', [
+                        'message' => 'Elaborazione ancora in corso. Lo stato verrà aggiornato.',
+                    ]);
 
-                    return;
-                }
-
-                if (app()->runningUnitTests()) {
                     return;
                 }
 
@@ -220,37 +214,12 @@ class DocumentController
         ]);
     }
 
-    public function destroy(Request $request, SubDocument $subDocument, AuditLogger $audit, MvpStateService $state): JsonResponse
+    public function destroy(Request $request, SubDocument $subDocument, DeleteDocumentUseCase $delete, MvpStateService $state): JsonResponse
     {
-        $original = $subDocument->originalDocument;
         $actor = $this->actor($request);
+        $this->authorizeSubDocument($subDocument, $actor);
 
-        if ($original) {
-            $this->authorizeOriginalDocument($original, $actor);
-        }
-
-        $disk = config('mvp.documents.storage_disk', config('filesystems.default', 'local'));
-        $subFilePath = $subDocument->file_path;
-
-        $subDocument->delete();
-        Storage::disk($disk)->delete($subFilePath);
-        $audit->record(
-            'mvp-sub-document-deleted',
-            $actor,
-            'sub_document',
-            (string) $subDocument->id,
-            ['original_document_id' => $original?->id],
-            $request,
-        );
-
-        if ($original && $original->subDocuments()->doesntExist()) {
-            $originalFilePath = $original->file_path;
-            // I task workflow sono legati da una relazione morph, senza foreign
-            // key: vanno rimossi insieme al documento che li ha generati.
-            $original->workflowTasks()->delete();
-            $original->delete();
-            Storage::disk($disk)->delete($originalFilePath);
-        }
+        $delete->delete($subDocument->id, $actor);
 
         return response()->json([
             'message' => 'Documento eliminato.',

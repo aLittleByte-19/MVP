@@ -141,10 +141,10 @@ class UploadDocumentRequest extends FormRequest
      */
     protected function failedValidation(ValidatorContract $validator): void
     {
-        $actor = $this->user();
+        $user = $this->user();
         app(AuditLogger::class)->record(
             'mvp-document-upload-rejected',
-            $actor instanceof MvpUser ? $actor : null,
+            $user instanceof MvpUser ? $user->toActor() : null,
             'original_document',
             null,
             [

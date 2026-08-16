@@ -1,7 +1,7 @@
 <?php
 
 use App\Models\OriginalDocument;
-use App\Mvp\Documents\Enums\ProcessingStatus;
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
 use Aws\Command;
@@ -69,7 +69,7 @@ test('beat is a no-op when the heartbeat is not activated', function () {
     $heartbeat->beat(force: true);
 });
 
-test('consumer completes the task even when heartbeat and callback are rejected', function () {
+test('consumer completes the task and clears the queue message when the callback fails with a permanent error', function () {
     config(['services.workflow.task_queue_url' => 'http://localstack:4566/000000000000/mvp-documents']);
 
     $document = OriginalDocument::factory()->create([
@@ -86,10 +86,10 @@ test('consumer completes the task even when heartbeat and callback are rejected'
     $sqs->shouldReceive('receiveMessage')
         ->once()
         ->andReturn(new Result(['Messages' => [['Body' => $body, 'ReceiptHandle' => 'rh-1']]]));
-    $sqs->shouldReceive('deleteMessage')
-        ->once()
-        ->with(Mockery::on(fn (array $args): bool => $args['ReceiptHandle'] === 'rh-1'))
-        ->andReturn(new Result([]));
+    // TaskTimedOut e' permanente: un retry con lo stesso token non puo' mai
+    // riuscire, quindi il messaggio va rimosso dalla coda anche se il
+    // callback e' stato rifiutato (vedi PERMANENT_CALLBACK_ERRORS).
+    $sqs->shouldReceive('deleteMessage')->once();
 
     $sfn = Mockery::mock(SfnClient::class);
     $sfn->shouldReceive('sendTaskHeartbeat')
@@ -98,6 +98,41 @@ test('consumer completes the task even when heartbeat and callback are rejected'
     $sfn->shouldReceive('sendTaskSuccess')
         ->once()
         ->andThrow(new AwsException('Task timed out', new Command('sendTaskSuccess'), ['code' => 'TaskTimedOut']));
+
+    $this->app->instance(SqsClient::class, $sqs);
+    $this->app->instance(SfnClient::class, $sfn);
+
+    $this->artisan('mvp:workflow:consume', ['--once' => true])->assertExitCode(0);
+
+    expect($document->workflowTasks()->where('task_type', 'persist.results')->value('status'))->toBe('succeeded');
+});
+
+test('consumer leaves the message in queue when the callback fails with a transient error', function () {
+    config(['services.workflow.task_queue_url' => 'http://localstack:4566/000000000000/mvp-documents']);
+
+    $document = OriginalDocument::factory()->create([
+        'processing_status' => ProcessingStatus::Processing,
+    ]);
+
+    $body = json_encode([
+        'taskToken' => 'token-throttled',
+        'taskType' => 'persist.results',
+        'documentId' => $document->id,
+    ], JSON_THROW_ON_ERROR);
+
+    $sqs = Mockery::mock(SqsClient::class);
+    $sqs->shouldReceive('receiveMessage')
+        ->once()
+        ->andReturn(new Result(['Messages' => [['Body' => $body, 'ReceiptHandle' => 'rh-1']]]));
+    // ThrottlingException e' transitorio: un retry successivo con lo stesso
+    // token puo' riuscire, quindi il messaggio deve restare in coda.
+    $sqs->shouldNotReceive('deleteMessage');
+
+    $sfn = Mockery::mock(SfnClient::class);
+    $sfn->shouldReceive('sendTaskHeartbeat')->once()->andReturn(new Result([]));
+    $sfn->shouldReceive('sendTaskSuccess')
+        ->once()
+        ->andThrow(new AwsException('Rate exceeded', new Command('sendTaskSuccess'), ['code' => 'ThrottlingException']));
 
     $this->app->instance(SqsClient::class, $sqs);
     $this->app->instance(SfnClient::class, $sfn);

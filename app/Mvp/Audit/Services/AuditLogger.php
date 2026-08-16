@@ -3,7 +3,7 @@
 namespace App\Mvp\Audit\Services;
 
 use App\Models\AuditEvent;
-use App\Mvp\Identity\MvpUser;
+use App\Mvp\Support\Identity\Actor;
 use App\Mvp\Workflow\Support\WorkflowContext;
 use Illuminate\Http\Request;
 
@@ -18,7 +18,7 @@ class AuditLogger
      */
     public function record(
         string $eventType,
-        ?MvpUser $actor = null,
+        ?Actor $actor = null,
         ?string $resourceType = null,
         ?string $resourceId = null,
         array $metadata = [],

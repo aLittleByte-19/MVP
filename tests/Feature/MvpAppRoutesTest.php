@@ -6,20 +6,15 @@ use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
 use App\Models\SubDocument;
 use App\Mvp\Ai\BedrockService;
-use App\Mvp\Audit\Services\AuditLogger;
-use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
-use App\Mvp\Communications\Enums\CommunicationStatus;
-use App\Mvp\Communications\Enums\CoverImageStatus;
-use App\Mvp\Communications\Enums\SendStatus;
-use App\Mvp\Communications\Services\CommunicationCoverService;
-use App\Mvp\Communications\Services\CommunicationWorkflowService;
-use App\Mvp\Documents\Enums\ReviewStatus;
-use App\Mvp\Documents\Services\DocumentWorkflowService;
-use App\Mvp\Observability\MetricsRecorder;
+use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
+use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
+use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
+use App\Mvp\Communications\Domain\Ports\Inbound\StartCommunicationWorkflowUseCase;
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
+use App\Mvp\Documents\Domain\Enums\SendStatus;
+use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Services\WorkflowTaskRunner;
 use App\Mvp\Workflow\Support\WorkflowContext;
-use Aws\Result;
-use Aws\Sfn\SfnClient;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -50,40 +45,59 @@ function mvpAssertWellFormedPdf(string $bytes): void
 
 function mvpMockWorkflowStart(object $test): void
 {
-    $mock = Mockery::mock(DocumentWorkflowService::class);
-    $mock->shouldReceive('start')
-        ->once()
-        ->andReturnUsing(fn (OriginalDocument $document) => $document);
+    // Prima, l'intero DocumentWorkflowService era mockato: il suo guard di
+    // configurazione non veniva mai eseguito. Ora si mocka solo la porta
+    // secondaria (WorkflowEnginePort): StartDocumentWorkflowService gira per
+    // davvero, quindi la configurazione minima deve essere presente.
+    config([
+        'services.workflow.state_machine_arn' => config('services.workflow.state_machine_arn') ?: 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-document-pipeline',
+        'services.workflow.task_queue_url' => config('services.workflow.task_queue_url') ?: 'http://localstack:4566/000000000000/mvp-documents',
+    ]);
 
-    app()->instance(DocumentWorkflowService::class, $mock);
+    $mock = Mockery::mock(WorkflowEnginePort::class);
+    $mock->shouldReceive('startExecution')
+        ->once()
+        ->andReturn('arn:aws:states:eu-north-1:000000000000:execution:fake:mvp-doc-test');
+
+    app()->instance(WorkflowEnginePort::class, $mock);
 }
 
 function mvpMockWorkflowNotStarted(): void
 {
-    $mock = Mockery::mock(DocumentWorkflowService::class);
-    $mock->shouldNotReceive('start');
+    $mock = Mockery::mock(WorkflowEnginePort::class);
+    $mock->shouldNotReceive('startExecution');
 
-    app()->instance(DocumentWorkflowService::class, $mock);
+    app()->instance(WorkflowEnginePort::class, $mock);
 }
 
 function mvpMockCommunicationWorkflowStart(object $test): void
 {
-    $mock = Mockery::mock(CommunicationWorkflowService::class);
-    $mock->shouldReceive('start')
-        ->once()
-        ->andReturnUsing(fn (Communication $communication) => $communication);
+    // Prima, l'intero CommunicationWorkflowService era mockato: il suo guard
+    // di configurazione non veniva mai eseguito. Ora si mocka solo la porta
+    // secondaria (WorkflowEnginePort): StartCommunicationWorkflowService gira
+    // per davvero, quindi la configurazione minima deve essere presente.
+    config([
+        'services.workflow.communications_state_machine_arn' => config('services.workflow.communications_state_machine_arn') ?: 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-communication-pipeline',
+        'services.workflow.communications_task_queue_url' => config('services.workflow.communications_task_queue_url') ?: 'http://localstack:4566/000000000000/mvp-communications',
+    ]);
 
-    app()->instance(CommunicationWorkflowService::class, $mock);
+    $mock = Mockery::mock(WorkflowEnginePort::class);
+    $mock->shouldReceive('startExecution')
+        ->once()
+        ->andReturn('arn:aws:states:eu-north-1:000000000000:execution:fake:mvp-comm-test');
+
+    app()->instance(WorkflowEnginePort::class, $mock);
 }
 
 function mvpMockCommunicationWorkflowRegenerate(object $test): void
 {
-    $mock = Mockery::mock(CommunicationWorkflowService::class);
-    $mock->shouldReceive('regenerate')
-        ->once()
-        ->andReturnUsing(fn (Communication $communication) => $communication);
+    // A differenza di start(), regenerate() puo' incontrare una copertina
+    // gia' presente e la elimina davvero tramite la porta secondaria: prima
+    // l'intero servizio era mockato e questa chiamata di storage restava
+    // invisibile al test.
+    Storage::fake('s3');
 
-    app()->instance(CommunicationWorkflowService::class, $mock);
+    mvpMockCommunicationWorkflowStart($test);
 }
 
 /**
@@ -157,7 +171,10 @@ test('ai assistant generation is accepted and delegated to the communication pip
 
     expect(Communication::query()->count())->toBe(1)
         ->and($communication->prompt)->toBe('Comunicazione interna sulla nuova area documentale.')
-        ->and($communication->generation_status)->toBe(CommunicationGenerationStatus::Pending)
+        // Il workflow reale (solo la porta secondaria e' mockata) porta lo
+        // stato a Processing dopo l'avvio: prima l'intero servizio era
+        // mockato e questo passaggio restava invisibile al test.
+        ->and($communication->generation_status)->toBe(CommunicationGenerationStatus::Processing)
         ->and($communication->tenant_id)->toBe('mvp-local-tenant')
         ->and(AuditEvent::query()->where('event_type', 'mvp-communication-generation-requested')->count())->toBe(1);
 });
@@ -275,6 +292,17 @@ test('a failed text generation fails the whole communication', function () {
         ->toThrow(RuntimeException::class);
 
     expect($communication->fresh()->generation_status)->toBe(CommunicationGenerationStatus::Failed);
+});
+
+test('workflow runner rejects a message whose tenantId does not match the communication', function () {
+    $communication = Communication::factory()->processing()->create(['tenant_id' => 'tenant-owner']);
+
+    expect(fn () => app(WorkflowTaskRunner::class)->handle([
+        'taskToken' => 'token-tenant-mismatch',
+        'taskType' => 'communication.generate_text',
+        'communicationId' => $communication->id,
+        'tenantId' => 'tenant-intruder',
+    ]))->toThrow(InvalidArgumentException::class, 'tenantId non corrisponde alla comunicazione');
 });
 
 test('workflow audit events keep the correlation id carried by the message', function () {
@@ -759,7 +787,7 @@ test('operator can preview a processed sub-document PDF', function () {
         ->assertHeader('Content-Type', 'application/pdf');
 
     expect($response->headers->get('Content-Disposition'))->toContain('inline');
-    expect($response->streamedContent())->toBe('contenuto-documento');
+    expect($response->getContent())->toBe('contenuto-documento');
 });
 
 test('sub-document preview returns 404 when the file is missing', function () {
@@ -1316,7 +1344,7 @@ test('operator can download the cover image of a communication', function () {
     $response->assertOk()
         ->assertHeader('Content-Type', 'image/png');
 
-    expect($response->streamedContent())->toBe('contenuto-copertina');
+    expect($response->getContent())->toBe('contenuto-copertina');
 });
 
 test('cover download returns 404 when the object is missing', function () {
@@ -1642,21 +1670,15 @@ test('regenerating a communication replaces text and cover with a new variant', 
     $previousCoverPath = $communication->cover_image_path;
     Storage::disk('s3')->put($previousCoverPath, 'vecchia-copertina');
 
-    $client = Mockery::mock(SfnClient::class);
-    $client->shouldReceive('startExecution')
+    $engine = Mockery::mock(WorkflowEnginePort::class);
+    $engine->shouldReceive('startExecution')
         ->once()
-        ->andReturn(new Result([
-            'executionArn' => 'arn:aws:states:eu-north-1:000000000000:execution:mvp-communication-pipeline:test',
-        ]));
+        ->andReturn('arn:aws:states:eu-north-1:000000000000:execution:mvp-communication-pipeline:test');
+    app()->instance(WorkflowEnginePort::class, $engine);
 
-    $service = new CommunicationWorkflowService(
-        $client,
-        app(AuditLogger::class),
-        app(MetricsRecorder::class),
-        app(CommunicationCoverService::class),
-    );
+    app(StartCommunicationWorkflowUseCase::class)->regenerate($communication->id, null, null, null);
 
-    $regenerated = $service->regenerate($communication);
+    $regenerated = $communication->fresh();
 
     expect($regenerated->generated_title)->toBeNull()
         ->and($regenerated->generated_body)->toBeNull()

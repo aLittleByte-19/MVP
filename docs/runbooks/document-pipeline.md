@@ -8,8 +8,8 @@
 
 1. SPA posts a PDF to `POST /api/v1/documents/ocr`.
 2. `UploadDocumentRequest` validates MIME type, size, filename, PDF readability, page count and optional Textract limits.
-3. `DocumentProcessingService::storeUpload()` stores the original file on the configured document disk.
-4. `DocumentWorkflowService::start()` starts the Step Functions execution and stores execution metadata on `original_documents`.
+3. `UploadDocumentService::upload()` stores the original file on the configured document disk.
+4. `StartDocumentWorkflowService::start()` starts the Step Functions execution and stores execution metadata on `original_documents`.
 5. Step Functions sends callback-token tasks to SQS.
 6. `php artisan mvp:workflow:consume --queue=documents` receives each message, executes the task through `DocumentWorkflowTaskHandler`, and calls `SendTaskSuccess` or `SendTaskFailure`.
 7. `textract.ocr` calls real Textract only when `TEXTRACT_ENABLED=true` and stores the page-aware OCR text (`ocr_text` + `ocr_pages`) consumed by the next step.
@@ -29,7 +29,7 @@
 | `TEXTRACT_ENABLED` | OCR | Defaults false in local/CI. Requires `MVP_DOCUMENT_DISK=real_s3`. |
 | `BEDROCK_MODEL_ID` | AI extraction | Real Bedrock access must be granted externally. |
 
-When `TEXTRACT_ENABLED=true`, `MVP_DOCUMENT_DISK` must be `real_s3`: real Textract can only read objects from real S3, so `DocumentWorkflowService::start()` rejects the workflow up front with an explicit error if OCR is enabled while documents live on the LocalStack disk. The S3 key passed to Textract includes the document disk root prefix (`AWS_REAL_S3_PREFIX`).
+When `TEXTRACT_ENABLED=true`, `MVP_DOCUMENT_DISK` must be `real_s3`: real Textract can only read objects from real S3, so `StartDocumentWorkflowService::start()` rejects the workflow up front with an explicit error if OCR is enabled while documents live on the LocalStack disk. The S3 key passed to Textract includes the document disk root prefix (`AWS_REAL_S3_PREFIX`).
 
 ## Manual Smoke
 
@@ -64,6 +64,12 @@ MVP_DOCUMENT_DISK=real_s3 TEXTRACT_ENABLED=true make aws-smoke
 
 `make aws-smoke` currently validates required configuration only. Add account-specific S3/Textract/Bedrock calls after enterprise IAM roles and model access are supplied.
 
+## SSE Stream Timeout and PHP-FPM Pool
+
+`DocumentController::stream()` reports progress over SSE for up to `mvp.documents.stream_timeout_seconds` (default 1800s, above the ~1140s worst case of Textract 420s + Bedrock 720s + persist/dispatch). On timeout it sends `still_running`, not `error`: the frontend keeps the progress UI active and does not treat it as a pipeline failure — the worker is still processing, only the SPA's live view has stopped following it (the next `GET /api/v1/state` picks up the eventual result).
+
+Each open stream holds a PHP-FPM worker on the `app` service busy for the full duration. The pool is sized in `docker/php/www-pool.conf` (`pm.max_children = 20`, up from the `php:8.4-fpm` image default of 5) specifically for this: with the default pool, 3-5 concurrent uploads would exhaust every worker and make `/health`/`/ready`/every other endpoint unresponsive until a stream ended or timed out. If demo load grows further, raise `pm.max_children` there (and check available container memory) before raising the stream timeout again.
+
 ## Failure States
 
 | Failure | Observable signal | Operator action |
@@ -73,3 +79,4 @@ MVP_DOCUMENT_DISK=real_s3 TEXTRACT_ENABLED=true make aws-smoke
 | Textract failure | `mvp_textract_jobs_failed_total` | Check real S3 object key, IAM and Textract limits. |
 | Bedrock failure | failed document/sub-document error message | Check model access, model ID and credentials. |
 | Stuck document | `mvp_document_stuck_processing_total` | Check worker, SQS queue and Step Functions execution. |
+| SSE stream timed out (`still_running`) | Frontend keeps polling state, no error shown | Not a failure by itself — check `mvp_document_stuck_processing_total` before assuming otherwise. |

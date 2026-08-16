@@ -5,17 +5,18 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\V1\Concerns\AuthorizesDocuments;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesActor;
 use App\Http\Requests\UpdateExtractedDataRequest;
-use App\Models\ExtractedData;
 use App\Models\SubDocument;
-use App\Mvp\Audit\Services\AuditLogger;
-use App\Mvp\Documents\Enums\ReviewStatus;
+use App\Mvp\Documents\Domain\Exceptions\MissingExtractedDataException;
+use App\Mvp\Documents\Domain\Ports\Inbound\ReviewDocumentUseCase;
 use App\Mvp\Support\MvpStateService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Revisione human-in-the-loop: correzione dei campi estratti e validazione manuale.
+ * Adapter primario HTTP: revisione human-in-the-loop. Traduce la richiesta
+ * nel caso d'uso tramite la sua porta primaria; nessuna regola di business
+ * qui (vedi ADR 0010).
  */
 class DocumentReviewController
 {
@@ -24,44 +25,20 @@ class DocumentReviewController
     public function updateExtractedData(
         UpdateExtractedDataRequest $request,
         SubDocument $subDocument,
-        AuditLogger $audit,
+        ReviewDocumentUseCase $review,
         MvpStateService $state,
     ): JsonResponse {
         $actor = $this->actor($request);
         $this->authorizeSubDocument($subDocument, $actor);
 
         $validated = $request->validated();
-        $existing = $subDocument->extractedData;
-        $updates = $this->extractedDataUpdates($validated);
+        $fieldUpdates = $this->extractedDataUpdates($validated);
+        $markAsValidated = (bool) ($validated['markAsValidated'] ?? false);
 
-        if ($updates !== [] || ! $existing) {
-            ExtractedData::updateOrCreate(
-                ['sub_document_id' => $subDocument->id],
-                $updates,
-            );
-        }
-
-        $reviewStatus = ($validated['markAsValidated'] ?? false)
-            ? ReviewStatus::ManuallyValidated
-            : ReviewStatus::NeedsReview;
-        $subDocument->update([
-            'review_status' => $reviewStatus,
-            'error_message' => null,
-        ]);
-        $audit->record(
-            'mvp-sub-document-extracted-data-corrected',
-            $actor,
-            'sub_document',
-            (string) $subDocument->id,
-            [
-                'changed_fields' => array_keys($updates),
-                'review_status' => $reviewStatus->value,
-            ],
-            $request,
-        );
+        $reviewStatus = $review->updateExtractedData($subDocument->id, $fieldUpdates, $markAsValidated, $actor);
 
         return response()->json([
-            'message' => $reviewStatus === ReviewStatus::ManuallyValidated
+            'message' => $reviewStatus === 'manually_validated'
                 ? 'Dati estratti corretti e validati manualmente.'
                 : 'Dati estratti aggiornati.',
             'document' => $state->document($subDocument->fresh(['originalDocument', 'extractedData'])),
@@ -69,29 +46,16 @@ class DocumentReviewController
         ]);
     }
 
-    public function markReviewed(Request $request, SubDocument $subDocument, AuditLogger $audit, MvpStateService $state): JsonResponse
+    public function markReviewed(Request $request, SubDocument $subDocument, ReviewDocumentUseCase $review, MvpStateService $state): JsonResponse
     {
         $actor = $this->actor($request);
         $this->authorizeSubDocument($subDocument, $actor);
 
-        if (! $subDocument->extractedData) {
-            throw ValidationException::withMessages([
-                'subDocument' => ['Correggi i dati estratti prima di validare manualmente il sotto-documento.'],
-            ]);
+        try {
+            $review->markReviewed($subDocument->id, $actor);
+        } catch (MissingExtractedDataException $e) {
+            throw ValidationException::withMessages(['subDocument' => [$e->getMessage()]]);
         }
-
-        $subDocument->update([
-            'review_status' => ReviewStatus::ManuallyValidated,
-            'error_message' => null,
-        ]);
-        $audit->record(
-            'mvp-sub-document-manually-validated',
-            $actor,
-            'sub_document',
-            (string) $subDocument->id,
-            ['review_status' => ReviewStatus::ManuallyValidated->value],
-            $request,
-        );
 
         return response()->json([
             'message' => 'Sotto-documento validato manualmente.',

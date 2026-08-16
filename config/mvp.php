@@ -28,6 +28,10 @@ return [
 
     'documents' => [
         'storage_disk' => env('MVP_DOCUMENT_DISK', env('FILESYSTEM_DISK', 's3')),
+        // Somma dei TimeoutSeconds ASL (420+720+120+120) più un margine per
+        // un giro di retry: oltre, lo stream SSE emette still_running e non
+        // un errore, perché la pipeline può ancora concludere.
+        'stream_timeout_seconds' => (int) env('MVP_DOCUMENT_STREAM_TIMEOUT_SECONDS', 1800),
     ],
 
     'communications' => [
@@ -47,7 +51,9 @@ return [
         'pdf_prefix' => env('MVP_COMMUNICATION_PDF_PREFIX') ?: 'communications/exports',
         // Oltre questa eta' una generazione ancora in processing e' considerata
         // bloccata e viene esposta come tale dalle metriche.
-        'generation_timeout_seconds' => (int) (env('MVP_COMMUNICATION_TIMEOUT_SECONDS') ?: 300),
+        'generation_timeout_seconds' => (int) (env('MVP_COMMUNICATION_TIMEOUT_SECONDS') ?: 900),
+        // Somma dei TimeoutSeconds ASL (180+300+120) più un margine per retry.
+        'stream_timeout_seconds' => (int) env('MVP_COMMUNICATION_STREAM_TIMEOUT_SECONDS', 900),
     ],
 
     'document_limits' => [
@@ -55,7 +61,7 @@ return [
         'max_pdf_pages' => (int) env('MVP_MAX_PDF_PAGES', 50),
         // Path esplicito del binario qpdf; vuoto = autodetect nei path standard.
         'qpdf_binary' => env('MVP_QPDF_BINARY', ''),
-        'processing_timeout_seconds' => (int) env('MVP_PROCESSING_TIMEOUT_SECONDS', 600),
+        'processing_timeout_seconds' => (int) env('MVP_PROCESSING_TIMEOUT_SECONDS', 1800),
         'textract_timeout_seconds' => (int) env('TEXTRACT_TIMEOUT_SECONDS', 300),
     ],
 

@@ -2,7 +2,7 @@
 
 use App\Models\Communication;
 use App\Mvp\Ai\BedrockService;
-use App\Mvp\Communications\Enums\CommunicationStatus;
+use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 
 test('successful generation creates a draft communication record with all fields', function () {
     $this->mock(BedrockService::class, function ($mock) {

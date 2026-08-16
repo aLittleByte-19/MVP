@@ -6,19 +6,26 @@ use App\Http\Controllers\Api\V1\Concerns\AuthorizesCommunications;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesActor;
 use App\Http\Requests\UpdateCommunicationCoverRequest;
 use App\Models\Communication;
-use App\Mvp\Audit\Services\AuditLogger;
-use App\Mvp\Communications\Services\CommunicationCoverService;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationCoverUnavailableException;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationNotEditableException;
+use App\Mvp\Communications\Domain\Ports\Inbound\DownloadCommunicationCoverUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\UpdateCommunicationCoverUseCase;
 use App\Mvp\Support\MvpStateService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
-use League\Flysystem\FilesystemException;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Validation\ValidationException;
 
 /**
- * Immagine di copertina della comunicazione: sostituzione manuale, rimozione e download.
+ * Adapter primario HTTP: immagine di copertina della comunicazione
+ * (sostituzione manuale, rimozione e download). L'audit della mutazione
+ * passa da CommunicationCoverReplaced/CommunicationCoverRemoved (dispatchati
+ * da UpdateCommunicationCoverService), stesso schema delle altre azioni sul
+ * dominio — non piu' scritto qui direttamente. Il download passa dalla porta
+ * primaria DownloadCommunicationCoverUseCase, stesso schema di
+ * DocumentPreviewController.
  */
 class CommunicationCoverController
 {
@@ -30,29 +37,28 @@ class CommunicationCoverController
     public function updateCoverImage(
         UpdateCommunicationCoverRequest $request,
         Communication $communication,
-        CommunicationCoverService $covers,
-        AuditLogger $audit,
+        UpdateCommunicationCoverUseCase $covers,
         MvpStateService $state,
     ): JsonResponse {
         $actor = $this->actor($request);
         $this->assertCommunicationOwnership($communication, $actor);
-        $this->assertCommunicationIsEditable($communication);
 
         /** @var UploadedFile $file */
         $file = $request->file('image');
-        $covers->storeUploaded($communication, $file);
+        $path = $file->getRealPath();
+        $bytes = $path !== false ? file_get_contents($path) : false;
 
-        $audit->record(
-            'mvp-communication-cover-updated',
-            $actor,
-            'communication',
-            (string) $communication->id,
-            [
-                'mime' => $file->getMimeType(),
-                'size' => $file->getSize(),
-            ],
-            $request,
-        );
+        if ($bytes === false || $bytes === '') {
+            throw new \RuntimeException('Immagine di copertina non leggibile.');
+        }
+
+        $mime = $file->getMimeType() ?: 'image/png';
+
+        try {
+            $covers->update($communication->id, $bytes, $mime, strlen($bytes), $actor);
+        } catch (CommunicationNotEditableException $e) {
+            throw ValidationException::withMessages(['communication' => [$e->getMessage()]]);
+        }
 
         return response()->json([
             'message' => 'Immagine di copertina aggiornata correttamente.',
@@ -67,24 +73,17 @@ class CommunicationCoverController
     public function removeCoverImage(
         Request $request,
         Communication $communication,
-        CommunicationCoverService $covers,
-        AuditLogger $audit,
+        UpdateCommunicationCoverUseCase $covers,
         MvpStateService $state,
     ): JsonResponse {
         $actor = $this->actor($request);
         $this->assertCommunicationOwnership($communication, $actor);
-        $this->assertCommunicationIsEditable($communication);
 
-        $covers->remove($communication);
-
-        $audit->record(
-            'mvp-communication-cover-removed',
-            $actor,
-            'communication',
-            (string) $communication->id,
-            [],
-            $request,
-        );
+        try {
+            $covers->remove($communication->id, $actor);
+        } catch (CommunicationNotEditableException $e) {
+            throw ValidationException::withMessages(['communication' => [$e->getMessage()]]);
+        }
 
         return response()->json([
             'message' => 'Immagine di copertina rimossa.',
@@ -96,37 +95,22 @@ class CommunicationCoverController
     /**
      * @throws AuthorizationException
      */
-    public function coverImage(Request $request, Communication $communication): StreamedResponse
+    public function coverImage(Request $request, Communication $communication, DownloadCommunicationCoverUseCase $covers): Response
     {
         $this->assertCommunicationOwnership($communication, $this->actor($request));
 
-        $path = $communication->cover_image_path;
-        abort_if($path === null || $path === '', 404);
-
-        $disk = Storage::disk((string) config('mvp.communications.cover_disk', config('filesystems.default', 'local')));
-
         try {
-            abort_unless($disk->exists($path), 404);
-        } catch (FilesystemException $exception) {
+            $cover = $covers->download($communication->id);
+        } catch (CommunicationCoverUnavailableException $exception) {
+            abort(404, $exception->getMessage());
+        } catch (\RuntimeException $exception) {
             report($exception);
 
             abort(503, 'Storage copertine non raggiungibile.');
         }
 
-        return response()->stream(function () use ($disk, $path): void {
-            $stream = $disk->readStream($path);
-
-            if (! is_resource($stream)) {
-                return;
-            }
-
-            try {
-                fpassthru($stream);
-            } finally {
-                fclose($stream);
-            }
-        }, 200, [
-            'Content-Type' => $communication->cover_image_mime ?: 'image/png',
+        return response($cover->bytes, 200, [
+            'Content-Type' => $cover->mime,
             'Content-Disposition' => 'inline',
             // Il percorso e' stabile e distingue le versioni solo con il
             // parametro "v": la risposta va rivalidata, altrimenti una

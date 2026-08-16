@@ -5,10 +5,10 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\V1\Concerns\AuthorizesDocuments;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesActor;
 use App\Models\SubDocument;
+use App\Mvp\Documents\Domain\Exceptions\DocumentPreviewUnavailableException;
+use App\Mvp\Documents\Domain\Ports\Inbound\PreviewDocumentUseCase;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
-use League\Flysystem\FilesystemException;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Http\Response;
 
 /**
  * Anteprima PDF del sotto-documento, con errore applicativo leggibile quando lo storage non risponde.
@@ -17,39 +17,24 @@ class DocumentPreviewController
 {
     use AuthorizesDocuments, ResolvesActor;
 
-    public function preview(Request $request, SubDocument $subDocument): StreamedResponse
+    public function preview(Request $request, SubDocument $subDocument, PreviewDocumentUseCase $preview): Response
     {
-        if ($subDocument->originalDocument) {
-            $this->authorizeOriginalDocument($subDocument->originalDocument, $this->actor($request));
-        }
-
-        $disk = Storage::disk(config('mvp.documents.storage_disk', config('filesystems.default', 'local')));
+        $actor = $this->actor($request);
+        $this->authorizeSubDocument($subDocument, $actor);
 
         try {
-            abort_unless($disk->exists($subDocument->file_path), 404);
-        } catch (FilesystemException $exception) {
+            $document = $preview->preview($subDocument->id, $actor);
+        } catch (DocumentPreviewUnavailableException $exception) {
+            abort(404, $exception->getMessage());
+        } catch (\RuntimeException $exception) {
             report($exception);
 
             abort(503, 'Storage documenti non raggiungibile.');
         }
 
-        $filename = $subDocument->originalDocument?->original_filename ?: 'documento.pdf';
-
-        return response()->stream(function () use ($disk, $subDocument): void {
-            $stream = $disk->readStream($subDocument->file_path);
-
-            if (! is_resource($stream)) {
-                return;
-            }
-
-            try {
-                fpassthru($stream);
-            } finally {
-                fclose($stream);
-            }
-        }, 200, [
+        return response($document->bytes, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.str_replace('"', '', $filename).'"',
+            'Content-Disposition' => 'inline; filename="'.str_replace('"', '', $document->filename).'"',
         ]);
     }
 }

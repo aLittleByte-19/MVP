@@ -14,6 +14,7 @@ Thumbs.db
 /.idea
 /.nova
 /.phpunit.cache
+/.trivy-cache/
 /.vscode
 /.zed
 /auth.json

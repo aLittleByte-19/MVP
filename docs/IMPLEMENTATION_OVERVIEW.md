@@ -2,7 +2,7 @@
 
 > Documento aggiornato tramite analisi diretta della codebase.
 > Branch analizzato: integration/develop_merge.
-> Ultimo aggiornamento: 2026-08-06.
+> Ultimo aggiornamento: 2026-08-15.
 
 ---
 
@@ -29,7 +29,7 @@ L'analisi si basa sullo **stato attuale del codice**: route, controller, service
 | Area | Path | Responsabilità |
 |---|---|---|
 | Backend applicativo | `app/` | Controller HTTP divisi per area in `Http/Controllers/Api/V1/` (bozze, stream, copertine, export, rating; documenti, revisione, anteprima, messaggio di invio) con le guardie condivise su attore e tenant in `Http/Controllers/Api/V1/Concerns/`; middleware, model, console command |
-| Domini MVP | `app/Mvp/` | Service layer per dominio: `Ai/` (Bedrock), `Ocr/` (Textract), `Documents/` (Co-Pilot, elaborazione e orchestrazione), `Communications/` (AI Assistant, copertine e orchestrazione), `Workflow/` (infrastruttura di orchestrazione comune), `Identity/`, `Audit/`, `Observability/`, `Support/` |
+| Domini MVP | `app/Mvp/` | `Documents/` (Co-Pilot) e `Communications/` (AI Assistant) seguono l'architettura esagonale (ports & adapters: `Domain/`, `Application/UseCases/`, `Adapters/{Primary,Outbound}/` — [ADR 0010](architecture-decisions/0010-hexagonal-architecture-documents-communications.md)); `Ai/` (Bedrock), `Workflow/` (infrastruttura di orchestrazione comune, include la porta condivisa `WorkflowEnginePort`), `Identity/`, `Audit/`, `Observability/`, `Support/` restano service layer per dominio, fuori dal perimetro esagonale per scelta esplicita dell'ADR |
 | Route | `routes/api.php`, `routes/web.php` | API v1 + endpoint di sistema |
 | Schema dati | `database/migrations/` | 7 tabelle di dominio + indici/FK |
 | Frontend SPA | `apps/frontend/` | Angular + TypeScript, client API Angular generato |
@@ -173,17 +173,17 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 
 ### AWS Textract (OCR, opzionale)
 
-**Dove**: `app/Mvp/Ocr/Services/TextractService.php`, flag `TEXTRACT_ENABLED` (`config/services.php`).
+**Dove**: `app/Mvp/Documents/Adapters/Outbound/Ocr/TextractOcrAdapter.php`, flag `TEXTRACT_ENABLED` (`config/services.php`).
 **Ruolo**: OCR asincrono (`startDocumentTextDetection` + polling con timeout configurabile), confidence media, testo salvato su `original_documents.ocr_text` e per pagina su `original_documents.ocr_pages` (usato da split ed estrazione).
-**Dettaglio rilevante**: guard architetturale in `DocumentWorkflowService::start()`; se Textract è abilitato ma il disco documenti non è `real_s3`, il workflow rifiuta di partire con errore esplicito (Textract reale non può leggere il bucket LocalStack). È un esempio concreto di fail-fast su configurazioni incoerenti.
+**Dettaglio rilevante**: guard architetturale in `StartDocumentWorkflowService::start()`; se Textract è abilitato ma il disco documenti non è `real_s3`, il workflow rifiuta di partire con errore esplicito (Textract reale non può leggere il bucket LocalStack). È un esempio concreto di fail-fast su configurazioni incoerenti.
 **Stato**: implementato ma **disabilitato di default** (`TEXTRACT_ENABLED=false`); con flag off il task ritorna `enabled=false` e la pipeline prosegue.
 
 ### AWS Step Functions + SQS (workflow asincrono)
 
-**Dove**: `infra/localstack/state-machines/` (document e communication pipeline), `infra/localstack/main.tf` (state machine, code + DLQ per dominio, IAM role/policy, EventBridge), `app/Mvp/Workflow/` (runner, registry, heartbeat, contesto di correlazione), `app/Mvp/Documents/Services/DocumentWorkflowService.php` e `DocumentWorkflowTaskHandler.php`, `app/Mvp/Communications/Services/CommunicationWorkflowService.php` e `CommunicationWorkflowTaskHandler.php`, `app/Console/Commands/ConsumeWorkflowTasks.php`.
+**Dove**: `infra/localstack/state-machines/` (document e communication pipeline), `infra/localstack/main.tf` (state machine, code + DLQ per dominio, IAM role/policy, EventBridge), `app/Mvp/Workflow/` (runner, registry, heartbeat, contesto di correlazione, `WorkflowEnginePort`/`SfnWorkflowEngineAdapter`), `app/Mvp/Documents/Application/UseCases/StartDocumentWorkflowService.php` e `Adapters/Primary/Workflow/DocumentWorkflowTaskHandler.php`, `app/Mvp/Communications/Application/UseCases/StartCommunicationWorkflowService.php` e `Adapters/Primary/Workflow/CommunicationWorkflowTaskHandler.php`, `app/Console/Commands/ConsumeWorkflowTasks.php`.
 **Ruolo**: la state machine usa il **callback pattern** (`arn:aws:states:::sqs:sendMessage.waitForTaskToken`): ogni stato pubblica su SQS un messaggio con task token e tipo (`textract.ocr`, `bedrock.extract`, `persist.results`, `dispatch.domain_event`); il worker Laravel esegue e risponde con `sendTaskSuccess/Failure`. Retry dichiarativi nello ASL (2 tentativi, backoff 2x), timeout per stato (420s Textract, 720s Bedrock), `Catch` → stato `Failed`.
 **Motivazione**: separa lo stato del workflow dall'esecutore; i task pesanti (LLM, OCR) escono dal ciclo HTTP; la DLQ cattura i messaggi non processabili.
-**Valutazione**: **idempotenza reale**; `workflow_tasks.task_token_hash` (SHA-256, unique) deduplica i re-delivery SQS e un task già `succeeded/skipped` ritorna il risultato cached senza rieseguire. **Heartbeat implementato**: l'ASL dichiara `HeartbeatSeconds` per ogni task (180s Textract, 240s Bedrock, 90s persist/dispatch) e il worker invia `SendTaskHeartbeat` tramite `WorkflowTaskHeartbeat` durante il polling Textract e tra i segmenti Bedrock (`TextractService`, `DocumentProcessingService`); un heartbeat rifiutato degrada a no-op senza abortire il task di business. È il punto più sofisticato del backend.
+**Valutazione**: **idempotenza reale**; `workflow_tasks.task_token_hash` (SHA-256, unique) deduplica i re-delivery SQS e un task già `succeeded/skipped` ritorna il risultato cached senza rieseguire. **Heartbeat implementato**: l'ASL dichiara `HeartbeatSeconds` per ogni task (180s Textract, 240s Bedrock, 90s persist/dispatch) e il worker invia `SendTaskHeartbeat` tramite `WorkflowTaskHeartbeat` durante il polling Textract e tra i segmenti Bedrock (`TextractOcrAdapter`, `ProcessDocumentService`); un heartbeat rifiutato degrada a no-op senza abortire il task di business. È il punto più sofisticato del backend.
 **Gap vs best practice AWS** ([Step Functions best practices](https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html)): in compose gira una sola replica del worker (`restart: unless-stopped`), anche se il design è già concorrenza-safe (claim atomico via `task_token_hash` + `MVP_WORKFLOW_CLAIM_TTL_SECONDS`, `visibility_timeout_seconds` SQS 900s > timeout ASL massimo 720s); in LocalStack il comportamento di SFN non è identico ad AWS (Express vs Standard, quota, exactly-once non garantito).
 
 ### LocalStack 4.5 + Terraform 1.10
@@ -249,7 +249,7 @@ scrape. Sono gauge, in particolare, le distribuzioni per stato:
 
 ```mermaid
 sequenceDiagram
-    participant FE as SPA (EventSource)
+    participant FE as SPA (SseClient)
     participant API as Laravel API
     participant SFN as Step Functions
     participant SQS as SQS communications queue
@@ -280,13 +280,13 @@ sequenceDiagram
 
 1. `POST /api/v1/communications` (throttle 20/min) → middleware `mvp.identity` (risolve `MvpUser` da config locale o trusted header) e `mvp.authorize` (tenant + ruolo `mvp-operator|mvp-admin`).
 2. `GenerateCommunicationRequest` valida `prompt` (12-5000 char), `tone` e `style` su whitelist chiuse.
-3. `CommunicationController::store()` persiste la `Communication` con `generation_status=pending` e stato `Draft`, registra l'audit event `mvp-communication-generation-requested` e avvia l'esecuzione con `CommunicationWorkflowService::start()`.
-4. Risposta **202** con `communicationId` e `streamUrl` relativo; la SPA apre l'`EventSource`.
+3. `CommunicationController::store()` persiste la `Communication` con `generation_status=pending` e stato `Draft` (`GenerateCommunicationService`), registra l'audit event `mvp-communication-generation-requested` e avvia l'esecuzione (`StartCommunicationWorkflowService::start()`).
+4. Risposta **202** con `communicationId` e `streamUrl` relativo; la SPA apre lo stream SSE via `fetch` (`SseClient`, con header di correlazione).
 5. `communication.generate_text` chiama Bedrock e persiste titolo, corpo e `image_prompt` (audit `mvp-communication-generated`). Lo stesso modello testuale scrive la direzione visiva della copertina avendo davanti il testo appena generato, quindi l'immagine segue la comunicazione reale e non il solo prompt dell'operatore. Un fallimento qui porta `generation_status=failed`: il testo è la comunicazione.
 6. `communication.generate_cover` passa `image_prompt` al modello immagini, scrive il risultato sul disco copertine (`MVP_COMMUNICATION_COVER_DISK`, l'S3 emulato per default) sotto `communications/covers/` e valorizza `cover_status=ready`. Senza direzione visiva dal modello si usa un soggetto corporate generico. Se il modello non è configurato, nega l'accesso o filtra il contenuto, il task registra `cover_status=failed` con `cover_error` e **chiude comunque con successo**.
 7. `communication.finalize` porta `generation_status=completed`, chiude una copertina rimasta pendente e registra `communication_workflow_completed_total`.
 8. Frontend: `AssistantService` popola la bozza per gradi (evento `text`, poi `cover`) e sul `done` rimpiazza lo store con lo stato autorevole.
-9. A generazione completata, `CommunicationPdfService` impagina titolo, corpo e copertina nel PDF finale servito da `GET /communications/{communication}/preview` (inline) e `GET .../export` (attachment), entrambi con throttle 30/min. Ogni pagina porta il marcatore di trasparenza `Creato da AI Assistant` e il piè di pagina NEXUM con numerazione, stampati via canvas dompdf perché i margin-box CSS3 non sono renderizzati. Le due rotte rispondono **422** se la comunicazione non è `completed` o è stata scartata.
+9. A generazione completata, `DompdfCommunicationPdfRenderer` (dietro la porta `CommunicationPdfRendererPort`, orchestrata da `ExportCommunicationUseCase`) impagina titolo, corpo e copertina nel PDF finale servito da `GET /communications/{communication}/preview` (inline) e `GET .../export` (attachment), entrambi con throttle 30/min. Ogni pagina porta il marcatore di trasparenza `Creato da AI Assistant` e il piè di pagina NEXUM con numerazione, stampati via canvas dompdf perché i margin-box CSS3 non sono renderizzati. Le due rotte rispondono **422** se la comunicazione non è `completed` o è stata scartata.
 10. Il PDF è deterministico a parità di contenuto, quindi viene materializzato una volta sul disco (`MVP_COMMUNICATION_PDF_DISK`) sotto `communications/exports/{id}/{fingerprint}.pdf`, dove il fingerprint è l'impronta di titolo, corpo e stato/path/MIME della copertina. L'invalidazione è implicita (cambia il contenuto, cambia l'impronta, nasce un oggetto nuovo) e lo stesso valore fa da `ETag`, così un reload risponde **304** senza toccare né dompdf né lo storage. La cache è best-effort: un disco irraggiungibile fa rigenerare e viene segnalato, non produce un 5xx. Le modifiche al template non entrano nell'impronta: le copre `RENDER_VERSION`, da incrementare nello stesso commit che cambia il layout.
 
 **Test**: `MvpAppRoutesTest` (accettazione 202, pipeline completa, copertina degradata, fallimento testo, correlation id negli audit, PDF materializzato e riusato, 304 su ETag, invalidazione al cambio copertina, degrado con disco assente), `CommunicationCoverStorageTest` equivalenti sulle rotte cover, `BedrockServiceTest` (parsing testo e immagini), `OpenApiContractTest`.
@@ -295,7 +295,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant FE as SPA (EventSource)
+    participant FE as SPA (SseClient)
     participant API as Laravel API
     participant S3 as S3 (LocalStack)
     participant SFN as Step Functions
@@ -329,7 +329,7 @@ Error handling: retry ASL (2 tentativi, backoff 2x) e `Catch`→`Failed`; `sendT
 accetta, oltre al PDF, i campi opzionali `documentType` (vincolato agli stessi valori della
 correzione manuale), `companyName`, `month` e `year` (`UploadDocumentRequest::manualMetadata()`).
 Vengono persistiti sul documento originale e riapplicati a valle dell'estrazione da
-`DocumentProcessingService::applyManualMetadataOverrides()`: quanto dichiarato dal consulente
+`ProcessDocumentService::applyManualMetadataOverrides()`: quanto dichiarato dal consulente
 prevale sull'output del modello, che resta comunque integro in `extracted_data.ai_payload`. Mese e
 anno concorrono a `document_date`; se ne arriva uno solo, l'altro viene completato dalla data
 estratta quando disponibile.
@@ -403,7 +403,7 @@ accetta anche una bozza non archiviata.
 **Preset di prompt riutilizzabili (UC-19, implementato)**: `POST /api/v1/prompt-configurations`
 salva testo/tono/stile del form corrente come preset con nome libero (`PromptConfigurationController`,
 tabella `prompt_configurations`); se il nome è vuoto o già in uso per il tenant,
-`PromptConfigurationNamer` assegna un'etichetta progressiva ("Senza nome (1)", "(2)", ...).
+`PromptConfigurationService::resolveName()` assegna un'etichetta progressiva ("Senza nome (1)", "(2)", ...).
 `DELETE /api/v1/prompt-configurations/{promptConfiguration}` la rimuove definitivamente. I preset
 (fino a 20 per tenant) viaggiano dentro `assistant.promptConfigurations` nello stato applicativo,
 non tramite un endpoint di lista dedicato: il riuso di un preset è puramente lato frontend, popola
@@ -456,7 +456,7 @@ Sette tabelle di dominio (`database/migrations/`):
 | `extracted_data` | FK **unique** cascade su sub_document | 1:1 con sotto-documento; confidence 0-100; campi destinatario `recipient_email`, `fiscal_code`, `employee_id` correggibili a mano |
 | `audit_events` | `(tenant_id, event_type)`, `(resource_type, resource_id)`, `created_at` | append-only (nessun `updated_at`), metadata JSON |
 | `workflow_tasks` | `task_token_hash` char(64) **unique**; `(subject_type, subject_id, task_type)`, `(status, task_type)` | tabella unica delle due pipeline, soggetto polimorfico (`original_document`/`communication`), input/output payload JSON, stati pending→running→succeeded/skipped/failed |
-| `prompt_configurations` | `(tenant_id, name)` | preset di prompt riutilizzabili (UC-19): nome, testo, tono, stile; nessun vincolo UNIQUE sul nome, la de-duplicazione ("Senza nome (N)") è solo applicativa (`PromptConfigurationNamer`) |
+| `prompt_configurations` | `(tenant_id, name)` | preset di prompt riutilizzabili (UC-19): nome, testo, tono, stile; nessun vincolo UNIQUE sul nome, la de-duplicazione ("Senza nome (N)") è solo applicativa (`PromptConfigurationService::resolveName()`) |
 
 Gli stati applicativi sono enum PHP con cast Eloquent (`ProcessingStatus`, `SendStatus`, `CommunicationStatus`, `CommunicationGenerationStatus`, `CoverImageStatus`, `CoverImageSource`) duplicati come CHECK a livello DB: doppia difesa coerente. Le relazioni Eloquent rispecchiano le FK.
 
@@ -520,7 +520,7 @@ Coperte in §5 (Bedrock, Textract) e §6. Punti trasversali:
 
 Coperto in §5; valutazione sintetica:
 
-- **Solido**: data layer uniforme (servizi Angular + client generato), feedback espliciti (loading con `aria-live`, error, empty), SSE per progress reale dell'elaborazione (`DocumentWorkflowService` con EventSource), design token centralizzati con dark mode, test Jest mirati e audit a11y automatizzati in CI.
+- **Solido**: data layer uniforme (servizi Angular + client generato), feedback espliciti (loading con `aria-live`, error, empty), SSE per progress reale dell'elaborazione (`DocumentWorkflowService` / `AssistantService` via `SseClient`), design token centralizzati con dark mode, test Jest mirati e audit a11y automatizzati in CI.
 - **Limiti**: l'emulatore CDN locale (Nginx) valida il flusso build → S3 locale → distribuzione edge, ma non copre OAC, invalidation e propagazione edge reali (in produzione: AWS CloudFront). La coverage frontend supera ampiamente i minimi globali; manca ancora uno smoke SSE completo attraverso il proxy.
 
 ---
@@ -530,8 +530,8 @@ Coperto in §5; valutazione sintetica:
 - **Stile**: REST pragmatico sotto `/api/v1` con naming coerente e versioning nel path; risposte JSON uniformi; errori con `code` macchina-leggibile + `requestId`/`correlationId` (correlazione propagata dal middleware `CorrelateRequests`).
 - **Validazione**: sempre via FormRequest, whitelist chiuse per valori enumerabili.
 - **Middleware chain**: `mvp.identity` → `mvp.authorize` → `throttle` (60/min lettura, 20/min operazioni costose: generazione AI e upload).
-- **Service layer**: i domini vivono in `app/Mvp/{Ai,Ocr,Documents,Workflow,Identity,Audit,Observability}`; confini netti, dipendenze inject-ate, nessun helper globale.
-- **SSE**: lo stream `documents/{id}/stream` ha timeout esplicito (300s) e eventi tipizzati (`document`, `done`, `error`).
+- **Service layer / esagonale**: `Documents` e `Communications` seguono ports & adapters ([ADR 0010](architecture-decisions/0010-hexagonal-architecture-documents-communications.md)); gli altri domini vivono in `app/Mvp/{Ai,Workflow,Identity,Audit,Observability,Support}` come service layer per dominio; confini netti, dipendenze inject-ate, nessun helper globale.
+- **SSE**: gli stream `documents/{id}/stream` e `communications/{id}/stream` hanno timeout allineati alla somma dei `TimeoutSeconds` ASL (1800s documenti, 900s comunicazioni). Allo scadere emettono `still_running` invece di `error`, perché la pipeline può ancora concludere. La SPA usa `SseClient` (fetch + header di correlazione) e distingue l'evento nominato `error` dal drop di connessione.
 - **Da rifattorizzare/completare**: il ciclo della bozza comunicazione è esposto dalle rotte di aggiornamento, rigenerazione, scarto ed eliminazione descritte in §6.5. Restano migliorabili il throttle, che non dispone di quote differenziate per tenant, e la verifica completa degli stream SSE attraverso il proxy.
 
 ---
@@ -597,7 +597,7 @@ Area più matura della MVP (dettagli §5):
 | Throttle differenziato per costo | `routes/api.php` (20/min su AI/upload, 60/min lettura) | protegge le operazioni costose (LLM) con limiti più severi |
 | Setup riproducibile one-shot | `make setup` (cert→build→infra→migrate→up) | onboarding e demo senza passi manuali |
 | Prompt/payload redatti nei task | `input_payload` redacted | meno dati sensibili persistiti nei log di workflow |
-| SSE invece di polling | `documents/{id}/stream` + EventSource | progress reale senza martellare l'API |
+| SSE invece di polling | stream documentale e comunicazioni via `SseClient` | progress reale senza martellare l'API; timeout allineati ad ASL |
 
 ---
 

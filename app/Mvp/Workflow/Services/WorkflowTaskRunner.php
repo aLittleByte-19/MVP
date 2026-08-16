@@ -5,6 +5,7 @@ namespace App\Mvp\Workflow\Services;
 use App\Models\WorkflowTask;
 use App\Mvp\Audit\Services\AuditLogger;
 use App\Mvp\Observability\MetricsRecorder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -22,7 +23,7 @@ class WorkflowTaskRunner
 
     /**
      * @param  array<string, mixed>  $message
-     * @return array{callback_required: bool, output: array<string, mixed>}
+     * @return array{callback_required: bool, callback?: 'success'|'failure', duplicate_in_flight?: bool, output: array<string, mixed>, error?: string}
      */
     public function handle(array $message): array
     {
@@ -37,20 +38,25 @@ class WorkflowTaskRunner
         $subject = $handler->resolveSubject($message);
         $tokenHash = hash('sha256', $taskToken);
 
-        $task = WorkflowTask::query()->firstOrCreate(
-            ['task_token_hash' => $tokenHash],
-            [
-                'subject_type' => $handler->subjectType(),
-                'subject_id' => $subject->getKey(),
-                'task_type' => $taskType,
-                'status' => 'pending',
-                'input_payload' => $this->redactTaskToken($message),
-            ],
-        );
+        try {
+            $task = WorkflowTask::query()->firstOrCreate(
+                ['task_token_hash' => $tokenHash],
+                [
+                    'subject_type' => $handler->subjectType(),
+                    'subject_id' => $subject->id,
+                    'task_type' => $taskType,
+                    'status' => 'pending',
+                    'input_payload' => $this->redactTaskToken($message),
+                ],
+            );
+        } catch (UniqueConstraintViolationException) {
+            $task = WorkflowTask::query()->where('task_token_hash', $tokenHash)->firstOrFail();
+        }
 
         if (in_array($task->status, ['succeeded', 'skipped'], true)) {
             return [
-                'callback_required' => false,
+                'callback_required' => true,
+                'callback' => 'success',
                 'output' => array_merge($this->baseOutput($message), [
                     'task_result' => [
                         'task_type' => $taskType,
@@ -61,6 +67,21 @@ class WorkflowTaskRunner
             ];
         }
 
+        if ($task->status === 'failed') {
+            return [
+                'callback_required' => true,
+                'callback' => 'failure',
+                'output' => array_merge($this->baseOutput($message), [
+                    'task_result' => [
+                        'task_type' => $taskType,
+                        'status' => 'failed',
+                        'idempotent' => true,
+                    ],
+                ]),
+                'error' => (string) ($task->error_message ?: 'Workflow task failed'),
+            ];
+        }
+
         if (! $this->claim($task)) {
             // Consegna duplicata mentre un altro worker sta gia' elaborando lo
             // stesso token: nessun callback, il worker attivo completera' il task.
@@ -68,6 +89,7 @@ class WorkflowTaskRunner
 
             return [
                 'callback_required' => false,
+                'duplicate_in_flight' => true,
                 'output' => array_merge($this->baseOutput($message), [
                     'task_result' => [
                         'task_type' => $taskType,
@@ -80,7 +102,13 @@ class WorkflowTaskRunner
         $this->metrics->recordDomainCounter('sqs_messages_received_total', ['task_type' => $taskType]);
 
         try {
-            $result = $handler->execute($taskType, $subject->refresh(), $message);
+            // Ri-risolve il subject invece di un semplice refresh: tra il
+            // claim e l'esecuzione puo' essere passato tempo (worker
+            // riconquistato dopo uno stale claim), e il subject serve
+            // comunque aggiornato. Stesso numero di letture DB di prima,
+            // solo attraverso il repository di dominio invece di Eloquent.
+            $subject = $handler->resolveSubject($message);
+            $result = $handler->execute($taskType, $subject, $message);
             $status = ($result['skipped'] ?? false) ? 'skipped' : 'succeeded';
             $output = array_merge($this->baseOutput($message), [
                 'task_result' => array_merge($result, [
@@ -97,25 +125,26 @@ class WorkflowTaskRunner
             $this->audit->record(
                 $handler->auditEventPrefix().$status,
                 resourceType: $handler->subjectType(),
-                resourceId: (string) $subject->getKey(),
+                resourceId: (string) $subject->id,
                 metadata: ['task_type' => $taskType],
-                tenantId: $subject->getAttribute('tenant_id'),
+                tenantId: $subject->tenantId,
             );
 
-            return ['callback_required' => true, 'output' => $output];
+            return ['callback_required' => true, 'callback' => 'success', 'output' => $output];
         } catch (\Throwable $e) {
             $task->update([
                 'status' => 'failed',
                 'error_message' => $e->getMessage(),
                 'failed_at' => now(),
             ]);
-            $handler->onFailure($subject->refresh(), $taskType, $e);
+            $subject = $handler->resolveSubject($message);
+            $handler->onFailure($subject, $taskType, $e);
 
             $this->metrics->recordDomainCounter('sqs_messages_failed_total', ['task_type' => $taskType]);
             $this->metrics->recordDomainCounter('stepfunctions_executions_failed_total', ['reason' => 'task_failure']);
             Log::error('Workflow task failed', [
                 'subject_type' => $handler->subjectType(),
-                'subject_id' => $subject->getKey(),
+                'subject_id' => $subject->id,
                 'task_type' => $taskType,
                 'message' => $e->getMessage(),
             ]);
@@ -127,7 +156,8 @@ class WorkflowTaskRunner
     /**
      * Claim atomico del task: con piu' worker solo uno puo' portare lo stato a
      * running. Un task gia' running viene riconquistato solo se stale (worker
-     * morto oltre il visibility timeout SQS).
+     * morto oltre il visibility timeout SQS). Un task failed non viene
+     * rieseguito: il consumer ritenta solo SendTaskFailure.
      */
     private function claim(WorkflowTask $task): bool
     {
@@ -136,7 +166,7 @@ class WorkflowTaskRunner
         $claimed = WorkflowTask::query()
             ->whereKey($task->id)
             ->where(function ($query) use ($staleBefore) {
-                $query->whereIn('status', ['pending', 'failed'])
+                $query->where('status', 'pending')
                     ->orWhere(function ($running) use ($staleBefore) {
                         $running->where('status', 'running')
                             ->where(function ($stale) use ($staleBefore) {

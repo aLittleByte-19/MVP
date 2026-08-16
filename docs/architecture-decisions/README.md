@@ -40,6 +40,8 @@ ADR che referenzia il precedente. La numerazione è progressiva e a quattro cifr
 | [0007](0007-authn-authz-boundary.md) | Confine authn/authz: IdP simulato, RBAC/ABAC server-side | Accepted, implemented baseline |
 | [0008](0008-angular-frontend-static-serving.md) | Frontend Angular e serving statico S3 locale + emulatore CDN locale (Nginx) | Accepted, implemented |
 | [0009](0009-communication-async-pipeline-and-cover-storage.md) | Pipeline asincrona delle comunicazioni e copertine su storage a oggetti | Accepted, implemented |
+| [0010](0010-hexagonal-architecture-documents-communications.md) | Architettura esagonale (ports & adapters) per i domini Documents e Communications | Accepted, implemented |
+| [0011](0011-frontend-presentation-model-and-sse-client.md) | ViewModel puro (Presentation Model) e client SSE su `fetch` | Accepted, implemented |
 
 ## Aggiungere un ADR
 
