@@ -109,6 +109,20 @@ describe("MvpStateStore", () => {
     expect(store.error()).toBe("servizio non disponibile");
   });
 
+  it("ritenta loadOnce dopo un primo caricamento fallito", () => {
+    getMvpState.mockReturnValue(throwError(() => new Error("servizio non disponibile")));
+    store.loadOnce();
+    expect(store.error()).toBe("servizio non disponibile");
+    expect(store.state()).toBeNull();
+
+    const state = stateWith([], []);
+    getMvpState.mockReturnValue(of(state));
+    store.loadOnce();
+
+    expect(store.state()).toBe(state);
+    expect(store.error()).toBeNull();
+  });
+
   it("ignora un aggiornamento documento finche' lo stato non e' disponibile", () => {
     store.upsertDocument({ id: 1 } as unknown as SubDocument);
 

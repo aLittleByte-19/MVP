@@ -48,6 +48,8 @@ function progressValue(phase: CommunicationGenerationPhase | "idle" | null): num
       return 55;
     case "generating-cover":
       return 85;
+    case "still_running":
+      return 90;
     case "completed":
     case "failed":
       return 100;

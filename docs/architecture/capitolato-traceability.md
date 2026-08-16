@@ -240,14 +240,14 @@ con tono e stile parametrizzati. I due contenuti sono step distinti di una pipel
 il testo è la comunicazione e un suo fallimento fallisce la generazione, mentre una copertina non
 disponibile viene segnalata e lascia la bozza utilizzabile. La copertina è sostituibile e
 rimovibile manualmente dall'operatore
-([`app/Mvp/Communications/Services/CommunicationCoverService.php`](../../app/Mvp/Communications/Services/CommunicationCoverService.php)).
+([`app/Mvp/Communications/Application/UseCases/UpdateCommunicationCoverService.php`](../../app/Mvp/Communications/Application/UseCases/UpdateCommunicationCoverService.php)).
 Il backend resta il punto di controllo attorno al modello: valida lo schema della risposta,
 persiste il risultato come bozza e ne traccia generazione e qualità. L'AI produce il contenuto,
 l'applicazione mantiene responsabilità su validazione, stato e tracciabilità.
 
 A generazione completata, titolo, corpo e copertina vengono impaginati nel documento finale, con
 anteprima ed esportazione in PDF
-([`app/Mvp/Communications/Services/CommunicationPdfService.php`](../../app/Mvp/Communications/Services/CommunicationPdfService.php)).
+([`app/Mvp/Communications/Adapters/Outbound/Pdf/DompdfCommunicationPdfRenderer.php`](../../app/Mvp/Communications/Adapters/Outbound/Pdf/DompdfCommunicationPdfRenderer.php)).
 Ogni pagina porta il marcatore `Creato da AI Assistant`: la provenienza AI del contenuto resta
 leggibile anche quando il PDF esce dall'applicativo e circola per conto proprio, che è il momento in
 cui l'informazione andrebbe altrimenti persa.

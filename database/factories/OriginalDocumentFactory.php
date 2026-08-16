@@ -3,7 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\OriginalDocument;
-use App\Mvp\Documents\Enums\ProcessingStatus;
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

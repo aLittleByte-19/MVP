@@ -3,7 +3,7 @@
 use App\Models\OriginalDocument;
 use App\Models\SubDocument;
 use App\Mvp\Ai\BedrockService;
-use App\Mvp\Documents\Enums\ProcessingStatus;
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 
 test('uploading a pdf creates an original document with pending status', function () {
     $originalDocument = OriginalDocument::create([

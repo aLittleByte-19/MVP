@@ -2,8 +2,6 @@
 
 namespace App\Mvp\Workflow\Contracts;
 
-use Illuminate\Database\Eloquent\Model;
-
 /**
  * Domain side of a Step Functions callback task.
  *
@@ -33,16 +31,16 @@ interface WorkflowTaskHandler
     /**
      * @param  array<string, mixed>  $message
      */
-    public function resolveSubject(array $message): Model;
+    public function resolveSubject(array $message): WorkflowSubject;
 
     /**
      * @param  array<string, mixed>  $message
      * @return array<string, mixed>
      */
-    public function execute(string $taskType, Model $subject, array $message): array;
+    public function execute(string $taskType, WorkflowSubject $subject, array $message): array;
 
     /**
      * Persist the failure on the aggregate before the runner rethrows.
      */
-    public function onFailure(Model $subject, string $taskType, \Throwable $e): void;
+    public function onFailure(WorkflowSubject $subject, string $taskType, \Throwable $e): void;
 }

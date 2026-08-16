@@ -21,6 +21,7 @@ describe("UploadProgressComponent", () => {
     ["queued", "40"],
     ["processing", "60"],
     ["extracting", "85"],
+    ["still_running", "90"],
     ["completed", "100"],
     ["failed", "100"]
   ] as [DocumentUploadPhase, string][])("porta la fase %s al %s per cento", (phase, expected) => {
@@ -36,6 +37,7 @@ describe("UploadProgressComponent", () => {
     ["queued", "isActive"],
     ["processing", "isActive"],
     ["extracting", "isActive"],
+    ["still_running", "isActive"],
     ["completed", "isDone"],
     ["failed", "isError"]
   ] as [DocumentUploadPhase, string][])("nello stato %s la barra e' %s", (phase, expectedClass) => {

@@ -19,6 +19,7 @@ describe("GenerationProgressComponent", () => {
     ["queued", "25"],
     ["generating-text", "55"],
     ["generating-cover", "85"],
+    ["still_running", "90"],
     ["completed", "100"],
     ["failed", "100"]
   ] as [CommunicationGenerationPhase, string][])("porta la fase %s al %s per cento", (phase, expected) => {

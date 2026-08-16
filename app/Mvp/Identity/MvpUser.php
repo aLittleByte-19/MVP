@@ -2,6 +2,7 @@
 
 namespace App\Mvp\Identity;
 
+use App\Mvp\Support\Identity\Actor;
 use Illuminate\Contracts\Auth\Authenticatable;
 
 class MvpUser implements Authenticatable
@@ -52,5 +53,10 @@ class MvpUser implements Authenticatable
     public function hasAnyRole(array $requiredRoles): bool
     {
         return array_intersect($this->roles, $requiredRoles) !== [];
+    }
+
+    public function toActor(): Actor
+    {
+        return new Actor($this->id, $this->email, $this->name, $this->tenantId, $this->roles);
     }
 }

@@ -5,15 +5,21 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\V1\Concerns\AuthorizesCommunications;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesActor;
 use App\Models\Communication;
-use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
-use App\Mvp\Communications\Enums\CoverImageStatus;
+use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
+use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
+use App\Mvp\Communications\Domain\Ports\Inbound\PollCommunicationProgressUseCase;
 use App\Mvp\Support\MvpStateService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Stream SSE dell'avanzamento della generazione.
+ * Stream SSE dell'avanzamento della generazione. Legge lo stato tramite
+ * PollCommunicationProgressUseCase (porta primaria): il controller resta
+ * responsabile solo del protocollo SSE e dello shaping via MvpStateService
+ * (infrastruttura condivisa fuori perimetro), ricaricando dal modello
+ * Eloquent solo quando deve emettere l'evento 'cover'/'done' che richiede
+ * l'intero aggregato.
  */
 class CommunicationStreamController
 {
@@ -22,16 +28,13 @@ class CommunicationStreamController
     /**
      * @throws AuthorizationException
      */
-    public function stream(Request $request, Communication $communication, MvpStateService $state): StreamedResponse
+    public function stream(Request $request, Communication $communication, MvpStateService $state, PollCommunicationProgressUseCase $poll): StreamedResponse
     {
         $actor = $this->actor($request);
         $this->assertCommunicationOwnership($communication, $actor);
+        $communicationId = $communication->id;
 
-        return response()->stream(function () use ($communication, $actor, $state): void {
-            if (app()->runningUnitTests()) {
-                return;
-            }
-
+        return response()->stream(function () use ($communicationId, $actor, $state, $poll): void {
             set_time_limit(0);
 
             $send = function (string $event, array $data): void {
@@ -53,15 +56,15 @@ class CommunicationStreamController
             };
 
             $startedAt = time();
-            $timeoutSeconds = 300;
+            $timeoutSeconds = max(60, (int) config('mvp.communications.stream_timeout_seconds', 900));
             $lastSignature = null;
             $textSent = false;
             $coverSent = false;
 
             while (! connection_aborted()) {
-                $fresh = Communication::query()->find($communication->id);
-
-                if (! $fresh) {
+                try {
+                    $snapshot = $poll->poll($communicationId);
+                } catch (\Throwable) {
                     $send('error', ['message' => 'Comunicazione non trovata.']);
 
                     return;
@@ -69,36 +72,41 @@ class CommunicationStreamController
 
                 // Il testo arriva prima della copertina: viene emesso appena
                 // disponibile, senza attendere il resto della pipeline.
-                if (! $textSent && $fresh->generated_body) {
+                if (! $textSent && $snapshot->generatedBody) {
                     $textSent = true;
                     $send('text', [
-                        'title' => $fresh->generated_title,
-                        'body' => $fresh->generated_body,
+                        'title' => $snapshot->generatedTitle,
+                        'body' => $snapshot->generatedBody,
                     ]);
                 }
 
-                if (! $coverSent && ! in_array($fresh->cover_status, [CoverImageStatus::Pending, CoverImageStatus::Processing], true)) {
+                if (! $coverSent && ! in_array($snapshot->coverStatus, [CoverImageStatus::Pending->value, CoverImageStatus::Processing->value], true)) {
                     $coverSent = true;
+                    // L'URL della copertina richiede il modello Eloquent (route +
+                    // hash del path per l'invalidazione cache, vedi MvpStateService):
+                    // unico punto di questo stream in cui si ricarica l'aggregato.
+                    $fresh = Communication::query()->findOrFail($communicationId);
                     $send('cover', [
                         'coverImageUrl' => $state->coverImageUrl($fresh),
-                        'coverStatus' => $fresh->cover_status->value,
-                        'coverError' => $fresh->cover_error,
+                        'coverStatus' => $snapshot->coverStatus,
+                        'coverError' => $snapshot->coverError,
                     ]);
                 }
 
-                $signature = $fresh->generation_status->value.':'.$fresh->cover_status->value;
+                $signature = $snapshot->generationStatus.':'.$snapshot->coverStatus;
 
                 if ($signature !== $lastSignature) {
                     $send('progress', [
-                        'generationStatus' => $fresh->generation_status->value,
-                        'coverStatus' => $fresh->cover_status->value,
+                        'generationStatus' => $snapshot->generationStatus,
+                        'coverStatus' => $snapshot->coverStatus,
                     ]);
                     $lastSignature = $signature;
                 } else {
                     $heartbeat();
                 }
 
-                if ($fresh->generation_status === CommunicationGenerationStatus::Completed) {
+                if ($snapshot->generationStatus === CommunicationGenerationStatus::Completed->value) {
+                    $fresh = Communication::query()->findOrFail($communicationId);
                     $send('done', [
                         'communication' => $state->communication($fresh),
                         'state' => $state->forActor($actor),
@@ -107,14 +115,16 @@ class CommunicationStreamController
                     return;
                 }
 
-                if ($fresh->generation_status === CommunicationGenerationStatus::Failed) {
-                    $send('error', ['message' => $fresh->error_message ?: 'Generazione non disponibile.']);
+                if ($snapshot->generationStatus === CommunicationGenerationStatus::Failed->value) {
+                    $send('error', ['message' => $snapshot->errorMessage ?: 'Generazione non disponibile.']);
 
                     return;
                 }
 
                 if (time() - $startedAt >= $timeoutSeconds) {
-                    $send('error', ['message' => 'Timeout generazione.']);
+                    $send('still_running', [
+                        'message' => 'Generazione ancora in corso. Lo stato verrà aggiornato.',
+                    ]);
 
                     return;
                 }

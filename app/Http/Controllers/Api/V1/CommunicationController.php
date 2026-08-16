@@ -8,128 +8,118 @@ use App\Http\Requests\GenerateCommunicationRequest;
 use App\Http\Requests\ListCommunicationsRequest;
 use App\Http\Requests\UpdateCommunicationRequest;
 use App\Models\Communication;
-use App\Mvp\Audit\Services\AuditLogger;
-use App\Mvp\Communications\Enums\CommunicationGenerationStatus;
-use App\Mvp\Communications\Enums\CommunicationStatus;
-use App\Mvp\Communications\Enums\CoverImageStatus;
-use App\Mvp\Communications\Services\CommunicationWorkflowService;
+use App\Mvp\Communications\Domain\Commands\GenerateCommunicationCommand;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationAlreadyDiscardedException;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationAlreadyFavoritedException;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationNotDraftException;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationNotEditableException;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationNotFavoritedException;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationRegenerationUnavailableException;
+use App\Mvp\Communications\Domain\Ports\Inbound\CommunicationDraftUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\DeleteCommunicationUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\GenerateCommunicationUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\ListCommunicationsUseCase;
+use App\Mvp\Communications\Domain\Ports\Inbound\StartCommunicationWorkflowUseCase;
+use App\Mvp\Communications\Domain\ValueObjects\CommunicationListFilters;
 use App\Mvp\Support\MvpStateService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Ciclo di vita della bozza: creazione, modifica manuale, nuova variante, scarto ed eliminazione definitiva.
+ * Adapter primario HTTP: traduce le richieste nei casi d'uso del dominio
+ * Communications tramite le loro porte primarie. Nessuna regola di business
+ * qui (vedi ADR 0010). Le liste e lo shaping delle risposte richiedono di
+ * ricaricare l'aggregato Eloquent per MvpStateService, che resta fuori dal
+ * perimetro esagonale — stessa eccezione dichiarata gia' applicata a
+ * DocumentController.
  */
 class CommunicationController
 {
     use AuthorizesCommunications, ResolvesActor;
 
-    /**
-     * Storico del tenant, filtrabile (UC-15..UC-18). Una bozza vi entra solo
-     * dopo un salvataggio esplicito (UC-9): finche' resta in stato draft (o
-     * dopo uno scarto) non compare qui, e' visibile solo nell'area di lavoro
-     * corrente dell'operatore.
-     */
-    public function index(ListCommunicationsRequest $request, MvpStateService $state): JsonResponse
-    {
+    public function index(
+        ListCommunicationsRequest $request,
+        ListCommunicationsUseCase $list,
+        MvpStateService $state,
+    ): JsonResponse {
         $actor = $this->actor($request);
         $filters = $request->validated();
 
-        $query = Communication::query()
-            ->where('tenant_id', $actor->tenantId)
-            ->where('status', CommunicationStatus::Approved);
-
-        if ($keyword = trim((string) ($filters['keyword'] ?? ''))) {
-            $query->where('prompt', 'like', '%'.$keyword.'%');
-        }
-
-        foreach (['tone', 'style'] as $exact) {
-            if ($value = trim((string) ($filters[$exact] ?? ''))) {
-                $query->where($exact, $value);
-            }
-        }
-
-        if ($date = $filters['date'] ?? null) {
-            $query->whereDate('created_at', $date);
-        }
-
-        $paginator = $query->latest()->paginate(
-            perPage: (int) ($filters['perPage'] ?? 10),
-            page: (int) ($filters['page'] ?? 1),
+        $page = $list->list(
+            $actor->tenantId,
+            new CommunicationListFilters(
+                keyword: isset($filters['keyword']) ? (string) $filters['keyword'] : null,
+                tone: isset($filters['tone']) ? (string) $filters['tone'] : null,
+                style: isset($filters['style']) ? (string) $filters['style'] : null,
+                date: isset($filters['date']) ? (string) $filters['date'] : null,
+            ),
+            (int) ($filters['page'] ?? 1),
+            (int) ($filters['perPage'] ?? 10),
         );
 
+        $communicationsById = Communication::query()
+            ->whereIn('id', $page->communicationIds)
+            ->get()
+            ->keyBy('id');
+
+        $items = collect($page->communicationIds)
+            ->map(fn (int $id) => $communicationsById->get($id))
+            ->filter()
+            ->map(fn (Communication $communication) => $state->communication($communication))
+            ->values();
+
         return response()->json([
-            'items' => collect($paginator->items())->map(fn ($communication) => $state->communication($communication))->values()->all(),
-            'total' => $paginator->total(),
-            'page' => $paginator->currentPage(),
-            'perPage' => $paginator->perPage(),
+            'items' => $items->all(),
+            'total' => $page->total,
+            'page' => $page->page,
+            'perPage' => $page->perPage,
         ]);
     }
 
     public function store(
         GenerateCommunicationRequest $request,
-        CommunicationWorkflowService $workflow,
-        AuditLogger $audit,
+        GenerateCommunicationUseCase $generate,
+        StartCommunicationWorkflowUseCase $startWorkflow,
     ): JsonResponse {
         $validated = $request->validated();
         $actor = $this->actor($request);
+        $correlationId = $request->attributes->get('correlation_id');
+        $requestId = $request->attributes->get('request_id');
 
-        $communication = Communication::create([
-            'tenant_id' => $actor->tenantId,
-            'created_by' => $actor->id,
-            'prompt' => $validated['prompt'],
-            'tone' => $validated['tone'],
-            'style' => $validated['style'],
-            'generation_status' => CommunicationGenerationStatus::Pending,
-            'cover_status' => CoverImageStatus::Pending,
-            'status' => CommunicationStatus::Draft,
-            'is_favorite' => false,
-        ]);
+        $communicationId = $generate->generate(new GenerateCommunicationCommand(
+            prompt: $validated['prompt'],
+            tone: $validated['tone'],
+            style: $validated['style'],
+            actor: $actor,
+        ));
 
-        $audit->record(
-            'mvp-communication-generation-requested',
-            $actor,
-            'communication',
-            (string) $communication->id,
-            ['tone' => $communication->tone, 'style' => $communication->style],
-            $request,
-        );
-
-        $workflow->start($communication, $actor, $request);
+        $startWorkflow->start($communicationId, $correlationId, $requestId);
 
         return response()->json([
             'message' => 'Generazione avviata.',
-            'communicationId' => $communication->id,
+            'communicationId' => $communicationId,
             // URL relativo: la SPA e' servita in HTTPS dietro Traefik, che termina
             // il TLS e inoltra in HTTP. Un URL assoluto verrebbe generato con
             // schema "http://" e bloccato dal browser come mixed-content.
-            'streamUrl' => route('api.v1.communications.stream', ['communication' => $communication->id], false),
+            'streamUrl' => route('api.v1.communications.stream', ['communication' => $communicationId], false),
         ], 202);
     }
 
-    public function favorite(Request $request, Communication $communication, AuditLogger $audit, MvpStateService $state): JsonResponse
+    /**
+     * @throws AuthorizationException
+     */
+    public function favorite(Request $request, Communication $communication, CommunicationDraftUseCase $draft, MvpStateService $state): JsonResponse
     {
         $actor = $this->actor($request);
         $this->assertCommunicationOwnership($communication, $actor);
 
-        if ($communication->is_favorite) {
-            throw ValidationException::withMessages([
-                'communication' => ['La generazione è già contrassegnata come preferita.'],
-            ]);
+        try {
+            $draft->favorite($communication->id, $actor);
+        } catch (CommunicationAlreadyFavoritedException $e) {
+            throw ValidationException::withMessages(['communication' => [$e->getMessage()]]);
         }
-
-        $communication->update(['is_favorite' => true]);
-        $audit->record(
-            'mvp-communication-favorited',
-            $actor,
-            'communication',
-            (string) $communication->id,
-            [],
-            $request,
-        );
 
         return response()->json([
             'message' => 'Generazione aggiunta ai preferiti.',
@@ -138,26 +128,19 @@ class CommunicationController
         ]);
     }
 
-    public function unfavorite(Request $request, Communication $communication, AuditLogger $audit, MvpStateService $state): JsonResponse
+    /**
+     * @throws AuthorizationException
+     */
+    public function unfavorite(Request $request, Communication $communication, CommunicationDraftUseCase $draft, MvpStateService $state): JsonResponse
     {
         $actor = $this->actor($request);
         $this->assertCommunicationOwnership($communication, $actor);
 
-        if (! $communication->is_favorite) {
-            throw ValidationException::withMessages([
-                'communication' => ['La generazione non è contrassegnata come preferita.'],
-            ]);
+        try {
+            $draft->unfavorite($communication->id, $actor);
+        } catch (CommunicationNotFavoritedException $e) {
+            throw ValidationException::withMessages(['communication' => [$e->getMessage()]]);
         }
-
-        $communication->update(['is_favorite' => false]);
-        $audit->record(
-            'mvp-communication-unfavorited',
-            $actor,
-            'communication',
-            (string) $communication->id,
-            [],
-            $request,
-        );
 
         return response()->json([
             'message' => 'Generazione rimossa dai preferiti.',
@@ -166,31 +149,25 @@ class CommunicationController
         ]);
     }
 
+    /**
+     * @throws AuthorizationException
+     */
     public function update(
         UpdateCommunicationRequest $request,
         Communication $communication,
-        AuditLogger $audit,
+        CommunicationDraftUseCase $draft,
         MvpStateService $state,
     ): JsonResponse {
         $actor = $this->actor($request);
         $this->assertCommunicationOwnership($communication, $actor);
 
-        $this->assertCommunicationIsEditable($communication);
-
         $validated = $request->validated();
 
-        $communication->update([
-            'generated_title' => $validated['title'],
-            'generated_body' => $validated['body'],
-        ]);
-        $audit->record(
-            'mvp-communication-edited',
-            $actor,
-            'communication',
-            (string) $communication->id,
-            ['fields' => ['title', 'body']],
-            $request,
-        );
+        try {
+            $draft->update($communication->id, $validated['title'], $validated['body'], $actor);
+        } catch (CommunicationNotEditableException $e) {
+            throw ValidationException::withMessages(['communication' => [$e->getMessage()]]);
+        }
 
         return response()->json([
             'message' => 'Bozza aggiornata.',
@@ -205,13 +182,20 @@ class CommunicationController
     public function regenerate(
         Request $request,
         Communication $communication,
-        CommunicationWorkflowService $workflow,
+        StartCommunicationWorkflowUseCase $startWorkflow,
     ): JsonResponse {
         $actor = $this->actor($request);
         $this->assertCommunicationOwnership($communication, $actor);
-        $this->assertCommunicationCanRegenerate($communication);
+        $correlationId = $request->attributes->get('correlation_id');
+        $requestId = $request->attributes->get('request_id');
 
-        $communication = $workflow->regenerate($communication, $actor, $request);
+        try {
+            $startWorkflow->regenerate($communication->id, $actor, $correlationId, $requestId);
+        } catch (CommunicationAlreadyDiscardedException $e) {
+            abort(422, $e->getMessage());
+        } catch (CommunicationRegenerationUnavailableException $e) {
+            abort(409, $e->getMessage());
+        }
 
         return response()->json([
             'message' => 'Rigenerazione avviata.',
@@ -230,28 +214,17 @@ class CommunicationController
     public function save(
         Request $request,
         Communication $communication,
-        AuditLogger $audit,
+        CommunicationDraftUseCase $draft,
         MvpStateService $state,
     ): JsonResponse {
         $actor = $this->actor($request);
         $this->assertCommunicationOwnership($communication, $actor);
 
-        abort_if(
-            $communication->status !== CommunicationStatus::Draft,
-            422,
-            'Solo le bozze in stato draft possono essere salvate nello storico.',
-        );
-
-        $communication->update(['status' => CommunicationStatus::Approved]);
-
-        $audit->record(
-            'mvp-communication-saved',
-            $actor,
-            'communication',
-            (string) $communication->id,
-            [],
-            $request,
-        );
+        try {
+            $draft->save($communication->id, $actor);
+        } catch (CommunicationNotDraftException $e) {
+            abort(422, $e->getMessage());
+        }
 
         return response()->json([
             'message' => 'Bozza salvata nello storico.',
@@ -266,24 +239,17 @@ class CommunicationController
     public function discard(
         Request $request,
         Communication $communication,
-        AuditLogger $audit,
+        CommunicationDraftUseCase $draft,
         MvpStateService $state,
     ): JsonResponse {
         $actor = $this->actor($request);
         $this->assertCommunicationOwnership($communication, $actor);
 
-        abort_if($communication->status === CommunicationStatus::Discarded, 422, 'La bozza risulta gia scartata.');
-
-        $communication->update(['status' => CommunicationStatus::Discarded]);
-
-        $audit->record(
-            'mvp-communication-discarded',
-            $actor,
-            'communication',
-            (string) $communication->id,
-            [],
-            $request,
-        );
+        try {
+            $draft->discard($communication->id, $actor);
+        } catch (CommunicationAlreadyDiscardedException $e) {
+            abort(422, $e->getMessage());
+        }
 
         return response()->json([
             'message' => 'Bozza scartata.',
@@ -298,29 +264,13 @@ class CommunicationController
     public function destroy(
         Request $request,
         Communication $communication,
-        AuditLogger $audit,
+        DeleteCommunicationUseCase $delete,
         MvpStateService $state,
     ): JsonResponse {
         $actor = $this->actor($request);
         $this->assertCommunicationOwnership($communication, $actor);
 
-        $coverPath = $communication->cover_image_path;
-        $disk = (string) config('mvp.communications.cover_disk', config('filesystems.default', 'local'));
-
-        $communication->delete();
-
-        if ($coverPath) {
-            Storage::disk($disk)->delete($coverPath);
-        }
-
-        $audit->record(
-            'mvp-communication-deleted',
-            $actor,
-            'communication',
-            (string) $communication->id,
-            [],
-            $request,
-        );
+        $delete->delete($communication->id, $actor);
 
         return response()->json([
             'message' => 'Generazione eliminata dallo storico.',
