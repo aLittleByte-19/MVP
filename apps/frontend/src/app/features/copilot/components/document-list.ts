@@ -3,7 +3,7 @@ import type { SubDocument } from "../../../../api/generated/model";
 import { ButtonComponent } from "../../../shared/components/button/button";
 import { EmptyStateComponent } from "../../../shared/components/empty-state/empty-state";
 import { StatusBadgeComponent } from "../../../shared/components/status-badge/status-badge";
-import { formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
+import { formatConfidence, formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
 import { getReviewStatusTone, getSendStatusTone } from "../../../shared/util/status";
 
 @Component({
@@ -21,7 +21,7 @@ import { getReviewStatusTone, getSendStatusTone } from "../../../shared/util/sta
               <th scope="col" data-column="file">File</th>
               <th scope="col" data-column="date">Data</th>
               <th scope="col" data-column="uploadedAt">Caricato il</th>
-              <th scope="col" data-column="confidence">Conf.</th>
+              <th scope="col" data-column="confidence">Confidenza</th>
               <th scope="col" data-column="status">Stato</th>
               <th scope="col" data-column="send-status">Invio</th>
               <th scope="col" data-column="actions">Azioni</th>
@@ -46,8 +46,8 @@ import { getReviewStatusTone, getSendStatusTone } from "../../../shared/util/sta
                 <td data-column="uploadedAt" data-label="Caricato il">
                   <span class="stamp">{{ formatFallback(documentItem.uploadedAt) }}</span>
                 </td>
-                <td data-column="confidence" data-label="Conf.">
-                  {{ formatFallback(documentItem.confidence, "Da verificare") }}
+                <td data-column="confidence" data-label="Confidenza">
+                  {{ formatConfidence(documentItem.confidence) }}
                 </td>
                 <td data-column="status" data-label="Stato">
                   <mvp-status-badge [tone]="getReviewStatusTone(documentItem.reviewStatus, documentItem.error)">
@@ -88,6 +88,7 @@ export class DocumentListComponent {
   readonly selectDocument = output<string>();
 
   protected readonly formatFallback = formatFallback;
+  protected readonly formatConfidence = formatConfidence;
   protected readonly formatDateForDisplay = formatDateForDisplay;
   protected readonly getReviewStatusTone = getReviewStatusTone;
   protected readonly getSendStatusTone = getSendStatusTone;

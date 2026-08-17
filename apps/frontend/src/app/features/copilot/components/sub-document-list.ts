@@ -6,7 +6,7 @@ import type { SubDocument, UpdateExtractedDataRequest, UpdateSendMessageRequest 
 import { ButtonComponent } from "../../../shared/components/button/button";
 import { EmptyStateComponent } from "../../../shared/components/empty-state/empty-state";
 import { SectionComponent } from "../../../layout/section/section";
-import { capitalizeFirst, formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
+import { capitalizeFirst, formatConfidence, formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
 import { DOCUMENT_TYPE_OPTIONS, codiceFiscaleValidator } from "../../../shared/util/document-field-validators";
 import { DocumentWorkflowService, type DocumentPreviewStatus } from "../data/document-workflow.service";
 import { DocumentStatusTimelineComponent } from "./document-status-timeline";
@@ -134,7 +134,7 @@ const emptySendMessageForm: SendMessageFormState = {
               [formGroup]="form"
               class="inspectorForm"
               [class.isEditing]="isEditing()"
-              [class.confidenceLow]="document.confidence !== null && document.confidence !== undefined && document.confidence < 80"
+              [class.confidenceLow]="document.reviewStatus === 'needs_review'"
               [class.statusAuto]="document.reviewStatus === 'auto_validated'"
               [class.statusManual]="document.reviewStatus === 'manually_validated'"
               (ngSubmit)="saveReview()"
@@ -542,7 +542,7 @@ export class SubDocumentListComponent {
   }
 
   protected confidenceDisplay(document: SubDocument): string {
-    return document.confidence != null ? `${document.confidence}%` : "Da verificare";
+    return formatConfidence(document.confidence);
   }
 
   protected documentDateDisplay(document: SubDocument): string {

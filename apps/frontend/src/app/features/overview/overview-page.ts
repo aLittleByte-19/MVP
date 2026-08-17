@@ -4,8 +4,8 @@ import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { ButtonComponent } from "../../shared/components/button/button";
 import { EmptyStateComponent } from "../../shared/components/empty-state/empty-state";
 import { ErrorStateComponent } from "../../shared/components/error-state/error-state";
+import { AttentionNoteComponent } from "../../shared/components/attention-note/attention-note";
 import { MetricCardComponent } from "../../shared/components/metric-card/metric-card";
-import { MetricsPanelComponent } from "../../shared/components/metrics-panel/metrics-panel";
 import { StatusBadgeComponent } from "../../shared/components/status-badge/status-badge";
 import { SectionComponent } from "../../layout/section/section";
 import { formatFallback } from "../../shared/util/formatters";
@@ -16,27 +16,26 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
  * View della Overview: nessuna logica di business qui, solo collante col
  * template e procacciamento delle dipendenze via `inject()` per costruire
  * {@link OverviewPageViewModel} — incluso `scrollToElement`, l'unica
- * operazione DOM richiesta dal ViewModel dopo la navigazione. Lo stato
- * condiviso non specifico della pagina (`store.error()`, `store.loading()`,
- * `store.state()` per le metriche degli strumenti) resta legato
- * direttamente allo store, come nelle altre pagine.
+ * operazione DOM richiesta dal ViewModel dopo la navigazione. Il template
+ * legge esclusivamente `vm.*`: errore, caricamento e ricarica sono
+ * pass-through esposti dal ViewModel, come in Copilot e Assistant (ADR 0011).
  */
 @Component({
   selector: "mvp-overview-page",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    AttentionNoteComponent,
     ButtonComponent,
     EmptyStateComponent,
     ErrorStateComponent,
     MetricCardComponent,
-    MetricsPanelComponent,
     SectionComponent,
     StatusBadgeComponent
   ],
   template: `
     <section class="view" aria-label="Overview operativa">
-      @if (store.error(); as error) {
-        <mvp-error-state [message]="error" [canRetry]="true" (retry)="store.reload()" />
+      @if (vm.error(); as error) {
+        <mvp-error-state [message]="error" [canRetry]="true" (retry)="vm.reload()" />
       }
 
       <mvp-section class="hero">
@@ -72,22 +71,60 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
       </mvp-section>
 
       <mvp-section id="overview-priorities" title="Priorità essenziali">
+        @if (vm.quarantined() > 0) {
+          <mvp-attention-note
+            tone="alert"
+            [title]="vm.quarantined() + ' sotto-documenti in quarantena'"
+            detail="L'estrazione non è affidabile: vanno riesaminati prima dell'invio."
+            actionLabel="Apri il Co-Pilot"
+            (acted)="vm.navigate('copilot', 'copilot-documents')"
+          />
+        }
         <div class="priorityGrid">
-          <mvp-metric-card label="Bozze generate" [value]="vm.generatedDrafts()" />
-          <mvp-metric-card label="Documenti da verificare" [value]="vm.documentsToReview()" />
-          <mvp-metric-card label="Documenti pronti" [value]="vm.readyDocuments()" />
+          @for (priority of vm.priorities(); track priority.key) {
+            <mvp-metric-card
+              [label]="priority.label"
+              [value]="priority.value"
+              [tone]="priority.tone"
+              [history]="priority.history"
+              [isLoading]="vm.loading()"
+              [context]="priority.context"
+            />
+          }
         </div>
       </mvp-section>
 
-      <mvp-section title="Metriche strumenti">
-        <div class="overviewGrid">
-          <div class="metricGroup">
+      <mvp-section title="Qualità degli strumenti">
+        <div class="qualityGrid">
+          <div class="qualityItem">
             <h3>AI Assistant</h3>
-            <mvp-metrics-panel [isLoading]="store.loading()" [metrics]="store.state()?.assistant?.metrics ?? []" />
+            @if (vm.assistantQuality(); as quality) {
+              <mvp-metric-card
+                [label]="quality.label"
+                [value]="quality.value"
+                [unit]="quality.unit"
+                [isLoading]="vm.loading()"
+                context="qualità percepita delle bozze"
+              />
+            }
+            <button mvpButton variant="secondary" type="button" (click)="vm.navigate('assistant', 'assistant-metrics')">
+              Vedi tutte le metriche
+            </button>
           </div>
-          <div class="metricGroup">
+          <div class="qualityItem">
             <h3>Co-Pilot documentale</h3>
-            <mvp-metrics-panel [isLoading]="store.loading()" [metrics]="store.state()?.copilot?.metrics ?? []" />
+            @if (vm.copilotQuality(); as quality) {
+              <mvp-metric-card
+                [label]="quality.label"
+                [value]="quality.value"
+                [unit]="quality.unit"
+                [isLoading]="vm.loading()"
+                context="campi oltre la soglia di confidenza"
+              />
+            }
+            <button mvpButton variant="secondary" type="button" (click)="vm.navigate('copilot', 'copilot-metrics')">
+              Vedi tutte le metriche
+            </button>
           </div>
         </div>
       </mvp-section>
