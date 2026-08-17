@@ -14,20 +14,6 @@
   },
   "panels": [
     {
-      "type": "text",
-      "title": "",
-      "gridPos": {
-        "w": 24,
-        "h": 3,
-        "x": 0,
-        "y": 0
-      },
-      "options": {
-        "mode": "markdown",
-        "content": "**Domanda:** l'estrazione automatica funziona abbastanza bene da fidarsi, e quanto lavoro scarica sugli operatori?\n\nTextract legge, Bedrock struttura: un guasto dell'uno si manifesta sull'altro, quindi le due catene stanno insieme. Alert correlati: `TextractFailureRateHigh`, `BedrockFailureRateHigh` — Runbook: docs/runbooks/document-pipeline.md"
-      }
-    },
-    {
       "type": "row",
       "title": "Qualità OCR (Textract)",
       "collapsed": false,
@@ -36,7 +22,7 @@
         "w": 24,
         "h": 1,
         "x": 0,
-        "y": 3
+        "y": 0
       }
     },
     {
@@ -46,7 +32,7 @@
         "w": 6,
         "h": 4,
         "x": 0,
-        "y": 4
+        "y": 1
       },
       "fieldConfig": {
         "defaults": {
@@ -89,7 +75,7 @@
         "w": 6,
         "h": 4,
         "x": 6,
-        "y": 4
+        "y": 1
       },
       "fieldConfig": {
         "defaults": {
@@ -132,7 +118,7 @@
         "w": 6,
         "h": 4,
         "x": 12,
-        "y": 4
+        "y": 1
       },
       "fieldConfig": {
         "defaults": {
@@ -188,7 +174,7 @@
         "w": 6,
         "h": 4,
         "x": 18,
-        "y": 4
+        "y": 1
       },
       "fieldConfig": {
         "defaults": {
@@ -244,7 +230,7 @@
         "w": 8,
         "h": 9,
         "x": 0,
-        "y": 8
+        "y": 5
       },
       "fieldConfig": {
         "defaults": {
@@ -334,7 +320,7 @@
         "w": 8,
         "h": 9,
         "x": 8,
-        "y": 8
+        "y": 5
       },
       "fieldConfig": {
         "defaults": {
@@ -389,7 +375,7 @@
         "w": 8,
         "h": 9,
         "x": 16,
-        "y": 8
+        "y": 5
       },
       "fieldConfig": {
         "defaults": {
@@ -444,7 +430,7 @@
         "w": 12,
         "h": 8,
         "x": 0,
-        "y": 17
+        "y": 14
       },
       "fieldConfig": {
         "defaults": {
@@ -496,7 +482,7 @@
         "w": 12,
         "h": 8,
         "x": 12,
-        "y": 17
+        "y": 14
       },
       "fieldConfig": {
         "defaults": {
@@ -531,7 +517,7 @@
         "w": 12,
         "h": 7,
         "x": 0,
-        "y": 25
+        "y": 22
       },
       "fieldConfig": {
         "defaults": {
@@ -586,7 +572,7 @@
         "w": 12,
         "h": 7,
         "x": 12,
-        "y": 25
+        "y": 22
       },
       "fieldConfig": {
         "defaults": {
@@ -641,7 +627,7 @@
         "w": 24,
         "h": 7,
         "x": 0,
-        "y": 32
+        "y": 29
       },
       "fieldConfig": {
         "defaults": {
@@ -677,7 +663,7 @@
         "w": 24,
         "h": 1,
         "x": 0,
-        "y": 39
+        "y": 36
       }
     },
     {
@@ -687,7 +673,7 @@
         "w": 24,
         "h": 11,
         "x": 0,
-        "y": 40
+        "y": 37
       },
       "options": {
         "showTime": true,
