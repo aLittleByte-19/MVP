@@ -46,14 +46,22 @@
   text-transform: uppercase;
 }
 
+/* Valore e contesto stanno entrambi dentro il <dd>: un <dl> ammette come figli
+   diretti solo dt, dd e div, e la riga di contesto come <span> fratello
+   violava la regola definition-list di axe. */
 .value {
+  display: grid;
+  gap: var(--mvp-space-2);
+  margin: 0;
+  order: 2;
+}
+
+.figure {
   display: flex;
   flex-wrap: wrap;
   gap: var(--mvp-space-2) var(--mvp-space-3);
   align-items: flex-end;
   justify-content: space-between;
-  margin: 0;
-  order: 2;
 }
 
 .num {
@@ -93,7 +101,6 @@
 }
 
 .context {
-  order: 3;
   color: var(--mvp-muted);
   font-size: var(--mvp-font-xs);
 }
@@ -117,7 +124,6 @@
 }
 
 .skeleton.txt {
-  order: 3;
   width: 118px;
   height: 13px;
 }
