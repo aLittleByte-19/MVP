@@ -11,6 +11,10 @@ return [
     'metrics' => [
         'enabled' => (bool) env('MVP_METRICS_ENABLED', true),
         'storage_path' => env('MVP_METRICS_STORAGE_PATH', 'app/private/observability/metrics.json'),
+        // Interroga SQS a ogni scrape per la profondita' reale delle DLQ.
+        // Disattivabile dove SQS non e' raggiungibile: le serie spariscono e
+        // mvp_dlq_probe_up lo rende esplicito, invece di esporre uno zero falso.
+        'dlq_probe_enabled' => (bool) env('MVP_DLQ_PROBE_ENABLED', true),
         'http_duration_buckets' => [
             0.005,
             0.01,

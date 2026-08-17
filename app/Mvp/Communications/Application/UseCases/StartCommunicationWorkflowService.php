@@ -13,6 +13,7 @@ use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use App\Mvp\Support\Identity\Actor;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
+use App\Mvp\Workflow\Support\StateMachineName;
 use App\Mvp\Workflow\Support\WorkflowContext;
 use Psr\Clock\ClockInterface;
 
@@ -83,7 +84,7 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
                 $communication->tenantId,
                 $executionArn,
                 $stateMachineArn,
-                $this->shortName($stateMachineArn),
+                StateMachineName::fromArn($stateMachineArn),
                 $taskQueueUrl,
             ));
         } catch (\Throwable $e) {
@@ -93,7 +94,7 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
                 $communicationId,
                 $communication->tenantId,
                 $e->getMessage(),
-                $this->shortName($stateMachineArn),
+                StateMachineName::fromArn($stateMachineArn),
             ));
 
             throw $e;
@@ -116,12 +117,5 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
         $this->events->dispatch(new CommunicationRegenerationRequested($communicationId, $communication->tenantId, $actor));
 
         $this->start($communicationId, $correlationId, $requestId);
-    }
-
-    private function shortName(string $arn): string
-    {
-        $segments = explode(':', $arn);
-
-        return $segments === [] ? 'unknown' : (string) end($segments);
     }
 }

@@ -2,17 +2,24 @@
 
 namespace App\Console\Commands;
 
-use App\Mvp\Observability\MetricsRecorder;
 use Aws\Sqs\SqsClient;
 use Illuminate\Console\Command;
 
+/**
+ * Strumento di diagnosi, non punto di strumentazione: la profondita' della DLQ
+ * e' misurata da DlqDepthProbe a ogni scrape. Questo comando incrementava un
+ * counter `dlq_messages_total` che cresceva solo quando qualcuno lo lanciava a
+ * mano, con un tetto di 10 messaggi, e non tornava mai indietro — gli alert che
+ * ci si basavano erano quindi ciechi prima della prima esecuzione e bloccati in
+ * firing dopo.
+ */
 class ListDlqMessages extends Command
 {
     protected $signature = 'mvp:dlq:list {--queue=documents : Pipeline DLQ to inspect: documents or communications} {--limit=10 : Maximum DLQ messages to inspect}';
 
     protected $description = 'List workflow DLQ messages without deleting them.';
 
-    public function handle(SqsClient $sqs, MetricsRecorder $metrics): int
+    public function handle(SqsClient $sqs): int
     {
         $pipeline = (string) $this->option('queue');
         $queueUrl = match ($pipeline) {
@@ -43,7 +50,6 @@ class ListDlqMessages extends Command
             'VisibilityTimeout' => 0,
         ]);
         $messages = $result->get('Messages') ?? [];
-        $metrics->recordDomainCounter('dlq_messages_total', ['queue' => $pipeline], count($messages));
 
         if ($messages === []) {
             $this->info('DLQ vuota.');

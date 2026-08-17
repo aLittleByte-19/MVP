@@ -24,6 +24,15 @@ interface WorkflowTaskHandler
     public function subjectType(): string;
 
     /**
+     * Pipeline this handler belongs to ('documents' or 'communications').
+     *
+     * The runner uses it to label failure metrics with the same state machine
+     * reported by the use cases that start the workflow, so a single query can
+     * cover both start failures and task failures.
+     */
+    public function pipeline(): string;
+
+    /**
      * Audit event prefix, completed by the runner with the task status.
      */
     public function auditEventPrefix(): string;
