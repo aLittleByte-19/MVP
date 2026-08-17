@@ -14,20 +14,6 @@
   },
   "panels": [
     {
-      "type": "text",
-      "title": "",
-      "gridPos": {
-        "w": 24,
-        "h": 4,
-        "x": 0,
-        "y": 0
-      },
-      "options": {
-        "mode": "markdown",
-        "content": "**Domanda:** sta andando storto qualcosa, adesso, e dove leggo le righe per capirlo?\n\nPrima fascia: cosa sta succedendo *ora*, distinto da cosa è successo nel periodo selezionato — durante un incidente è la differenza fra un picco in corso e uno già rientrato. Poi il confronto fra servizi, poi le righe. Finestra di default un'ora, più corta delle altre dashboard perché è la scala giusta per i log."
-      }
-    },
-    {
       "type": "row",
       "title": "Cosa sta succedendo ora",
       "collapsed": false,
@@ -36,7 +22,7 @@
         "w": 24,
         "h": 1,
         "x": 0,
-        "y": 4
+        "y": 0
       }
     },
     {
@@ -46,7 +32,7 @@
         "w": 6,
         "h": 5,
         "x": 0,
-        "y": 5
+        "y": 1
       },
       "fieldConfig": {
         "defaults": {
@@ -84,18 +70,18 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(count_over_time({project=\"mvp\"} |~ \"(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))\" != \"No such container\" [5m])) or vector(0)",
+          "expr": "sum(count_over_time({project=\"mvp\"} |~ \"(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))\" != \"No such container\" [5m]))",
           "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
+            "type": "loki",
+            "uid": "loki"
           },
           "legendFormat": "errori",
           "instant": true
         }
       ],
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "loki",
+        "uid": "loki"
       },
       "description": "Finestra fissa, indipendente dal selettore temporale: dice se il problema è in corso adesso."
     },
@@ -106,7 +92,7 @@
         "w": 6,
         "h": 5,
         "x": 6,
-        "y": 5
+        "y": 1
       },
       "fieldConfig": {
         "defaults": {
@@ -127,18 +113,18 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(count_over_time({project=\"mvp\"} |~ \"(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))\" != \"No such container\" [$__range])) or vector(0)",
+          "expr": "sum(count_over_time({project=\"mvp\"} |~ \"(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))\" != \"No such container\" [$__range]))",
           "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
+            "type": "loki",
+            "uid": "loki"
           },
           "legendFormat": "errori",
           "instant": true
         }
       ],
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "loki",
+        "uid": "loki"
       },
       "description": "Segue il selettore temporale: il totale del periodo che stai guardando."
     },
@@ -149,7 +135,7 @@
         "w": 6,
         "h": 5,
         "x": 12,
-        "y": 5
+        "y": 1
       },
       "fieldConfig": {
         "defaults": {
@@ -172,18 +158,18 @@
           "refId": "A",
           "expr": "topk(1, sum by (service) (count_over_time({project=\"mvp\"} |~ \"(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))\" != \"No such container\" [$__range])))",
           "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
+            "type": "loki",
+            "uid": "loki"
           },
           "legendFormat": "{{service}}",
           "instant": true
         }
       ],
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "loki",
+        "uid": "loki"
       },
-      "description": "Dove concentrare l'attenzione. La legenda porta il nome del servizio, il valore il conteggio."
+      "description": "Dove concentrare l'attenzione: la legenda porta il nome del servizio, il valore il conteggio."
     },
     {
       "type": "stat",
@@ -192,7 +178,7 @@
         "w": 6,
         "h": 5,
         "x": 18,
-        "y": 5
+        "y": 1
       },
       "fieldConfig": {
         "defaults": {
@@ -239,7 +225,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Regole Prometheus in firing: collega le righe di log alle 16 regole in docker/prometheus/rules/."
+      "description": "Regole Prometheus in firing: collega le righe di log alle sedici regole in docker/prometheus/rules/."
     },
     {
       "type": "timeseries",
@@ -248,7 +234,7 @@
         "w": 24,
         "h": 8,
         "x": 0,
-        "y": 10
+        "y": 6
       },
       "fieldConfig": {
         "defaults": {
@@ -264,15 +250,15 @@
           "refId": "A",
           "expr": "sum by (service) (rate({project=\"mvp\"} |~ \"(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))\" != \"No such container\" [5m]))",
           "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
+            "type": "loki",
+            "uid": "loki"
           },
           "legendFormat": "{{service}}"
         }
       ],
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "loki",
+        "uid": "loki"
       },
       "description": "A piena larghezza perché lo scopo è confrontare i servizi sulla stessa scala temporale. Non impilato: le serie vanno lette una per una."
     },
@@ -285,63 +271,8 @@
         "w": 24,
         "h": 1,
         "x": 0,
-        "y": 18
+        "y": 14
       }
-    },
-    {
-      "type": "table",
-      "title": "Conteggio errori per servizio",
-      "gridPos": {
-        "w": 8,
-        "h": 10,
-        "x": 0,
-        "y": 19
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "cellOptions": {
-              "type": "auto"
-            }
-          }
-        }
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (service) (count_over_time({project=\"mvp\"} |~ \"(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))\" != \"No such container\" [$__range]))",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "legendFormat": "errori",
-          "instant": true,
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            },
-            "renameByName": {
-              "service": "Servizio",
-              "Value": "Errori"
-            }
-          }
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Sul periodo selezionato. I servizi assenti dalla tabella non hanno prodotto errori in quella finestra."
     },
     {
       "type": "logs",
@@ -349,8 +280,8 @@
       "gridPos": {
         "w": 16,
         "h": 10,
-        "x": 8,
-        "y": 19
+        "x": 0,
+        "y": 15
       },
       "options": {
         "showTime": true,
@@ -371,7 +302,52 @@
         "type": "loki",
         "uid": "loki"
       },
-      "description": "Ordinati dal più recente. Il filtro copre sia il JSON di Monolog sia il logfmt dei container."
+      "description": "Ordinati dal più recente. Il filtro copre sia il JSON di Monolog sia il logfmt dei container di infrastruttura."
+    },
+    {
+      "type": "table",
+      "title": "Conteggio errori per servizio",
+      "gridPos": {
+        "w": 8,
+        "h": 10,
+        "x": 16,
+        "y": 15
+      },
+      "description": "Sul periodo selezionato. I servizi assenti non hanno prodotto errori in quella finestra.",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service) (count_over_time({project=\"mvp\"} |~ \"(?i)(level_name.{0,6}(error|critical|emergency)|level=(error|critical|fatal))\" != \"No such container\" [$__range]))",
+          "instant": true,
+          "format": "table",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "service": "Servizio",
+              "Value": "Errori"
+            }
+          }
+        }
+      ],
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      }
     },
     {
       "type": "row",
@@ -382,7 +358,7 @@
         "w": 24,
         "h": 1,
         "x": 0,
-        "y": 29
+        "y": 25
       }
     },
     {
@@ -392,7 +368,7 @@
         "w": 8,
         "h": 11,
         "x": 0,
-        "y": 30
+        "y": 26
       },
       "options": {
         "showTime": true,
@@ -422,7 +398,7 @@
         "w": 8,
         "h": 11,
         "x": 8,
-        "y": 30
+        "y": 26
       },
       "options": {
         "showTime": true,
@@ -451,7 +427,7 @@
         "w": 8,
         "h": 11,
         "x": 16,
-        "y": 30
+        "y": 26
       },
       "options": {
         "showTime": true,
@@ -472,7 +448,7 @@
         "type": "loki",
         "uid": "loki"
       },
-      "description": "La seconda metà della pipeline: prima di questo pannello i suoi log non comparivano in nessuna vista per-servizio."
+      "description": "La seconda metà della pipeline: prima i suoi log non comparivano in nessuna vista per-servizio."
     }
   ]
 }
