@@ -204,13 +204,13 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 
 **Dove**: `docker/otel-collector/config.yml`, `docker/prometheus/{prometheus.yml,rules/}`, `docker/tempo/`, `docker/loki/`, `docker/alloy/config.alloy`, `docker/grafana/{provisioning,dashboards}/`, `docker/alertmanager/`.
 **Ruolo e flusso**: il collector è l'**unico punto di raccolta**; riceve OTLP (gRPC/HTTP) da app e worker, scrappa `/internal/metrics` via nginx e le metriche Traefik `:9100`, e re-espone tutto su `:9464` dove Prometheus fa un solo scrape. Trace → Tempo (OTLP), log applicativi → Loki (ingestion OTLP nativa di Loki 3.x); Alloy raccoglie i log dei container (filtrati per label compose project) e li spedisce a Loki. Grafana ha datasource provisioned da file (Prometheus/Tempo/Loki, non editabili) e 6 dashboard versionate: `api-golden-signals`, `document-pipeline`, `communication-pipeline`, `ai-ocr-quality`, `queues-and-dlq`, `logs-and-errors`.
-**Alerting**: 10 regole in 4 file (`docker/prometheus/rules/`): `WorkerDown`, `DocumentStuckInProcessing`, `StepFunctionExecutionFailed`, `TextractFailureRateHigh`, `BedrockFailureRateHigh`, `TargetDown`, `APIHighErrorRate`, `APIHighLatencyP95`, `QueueBacklogHigh`, `DLQNotEmpty`; ognuna rimanda a un runbook in `docs/runbooks/`.
+**Alerting**: 16 regole in 5 file (`docker/prometheus/rules/`): `WorkerDown`, `DocumentStuckInProcessing`, `StepFunctionExecutionFailed`, `TextractFailureRateHigh`, `BedrockFailureRateHigh`, `TargetDown`, `APIHighErrorRate`, `APIHighLatencyP95`, `QueueBacklogHigh`, `DLQNotEmpty`, `DlqProbeDown`, `CommunicationPipelineTaskFailed`, `CommunicationStuckInProcessing`, `CommunicationCoverGenerationDegraded`, `CommunicationCoverStorageFailing`, `CommunicationDLQNotEmpty`; ognuna rimanda a un runbook in `docs/runbooks/`.
 **Motivazione**: copre i [quattro golden signal SRE](https://sre.google/sre-book/monitoring-distributed-systems/) (latency, traffic, errors, saturation) più le metriche di dominio della pipeline.
 **Valutazione**: architettura corretta (un solo collettore, processori `memory_limiter`+`batch`, config validate in CI con `promtool` e `otelcol validate` via `make observability-config`). Gap: niente retention/SLO formalizzati; Alertmanager senza receiver reali (routing demo).
 
 ### Metriche applicative custom
 
-**Dove**: `app/Mvp/Observability/MetricsRecorder.php` + `PrometheusExporter.php`, endpoint `/internal/metrics`, volume compose `observability-metrics` condiviso tra `app` e `queue`.
+**Dove**: `app/Mvp/Observability/MetricsRecorder.php` + `PrometheusExporter.php` + `DomainMetricCatalog.php` + `DlqDepthProbe.php`, endpoint `/internal/metrics`, volume compose `observability-metrics` condiviso tra `app`, `queue` e `queue-communications`.
 **Ruolo**: counter e histogram HTTP (bucket espliciti 5ms→10s) e counter di dominio (`textract_jobs_*`, `stepfunctions_executions_*`, `sqs_messages_*`) persistiti su JSON con file locking; il volume condiviso fa sì che le metriche registrate dal worker raggiungano l'exporter scrappato via nginx.
 
 Le due sorgenti sono distinte e non vanno confuse: `MetricsRecorder` accumula **counter di eventi**
