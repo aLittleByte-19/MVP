@@ -10,9 +10,15 @@ use App\Models\SubDocument;
 use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Support\Identity\Actor;
+use Illuminate\Database\Eloquent\Builder;
 
 class MvpStateService
 {
+    /**
+     * Giorni coperti dalla serie storica delle metriche.
+     */
+    private const HISTORY_DAYS = 7;
+
     /**
      * @return array<string, mixed>
      */
@@ -56,10 +62,24 @@ class MvpStateService
             // presentazione e puo' cambiare senza rompere chi seleziona la
             // metrica (vedi overview-page, che ne mostra solo alcune).
             'metrics' => [
-                ['key' => 'assistant.total', 'value' => $total, 'label' => 'Contenuti generati'],
-                ['key' => 'assistant.drafts', 'value' => $drafts, 'label' => 'Bozze generate'],
+                [
+                    'key' => 'assistant.total',
+                    'value' => $total,
+                    'label' => 'Contenuti generati',
+                    'history' => $this->dailySeries(Communication::query()->where('tenant_id', $actor->tenantId)),
+                ],
+                [
+                    'key' => 'assistant.drafts',
+                    'value' => $drafts,
+                    'label' => 'Bozze generate',
+                    'history' => $this->dailySeries(
+                        Communication::query()->where('tenant_id', $actor->tenantId)->where('status', CommunicationStatus::Draft)
+                    ),
+                ],
                 ['key' => 'assistant.rated', 'value' => $rated, 'label' => 'Valutazioni ricevute'],
                 [
+                    // Nessuna serie: e' una media, non un conteggio di elementi
+                    // entrati, quindi un flusso giornaliero non la descrive.
                     'key' => 'assistant.rating_average',
                     'value' => $averageRating === null ? '—' : number_format((float) $averageRating, 1, '.', ''),
                     'label' => 'Media stelle',
@@ -68,6 +88,42 @@ class MvpStateService
             'history' => $history->map(fn ($communication) => $this->communication($communication))->values()->all(),
             'promptConfigurations' => $promptConfigurations->map(fn ($configuration) => $this->promptConfiguration($configuration))->values()->all(),
         ];
+    }
+
+    /**
+     * Conteggio giornaliero degli ultimi sette giorni, dal piu' vecchio al piu'
+     * recente e con gli zeri espliciti sui giorni senza elementi.
+     *
+     * E' un **flusso di ingresso**, non la storia dello stock: dice quanti
+     * elementi sono *entrati* in quello stato ogni giorno, non come il totale
+     * e' variato. Ricostruire lo stock richiederebbe snapshot giornalieri, che
+     * il modello dati non conserva. La distinzione va mantenuta anche nella UI:
+     * accanto a "23 in attesa" si legge "3 nuovi oggi", mai "+3 rispetto a ieri".
+     *
+     * Il raggruppamento avviene in PHP invece che con una funzione di data SQL
+     * perche' deve valere su PostgreSQL e su SQLite (suite di test) senza
+     * dialetti diversi; i volumi di una finestra di sette giorni lo consentono.
+     *
+     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>  $query
+     * @return list<int>
+     */
+    private function dailySeries($query): array
+    {
+        $since = now()->subDays(self::HISTORY_DAYS - 1)->startOfDay();
+
+        $countsByDay = (clone $query)
+            ->where('created_at', '>=', $since)
+            ->pluck('created_at')
+            ->filter()
+            ->countBy(fn ($createdAt): string => $createdAt->format('Y-m-d'));
+
+        $series = [];
+
+        for ($ago = self::HISTORY_DAYS - 1; $ago >= 0; $ago--) {
+            $series[] = (int) ($countsByDay[now()->subDays($ago)->format('Y-m-d')] ?? 0);
+        }
+
+        return $series;
     }
 
     /**
@@ -106,15 +162,40 @@ class MvpStateService
 
         return [
             'metrics' => [
-                ['key' => 'copilot.documents', 'value' => $originalCount, 'label' => 'Documenti analizzati'],
-                ['key' => 'copilot.sub_documents', 'value' => $ofTenant(SubDocument::query())->count(), 'label' => 'Sotto-documenti rilevati'],
+                [
+                    'key' => 'copilot.documents',
+                    'value' => $originalCount,
+                    'label' => 'Documenti analizzati',
+                    'history' => $this->dailySeries(OriginalDocument::query()->where('tenant_id', $actor->tenantId)),
+                ],
+                [
+                    'key' => 'copilot.sub_documents',
+                    'value' => $ofTenant(SubDocument::query())->count(),
+                    'label' => 'Sotto-documenti rilevati',
+                    'history' => $this->dailySeries($ofTenant(SubDocument::query())),
+                ],
                 ['key' => 'copilot.confident_fields', 'value' => ExtractedData::query()->whereHas('subDocument.originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))->where('confidence_score', '>=', $confidenceThreshold)->count(), 'label' => 'Campi con confidenza'],
-                ['key' => 'copilot.needs_review', 'value' => $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)->count(), 'label' => 'Da verificare'],
+                [
+                    'key' => 'copilot.needs_review',
+                    'value' => $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)->count(),
+                    'label' => 'Da verificare',
+                    'history' => $this->dailySeries($ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)),
+                ],
                 // Pronti = validati, automaticamente o a mano. Non e' il
                 // complemento di "da verificare": la quarantena e' un terzo
                 // stato che non va contato come pronto.
-                ['key' => 'copilot.validated', 'value' => $ofTenant(SubDocument::query())->whereIn('review_status', [ReviewStatus::AutoValidated, ReviewStatus::ManuallyValidated])->count(), 'label' => 'Documenti pronti'],
-                ['key' => 'copilot.quarantined', 'value' => $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::Quarantined)->count(), 'label' => 'In quarantena'],
+                [
+                    'key' => 'copilot.validated',
+                    'value' => $ofTenant(SubDocument::query())->whereIn('review_status', [ReviewStatus::AutoValidated, ReviewStatus::ManuallyValidated])->count(),
+                    'label' => 'Documenti pronti',
+                    'history' => $this->dailySeries($ofTenant(SubDocument::query())->whereIn('review_status', [ReviewStatus::AutoValidated, ReviewStatus::ManuallyValidated])),
+                ],
+                [
+                    'key' => 'copilot.quarantined',
+                    'value' => $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::Quarantined)->count(),
+                    'label' => 'In quarantena',
+                    'history' => $this->dailySeries($ofTenant(SubDocument::query())->where('review_status', ReviewStatus::Quarantined)),
+                ],
             ],
             'documents' => $documents->map(fn ($document) => $this->document($document))->values()->all(),
         ];

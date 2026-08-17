@@ -11,4 +11,11 @@ export interface Metric {
   key: string;
   value: number | string;
   label: string;
+  /**
+     * Conteggio giornaliero degli ultimi sette giorni, dal più vecchio al più recente. È il flusso di ingresso — quanti elementi sono entrati in quello stato ogni giorno — non la storia del totale, che richiederebbe snapshot giornalieri non conservati dal modello dati. Va quindi presentato come "n nuovi oggi", mai come variazione del valore. Assente sulle metriche per cui un flusso non ha significato, come le medie.
+     * @minItems 7
+     * @maxItems 7
+     * @items.minimum 0
+     */
+  history?: number[];
 }
