@@ -27,9 +27,17 @@ class DlqDepthProbe
     public function __construct(private readonly SqsClient $sqs) {}
 
     /**
-     * Profondita' per coda. Una coda non configurata e' assente dal risultato
-     * (non e' un errore: in molti ambienti la seconda pipeline non esiste),
-     * una coda interrogata senza successo vale null.
+     * Profondita' per coda, una voce per ogni pipeline dichiarata a catalogo.
+     * Vale null quando la misura non c'e': coda non configurata, oppure
+     * interrogata senza successo.
+     *
+     * Anche l'URL mancante conta come misura assente, non come coda da
+     * ignorare. Saltandola, non uscivano ne' la profondita' ne' dlq_probe_up, e
+     * DLQNotEmpty non aveva serie su cui valutare: una DLQ non configurata era
+     * quindi indistinguibile da una DLQ vuota, ossia proprio il difetto che
+     * dlq_probe_up esiste per rendere visibile. Ora la pipeline compare
+     * comunque, con il probe a 0, e DlqProbeDown segnala la configurazione
+     * incompleta.
      *
      * @return array<string, int|null>
      */
@@ -39,25 +47,26 @@ class DlqDepthProbe
             return [];
         }
 
-        $queues = [
+        $queueUrls = [
             'documents' => (string) config('services.workflow.dlq_queue_url'),
             'communications' => (string) config('services.workflow.communications_dlq_queue_url'),
         ];
 
         $depths = [];
 
-        foreach ($queues as $pipeline => $queueUrl) {
-            if ($queueUrl === '') {
-                continue;
-            }
+        foreach (DomainMetricCatalog::DLQ_QUEUES as $queue) {
+            $queueUrl = $queueUrls[$queue] ?? '';
 
-            $depths[$pipeline] = $this->depth($queueUrl, $pipeline);
+            // Nessun log sull'URL mancante: lo scrape passa ogni pochi secondi
+            // e ne uscirebbe un warning per scrape su una condizione statica,
+            // che dlq_probe_up gia' descrive senza rumore.
+            $depths[$queue] = $queueUrl === '' ? null : $this->depth($queueUrl, $queue);
         }
 
         return $depths;
     }
 
-    private function depth(string $queueUrl, string $pipeline): ?int
+    private function depth(string $queueUrl, string $queue): ?int
     {
         try {
             $result = $this->sqs->getQueueAttributes([
@@ -72,7 +81,7 @@ class DlqDepthProbe
             // Volutamente non rilanciata: uno scrape deve degradare, non fallire.
             // Il fatto che la misura manchi e' esposto da dlq_probe_up.
             Log::warning('DLQ depth probe failed', [
-                'pipeline' => $pipeline,
+                'queue' => $queue,
                 'message' => str($e->getMessage())->limit(220)->toString(),
             ]);
 
