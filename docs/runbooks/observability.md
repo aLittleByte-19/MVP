@@ -69,6 +69,11 @@ Le metriche di dominio sono **dichiarate** in `app/Mvp/Observability/DomainMetri
 dedotte da ciò che il file di accumulo contiene. Il catalogo definisce nome, tipo, help, label e —
 dove i valori sono un insieme chiuso — i valori ammessi, presi dagli enum di dominio.
 
+I nomi delle state machine fanno eccezione: non sono un enum ma portano il `name_prefix`
+dell'ambiente, quindi il catalogo li legge dalla configurazione con `StateMachineName::forPipeline()`,
+la stessa funzione che etichetta le metriche a runtime. Una pipeline il cui ARN non è configurato
+resta fuori dalle serie seminate: `unknown` descriverebbe una pipeline che non può nemmeno partire.
+
 Tre conseguenze operative:
 
 - una metrica dichiarata compare nell'esposizione **anche a zero**, prima di essere emessa la prima
@@ -104,7 +109,14 @@ vuoti i pannelli di confidenza e durata OCR pur essendoci il dato. Due difese:
 `DlqDepthProbe`, con timeout di 2-3 secondi. Se la lettura fallisce **non viene emessa alcuna serie
 di profondità** e `mvp_dlq_probe_up{queue}` vale 0: uno zero inventato spegnerebbe in silenzio
 `DLQNotEmpty`, che è severity critical. L'alert `DlqProbeDown` copre proprio questo caso.
-Disattivabile con `MVP_DLQ_PROBE_ENABLED=false` dove SQS non è raggiungibile.
+
+Una coda **senza URL configurato** è trattata allo stesso modo di una lettura fallita: la pipeline
+compare comunque con `mvp_dlq_probe_up{queue} 0`. Prima veniva saltata del tutto, quindi non usciva
+né la profondità né il probe, e una DLQ mai configurata era indistinguibile da una DLQ vuota.
+
+`MVP_DLQ_PROBE_ENABLED=false` spegne il probe dove SQS non è raggiungibile: sparisce anche
+`mvp_dlq_probe_up`, quindi `DLQNotEmpty` e `DlqProbeDown` smettono entrambi di valutare. È una
+rinuncia dichiarata, non la stessa cosa di un probe che fallisce.
 
 ### Saturazione del trasporto
 
