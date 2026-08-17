@@ -14,20 +14,6 @@
   },
   "panels": [
     {
-      "type": "text",
-      "title": "",
-      "gridPos": {
-        "w": 24,
-        "h": 3,
-        "x": 0,
-        "y": 0
-      },
-      "options": {
-        "mode": "markdown",
-        "content": "**Domanda:** l'API sta servendo le richieste in tempi accettabili, e quando fallisce, quanto e dove?\n\nPrima fascia: c'è un problema *adesso*. Seconda: di che natura. Terza: dove intervenire. Alert correlati: `APIHighErrorRate`, `APIHighLatencyP95`, `TargetDown` — Runbook: docs/runbooks/observability.md"
-      }
-    },
-    {
       "type": "row",
       "title": "Stato del servizio",
       "collapsed": false,
@@ -36,7 +22,7 @@
         "w": 24,
         "h": 1,
         "x": 0,
-        "y": 3
+        "y": 0
       }
     },
     {
@@ -46,7 +32,7 @@
         "w": 8,
         "h": 5,
         "x": 0,
-        "y": 4
+        "y": 1
       },
       "fieldConfig": {
         "defaults": {
@@ -107,7 +93,7 @@
         "w": 8,
         "h": 5,
         "x": 8,
-        "y": 4
+        "y": 1
       },
       "fieldConfig": {
         "defaults": {
@@ -163,7 +149,7 @@
         "w": 8,
         "h": 5,
         "x": 16,
-        "y": 4
+        "y": 1
       },
       "fieldConfig": {
         "defaults": {
@@ -221,7 +207,7 @@
         "w": 24,
         "h": 1,
         "x": 0,
-        "y": 9
+        "y": 6
       }
     },
     {
@@ -231,7 +217,7 @@
         "w": 6,
         "h": 4,
         "x": 0,
-        "y": 10
+        "y": 7
       },
       "fieldConfig": {
         "defaults": {
@@ -275,7 +261,7 @@
         "w": 6,
         "h": 4,
         "x": 6,
-        "y": 10
+        "y": 7
       },
       "fieldConfig": {
         "defaults": {
@@ -319,7 +305,7 @@
         "w": 6,
         "h": 4,
         "x": 12,
-        "y": 10
+        "y": 7
       },
       "fieldConfig": {
         "defaults": {
@@ -363,7 +349,7 @@
         "w": 6,
         "h": 4,
         "x": 18,
-        "y": 10
+        "y": 7
       },
       "fieldConfig": {
         "defaults": {
@@ -406,7 +392,7 @@
         "w": 12,
         "h": 8,
         "x": 0,
-        "y": 14
+        "y": 11
       },
       "fieldConfig": {
         "defaults": {
@@ -459,7 +445,7 @@
         "w": 12,
         "h": 8,
         "x": 12,
-        "y": 14
+        "y": 11
       },
       "fieldConfig": {
         "defaults": {
@@ -513,7 +499,7 @@
         "w": 24,
         "h": 1,
         "x": 0,
-        "y": 22
+        "y": 19
       }
     },
     {
@@ -523,7 +509,7 @@
         "w": 12,
         "h": 8,
         "x": 0,
-        "y": 23
+        "y": 20
       },
       "fieldConfig": {
         "defaults": {
@@ -602,7 +588,7 @@
         "w": 4,
         "h": 8,
         "x": 12,
-        "y": 23
+        "y": 20
       },
       "fieldConfig": {
         "defaults": {
@@ -636,7 +622,7 @@
         "w": 4,
         "h": 8,
         "x": 16,
-        "y": 23
+        "y": 20
       },
       "fieldConfig": {
         "defaults": {
@@ -670,7 +656,7 @@
         "w": 4,
         "h": 8,
         "x": 20,
-        "y": 23
+        "y": 20
       },
       "fieldConfig": {
         "defaults": {
