@@ -2,12 +2,11 @@
   "uid": "mvp-api-golden-signals",
   "title": "API Golden Signals",
   "tags": [
-    "alittlebyte",
-    "api",
-    "sre"
+    "mvp",
+    "api"
   ],
+  "timezone": "browser",
   "schemaVersion": 39,
-  "version": 4,
   "refresh": "15s",
   "time": {
     "from": "now-6h",
@@ -15,76 +14,46 @@
   },
   "panels": [
     {
-      "type": "row",
-      "title": "Segnali d'oro (latency, traffic, errors)",
+      "type": "text",
+      "title": "",
       "gridPos": {
-        "x": 0,
-        "y": 0,
         "w": 24,
-        "h": 1
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Traffico",
-      "gridPos": {
+        "h": 3,
         "x": 0,
-        "y": 1,
-        "w": 6,
-        "h": 4
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "blue"
-          }
-        }
+        "y": 0
       },
       "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "colorMode": "value",
-        "graphMode": "area"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum(rate(mvp_http_requests_total[5m]))",
-          "instant": true,
-          "legendFormat": "req/s",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "mode": "markdown",
+        "content": "**Domanda:** l'API sta servendo le richieste in tempi accettabili, e quando fallisce, quanto e dove?\n\nPrima fascia: c'è un problema *adesso*. Seconda: di che natura. Terza: dove intervenire. Alert correlati: `APIHighErrorRate`, `APIHighLatencyP95`, `TargetDown` — Runbook: docs/runbooks/observability.md"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Stato del servizio",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "w": 24,
+        "h": 1,
+        "x": 0,
+        "y": 3
       }
     },
     {
       "type": "stat",
-      "title": "Tasso di errore (5xx)",
+      "title": "Stato API",
       "gridPos": {
-        "x": 6,
-        "y": 1,
-        "w": 6,
-        "h": 4
+        "w": 8,
+        "h": 5,
+        "x": 0,
+        "y": 4
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1,
           "color": {
             "mode": "thresholds"
           },
+          "unit": "percentunit",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -93,7 +62,7 @@
                 "value": null
               },
               {
-                "color": "orange",
+                "color": "#EAB839",
                 "value": 0.01
               },
               {
@@ -116,52 +85,248 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(mvp_http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(mvp_http_requests_total[5m])), 1)",
-          "instant": true,
-          "legendFormat": "5xx",
+          "expr": "sum(rate(mvp_http_requests_total{status=~\"5..\"}[5m])) / sum(rate(mvp_http_requests_total[5m]))",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "errori",
+          "instant": true
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
+      },
+      "description": "Verde sotto l'1% di 5xx, giallo fino al 5%, rosso oltre: la stessa soglia su cui scatta APIHighErrorRate. Vuoto quando non c'è traffico, che non è un errore."
+    },
+    {
+      "type": "stat",
+      "title": "Alert attivi",
+      "gridPos": {
+        "w": 8,
+        "h": 5,
+        "x": 8,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(ALERTS{alertstate=\"firing\"}) or vector(0)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "firing",
+          "instant": true
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Regole Prometheus attualmente in firing, su tutte le pipeline. È il collegamento fra questa pagina e le 16 regole in docker/prometheus/rules/."
+    },
+    {
+      "type": "stat",
+      "title": "Errori nell'ultima ora",
+      "gridPos": {
+        "w": 8,
+        "h": 5,
+        "x": 16,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 1
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(mvp_http_requests_total{status=~\"5..\"}[1h])) or vector(0)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "5xx",
+          "instant": true
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Conteggio assoluto, non tasso: dice se è già successo qualcosa anche quando il rapporto istantaneo è tornato a posto."
+    },
+    {
+      "type": "row",
+      "title": "Segnali d'oro",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "w": 24,
+        "h": 1,
+        "x": 0,
+        "y": 9
       }
+    },
+    {
+      "type": "stat",
+      "title": "Traffico",
+      "gridPos": {
+        "w": 6,
+        "h": 4,
+        "x": 0,
+        "y": 10
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "reqps"
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(mvp_http_requests_total[5m]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "req/s",
+          "instant": true
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Rate delle richieste servite, tutte le route."
+    },
+    {
+      "type": "stat",
+      "title": "Tasso di errore (5xx)",
+      "gridPos": {
+        "w": 6,
+        "h": 4,
+        "x": 6,
+        "y": 10
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "percentunit"
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(mvp_http_requests_total{status=~\"5..\"}[5m])) / sum(rate(mvp_http_requests_total[5m]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "quota",
+          "instant": true
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Senza clamp sul denominatore: a traffico zero il risultato è vuoto, non zero, così il rapporto non viene schiacciato proprio quando le richieste calano."
     },
     {
       "type": "stat",
       "title": "Latenza p95",
       "gridPos": {
-        "x": 12,
-        "y": 1,
         "w": 6,
-        "h": 4
+        "h": 4,
+        "x": 12,
+        "y": 10
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
           "color": {
             "mode": "thresholds"
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 0.5
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          }
+          "unit": "s"
         }
       },
       "options": {
@@ -171,57 +336,41 @@
           ]
         },
         "colorMode": "value",
-        "graphMode": "none"
+        "graphMode": "area"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "histogram_quantile(0.95, sum(rate(mvp_http_request_duration_seconds_bucket[5m])) by (le))",
-          "instant": true,
-          "legendFormat": "p95",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "p95",
+          "instant": true
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "Soglia di allerta a 1s (APIHighLatencyP95)."
     },
     {
       "type": "stat",
       "title": "Latenza p99",
       "gridPos": {
-        "x": 18,
-        "y": 1,
         "w": 6,
-        "h": 4
+        "h": 4,
+        "x": 18,
+        "y": 10
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
           "color": {
             "mode": "thresholds"
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 2
-              }
-            ]
-          }
+          "unit": "s"
         }
       },
       "options": {
@@ -231,18 +380,18 @@
           ]
         },
         "colorMode": "value",
-        "graphMode": "none"
+        "graphMode": "area"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "histogram_quantile(0.99, sum(rate(mvp_http_request_duration_seconds_bucket[5m])) by (le))",
-          "instant": true,
-          "legendFormat": "p99",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "p99",
+          "instant": true
         }
       ],
       "datasource": {
@@ -254,19 +403,16 @@
       "type": "timeseries",
       "title": "Richieste per classe di stato (rate 5m)",
       "gridPos": {
-        "x": 0,
-        "y": 5,
         "w": 12,
-        "h": 8
+        "h": 8,
+        "x": 0,
+        "y": 14
       },
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 15,
-            "stacking": {
-              "mode": "normal"
-            }
+            "lineWidth": 2,
+            "fillOpacity": 8
           },
           "unit": "reqps"
         }
@@ -275,50 +421,51 @@
         {
           "refId": "A",
           "expr": "sum(rate(mvp_http_requests_total{status=~\"2..\"}[5m]))",
-          "legendFormat": "2xx",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "2xx"
         },
         {
           "refId": "B",
           "expr": "sum(rate(mvp_http_requests_total{status=~\"4..\"}[5m]))",
-          "legendFormat": "4xx",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "4xx"
         },
         {
           "refId": "C",
           "expr": "sum(rate(mvp_http_requests_total{status=~\"5..\"}[5m]))",
-          "legendFormat": "5xx",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "5xx"
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "Non impilate: solo il segmento inferiore sarebbe leggibile con precisione."
     },
     {
       "type": "timeseries",
       "title": "Latenza (quantili)",
       "gridPos": {
-        "x": 12,
-        "y": 5,
         "w": 12,
-        "h": 8
+        "h": 8,
+        "x": 12,
+        "y": 14
       },
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10
+            "lineWidth": 2,
+            "fillOpacity": 8
           },
           "unit": "s"
         }
@@ -327,186 +474,29 @@
         {
           "refId": "A",
           "expr": "histogram_quantile(0.50, sum(rate(mvp_http_request_duration_seconds_bucket[5m])) by (le))",
-          "legendFormat": "p50",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "p50"
         },
         {
           "refId": "B",
           "expr": "histogram_quantile(0.95, sum(rate(mvp_http_request_duration_seconds_bucket[5m])) by (le))",
-          "legendFormat": "p95",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "p95"
         },
         {
           "refId": "C",
           "expr": "histogram_quantile(0.99, sum(rate(mvp_http_request_duration_seconds_bucket[5m])) by (le))",
-          "legendFormat": "p99",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      }
-    },
-    {
-      "type": "table",
-      "title": "Endpoint - golden signals per route",
-      "gridPos": {
-        "x": 0,
-        "y": 13,
-        "w": 24,
-        "h": 9
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Req/s"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "reqps"
-              },
-              {
-                "id": "decimals",
-                "value": 3
-              }
-            ]
           },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Errori/s (5xx)"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "reqps"
-              },
-              {
-                "id": "decimals",
-                "value": 3
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "red",
-                      "value": 0.0001
-                    }
-                  ]
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p95 (s)"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "s"
-              },
-              {
-                "id": "decimals",
-                "value": 3
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (route) (rate(mvp_http_requests_total[5m]))",
-          "instant": true,
-          "format": "table",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "refId": "B",
-          "expr": "sum by (route) (rate(mvp_http_requests_total{status=~\"5..\"}[5m]))",
-          "instant": true,
-          "format": "table",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "refId": "C",
-          "expr": "histogram_quantile(0.95, sum by (route, le) (rate(mvp_http_request_duration_seconds_bucket[5m])))",
-          "instant": true,
-          "format": "table",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            },
-            "renameByName": {
-              "route": "Route",
-              "Value #A": "Req/s",
-              "Value #B": "Errori/s (5xx)",
-              "Value #C": "p95 (s)"
-            }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "fields": "",
-            "sort": [
-              {
-                "field": "Req/s",
-                "desc": true
-              }
-            ]
-          }
+          "legendFormat": "p99"
         }
       ],
       "datasource": {
@@ -516,100 +506,177 @@
     },
     {
       "type": "row",
-      "title": "Saturation",
+      "title": "Dettaglio e saturazione",
+      "collapsed": false,
+      "panels": [],
       "gridPos": {
-        "x": 0,
-        "y": 22,
         "w": 24,
-        "h": 1
+        "h": 1,
+        "x": 0,
+        "y": 22
       }
+    },
+    {
+      "type": "table",
+      "title": "Endpoint — golden signals per route",
+      "gridPos": {
+        "w": 12,
+        "h": 8,
+        "x": 0,
+        "y": 23
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        }
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (route) (rate(mvp_http_requests_total[5m]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "traffico",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (route) (rate(mvp_http_requests_total{status=~\"5..\"}[5m]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "errori",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.95, sum by (route, le) (rate(mvp_http_request_duration_seconds_bucket[5m])))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "p95",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "route": "Route",
+              "Value #A": "Traffico",
+              "Value #B": "Errori 5xx",
+              "Value #C": "p95"
+            }
+          }
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Terzo livello: serve per l'indagine, non per accorgersi di un problema. `route` è il nome della route Laravel; quelle senza nome ricadono su `unmatched`."
     },
     {
       "type": "timeseries",
       "title": "Connessioni aperte (edge)",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
       "gridPos": {
-        "x": 0,
-        "y": 23,
-        "w": 8,
-        "h": 8
+        "w": 4,
+        "h": 8,
+        "x": 12,
+        "y": 23
       },
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 15
-          },
-          "unit": "short"
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
         }
       },
       "targets": [
         {
           "refId": "A",
+          "expr": "sum(traefik_open_connections) by (entrypoint)",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(traefik_open_connections) by (entrypoint)",
           "legendFormat": "{{entrypoint}}"
         }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "Documenti in elaborazione (backlog pipeline)",
+      ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Saturazione del bordo: connessioni tenute aperte da Traefik."
+    },
+    {
+      "type": "timeseries",
+      "title": "Backlog pipeline",
       "gridPos": {
-        "x": 8,
-        "y": 23,
-        "w": 8,
-        "h": 8
+        "w": 4,
+        "h": 8,
+        "x": 16,
+        "y": 23
       },
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 15
-          },
-          "unit": "short"
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
         }
       },
       "targets": [
         {
           "refId": "A",
+          "expr": "sum(mvp_original_documents{status=\"processing\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(mvp_original_documents_total{status=\"processing\"})",
           "legendFormat": "in elaborazione"
         }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "Memoria OTel Collector (RSS)",
+      ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Documenti fermi in elaborazione: saturazione a valle dell'API."
+    },
+    {
+      "type": "timeseries",
+      "title": "Memoria Collector",
       "gridPos": {
-        "x": 16,
-        "y": 23,
-        "w": 8,
-        "h": 8
+        "w": 4,
+        "h": 8,
+        "x": 20,
+        "y": 23
       },
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 15
+            "lineWidth": 2,
+            "fillOpacity": 8
           },
           "unit": "bytes"
         }
@@ -617,14 +684,19 @@
       "targets": [
         {
           "refId": "A",
+          "expr": "otelcol_process_memory_rss",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "otelcol_process_memory_rss",
-          "legendFormat": "rss"
+          "legendFormat": "RSS"
         }
-      ]
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Se il Collector satura, tutte le metriche di questa pagina smettono di arrivare."
     }
   ]
 }
