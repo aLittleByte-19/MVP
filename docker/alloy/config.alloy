@@ -44,9 +44,10 @@ loki.source.docker "mvp" {
   refresh_interval = "10s"
 }
 
-// Log level is detected by Loki itself (detected_level structured metadata),
-// so dashboards filter errors with `| detected_level=~"error|critical"` without
-// promoting noisy high-cardinality labels here.
+// Il livello non viene promosso a label qui, per non introdurre cardinalita'
+// alta: le dashboard filtrano gli errori con una regex sulla riga
+// (`|~ "(?i)level_name.{0,6}(error|critical|emergency)"`), che copre sia i log
+// JSON di Monolog sia il logfmt dei container di infrastruttura.
 
 loki.write "default" {
   endpoint {

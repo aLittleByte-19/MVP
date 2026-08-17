@@ -13,7 +13,7 @@ groups:
           runbook: "https://github.com/aLittleByte-19/MVP/blob/main/docs/runbooks/communication-pipeline.md"
 
       - alert: CommunicationStuckInProcessing
-        expr: mvp_communication_stuck_processing_total > 0
+        expr: mvp_communications_stuck_processing > 0
         for: 10m
         labels:
           severity: warning
@@ -48,7 +48,7 @@ groups:
           runbook: "https://github.com/aLittleByte-19/MVP/blob/main/docs/runbooks/communication-pipeline.md"
 
       - alert: CommunicationDLQNotEmpty
-        expr: mvp_dlq_messages_total{queue="communications"} > 0
+        expr: mvp_dlq_messages{queue="communications"} > 0
         for: 1m
         labels:
           severity: critical
