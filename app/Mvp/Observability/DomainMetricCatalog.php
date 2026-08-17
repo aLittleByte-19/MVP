@@ -9,6 +9,7 @@ use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Enums\SendStatus;
+use App\Mvp\Workflow\Support\StateMachineName;
 
 /**
  * Elenco dichiarativo delle metriche di dominio esposte da /internal/metrics.
@@ -51,8 +52,22 @@ final class DomainMetricCatalog
         'textract.ocr',
     ];
 
-    /** @var list<string> */
-    public const DLQ_QUEUES = ['communications', 'documents'];
+    /**
+     * Le due pipeline di dominio, nella forma accettata da
+     * StateMachineName::forPipeline().
+     *
+     * @var list<string>
+     */
+    public const PIPELINES = ['communications', 'documents'];
+
+    /**
+     * Le DLQ sono una per pipeline e ne portano il nome: l'insieme e' lo
+     * stesso, e tenerli legati evita che una pipeline aggiunta domani compaia
+     * nelle serie delle state machine ma non in quelle delle code.
+     *
+     * @var list<string>
+     */
+    public const DLQ_QUEUES = self::PIPELINES;
 
     /** @var list<string> */
     public const WORKFLOW_FAILURE_REASONS = ['start_failure', 'task_failure'];
@@ -71,23 +86,22 @@ final class DomainMetricCatalog
      */
     public static function recorded(): array
     {
+        $stateMachines = self::stateMachineNames();
+
         $definitions = [
-            // `state_machine` non e' enumerabile: e' il nome breve dell'ARN, che
-            // porta il name_prefix dell'ambiente (mvp-document-pipeline in
-            // locale). Elencare valori fissi qui produrrebbe serie a zero con
-            // nomi che non esistono in nessun ambiente reale.
             new DomainMetricDefinition(
                 'stepfunctions_executions_started_total',
                 'counter',
                 'Step Functions executions started by the application.',
                 ['state_machine'],
+                ['state_machine' => $stateMachines],
             ),
             new DomainMetricDefinition(
                 'stepfunctions_executions_failed_total',
                 'counter',
                 'Step Functions executions that failed to start or whose task failed.',
                 ['reason', 'state_machine'],
-                ['reason' => self::WORKFLOW_FAILURE_REASONS],
+                ['reason' => self::WORKFLOW_FAILURE_REASONS, 'state_machine' => $stateMachines],
             ),
             new DomainMetricDefinition(
                 'stepfunctions_callbacks_failed_total',
@@ -371,6 +385,41 @@ final class DomainMetricCatalog
         }
 
         return $names;
+    }
+
+    /**
+     * Nomi brevi delle state machine configurate in questo ambiente.
+     *
+     * Letti dalla configurazione invece che elencati come costanti: portano il
+     * name_prefix dell'ambiente (`mvp-document-pipeline` in locale), quindi un
+     * elenco fisso produrrebbe serie a zero con nomi che non esistono da
+     * nessuna parte. Ricavandoli da `StateMachineName::forPipeline()` — la
+     * stessa funzione che etichetta le metriche a runtime — la serie seminata
+     * e quella emessa dopo il primo evento reale portano per costruzione la
+     * stessa label, che e' il punto: senza, i pannelli filtrati per
+     * `state_machine` restavano su "No data" invece di mostrare uno zero.
+     *
+     * Una pipeline senza ARN configurato resta fuori. `unknown` e' un valore
+     * che il codice emette davvero quando l'ARN manca, ma seminarlo a zero
+     * descriverebbe una pipeline che in quell'ambiente non puo' partire.
+     *
+     * @return list<string>
+     */
+    private static function stateMachineNames(): array
+    {
+        $names = [];
+
+        foreach (self::PIPELINES as $pipeline) {
+            $name = StateMachineName::forPipeline($pipeline);
+
+            if ($name !== StateMachineName::UNKNOWN) {
+                $names[] = $name;
+            }
+        }
+
+        sort($names);
+
+        return array_values(array_unique($names));
     }
 
     /**
