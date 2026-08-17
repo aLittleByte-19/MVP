@@ -23,41 +23,43 @@ const SPARK_HEIGHT = 30;
     <dl class="card" [class]="tone()" [attr.aria-busy]="isLoading() ? 'true' : null">
       <dt class="label">{{ label() }}</dt>
       <dd class="value">
+        <span class="figure">
+          @if (isLoading()) {
+            <span class="skeleton num" aria-hidden="true"></span>
+            <span class="sr-only">Caricamento in corso</span>
+          } @else {
+            <span class="num">{{ displayValue() }}</span>
+            @if (unit(); as unitText) {
+              <span class="unit">{{ unitText }}</span>
+            }
+            @if (sparkPoints(); as points) {
+              <svg
+                class="spark"
+                [attr.viewBox]="'0 0 ' + sparkWidth + ' ' + sparkHeight"
+                role="img"
+                [attr.aria-label]="sparkLabel()"
+              >
+                <polyline
+                  [attr.points]="points"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                @if (sparkTip(); as tip) {
+                  <circle [attr.cx]="tip.x" [attr.cy]="tip.y" r="2.8" fill="currentColor" />
+                }
+              </svg>
+            }
+          }
+        </span>
         @if (isLoading()) {
-          <span class="skeleton num" aria-hidden="true"></span>
-          <span class="sr-only">Caricamento in corso</span>
-        } @else {
-          <span class="num">{{ displayValue() }}</span>
-          @if (unit(); as unitText) {
-            <span class="unit">{{ unitText }}</span>
-          }
-          @if (sparkPoints(); as points) {
-            <svg
-              class="spark"
-              [attr.viewBox]="'0 0 ' + sparkWidth + ' ' + sparkHeight"
-              role="img"
-              [attr.aria-label]="sparkLabel()"
-            >
-              <polyline
-                [attr.points]="points"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-              @if (sparkTip(); as tip) {
-                <circle [attr.cx]="tip.x" [attr.cy]="tip.y" r="2.8" fill="currentColor" />
-              }
-            </svg>
-          }
+          <span class="skeleton txt" aria-hidden="true"></span>
+        } @else if (context(); as contextText) {
+          <span class="context">{{ contextText }}</span>
         }
       </dd>
-      @if (isLoading()) {
-        <span class="skeleton txt" aria-hidden="true"></span>
-      } @else if (context(); as contextText) {
-        <span class="context">{{ contextText }}</span>
-      }
     </dl>
   `,
   styleUrl: "./metric-card.css"
