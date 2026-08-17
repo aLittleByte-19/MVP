@@ -20,7 +20,7 @@ export type ProgressState = "idle" | "active" | "done" | "error";
       [attr.aria-label]="label()"
       aria-valuemin="0"
       aria-valuemax="100"
-      [attr.aria-valuenow]="value()"
+      [attr.aria-valuenow]="clamped()"
       [class.isActive]="state() === 'active'"
       [class.isDone]="state() === 'done'"
       [class.isError]="state() === 'error'"

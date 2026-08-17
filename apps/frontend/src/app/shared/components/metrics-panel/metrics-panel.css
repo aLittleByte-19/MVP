@@ -1,7 +1,25 @@
 .grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--mvp-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grid > li {
+  display: contents;
+}
+
+.failed {
+  margin: 0;
+  padding: var(--mvp-space-4);
+  border: 1px solid var(--mvp-border);
+  border-left: 3px solid var(--mvp-danger);
+  border-radius: var(--mvp-radius);
+  background: var(--mvp-surface-muted);
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-sm);
 }
 
 @media (max-width: 640px) {

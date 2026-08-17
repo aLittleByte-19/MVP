@@ -48,6 +48,16 @@ describe("ProgressBarComponent", () => {
   });
 
   it.each([
+    [-20, "0"],
+    [140, "100"]
+  ])("annuncia il valore clampato, non quello grezzo (%i)", (value, expected) => {
+    // aria-valuenow leggeva il valore grezzo mentre il riempimento usava quello
+    // clampato: con un input fuori scala lo screen reader annunciava un numero
+    // diverso da quello mostrato.
+    expect(render(value).getAttribute("aria-valuenow")).toBe(expected);
+  });
+
+  it.each([
     ["idle", []],
     ["active", ["isActive"]],
     ["done", ["isDone"]],
