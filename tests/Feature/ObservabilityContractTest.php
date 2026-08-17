@@ -1,7 +1,10 @@
 <?php
 
+use App\Mvp\Observability\DlqDepthProbe;
 use App\Mvp\Observability\DomainMetricCatalog;
 use App\Mvp\Workflow\Services\WorkflowTaskRegistry;
+use Aws\Result;
+use Aws\Sqs\SqsClient;
 use Tests\Support\MetricsContract;
 
 /**
@@ -17,6 +20,16 @@ function mvpResetRecordedMetrics(): void
     if (is_file($path)) {
         unlink($path);
     }
+}
+
+/**
+ * DlqDepthProbe e' un singleton che costruisce da se' il proprio SqsClient
+ * (timeout brevi, vedi AppServiceProvider): sostituire il binding di SqsClient
+ * non lo raggiungerebbe, va rimpiazzata l'istanza della probe.
+ */
+function mvpFakeDlqProbe(SqsClient $sqs): void
+{
+    app()->instance(DlqDepthProbe::class, new DlqDepthProbe($sqs));
 }
 
 /**
@@ -282,6 +295,62 @@ test('una pipeline senza ARN configurato non produce serie inventate', function 
     expect($exposition)
         ->toContain('# TYPE mvp_stepfunctions_executions_failed_total counter')
         ->not->toContain('state_machine="unknown"');
+});
+
+test('una dlq non configurata resta visibile con il probe a zero', function () {
+    config([
+        'services.workflow.dlq_queue_url' => '',
+        'services.workflow.communications_dlq_queue_url' => '',
+    ]);
+
+    $exposition = (string) $this->get('/internal/metrics')->assertOk()->getContent();
+
+    // Saltare la coda la rendeva indistinguibile da una coda vuota: DLQNotEmpty
+    // non aveva serie su cui valutare e nessuno se ne accorgeva.
+    expect($exposition)
+        ->toContain('mvp_dlq_probe_up{queue="documents"} 0')
+        ->toContain('mvp_dlq_probe_up{queue="communications"} 0')
+        // Nessuna profondita' inventata: uno zero qui spegnerebbe l'alert critical.
+        ->not->toContain('mvp_dlq_messages{');
+});
+
+test('una dlq raggiungibile espone la profondita e il probe a uno', function () {
+    config([
+        'services.workflow.dlq_queue_url' => 'http://localstack:4566/000000000000/mvp-documents-dlq',
+        'services.workflow.communications_dlq_queue_url' => '',
+    ]);
+
+    $sqs = Mockery::mock(SqsClient::class);
+    $sqs->shouldReceive('getQueueAttributes')
+        ->once()
+        ->with(Mockery::on(fn (array $params): bool => str_ends_with($params['QueueUrl'], 'mvp-documents-dlq')))
+        ->andReturn(new Result(['Attributes' => ['ApproximateNumberOfMessages' => '4']]));
+    mvpFakeDlqProbe($sqs);
+
+    $exposition = (string) $this->get('/internal/metrics')->assertOk()->getContent();
+
+    expect($exposition)
+        ->toContain('mvp_dlq_messages{queue="documents"} 4')
+        ->toContain('mvp_dlq_probe_up{queue="documents"} 1')
+        // La coda non configurata resta comunque dichiarata come non misurata.
+        ->toContain('mvp_dlq_probe_up{queue="communications"} 0');
+});
+
+test('una dlq interrogata senza successo non inventa una profondita', function () {
+    config([
+        'services.workflow.dlq_queue_url' => 'http://localstack:4566/000000000000/mvp-documents-dlq',
+        'services.workflow.communications_dlq_queue_url' => '',
+    ]);
+
+    $sqs = Mockery::mock(SqsClient::class);
+    $sqs->shouldReceive('getQueueAttributes')->andThrow(new RuntimeException('connection refused'));
+    mvpFakeDlqProbe($sqs);
+
+    $exposition = (string) $this->get('/internal/metrics')->assertOk()->getContent();
+
+    expect($exposition)
+        ->toContain('mvp_dlq_probe_up{queue="documents"} 0')
+        ->not->toContain('mvp_dlq_messages{');
 });
 
 test('nessun counter usa un nome riservato ad altre forme di metrica', function () {
