@@ -5,6 +5,21 @@ use App\Mvp\Workflow\Services\WorkflowTaskRegistry;
 use Tests\Support\MetricsContract;
 
 /**
+ * Le metriche accumulate vivono in un file condiviso che dura quanto l'intera
+ * esecuzione della suite: senza azzerarlo, un valore lasciato da un test
+ * precedente prenderebbe il posto della serie a zero che qui si vuole
+ * verificare.
+ */
+function mvpResetRecordedMetrics(): void
+{
+    $path = storage_path((string) config('observability.metrics.storage_path'));
+
+    if (is_file($path)) {
+        unlink($path);
+    }
+}
+
+/**
  * Lega cio' che il codice emette a cio' che dashboard e alert interrogano.
  *
  * Ogni difetto chiuso in questa tornata sarebbe stato intercettato qui:
@@ -168,6 +183,13 @@ test('i valori dei matcher esatti appartengono agli enum dichiarati', function (
 
                 $values = $enumerated[$metric][$matcher['label']] ?? null;
 
+                // Enumerazione vuota significa "non enumerabile in questo
+                // ambiente" (le state machine senza ARN configurato), non
+                // "nessun valore ammesso": li' non c'e' niente da confrontare.
+                if ($values === []) {
+                    continue;
+                }
+
                 if ($values !== null && ! in_array($matcher['value'], $values, true)) {
                     $violations[] = sprintf(
                         '%s: %s{%s="%s"} non e\' fra i valori ammessi (%s)',
@@ -223,6 +245,43 @@ test('i task type del catalogo coincidono con quelli registrati', function () {
         DomainMetricCatalog::TASK_TYPES,
         'DomainMetricCatalog::TASK_TYPES e WorkflowTaskRegistry divergono: le serie a zero non coprirebbero piu\' tutti i task.'
     );
+});
+
+test('le serie a zero delle state machine portano i nomi configurati', function () {
+    config([
+        'services.workflow.state_machine_arn' => 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-document-pipeline',
+        'services.workflow.communications_state_machine_arn' => 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-communication-pipeline',
+    ]);
+    mvpResetRecordedMetrics();
+
+    $exposition = (string) $this->get('/internal/metrics')->assertOk()->getContent();
+
+    // Il nome seminato e' lo stesso che StateMachineName scrive a runtime:
+    // e' cio' che permette ai pannelli filtrati per state_machine di mostrare
+    // uno zero invece di "No data" prima del primo evento reale.
+    expect($exposition)
+        ->toContain('mvp_stepfunctions_executions_started_total{state_machine="mvp-document-pipeline"} 0')
+        ->toContain('mvp_stepfunctions_executions_started_total{state_machine="mvp-communication-pipeline"} 0')
+        ->toContain('mvp_stepfunctions_executions_failed_total{reason="start_failure",state_machine="mvp-document-pipeline"} 0')
+        ->toContain('mvp_stepfunctions_executions_failed_total{reason="task_failure",state_machine="mvp-document-pipeline"} 0')
+        ->toContain('mvp_stepfunctions_executions_failed_total{reason="start_failure",state_machine="mvp-communication-pipeline"} 0')
+        ->toContain('mvp_stepfunctions_executions_failed_total{reason="task_failure",state_machine="mvp-communication-pipeline"} 0');
+});
+
+test('una pipeline senza ARN configurato non produce serie inventate', function () {
+    config([
+        'services.workflow.state_machine_arn' => '',
+        'services.workflow.communications_state_machine_arn' => '',
+    ]);
+    mvpResetRecordedMetrics();
+
+    $exposition = (string) $this->get('/internal/metrics')->assertOk()->getContent();
+
+    // `unknown` e' un valore che il codice emette davvero quando l'ARN manca,
+    // ma seminarlo descriverebbe una pipeline che non puo' nemmeno partire.
+    expect($exposition)
+        ->toContain('# TYPE mvp_stepfunctions_executions_failed_total counter')
+        ->not->toContain('state_machine="unknown"');
 });
 
 test('nessun counter usa un nome riservato ad altre forme di metrica', function () {
