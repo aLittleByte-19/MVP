@@ -1,7 +1,7 @@
 import { TestBed } from "@angular/core/testing";
 import { Router } from "@angular/router";
 import { signal } from "@angular/core";
-import type { MvpState } from "../../../api/generated/model";
+import type { Metric, MvpState } from "../../../api/generated/model";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { OverviewPage } from "./overview-page";
 import { OverviewPageViewModel } from "./overview-page.view-model";
@@ -18,22 +18,24 @@ describe("OverviewPage", () => {
   const error = signal<string | null>(null);
   const history = signal<MvpState["assistant"]["history"]>([]);
   let navigate: jest.Mock;
-  let metric: jest.Mock;
+  let metricEntry: jest.Mock;
+
+  const entries: Record<string, Metric> = {
+    "assistant.drafts": { key: "assistant.drafts", value: 8, label: "Bozze generate" },
+    "copilot.needs_review": { key: "copilot.needs_review", value: 3, label: "Da verificare" },
+    "copilot.quarantined": { key: "copilot.quarantined", value: 0, label: "In quarantena" },
+    "copilot.sub_documents": { key: "copilot.sub_documents", value: 412, label: "Sotto-documenti" },
+    "assistant.rating_average": { key: "assistant.rating_average", value: "4.3", label: "Media stelle" },
+    "copilot.confident_fields": { key: "copilot.confident_fields", value: 1284, label: "Campi con confidenza" }
+  };
 
   beforeEach(() => {
     navigate = jest.fn(() => Promise.resolve(true));
-    metric = jest.fn(
-      (key: string) =>
-        ({
-          "assistant.drafts": 8,
-          "copilot.needs_review": 3,
-          "copilot.validated": 5
-        })[key] ?? 0
-    );
+    metricEntry = jest.fn((key: string) => entries[key] ?? null);
     TestBed.configureTestingModule({
       providers: [
         { provide: Router, useValue: { navigate } },
-        { provide: MvpStateStore, useValue: { state, loading, error, history, metric } }
+        { provide: MvpStateStore, useValue: { state, loading, error, history, metricEntry } }
       ]
     });
   });
@@ -43,7 +45,23 @@ describe("OverviewPage", () => {
     fixture.detectChanges();
 
     expect(fixture.componentInstance["vm"]).toBeInstanceOf(OverviewPageViewModel);
-    expect(fixture.componentInstance["vm"].generatedDrafts()).toBe(8);
+    expect(fixture.componentInstance["vm"].priorities()[0]?.value).toBe(3);
+  });
+
+  it("segnala la quarantena solo quando ce n'è davvero", () => {
+    const fixture = TestBed.createComponent(OverviewPage);
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain("in quarantena");
+
+    entries["copilot.quarantined"] = { key: "copilot.quarantined", value: 4, label: "In quarantena" };
+    const withQuarantine = TestBed.createComponent(OverviewPage);
+    withQuarantine.detectChanges();
+
+    expect((withQuarantine.nativeElement as HTMLElement).textContent).toContain(
+      "4 sotto-documenti in quarantena"
+    );
+    entries["copilot.quarantined"] = { key: "copilot.quarantined", value: 0, label: "In quarantena" };
   });
 
   it("rende errore, storico e stato vuoto in base ai signal", () => {

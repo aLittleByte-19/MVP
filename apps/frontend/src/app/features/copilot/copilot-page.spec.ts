@@ -52,7 +52,14 @@ describe("CopilotPage", () => {
       providers: [
         {
           provide: MvpStateStore,
-          useValue: { documents, reload, error, loading: signal(false), copilotMetrics: signal([]) }
+          useValue: {
+            documents,
+            reload,
+            error,
+            loading: signal(false),
+            copilotMetrics: signal([]),
+            metricEntry: () => null
+          }
         },
         { provide: DocumentWorkflowService, useValue: workflow }
       ]

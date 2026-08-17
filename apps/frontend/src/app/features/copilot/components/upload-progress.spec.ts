@@ -1,11 +1,12 @@
 import { TestBed } from "@angular/core/testing";
-import { UploadProgressComponent } from "./upload-progress";
 import type { DocumentUploadPhase } from "../data/document-workflow.service";
+import { UploadProgressComponent } from "./upload-progress";
 
 /**
- * L'adattatore fra le fasi della pipeline documentale e la barra condivisa.
- * Le fasi arrivano dagli eventi reali dello stream SSE, quindi la mappatura
- * non e' cosmetica: se sbaglia, la barra racconta un avanzamento che non c'e'.
+ * L'adattatore fra le fasi della pipeline documentale e l'avanzamento per
+ * tappe. Le fasi arrivano dagli eventi reali dello stream SSE, quindi la
+ * mappatura non e' cosmetica: se sbaglia, l'interfaccia racconta uno stato
+ * che il documento non ha.
  */
 describe("UploadProgressComponent", () => {
   function render(phase: DocumentUploadPhase | null): HTMLElement {
@@ -13,46 +14,59 @@ describe("UploadProgressComponent", () => {
     fixture.componentRef.setInput("phase", phase);
     fixture.detectChanges();
 
-    return fixture.nativeElement.querySelector("[role=progressbar]") as HTMLElement;
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  function currentStage(host: HTMLElement): string | null {
+    return host.querySelector("li.current .name")?.textContent?.trim() ?? null;
   }
 
   it.each([
-    ["uploading", "20"],
-    ["queued", "40"],
-    ["processing", "60"],
-    ["extracting", "85"],
-    ["still_running", "90"],
-    ["completed", "100"],
-    ["failed", "100"]
-  ] as [DocumentUploadPhase, string][])("porta la fase %s al %s per cento", (phase, expected) => {
-    expect(render(phase).getAttribute("aria-valuenow")).toBe(expected);
+    ["uploading", "Caricamento"],
+    ["queued", "In coda"],
+    ["processing", "Analisi OCR"],
+    ["extracting", "Estrazione campi"],
+    ["completed", "Completato"]
+  ] as [DocumentUploadPhase, string][])("colloca la fase %s sulla tappa %s", (phase, expected) => {
+    expect(currentStage(render(phase))).toBe(expected);
   });
 
-  it("resta a zero finche' non c'e' una fase", () => {
-    expect(render(null).getAttribute("aria-valuenow")).toBe("0");
+  it("non evidenzia alcuna tappa prima che l'elaborazione inizi", () => {
+    const host = render(null);
+
+    expect(host.querySelector("li.current")).toBeNull();
+    expect(host.querySelectorAll("li.pending")).toHaveLength(5);
   });
 
-  it.each([
-    ["uploading", "isActive"],
-    ["queued", "isActive"],
-    ["processing", "isActive"],
-    ["extracting", "isActive"],
-    ["still_running", "isActive"],
-    ["completed", "isDone"],
-    ["failed", "isError"]
-  ] as [DocumentUploadPhase, string][])("nello stato %s la barra e' %s", (phase, expectedClass) => {
-    expect(render(phase).classList.contains(expectedClass)).toBe(true);
+  it("resta sull'estrazione quando l'elaborazione tarda, segnalandolo", () => {
+    // `still_running` non e' una tappa: il documento e' fermo dov'era, da piu'
+    // tempo del previsto, e la lavorazione prosegue in background.
+    const host = render("still_running");
+
+    expect(currentStage(host)).toBe("Estrazione campi");
+    expect(host.textContent).toContain("più del previsto");
   });
 
-  it("una elaborazione fallita si vede come errore, non come completata", () => {
-    // Entrambe stanno al 100%: e' il colore a distinguerle, quindi va verificato.
+  it("distingue l'elaborazione fallita da quella conclusa", () => {
     const failed = render("failed");
 
-    expect(failed.classList.contains("isError")).toBe(true);
-    expect(failed.classList.contains("isDone")).toBe(false);
+    expect(failed.querySelector("li.failed .name")?.textContent?.trim()).toBe("Estrazione campi");
+    expect(failed.textContent).not.toContain("più del previsto");
+
+    expect(render("completed").querySelector("li.failed")).toBeNull();
+  });
+
+  it("tiene per completate le tappe superate prima del fallimento", () => {
+    const done = Array.from(render("failed").querySelectorAll("li.done .name")).map((node) =>
+      node.textContent?.trim()
+    );
+
+    expect(done).toEqual(["Caricamento", "In coda", "Analisi OCR"]);
   });
 
   it("annuncia di quale elaborazione si tratta", () => {
-    expect(render("queued").getAttribute("aria-label")).toBe("Avanzamento elaborazione documento");
+    expect(render("queued").querySelector("ol")?.getAttribute("aria-label")).toBe(
+      "Avanzamento elaborazione documento"
+    );
   });
 });

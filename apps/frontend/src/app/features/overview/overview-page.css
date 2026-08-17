@@ -71,34 +71,44 @@
   gap: var(--mvp-space-3);
 }
 
-.overviewGrid {
+/* La segnalazione precede le priorità dentro la stessa sezione: senza questo
+   margine i due blocchi si toccano, perché la nota è un elemento a sé. */
+mvp-attention-note + .priorityGrid {
+  margin-top: var(--mvp-space-3);
+}
+
+.qualityGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--mvp-space-3);
-  /* Ogni gruppo prende l'altezza del proprio contenuto: senza questo, la colonna
-     piu' corta (AI Assistant) verrebbe stirata fino al gemello piu' alto
-     (Co-Pilot), allungando le card e creando vuoti verticali. */
+  /* Ogni riquadro prende l'altezza del proprio contenuto: senza questo, la
+     colonna piu' corta verrebbe stirata fino alla gemella piu' alta. */
   align-items: start;
 }
 
-.metricGroup {
+.qualityItem {
   display: grid;
   gap: var(--mvp-space-3);
-  /* Difesa aggiuntiva: tiene il contenuto compatto in alto anche se il gruppo
-     dovesse essere stirato in un layout diverso. */
   align-content: start;
+  justify-items: start;
   padding: var(--mvp-space-3);
   border: 1px solid var(--mvp-border);
   border-radius: var(--mvp-radius);
   background: var(--mvp-surface-muted);
 }
 
-.metricGroup h3 {
+.qualityItem h3 {
   margin: 0;
 }
 
+/* La scheda non ha larghezza propria (`:host { display: contents }`): dentro
+   una griglia a colonna singola occupa comunque tutta la riga. */
+.qualityItem mvp-metric-card {
+  width: 100%;
+}
+
 @media (max-width: 760px) {
-  .overviewGrid,
+  .qualityGrid,
   .priorityGrid {
     grid-template-columns: 1fr;
   }

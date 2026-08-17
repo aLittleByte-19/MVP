@@ -10,6 +10,8 @@ import type {
 } from "../../../api/generated/model";
 import { getApiErrorMessage } from "../../core/errors/api-error";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
+import type { CompositionSlice } from "../../shared/components/metric-composition/metric-composition";
+import type { MetricPresentation } from "../../shared/components/metrics-panel/metrics-panel";
 import type {
   CommunicationDraftForm,
   CommunicationGenerationPhase,
@@ -114,6 +116,46 @@ export class AssistantPageViewModel {
   readonly historyError: WritableSignal<string | null> = signal(null);
 
   readonly error: Signal<string | null> = computed(() => this.store.error());
+  readonly loading: Signal<boolean> = computed(() => this.store.loading());
+
+  /**
+   * Metriche descrittive del modulo. `assistant.drafts` è escluso: le bozze da
+   * valutare sono una priorità e vivono nella Overview, qui sono la parte "in
+   * bozza" della ripartizione sottostante.
+   */
+  readonly metrics = computed(() =>
+    this.store.assistantMetrics().filter((metric) => metric.key !== "assistant.drafts")
+  );
+
+  readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => {
+    const total = this.store.metricEntry("assistant.total");
+    const outOf = typeof total?.value === "number" ? total.value : undefined;
+
+    return { "assistant.rated": { outOf } };
+  });
+
+  /**
+   * Composizione dello stato delle bozze: è la decisione presa su ciascuna,
+   * un'informazione che oggi non compare da nessuna parte nell'interfaccia.
+   */
+  readonly draftComposition = computed<CompositionSlice[]>(() => {
+    const metrics = this.store.assistantMetrics();
+    const valueOf = (key: string): number => {
+      const found = metrics.find((metric) => metric.key === key);
+
+      return typeof found?.value === "number" ? found.value : 0;
+    };
+
+    const total = valueOf("assistant.total");
+    const drafts = valueOf("assistant.drafts");
+
+    return [
+      { label: "In bozza", value: drafts },
+      // Il backend espone il totale e le bozze: le altre sono le comunicazioni
+      // su cui una decisione è già stata presa.
+      { label: "Decise", value: Math.max(0, total - drafts) }
+    ];
+  });
 
   private searchSubscription: Subscription | null = null;
 
@@ -139,6 +181,16 @@ export class AssistantPageViewModel {
       next: (communications) => this.setFilteredCommunications(communications),
       error: (error: unknown) => this.handleHistoryError(error)
     });
+  }
+
+  /**
+   * Ricarica lo stato condiviso, che è ciò che il pulsante "Riprova"
+   * dell'errore di pagina deve rifare. Distinto da `reload()`, che rilegge il
+   * storico comunicazioni: confonderli lascerebbe lo stato globale in errore
+   * pur avendo ricaricato l'elenco.
+   */
+  reloadState(): void {
+    this.store.reload();
   }
 
   /**

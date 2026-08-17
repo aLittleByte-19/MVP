@@ -8,6 +8,8 @@ import { ButtonComponent } from "../../shared/components/button/button";
 import { EmptyStateComponent } from "../../shared/components/empty-state/empty-state";
 import { ErrorStateComponent } from "../../shared/components/error-state/error-state";
 import { SectionComponent } from "../../layout/section/section";
+import { MetricCompositionComponent } from "../../shared/components/metric-composition/metric-composition";
+import { MetricsPanelComponent } from "../../shared/components/metrics-panel/metrics-panel";
 import { StatusBadgeComponent } from "../../shared/components/status-badge/status-badge";
 import { formatDateForDisplay, formatFallback } from "../../shared/util/formatters";
 import { scrollToElement } from "../../shared/util/scroll";
@@ -40,6 +42,8 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
     GeneratedCommunicationPreviewComponent,
     LucideStar,
     LucideTrash2,
+    MetricCompositionComponent,
+    MetricsPanelComponent,
     ReactiveFormsModule,
     SectionComponent,
     StatusBadgeComponent
@@ -47,7 +51,7 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
   template: `
     <section class="view" aria-label="AI Assistant Generativo">
       @if (vm.error(); as error) {
-        <mvp-error-state [message]="error" [canRetry]="true" (retry)="store.reload()" />
+        <mvp-error-state [message]="error" [canRetry]="true" (retry)="vm.reloadState()" />
       }
 
       <mvp-communication-generator-panel
@@ -247,6 +251,22 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
         } @else {
           <mvp-empty-state>Le bozze generate compariranno qui.</mvp-empty-state>
         }
+      </mvp-section>
+
+      <mvp-section id="assistant-metrics" title="Qualità della generazione">
+        <mvp-metrics-panel
+          [isLoading]="vm.loading()"
+          [hasError]="!!vm.error()"
+          [metrics]="vm.metrics()"
+          [presentation]="vm.metricsPresentation()"
+          ariaLabel="Metriche dell'AI Assistant"
+        />
+        <h3 class="compositionTitle">Esito delle bozze</h3>
+        <mvp-metric-composition
+          [parts]="vm.draftComposition()"
+          subject="comunicazioni"
+          emptyLabel="Nessuna comunicazione ancora generata."
+        />
       </mvp-section>
     </section>
   `,

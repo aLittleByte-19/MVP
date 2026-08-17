@@ -6,6 +6,11 @@ import type {
   UpdateSendMessageRequest
 } from "../../../api/generated/model";
 import { extractFieldErrors, getApiErrorMessage } from "../../core/errors/api-error";
+import type { CompositionSlice } from "../../shared/components/metric-composition/metric-composition";
+import type { MetricPresentation } from "../../shared/components/metrics-panel/metrics-panel";
+
+/** Metriche che il pannello non ripete perché sono le parti della ripartizione. */
+const MODULE_COMPOSITION_KEYS = ["copilot.needs_review", "copilot.validated", "copilot.quarantined"];
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import type { DocumentUploadRequest } from "./components/document-upload-panel";
 import {
@@ -61,7 +66,56 @@ export class CopilotPageViewModel {
 
   readonly error: Signal<string | null> = computed(() => this.store.error());
   readonly loading: Signal<boolean> = computed(() => this.store.loading());
-  readonly metrics = computed(() => this.store.copilotMetrics());
+  /**
+   * Le metriche descrittive del modulo. `needs_review`, `validated` e
+   * `quarantined` sono escluse: qui non servono come conteggi separati, sono
+   * la ripartizione mostrata da `reviewComposition`, e in forma di priorità
+   * vivono già nella Overview.
+   */
+  readonly metrics = computed(() =>
+    this.store
+      .copilotMetrics()
+      .filter((metric) => !MODULE_COMPOSITION_KEYS.includes(metric.key))
+  );
+
+  /** Rilievo e totale di riferimento per le schede del pannello. */
+  readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => {
+    const documents = this.store.metricEntry("copilot.documents");
+    const total = typeof documents?.value === "number" ? documents.value : undefined;
+
+    return { "copilot.sub_documents": { outOf: total } };
+  });
+
+  /**
+   * Stati di revisione come partizione dei sotto-documenti.
+   *
+   * I quattro stati coprono l'intero insieme, quindi la domanda utile non è
+   * "quanti sono da verificare" — a cui risponde già la Overview — ma "quanta
+   * parte del totale rappresentano".
+   */
+  readonly reviewComposition = computed<CompositionSlice[]>(() => {
+    const metrics = this.store.copilotMetrics();
+    const valueOf = (key: string): number => {
+      const found = metrics.find((metric) => metric.key === key);
+
+      return typeof found?.value === "number" ? found.value : 0;
+    };
+
+    const validated = valueOf("copilot.validated");
+    const needsReview = valueOf("copilot.needs_review");
+    const quarantined = valueOf("copilot.quarantined");
+    const known = validated + needsReview + quarantined;
+    const total = valueOf("copilot.sub_documents");
+
+    return [
+      { label: "Validati", value: validated },
+      { label: "Da verificare", value: needsReview },
+      { label: "In quarantena", value: quarantined },
+      // I sotto-documenti ancora senza esito: senza questa voce la barra
+      // direbbe che tutto è già stato classificato.
+      { label: "In elaborazione", value: Math.max(0, total - known) }
+    ];
+  });
 
   private searchSubscription: Subscription | null = null;
 
@@ -86,6 +140,16 @@ export class CopilotPageViewModel {
       next: (documents) => this.setFilteredDocuments(documents),
       error: (error: unknown) => this.handleDocumentsError(error)
     });
+  }
+
+  /**
+   * Ricarica lo stato condiviso, che è ciò che il pulsante "Riprova"
+   * dell'errore di pagina deve rifare. Distinto da `reload()`, che rilegge il
+   * storico documenti: confonderli lascerebbe lo stato globale in errore
+   * pur avendo ricaricato l'elenco.
+   */
+  reloadState(): void {
+    this.store.reload();
   }
 
   /**
