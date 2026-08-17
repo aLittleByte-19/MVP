@@ -26,7 +26,16 @@ Alloy.
 - I fallimenti della pipeline devono conservare contesto sufficiente al supporto senza trapelare
   dati.
 - Le metriche seguono i golden signal di Google SRE: latency, traffic, errors, saturation.
-- L'OTel Collector resta il confine vendor-neutral per l'export futuro di trace e log OTLP.
+- L'OTel Collector resta il confine vendor-neutral per l'export futuro di trace e log OTLP, ma per
+  le metriche è un gateway di **trasporto**: non riscrive i nomi (`add_metric_suffixes: false`).
+  Delegargli la normalizzazione significherebbe far dipendere i nomi delle serie da un default
+  upstream, che è come i pannelli OCR sono rimasti vuoti pur avendo il dato.
+- Le metriche di dominio sono dichiarate prima di essere osservate (`DomainMetricCatalog`): una
+  serie esiste a zero dal primo scrape, quindi i pannelli non mostrano "No data" su un ambiente
+  appena avviato e le regole con `== 0` hanno qualcosa su cui valutare. Il costo è che aggiungere
+  una metrica richiede due modifiche invece di una, ed è voluto: è il punto in cui il disallineamento
+  fra ciò che si emette e ciò che si interroga diventa visibile.
+- Un fallimento di raccolta degrada la singola famiglia di metriche, non l'intera esposizione.
 
 ## Alternatives considered
 
@@ -39,11 +48,17 @@ Alloy.
 
 - Correlazione: `app/Http/Middleware/CorrelateRequests.php`; audit: `app/Mvp/Audit/Services/AuditLogger.php`
   e migrazione `audit_events` (append-only).
-- Metriche: `app/Mvp/Observability/MetricsRecorder.php`, `PrometheusExporter.php`, endpoint
+- Metriche: `app/Mvp/Observability/MetricsRecorder.php`, `PrometheusExporter.php`,
+  `DomainMetricCatalog.php`, `DomainMetricDefinition.php`, `DlqDepthProbe.php`, endpoint
   `/internal/metrics`.
+- Dashboard: ciascuna dichiara in testa la domanda a cui risponde e gli alert correlati; la
+  struttura segue i golden signal per l'API, l'imbuto di pipeline per i due domini e il metodo
+  USE per le code (vedi `../runbooks/observability.md`).
 - Config osservabilità: `docker/otel-collector/`, `docker/prometheus/{prometheus.yml,rules/}`,
-  `docker/tempo/`, `docker/loki/`, `docker/alloy/`, `docker/grafana/` (6 dashboard, 15 alert rule).
+  `docker/tempo/`, `docker/loki/`, `docker/alloy/`, `docker/grafana/` (6 dashboard, 16 alert rule).
 - Validazione config in CI: `make observability-config` (`promtool`, `otelcol validate`).
+- Contratto metriche: `tests/Feature/ObservabilityContractTest.php` più l'helper
+  `tests/Support/MetricsContract.php`, eseguiti da `make verify-backend`.
 
 ## References
 
