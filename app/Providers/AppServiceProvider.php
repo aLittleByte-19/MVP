@@ -156,6 +156,7 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
 use App\Mvp\Documents\Domain\Ports\Outbound\OcrGatewayPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\SendMessageRendererPort;
 use App\Mvp\Identity\MvpUserProvider;
+use App\Mvp\Observability\DlqDepthProbe;
 use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Support\Clock\SystemClock;
 use App\Mvp\Support\Identifiers\RandomUuidGenerator;
@@ -229,6 +230,26 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return new SqsClient($config);
+        });
+
+        // Client dedicato al probe DLQ: timeout corti perche' viene usato dentro
+        // /internal/metrics, dove una chiamata lenta ritarderebbe lo scrape di
+        // tutte le altre metriche. Il singleton generico non li impone.
+        $this->app->singleton(DlqDepthProbe::class, function () {
+            $config = [
+                'version' => 'latest',
+                'region' => config('services.sqs.region'),
+                'http' => [
+                    'connect_timeout' => 2,
+                    'timeout' => 3,
+                ],
+            ];
+
+            if (filled(config('services.sqs.endpoint'))) {
+                $config['endpoint'] = config('services.sqs.endpoint');
+            }
+
+            return new DlqDepthProbe(new SqsClient($config));
         });
 
         $this->app->singleton(TextractClient::class, function () {

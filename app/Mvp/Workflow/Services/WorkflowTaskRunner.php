@@ -5,6 +5,7 @@ namespace App\Mvp\Workflow\Services;
 use App\Models\WorkflowTask;
 use App\Mvp\Audit\Services\AuditLogger;
 use App\Mvp\Observability\MetricsRecorder;
+use App\Mvp\Workflow\Support\StateMachineName;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Log;
 
@@ -141,7 +142,13 @@ class WorkflowTaskRunner
             $handler->onFailure($subject, $taskType, $e);
 
             $this->metrics->recordDomainCounter('sqs_messages_failed_total', ['task_type' => $taskType]);
-            $this->metrics->recordDomainCounter('stepfunctions_executions_failed_total', ['reason' => 'task_failure']);
+            // La state machine va etichettata anche qui: senza, i pannelli che
+            // filtrano per state_machine perdevano proprio i fallimenti da task,
+            // che sono il caso piu' frequente.
+            $this->metrics->recordDomainCounter('stepfunctions_executions_failed_total', [
+                'reason' => 'task_failure',
+                'state_machine' => StateMachineName::forPipeline($handler->pipeline()),
+            ]);
             Log::error('Workflow task failed', [
                 'subject_type' => $handler->subjectType(),
                 'subject_id' => $subject->id,

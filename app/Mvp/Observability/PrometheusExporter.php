@@ -5,6 +5,7 @@ namespace App\Mvp\Observability;
 use App\Models\Communication;
 use App\Models\OriginalDocument;
 use App\Models\SubDocument;
+use App\Models\WorkflowTask;
 use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
@@ -12,41 +13,123 @@ use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Enums\SendStatus;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class PrometheusExporter
 {
-    public function __construct(private readonly MetricsRecorder $metrics) {}
+    /**
+     * Fallimenti dei collector durante il render corrente, per esporli come
+     * metrica invece di perderli (vedi collect()).
+     *
+     * @var array<string, int>
+     */
+    private array $collectionFailures = [];
+
+    public function __construct(
+        private readonly MetricsRecorder $metrics,
+        private readonly DlqDepthProbe $dlq,
+    ) {}
 
     public function render(): string
     {
-        $lines = [
-            '# HELP mvp_app_info Static application metadata.',
-            '# TYPE mvp_app_info gauge',
+        $this->collectionFailures = [];
+
+        // Una sola lettura del file condiviso per scrape: prima ne servivano
+        // due (metriche HTTP e metriche di dominio), ognuna con la propria
+        // acquisizione di lock.
+        $snapshot = $this->metrics->snapshot();
+
+        $lines = array_merge(
+            $this->appInfo(),
+            $this->readinessMetrics(),
+            $this->httpMetrics($snapshot),
+            $this->gaugeMetrics(),
+            $this->recordedDomainMetrics($snapshot),
+        );
+
+        return implode("\n", array_merge($lines, $this->collectionFailureMetrics()))."\n";
+    }
+
+    /**
+     * Esegue un collector isolandone il fallimento: una query rotta deve far
+     * mancare la propria famiglia di metriche, non l'intera esposizione. Prima
+     * bastava una colonna assente perche' /internal/metrics rispondesse 500 e
+     * Prometheus perdesse anche le metriche HTTP e di readiness, che stavano
+     * funzionando — cioe' l'osservabilita' spariva proprio durante un deploy
+     * andato a meta'.
+     *
+     * @param  callable(): array<int, string>  $collector
+     * @return array<int, string>
+     */
+    private function collect(string $name, callable $collector): array
+    {
+        try {
+            return $collector();
+        } catch (\Throwable $e) {
+            $this->collectionFailures[$name] = ($this->collectionFailures[$name] ?? 0) + 1;
+
+            Log::warning('Metric collector failed', [
+                'collector' => $name,
+                'message' => str($e->getMessage())->limit(220)->toString(),
+            ]);
+
+            return [];
+        }
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function collectionFailureMetrics(): array
+    {
+        $definition = DomainMetricCatalog::recorded()['metrics_collection_failures_total'];
+        $lines = $this->header($definition);
+
+        foreach ($this->collectionFailures as $collector => $count) {
+            $lines[] = $this->line('mvp_metrics_collection_failures_total', ['collector' => $collector], $count);
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function appInfo(): array
+    {
+        $definition = DomainMetricCatalog::gauges()['app_info'];
+
+        return array_merge($this->header($definition), [
             $this->line('mvp_app_info', [
                 'service_name' => (string) config('observability.service.name'),
                 'service_namespace' => (string) config('observability.service.namespace'),
                 'service_version' => (string) config('observability.service.version'),
                 'deployment_environment' => (string) config('observability.service.environment'),
             ], 1),
-            '# HELP mvp_readiness_status Readiness check status by dependency.',
-            '# TYPE mvp_readiness_status gauge',
-        ];
-
-        foreach ($this->readinessChecks() as $check => $ready) {
-            $lines[] = $this->line('mvp_readiness_status', ['check' => $check], $ready ? 1 : 0);
-        }
-
-        $lines = array_merge($lines, $this->httpMetrics(), $this->domainMetrics(), $this->recordedDomainMetrics());
-
-        return implode("\n", $lines)."\n";
+        ]);
     }
 
     /**
      * @return array<int, string>
      */
-    private function httpMetrics(): array
+    private function readinessMetrics(): array
     {
-        $snapshot = $this->metrics->snapshot();
+        $definition = DomainMetricCatalog::gauges()['readiness_status'];
+        $lines = $this->header($definition);
+
+        foreach ($this->readinessChecks() as $check => $ready) {
+            $lines[] = $this->line('mvp_readiness_status', ['check' => $check], $ready ? 1 : 0);
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     * @return array<int, string>
+     */
+    private function httpMetrics(array $snapshot): array
+    {
         $lines = [
             '# HELP mvp_http_requests_total Total HTTP requests handled by the application.',
             '# TYPE mvp_http_requests_total counter',
@@ -59,40 +142,40 @@ class PrometheusExporter
         $lines[] = '# HELP mvp_http_request_duration_seconds HTTP request duration histogram.';
         $lines[] = '# TYPE mvp_http_request_duration_seconds histogram';
 
-        foreach ($this->samples($snapshot, 'http_request_duration_seconds_bucket') as $sample) {
-            $lines[] = $this->line('mvp_http_request_duration_seconds_bucket', $sample['labels'], (float) $sample['value']);
-        }
-
-        foreach ($this->samples($snapshot, 'http_request_duration_seconds_sum') as $sample) {
-            $lines[] = $this->line('mvp_http_request_duration_seconds_sum', $sample['labels'], (float) $sample['value']);
-        }
-
-        foreach ($this->samples($snapshot, 'http_request_duration_seconds_count') as $sample) {
-            $lines[] = $this->line('mvp_http_request_duration_seconds_count', $sample['labels'], (float) $sample['value']);
+        foreach (['bucket', 'sum', 'count'] as $suffix) {
+            foreach ($this->samples($snapshot, 'http_request_duration_seconds_'.$suffix) as $sample) {
+                $lines[] = $this->line('mvp_http_request_duration_seconds_'.$suffix, $sample['labels'], (float) $sample['value']);
+            }
         }
 
         return $lines;
     }
 
     /**
+     * Rende le metriche accumulate iterando il catalogo, non il file: una
+     * metrica dichiarata ma mai emessa esce comunque, a zero, sulle
+     * combinazioni di label note. Senza, `increase(...) == 0` non aveva serie
+     * su cui valutare e i pannelli mostravano "No data" al posto di uno zero.
+     * Le chiavi presenti nel file ma non a catalogo sono ignorate: e' cosi'
+     * che una metrica ritirata smette davvero di essere esposta, invece di
+     * sopravvivere per sempre nel volume condiviso.
+     *
+     * @param  array<string, mixed>  $snapshot
      * @return array<int, string>
      */
-    private function recordedDomainMetrics(): array
+    private function recordedDomainMetrics(array $snapshot): array
     {
-        $snapshot = $this->metrics->snapshot();
         $lines = [];
 
-        foreach ($snapshot as $metric => $_samples) {
-            if (! is_string($metric) || str_starts_with($metric, 'http_')) {
+        foreach (DomainMetricCatalog::recorded() as $definition) {
+            if ($definition->name === 'metrics_collection_failures_total') {
                 continue;
             }
 
-            $prometheusName = 'mvp_'.$metric;
-            $lines[] = "# HELP {$prometheusName} Application domain metric recorded by the MVP.";
-            $lines[] = "# TYPE {$prometheusName} counter";
+            $lines = array_merge($lines, $this->header($definition));
 
-            foreach ($this->samples($snapshot, $metric) as $sample) {
-                $lines[] = $this->line($prometheusName, $sample['labels'], (float) $sample['value']);
+            foreach ($this->sampleNames($definition) as $sampleName) {
+                $lines = array_merge($lines, $this->recordedSamples($snapshot, $definition, $sampleName));
             }
         }
 
@@ -102,89 +185,193 @@ class PrometheusExporter
     /**
      * @return array<int, string>
      */
-    private function domainMetrics(): array
+    private function sampleNames(DomainMetricDefinition $definition): array
     {
-        $lines = [
-            '# HELP mvp_communications_total Communications stored by status.',
-            '# TYPE mvp_communications_total gauge',
-        ];
+        return $definition->type === 'summary'
+            ? [$definition->name.'_sum', $definition->name.'_count']
+            : [$definition->name];
+    }
 
-        foreach (CommunicationStatus::cases() as $status) {
-            $lines[] = $this->line('mvp_communications_total', ['status' => $status->value], Communication::query()->where('status', $status)->count());
+    /**
+     * @param  array<string, mixed>  $snapshot
+     * @return array<int, string>
+     */
+    private function recordedSamples(array $snapshot, DomainMetricDefinition $definition, string $sampleName): array
+    {
+        $observed = [];
+
+        foreach ($this->samples($snapshot, $sampleName) as $sample) {
+            $observed[$this->labelKey($sample['labels'])] = $sample;
         }
 
-        $lines[] = '# HELP mvp_original_documents_total Original documents stored by processing status.';
-        $lines[] = '# TYPE mvp_original_documents_total gauge';
-
-        foreach (ProcessingStatus::cases() as $status) {
-            $lines[] = $this->line('mvp_original_documents_total', ['status' => $status->value], OriginalDocument::query()->where('processing_status', $status)->count());
+        foreach ($definition->seedLabelSets() as $labels) {
+            $key = $this->labelKey($labels);
+            $observed[$key] ??= ['labels' => $labels, 'value' => 0.0];
         }
 
-        $lines[] = '# HELP mvp_sub_documents_total Split documents stored by extraction state.';
-        $lines[] = '# TYPE mvp_sub_documents_total gauge';
-        $lines[] = $this->line('mvp_sub_documents_total', ['state' => 'total'], SubDocument::query()->count());
-        $lines[] = $this->line('mvp_sub_documents_total', ['state' => 'failed'], SubDocument::query()->whereNotNull('error_message')->count());
+        $samples = array_values($observed);
+        usort($samples, fn (array $left, array $right): int => $this->compareLabels($left['labels'], $right['labels']));
 
-        // Metrica dedicata: i review status sono una partizione completa dei
-        // sotto-documenti e non vanno mescolati alle label total/failed sopra.
-        $lines[] = '# HELP mvp_sub_documents_review_total Sub documents by review status.';
-        $lines[] = '# TYPE mvp_sub_documents_review_total gauge';
+        return array_map(
+            fn (array $sample): string => $this->line('mvp_'.$sampleName, $sample['labels'], (float) $sample['value']),
+            $samples,
+        );
+    }
 
-        foreach (ReviewStatus::cases() as $status) {
-            $lines[] = $this->line('mvp_sub_documents_review_total', ['review_status' => $status->value], SubDocument::query()->where('review_status', $status)->count());
+    /**
+     * Gauge di stato: ogni famiglia e' raccolta a se' stante, cosi' una query
+     * che fallisce non trascina giu' le altre (vedi collect()).
+     *
+     * @return array<int, string>
+     */
+    private function gaugeMetrics(): array
+    {
+        $gauges = DomainMetricCatalog::gauges();
+
+        return array_merge(
+            $this->collect('communications', fn (): array => $this->enumGauge(
+                $gauges['communications'],
+                CommunicationStatus::cases(),
+                'status',
+                fn ($status): int => Communication::query()->where('status', $status)->count(),
+            )),
+            $this->collect('original_documents', fn (): array => $this->enumGauge(
+                $gauges['original_documents'],
+                ProcessingStatus::cases(),
+                'status',
+                fn ($status): int => OriginalDocument::query()->where('processing_status', $status)->count(),
+            )),
+            $this->collect('sub_documents', fn (): array => array_merge(
+                $this->header($gauges['sub_documents']),
+                [$this->line('mvp_sub_documents', [], SubDocument::query()->count())],
+                $this->header($gauges['sub_documents_failed']),
+                [$this->line('mvp_sub_documents_failed', [], SubDocument::query()->whereNotNull('error_message')->count())],
+            )),
+            $this->collect('sub_documents_review', fn (): array => $this->enumGauge(
+                $gauges['sub_documents_review'],
+                ReviewStatus::cases(),
+                'review_status',
+                fn ($status): int => SubDocument::query()->where('review_status', $status)->count(),
+            )),
+            $this->collect('sub_documents_send', fn (): array => $this->enumGauge(
+                $gauges['sub_documents_send'],
+                SendStatus::cases(),
+                'send_status',
+                fn ($status): int => SubDocument::query()->where('send_status', $status)->count(),
+            )),
+            $this->collect('documents_stuck_processing', fn (): array => array_merge(
+                $this->header($gauges['documents_stuck_processing']),
+                [$this->line('mvp_documents_stuck_processing', [], OriginalDocument::query()
+                    ->where('processing_status', ProcessingStatus::Processing)
+                    ->where('workflow_started_at', '<', now()->subSeconds((int) config('mvp.document_limits.processing_timeout_seconds', 600)))
+                    ->count())],
+            )),
+            $this->collect('communications_generation', fn (): array => $this->enumGauge(
+                $gauges['communications_generation'],
+                CommunicationGenerationStatus::cases(),
+                'generation_status',
+                fn ($status): int => Communication::query()->where('generation_status', $status)->count(),
+            )),
+            $this->collect('communication_covers', fn (): array => $this->enumGauge(
+                $gauges['communication_covers'],
+                CoverImageStatus::cases(),
+                'cover_status',
+                fn ($status): int => Communication::query()->where('cover_status', $status)->count(),
+            )),
+            $this->collect('communications_rated', fn (): array => array_merge(
+                $this->header($gauges['communications_rated']),
+                [$this->line('mvp_communications_rated', [], Communication::query()->whereNotNull('rating')->count())],
+                $this->header($gauges['communication_rating_average']),
+                [$this->line('mvp_communication_rating_average', [], round((float) (Communication::query()->whereNotNull('rating')->avg('rating') ?? 0), 2))],
+            )),
+            $this->collect('communications_stuck_processing', fn (): array => array_merge(
+                $this->header($gauges['communications_stuck_processing']),
+                [$this->line('mvp_communications_stuck_processing', [], Communication::query()
+                    ->where('generation_status', CommunicationGenerationStatus::Processing)
+                    ->where('workflow_started_at', '<', now()->subSeconds((int) config('mvp.communications.generation_timeout_seconds', 300)))
+                    ->count())],
+            )),
+            $this->collect('workflow_tasks', fn (): array => $this->workflowTaskMetrics($gauges['workflow_tasks'])),
+            $this->collect('dlq', fn (): array => $this->dlqMetrics($gauges)),
+        );
+    }
+
+    /**
+     * Task per stato di claim: `pending` e `running` dicono quanto lavoro
+     * attende o e' in corso, cioe' la saturazione del trasporto. E' la misura
+     * che manca alla DLQ, la quale conta solo cio' che ha smesso di essere
+     * ritentato.
+     *
+     * Una sola query aggregata invece di cinque `count()`: gli stati sono
+     * completati a zero dal catalogo, cosi' una serie assente non diventa un
+     * buco nel grafico.
+     *
+     * @return array<int, string>
+     */
+    private function workflowTaskMetrics(DomainMetricDefinition $definition): array
+    {
+        $counts = WorkflowTask::query()
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $lines = $this->header($definition);
+
+        foreach (DomainMetricCatalog::WORKFLOW_TASK_STATUSES as $status) {
+            $lines[] = $this->line('mvp_workflow_tasks', ['status' => $status], (int) ($counts[$status] ?? 0));
         }
-
-        // Lo stato di invio coincide con l'avvenuto scaricamento del PDF: il
-        // recapito e' fuori piattaforma, quindi il download e' l'ultimo evento
-        // che possiamo osservare.
-        $lines[] = '# HELP mvp_sub_documents_send_total Sub documents by send status (sent means the PDF was downloaded).';
-        $lines[] = '# TYPE mvp_sub_documents_send_total gauge';
-
-        foreach (SendStatus::cases() as $status) {
-            $lines[] = $this->line('mvp_sub_documents_send_total', ['send_status' => $status->value], SubDocument::query()->where('send_status', $status)->count());
-        }
-
-        $lines[] = '# HELP mvp_document_stuck_processing_total Documents processing beyond the configured timeout.';
-        $lines[] = '# TYPE mvp_document_stuck_processing_total gauge';
-        $lines[] = $this->line('mvp_document_stuck_processing_total', [], OriginalDocument::query()
-            ->where('processing_status', ProcessingStatus::Processing)
-            ->where('workflow_started_at', '<', now()->subSeconds((int) config('mvp.document_limits.processing_timeout_seconds', 600)))
-            ->count());
-
-        // Stato tecnico della pipeline di generazione, distinto da
-        // mvp_communications_total che conta la decisione sulla bozza.
-        $lines[] = '# HELP mvp_communications_generation_total Communications by generation pipeline status.';
-        $lines[] = '# TYPE mvp_communications_generation_total gauge';
-
-        foreach (CommunicationGenerationStatus::cases() as $status) {
-            $lines[] = $this->line('mvp_communications_generation_total', ['generation_status' => $status->value], Communication::query()->where('generation_status', $status)->count());
-        }
-
-        $lines[] = '# HELP mvp_communication_covers_total Communication covers by status.';
-        $lines[] = '# TYPE mvp_communication_covers_total gauge';
-
-        foreach (CoverImageStatus::cases() as $status) {
-            $lines[] = $this->line('mvp_communication_covers_total', ['cover_status' => $status->value], Communication::query()->where('cover_status', $status)->count());
-        }
-
-        // Qualita' percepita della generazione: una sola valutazione per bozza,
-        // quindi il conteggio e' anche il numero di bozze valutate.
-        $lines[] = '# HELP mvp_communications_rated_total Communications that received a rating.';
-        $lines[] = '# TYPE mvp_communications_rated_total gauge';
-        $lines[] = $this->line('mvp_communications_rated_total', [], Communication::query()->whereNotNull('rating')->count());
-
-        $lines[] = '# HELP mvp_communication_rating_average Average star rating across rated communications.';
-        $lines[] = '# TYPE mvp_communication_rating_average gauge';
-        $lines[] = $this->line('mvp_communication_rating_average', [], round((float) (Communication::query()->whereNotNull('rating')->avg('rating') ?? 0), 2));
-
-        $lines[] = '# HELP mvp_communication_stuck_processing_total Communications generating beyond the configured timeout.';
-        $lines[] = '# TYPE mvp_communication_stuck_processing_total gauge';
-        $lines[] = $this->line('mvp_communication_stuck_processing_total', [], Communication::query()
-            ->where('generation_status', CommunicationGenerationStatus::Processing)
-            ->where('workflow_started_at', '<', now()->subSeconds((int) config('mvp.communications.generation_timeout_seconds', 300)))
-            ->count());
 
         return $lines;
+    }
+
+    /**
+     * @param  array<string, DomainMetricDefinition>  $gauges
+     * @return array<int, string>
+     */
+    private function dlqMetrics(array $gauges): array
+    {
+        $depths = $this->dlq->depths();
+        $depthLines = $this->header($gauges['dlq_messages']);
+        $probeLines = $this->header($gauges['dlq_probe_up']);
+
+        foreach ($depths as $queue => $depth) {
+            $probeLines[] = $this->line('mvp_dlq_probe_up', ['queue' => $queue], $depth === null ? 0 : 1);
+
+            // Nessuna serie di profondita' quando la lettura non e' riuscita:
+            // uno zero inventato spegnerebbe l'alert critical sulla DLQ.
+            if ($depth !== null) {
+                $depthLines[] = $this->line('mvp_dlq_messages', ['queue' => $queue], $depth);
+            }
+        }
+
+        return array_merge($depthLines, $probeLines);
+    }
+
+    /**
+     * @param  list<\BackedEnum>  $cases
+     * @param  callable(\BackedEnum): int  $count
+     * @return array<int, string>
+     */
+    private function enumGauge(DomainMetricDefinition $definition, array $cases, string $label, callable $count): array
+    {
+        $lines = $this->header($definition);
+
+        foreach ($cases as $case) {
+            $lines[] = $this->line('mvp_'.$definition->name, [$label => (string) $case->value], $count($case));
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function header(DomainMetricDefinition $definition): array
+    {
+        return [
+            "# HELP mvp_{$definition->name} {$definition->help}",
+            "# TYPE mvp_{$definition->name} {$definition->type}",
+        ];
     }
 
     /**
@@ -239,6 +426,16 @@ class PrometheusExporter
     }
 
     /**
+     * @param  array<string, string>  $labels
+     */
+    private function labelKey(array $labels): string
+    {
+        ksort($labels);
+
+        return json_encode($labels, JSON_THROW_ON_ERROR);
+    }
+
+    /**
      * @param  array<string, string>  $left
      * @param  array<string, string>  $right
      */
@@ -274,7 +471,9 @@ class PrometheusExporter
      */
     private function line(string $name, array $labels, int|float $value): string
     {
-        return sprintf('%s{%s} %s', $name, $this->labels($labels), $this->value($value));
+        return $labels === []
+            ? sprintf('%s %s', $name, $this->value($value))
+            : sprintf('%s{%s} %s', $name, $this->labels($labels), $this->value($value));
     }
 
     /**

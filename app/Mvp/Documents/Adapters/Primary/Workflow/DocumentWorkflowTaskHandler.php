@@ -47,6 +47,11 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
         return 'original_document';
     }
 
+    public function pipeline(): string
+    {
+        return 'documents';
+    }
+
     public function auditEventPrefix(): string
     {
         return 'mvp-document-workflow-task-';

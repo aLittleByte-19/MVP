@@ -44,6 +44,11 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
         return 'communication';
     }
 
+    public function pipeline(): string
+    {
+        return 'communications';
+    }
+
     public function auditEventPrefix(): string
     {
         return 'mvp-communication-workflow-task-';

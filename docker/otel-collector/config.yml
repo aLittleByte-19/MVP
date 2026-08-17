@@ -50,6 +50,14 @@ processors:
 exporters:
   prometheus:
     endpoint: 0.0.0.0:9464
+    # I nomi arrivano gia' conformi alla convenzione Prometheus dalla sorgente:
+    # qui il Collector e' un gateway di trasporto, non un normalizzatore. Con il
+    # default (true) appendeva _total ai sum monotoni il cui nome non lo aveva
+    # gia', trasformando mvp_textract_confidence_sum in
+    # mvp_textract_confidence_sum_total: le dashboard interrogavano il nome
+    # originale e i pannelli di confidenza e durata OCR restavano vuoti pur
+    # avendo il dato (misurato: 96.8% di confidenza media non mostrata).
+    add_metric_suffixes: false
     resource_to_telemetry_conversion:
       enabled: false
   otlp/tempo:
