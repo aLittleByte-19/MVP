@@ -1,0 +1,76 @@
+.stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mvp-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stages li {
+  flex: 1 1 128px;
+  display: grid;
+  gap: 1px;
+  padding-top: var(--mvp-space-2);
+  /* Il bordo superiore è la traccia: si riempie tappa per tappa invece di
+     scorrere con una percentuale che non misura nulla. */
+  border-top: 3px solid var(--mvp-border-soft);
+}
+
+.stages li.done {
+  border-top-color: var(--mvp-success);
+}
+
+.stages li.current {
+  border-top-color: var(--mvp-primary);
+}
+
+.stages li.failed {
+  border-top-color: var(--mvp-danger);
+}
+
+.mark {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-xs);
+}
+
+.stages li.done .mark {
+  color: var(--mvp-success);
+}
+
+.stages li.current .mark {
+  color: var(--mvp-primary);
+}
+
+.stages li.failed .mark {
+  color: var(--mvp-danger);
+}
+
+.glyph {
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.name {
+  color: var(--mvp-text);
+  font-size: var(--mvp-font-sm);
+  font-weight: 650;
+}
+
+.stages li.pending .name {
+  color: var(--mvp-muted);
+  font-weight: 600;
+}
+
+.slow {
+  margin: var(--mvp-space-3) 0 0;
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-xs);
+}
+
+:host {
+  display: block;
+}

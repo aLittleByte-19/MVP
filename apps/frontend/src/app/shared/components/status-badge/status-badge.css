@@ -1,9 +1,17 @@
+.glyph {
+  flex: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .badge {
   --tag-accent: var(--mvp-primary);
   --tag-bg: var(--mvp-surface-soft);
   --tag-color: var(--mvp-primary-deep);
 
   display: inline-flex;
+  gap: 6px;
   align-items: center;
   max-width: 100%;
   min-height: 24px;

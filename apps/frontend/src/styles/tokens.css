@@ -34,6 +34,15 @@
   --mvp-font-md: 1rem;
   --mvp-font-lg: 1.25rem;
   --mvp-font-xl: 1.55rem;
+
+  /* Scala categorica per le composizioni (barre segmentate): tonalita' del
+     primario, non colori di stato — una ripartizione non esprime un giudizio,
+     quindi verde e rosso qui direbbero qualcosa che il dato non dice. */
+  --mvp-series-1: #2f678f;
+  --mvp-series-2: #5c94b8;
+  --mvp-series-3: #8fbcd6;
+  --mvp-series-4: #c2d9e8;
+  --mvp-series-5: #e3eef5;
 }
 
 [data-mvp-theme="dark"] {
@@ -57,4 +66,9 @@
   --mvp-danger: #ff9e9e;
   --mvp-overlay-locked: rgba(15, 23, 32, 0.62);
   --mvp-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+  --mvp-series-1: #79add3;
+  --mvp-series-2: #5b8db4;
+  --mvp-series-3: #446f92;
+  --mvp-series-4: #33556f;
+  --mvp-series-5: #263f52;
 }
