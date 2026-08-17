@@ -2,11 +2,11 @@
   "uid": "mvp-document-pipeline",
   "title": "Document Pipeline",
   "tags": [
-    "alittlebyte",
-    "pipeline"
+    "mvp",
+    "documents"
   ],
+  "timezone": "browser",
   "schemaVersion": 39,
-  "version": 4,
   "refresh": "15s",
   "time": {
     "from": "now-6h",
@@ -14,29 +14,133 @@
   },
   "panels": [
     {
-      "type": "row",
-      "title": "Sintesi pipeline",
+      "type": "text",
+      "title": "",
       "gridPos": {
-        "x": 0,
-        "y": 0,
         "w": 24,
-        "h": 1
+        "h": 3,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Domanda:** i documenti caricati arrivano in fondo alla pipeline, e quando si fermano, dove?\n\nL'imbuto misura la dispersione fra un passo e il successivo. Alert correlati: `DocumentStuckInProcessing`, `StepFunctionExecutionFailed`, `QueueBacklogHigh` — Runbook: docs/runbooks/document-pipeline.md"
       }
     },
     {
-      "type": "stat",
-      "title": "Documenti completati",
+      "type": "row",
+      "title": "Dove si fermano",
+      "collapsed": false,
+      "panels": [],
       "gridPos": {
+        "w": 24,
+        "h": 1,
         "x": 0,
-        "y": 1,
-        "w": 6,
-        "h": 4
+        "y": 3
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Imbuto della pipeline documentale",
+      "gridPos": {
+        "w": 16,
+        "h": 9,
+        "x": 0,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        }
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(mvp_sub_documents)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "1 · Rilevati",
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum(mvp_sub_documents_review{review_status=~\"auto_validated|manually_validated|needs_review|quarantined\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "2 · Con esito di revisione",
+          "instant": true
+        },
+        {
+          "refId": "C",
+          "expr": "sum(mvp_sub_documents_review{review_status=~\"auto_validated|manually_validated\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "3 · Validati",
+          "instant": true
+        },
+        {
+          "refId": "D",
+          "expr": "sum(mvp_sub_documents_send{send_status=\"sent\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "4 · Scaricati",
+          "instant": true
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Ogni barra è un passo della pipeline, in ordine. La differenza fra due barre consecutive è la dispersione di quel passo. Le barre partono da zero e sono proporzionali: è ciò che rende leggibile un imbuto."
+    },
+    {
+      "type": "stat",
+      "title": "Oltre timeout",
+      "gridPos": {
+        "w": 8,
+        "h": 4,
+        "x": 16,
+        "y": 4
       },
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "fixed",
-            "fixedColor": "green"
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
           }
         }
       },
@@ -46,19 +150,131 @@
             "lastNotNull"
           ]
         },
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "none"
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(mvp_original_documents_total{status=\"completed\"})",
-          "instant": true,
-          "legendFormat": "completati",
+          "expr": "sum(mvp_documents_stuck_processing)",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
+          },
+          "legendFormat": "bloccati",
+          "instant": true
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Documenti in elaborazione oltre MVP_PROCESSING_TIMEOUT_SECONDS. Su questo scatta DocumentStuckInProcessing."
+    },
+    {
+      "type": "stat",
+      "title": "Falliti",
+      "gridPos": {
+        "w": 8,
+        "h": 5,
+        "x": 0,
+        "y": 13
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 1
+              }
+            ]
           }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(mvp_original_documents{status=\"failed\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "falliti",
+          "instant": true
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Documenti la cui elaborazione si è interrotta. Restano caricati: l'errore è di estrazione, non di ingestione."
+    },
+    {
+      "type": "row",
+      "title": "Stato corrente",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "w": 24,
+        "h": 1,
+        "x": 0,
+        "y": 18
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Completati",
+      "gridPos": {
+        "w": 6,
+        "h": 4,
+        "x": 0,
+        "y": 19
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "none"
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(mvp_original_documents{status=\"completed\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "completati",
+          "instant": true
         }
       ],
       "datasource": {
@@ -70,16 +286,15 @@
       "type": "stat",
       "title": "In elaborazione",
       "gridPos": {
-        "x": 6,
-        "y": 1,
         "w": 6,
-        "h": 4
+        "h": 4,
+        "x": 6,
+        "y": 19
       },
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "fixed",
-            "fixedColor": "blue"
+            "mode": "thresholds"
           }
         }
       },
@@ -90,18 +305,18 @@
           ]
         },
         "colorMode": "value",
-        "graphMode": "none"
+        "graphMode": "area"
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(mvp_original_documents_total{status=\"processing\"})",
-          "instant": true,
+          "expr": "sum(mvp_original_documents{status=\"processing\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "legendFormat": "in corso",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
+          "instant": true
         }
       ],
       "datasource": {
@@ -111,30 +326,17 @@
     },
     {
       "type": "stat",
-      "title": "Documenti falliti",
+      "title": "In attesa",
       "gridPos": {
+        "w": 6,
+        "h": 4,
         "x": 12,
-        "y": 1,
-        "w": 6,
-        "h": 4
+        "y": 19
       },
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
           }
         }
       },
@@ -144,52 +346,40 @@
             "lastNotNull"
           ]
         },
-        "colorMode": "background",
-        "graphMode": "none"
+        "colorMode": "value",
+        "graphMode": "area"
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(mvp_original_documents_total{status=\"failed\"})",
-          "instant": true,
-          "legendFormat": "falliti",
+          "expr": "sum(mvp_original_documents{status=\"pending\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "in attesa",
+          "instant": true
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "Caricati ma non ancora presi in carico dalla pipeline."
     },
     {
       "type": "stat",
-      "title": "Bloccati oltre timeout",
+      "title": "Da verificare",
       "gridPos": {
-        "x": 18,
-        "y": 1,
         "w": 6,
-        "h": 4
+        "h": 4,
+        "x": 18,
+        "y": 19
       },
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
           }
         }
       },
@@ -199,184 +389,100 @@
             "lastNotNull"
           ]
         },
-        "colorMode": "background",
-        "graphMode": "none"
+        "colorMode": "value",
+        "graphMode": "area"
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(mvp_document_stuck_processing_total)",
-          "instant": true,
-          "legendFormat": "bloccati",
+          "expr": "sum(mvp_sub_documents_review{review_status=\"needs_review\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "da verificare",
+          "instant": true
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "Sotto-documenti sotto la soglia di confidenza (MVP_CONFIDENCE_THRESHOLD): richiedono una revisione manuale."
     },
     {
-      "type": "table",
-      "title": "Documenti per stato",
+      "type": "row",
+      "title": "Flusso e cause",
+      "collapsed": false,
+      "panels": [],
       "gridPos": {
+        "w": 24,
+        "h": 1,
         "x": 0,
-        "y": 5,
-        "w": 8,
-        "h": 9
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (status) (mvp_original_documents_total)",
-          "instant": true,
-          "format": "table",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            },
-            "renameByName": {
-              "status": "Stato",
-              "Value": "Documenti"
-            }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "fields": "",
-            "sort": [
-              {
-                "field": "Documenti",
-                "desc": true
-              }
-            ]
-          }
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "y": 23
       }
     },
     {
-      "type": "table",
-      "title": "Step di elaborazione (coda SQS)",
+      "type": "timeseries",
+      "title": "Throughput step pipeline (rate 5m)",
       "gridPos": {
-        "x": 8,
-        "y": 5,
-        "w": 8,
-        "h": 9
+        "w": 12,
+        "h": 8,
+        "x": 0,
+        "y": 24
       },
       "fieldConfig": {
-        "defaults": {},
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Falliti"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "red",
-                      "value": 1
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "ops"
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (task_type) (mvp_sqs_messages_received_total)",
-          "instant": true,
-          "format": "table",
+          "expr": "sum by (task_type) (rate(mvp_sqs_messages_received_total{task_type!~\"communication.*\"}[5m]))",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "{{task_type}} ricevuti"
         },
         {
           "refId": "B",
-          "expr": "sum by (task_type) (mvp_sqs_messages_failed_total)",
-          "instant": true,
-          "format": "table",
+          "expr": "sum by (task_type) (rate(mvp_sqs_messages_failed_total{task_type!~\"communication.*\"}[5m]))",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
-        }
-      ],
-      "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            },
-            "renameByName": {
-              "task_type": "Step",
-              "Value #A": "Ricevuti",
-              "Value #B": "Falliti"
-            }
-          }
+          },
+          "legendFormat": "{{task_type}} falliti"
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "Solo i task documentali: il filtro esclude quelli della pipeline comunicazioni, che hanno una dashboard propria."
     },
     {
       "type": "table",
       "title": "Fallimenti Step Functions per motivo",
       "gridPos": {
-        "x": 16,
-        "y": 5,
-        "w": 8,
-        "h": 9
+        "w": 12,
+        "h": 8,
+        "x": 12,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        }
       },
       "options": {
         "showHeader": true,
@@ -385,13 +491,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (reason) (mvp_stepfunctions_executions_failed_total)",
-          "instant": true,
-          "format": "table",
+          "expr": "sum by (reason) (mvp_stepfunctions_executions_failed_total{state_machine=~\".*document-pipeline\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "fallimenti",
+          "instant": true,
+          "format": "table"
         }
       ],
       "transformations": [
@@ -403,122 +510,34 @@
             },
             "renameByName": {
               "reason": "Motivo",
-              "Value": "Conteggio"
+              "Value": "Fallimenti"
             }
           }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "fields": "",
-            "sort": [
-              {
-                "field": "Conteggio",
-                "desc": true
-              }
-            ]
-          }
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Esecuzioni Step Functions (rate 5m)",
-      "gridPos": {
-        "x": 0,
-        "y": 14,
-        "w": 12,
-        "h": 8
       },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10
-          },
-          "unit": "ops"
-        }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum(rate(mvp_stepfunctions_executions_started_total[5m]))",
-          "legendFormat": "avviate",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "refId": "B",
-          "expr": "sum(rate(mvp_stepfunctions_executions_failed_total[5m]))",
-          "legendFormat": "fallite",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Throughput step pipeline (rate 5m)",
-      "gridPos": {
-        "x": 12,
-        "y": 14,
-        "w": 12,
-        "h": 8
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10
-          },
-          "unit": "ops"
-        }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (task_type) (rate(mvp_sqs_messages_received_total[5m]))",
-          "legendFormat": "ricevuti {{task_type}}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "refId": "B",
-          "expr": "sum by (task_type) (rate(mvp_sqs_messages_failed_total[5m]))",
-          "legendFormat": "falliti {{task_type}}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      }
+      "description": "`start_failure` è un avvio rifiutato da Step Functions; `task_failure` è un task che si è interrotto durante l'esecuzione."
     },
     {
       "type": "table",
       "title": "Sotto-documenti per stato di invio",
       "gridPos": {
+        "w": 12,
+        "h": 7,
         "x": 0,
-        "y": 22,
-        "w": 8,
-        "h": 9
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        }
       },
       "options": {
         "showHeader": true,
@@ -527,13 +546,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (send_status) (mvp_sub_documents_send_total)",
-          "instant": true,
-          "format": "table",
+          "expr": "sum by (send_status) (mvp_sub_documents_send)",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "sotto-documenti",
+          "instant": true,
+          "format": "table"
         }
       ],
       "transformations": [
@@ -544,71 +564,114 @@
               "Time": true
             },
             "renameByName": {
-              "send_status": "Stato invio",
+              "send_status": "Stato",
               "Value": "Sotto-documenti"
             }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "fields": "",
-            "sort": [
-              {
-                "field": "Sotto-documenti",
-                "desc": true
-              }
-            ]
           }
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "`sent` significa che il PDF è stato scaricato: il recapito avviene fuori piattaforma, quindi il download è l'ultimo evento osservabile."
+    },
+    {
+      "type": "table",
+      "title": "Esiti di revisione",
+      "gridPos": {
+        "w": 12,
+        "h": 7,
+        "x": 12,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        }
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (review_status) (mvp_sub_documents_review)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "sotto-documenti",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "review_status": "Esito",
+              "Value": "Sotto-documenti"
+            }
+          }
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Partizione completa dei sotto-documenti: la somma delle righe è il totale rilevato."
     },
     {
       "type": "row",
-      "title": "Log di elaborazione",
+      "title": "Log",
+      "collapsed": false,
+      "panels": [],
       "gridPos": {
-        "x": 0,
-        "y": 31,
         "w": 24,
-        "h": 1
+        "h": 1,
+        "x": 0,
+        "y": 39
       }
     },
     {
       "type": "logs",
-      "title": "Errori pipeline (container queue + app)",
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
+      "title": "Errori pipeline (worker documenti + app)",
       "gridPos": {
-        "x": 0,
-        "y": 32,
         "w": 24,
-        "h": 11
+        "h": 11,
+        "x": 0,
+        "y": 40
       },
       "options": {
         "showTime": true,
         "wrapLogMessage": true,
-        "prettifyLogMessage": true,
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
         "sortOrder": "Descending"
       },
       "targets": [
         {
           "refId": "A",
+          "expr": "{project=\"mvp\", service=~\"queue|app\"} |~ \"(?i)level_name.{0,6}(error|critical|emergency)\"",
           "datasource": {
             "type": "loki",
             "uid": "loki"
-          },
-          "expr": "{project=\"mvp\", service=~\"queue|app\"} |~ \"(?i)level_name.{0,6}(error|critical|emergency)\"",
-          "maxLines": 200
+          }
         }
-      ]
+      ],
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "description": "Monolog scrive JSON con level_name; i container di infrastruttura usano logfmt con level=. Il filtro copre entrambi."
     }
   ]
 }

@@ -2,12 +2,11 @@
   "uid": "mvp-ai-ocr-quality",
   "title": "AI and OCR Quality",
   "tags": [
-    "alittlebyte",
-    "ai",
-    "ocr"
+    "mvp",
+    "ai"
   ],
+  "timezone": "browser",
   "schemaVersion": 39,
-  "version": 4,
   "refresh": "15s",
   "time": {
     "from": "now-6h",
@@ -15,49 +14,46 @@
   },
   "panels": [
     {
-      "type": "row",
-      "title": "Qualita OCR (Textract)",
+      "type": "text",
+      "title": "",
       "gridPos": {
-        "x": 0,
-        "y": 0,
         "w": 24,
-        "h": 1
+        "h": 3,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Domanda:** l'estrazione automatica funziona abbastanza bene da fidarsi, e quanto lavoro scarica sugli operatori?\n\nTextract legge, Bedrock struttura: un guasto dell'uno si manifesta sull'altro, quindi le due catene stanno insieme. Alert correlati: `TextractFailureRateHigh`, `BedrockFailureRateHigh` — Runbook: docs/runbooks/document-pipeline.md"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Qualità OCR (Textract)",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "w": 24,
+        "h": 1,
+        "x": 0,
+        "y": 3
       }
     },
     {
       "type": "stat",
       "title": "Confidenza media OCR",
       "gridPos": {
-        "x": 0,
-        "y": 1,
         "w": 6,
-        "h": 4
+        "h": 4,
+        "x": 0,
+        "y": 4
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100,
           "color": {
             "mode": "thresholds"
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 70
-              },
-              {
-                "color": "green",
-                "value": 85
-              }
-            ]
-          }
+          "unit": "percent"
         }
       },
       "options": {
@@ -67,41 +63,40 @@
           ]
         },
         "colorMode": "value",
-        "graphMode": "none"
+        "graphMode": "area"
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(mvp_textract_confidence_sum) / clamp_min(sum(mvp_textract_confidence_count), 1)",
-          "instant": true,
-          "legendFormat": "confidenza",
+          "expr": "sum(rate(mvp_textract_confidence_sum[$__range])) / (sum(rate(mvp_textract_confidence_count[$__range])) > 0)",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "confidenza"
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "Media sulla finestra selezionata, non da inizio processo: risponde al selettore temporale. Vuota quando nella finestra non ci sono stati job OCR — l'assenza di misura è l'informazione corretta."
     },
     {
       "type": "stat",
       "title": "Durata media OCR",
       "gridPos": {
-        "x": 6,
-        "y": 1,
         "w": 6,
-        "h": 4
+        "h": 4,
+        "x": 6,
+        "y": 4
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
           "color": {
-            "mode": "fixed",
-            "fixedColor": "blue"
-          }
+            "mode": "thresholds"
+          },
+          "unit": "s"
         }
       },
       "options": {
@@ -111,33 +106,33 @@
           ]
         },
         "colorMode": "value",
-        "graphMode": "none"
+        "graphMode": "area"
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(mvp_textract_duration_seconds_sum) / clamp_min(sum(mvp_textract_duration_seconds_count), 1)",
-          "instant": true,
-          "legendFormat": "durata",
+          "expr": "sum(rate(mvp_textract_duration_seconds_sum[$__range])) / (sum(rate(mvp_textract_duration_seconds_count[$__range])) > 0)",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "durata"
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "Stessa finestra della confidenza. Il timeout di un job è TEXTRACT_TIMEOUT_SECONDS."
     },
     {
       "type": "stat",
       "title": "Job OCR falliti",
       "gridPos": {
-        "x": 12,
-        "y": 1,
         "w": 6,
-        "h": 4
+        "h": 4,
+        "x": 12,
+        "y": 4
       },
       "fieldConfig": {
         "defaults": {
@@ -152,7 +147,7 @@
                 "value": null
               },
               {
-                "color": "red",
+                "color": "#EAB839",
                 "value": 1
               }
             ]
@@ -172,27 +167,28 @@
         {
           "refId": "A",
           "expr": "sum(mvp_textract_jobs_failed_total)",
-          "instant": true,
-          "legendFormat": "falliti",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "falliti",
+          "instant": true
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "Job rifiutati da Textract con un errore AWS. Non include i documenti la cui estrazione è fallita a valle."
     },
     {
       "type": "stat",
       "title": "Estrazioni fallite",
       "gridPos": {
-        "x": 18,
-        "y": 1,
         "w": 6,
-        "h": 4
+        "h": 4,
+        "x": 18,
+        "y": 4
       },
       "fieldConfig": {
         "defaults": {
@@ -207,7 +203,7 @@
                 "value": null
               },
               {
-                "color": "red",
+                "color": "#EAB839",
                 "value": 1
               }
             ]
@@ -226,28 +222,38 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(mvp_sub_documents_total{state=\"failed\"})",
-          "instant": true,
-          "legendFormat": "estrazioni fallite",
+          "expr": "sum(mvp_sub_documents_failed)",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "fallite",
+          "instant": true
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "Sotto-documenti che portano un messaggio di errore: il guasto è successivo all'OCR."
     },
     {
       "type": "table",
-      "title": "Textract - esiti job",
+      "title": "Textract — esiti job",
       "gridPos": {
-        "x": 0,
-        "y": 5,
         "w": 8,
-        "h": 9
+        "h": 9,
+        "x": 0,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        }
       },
       "options": {
         "showHeader": true,
@@ -257,49 +263,49 @@
         {
           "refId": "A",
           "expr": "sum(mvp_textract_jobs_started_total)",
-          "instant": true,
-          "format": "table",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "avviati",
+          "instant": true,
+          "format": "table"
         },
         {
           "refId": "B",
           "expr": "sum(mvp_textract_jobs_completed_total)",
-          "instant": true,
-          "format": "table",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "completati",
+          "instant": true,
+          "format": "table"
         },
         {
           "refId": "C",
           "expr": "sum(mvp_textract_jobs_failed_total)",
-          "instant": true,
-          "format": "table",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "falliti",
+          "instant": true,
+          "format": "table"
         },
         {
           "refId": "D",
           "expr": "sum(mvp_textract_jobs_skipped_total)",
-          "instant": true,
-          "format": "table",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "saltati",
+          "instant": true,
+          "format": "table"
         }
       ],
       "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        },
         {
           "id": "organize",
           "options": {
@@ -318,51 +324,26 @@
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "La differenza fra avviati e completati+falliti sono i job ancora in corso al momento dello scrape."
     },
     {
       "type": "table",
-      "title": "Textract - fallimenti per codice errore",
+      "title": "Textract — fallimenti per codice errore",
       "gridPos": {
-        "x": 8,
-        "y": 5,
         "w": 8,
-        "h": 9
+        "h": 9,
+        "x": 8,
+        "y": 8
       },
       "fieldConfig": {
-        "defaults": {},
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Occorrenze"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "red",
-                      "value": 1
-                    }
-                  ]
-                }
-              }
-            ]
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            }
           }
-        ]
+        }
       },
       "options": {
         "showHeader": true,
@@ -372,12 +353,13 @@
         {
           "refId": "A",
           "expr": "sum by (error) (mvp_textract_jobs_failed_total)",
-          "instant": true,
-          "format": "table",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "fallimenti",
+          "instant": true,
+          "format": "table"
         }
       ],
       "transformations": [
@@ -388,37 +370,35 @@
               "Time": true
             },
             "renameByName": {
-              "error": "Codice errore",
-              "Value": "Occorrenze"
+              "error": "Codice AWS",
+              "Value": "Fallimenti"
             }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "fields": "",
-            "sort": [
-              {
-                "field": "Occorrenze",
-                "desc": true
-              }
-            ]
           }
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "Codice di errore restituito dall'SDK. Non enumerabile a priori: la serie compare solo dopo il primo errore di quel tipo."
     },
     {
       "type": "table",
-      "title": "Textract - job saltati per motivo",
+      "title": "Textract — job saltati per motivo",
       "gridPos": {
-        "x": 16,
-        "y": 5,
         "w": 8,
-        "h": 9
+        "h": 9,
+        "x": 16,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        }
       },
       "options": {
         "showHeader": true,
@@ -428,12 +408,13 @@
         {
           "refId": "A",
           "expr": "sum by (reason) (mvp_textract_jobs_skipped_total)",
-          "instant": true,
-          "format": "table",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "saltati",
+          "instant": true,
+          "format": "table"
         }
       ],
       "transformations": [
@@ -445,9 +426,62 @@
             },
             "renameByName": {
               "reason": "Motivo",
-              "Value": "Occorrenze"
+              "Value": "Saltati"
             }
           }
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "`disabled` significa che Textract è spento da configurazione: la pipeline prosegue senza OCR."
+    },
+    {
+      "type": "timeseries",
+      "title": "Job Textract (rate 5m)",
+      "gridPos": {
+        "w": 12,
+        "h": 8,
+        "x": 0,
+        "y": 17
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "ops"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(mvp_textract_jobs_started_total[5m]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "avviati"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(mvp_textract_jobs_completed_total[5m]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "completati"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(mvp_textract_jobs_failed_total[5m]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "falliti"
         }
       ],
       "datasource": {
@@ -457,18 +491,18 @@
     },
     {
       "type": "timeseries",
-      "title": "Job Textract (rate 5m)",
+      "title": "Output AI rifiutati dal validatore (rate 15m)",
       "gridPos": {
-        "x": 0,
-        "y": 14,
         "w": 12,
-        "h": 8
+        "h": 8,
+        "x": 12,
+        "y": 17
       },
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10
+            "lineWidth": 2,
+            "fillOpacity": 8
           },
           "unit": "ops"
         }
@@ -476,45 +510,37 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(mvp_textract_jobs_started_total[5m]))",
-          "legendFormat": "avviati",
+          "expr": "sum by (operation) (rate(mvp_ai_outputs_invalid_total[15m]))",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
-        },
-        {
-          "refId": "B",
-          "expr": "sum(rate(mvp_textract_jobs_completed_total[5m]))",
-          "legendFormat": "completati",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "refId": "C",
-          "expr": "sum(rate(mvp_textract_jobs_failed_total[5m]))",
-          "legendFormat": "falliti",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
+          },
+          "legendFormat": "{{operation}}"
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "Risposte del modello che non superano la validazione di schema. Una crescita segnala una regressione del prompt o del modello, prima che si veda sui documenti."
     },
     {
       "type": "table",
-      "title": "Comunicazioni generate per stato (AI Assistant)",
+      "title": "Estrazioni AI per esito revisione",
       "gridPos": {
-        "x": 12,
-        "y": 14,
         "w": 12,
-        "h": 8
+        "h": 7,
+        "x": 0,
+        "y": 25
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        }
       },
       "options": {
         "showHeader": true,
@@ -523,13 +549,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status) (mvp_communications_total)",
-          "instant": true,
-          "format": "table",
+          "expr": "sum by (review_status) (mvp_ai_extractions_total)",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "estrazioni",
+          "instant": true,
+          "format": "table"
         }
       ],
       "transformations": [
@@ -540,71 +567,147 @@
               "Time": true
             },
             "renameByName": {
-              "status": "Stato",
-              "Value": "Comunicazioni"
+              "review_status": "Esito",
+              "Value": "Estrazioni"
             }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "fields": "",
-            "sort": [
-              {
-                "field": "Comunicazioni",
-                "desc": true
-              }
-            ]
           }
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "Esito assegnato al momento dell'estrazione, confrontando la confidenza con MVP_CONFIDENCE_THRESHOLD."
+    },
+    {
+      "type": "table",
+      "title": "Sotto-documenti per stato di revisione",
+      "gridPos": {
+        "w": 12,
+        "h": 7,
+        "x": 12,
+        "y": 25
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        }
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (review_status) (mvp_sub_documents_review)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "sotto-documenti",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "review_status": "Stato",
+              "Value": "Sotto-documenti"
+            }
+          }
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Stato corrente, non al momento dell'estrazione: un documento validato a mano si sposta qui ma non nella tabella accanto."
+    },
+    {
+      "type": "timeseries",
+      "title": "Sotto-documenti totali",
+      "gridPos": {
+        "w": 24,
+        "h": 7,
+        "x": 0,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(mvp_sub_documents)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "totali"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Volume complessivo su cui si calcolano le quote di questa pagina."
     },
     {
       "type": "row",
-      "title": "Log OCR / AI",
+      "title": "Log",
+      "collapsed": false,
+      "panels": [],
       "gridPos": {
-        "x": 0,
-        "y": 22,
         "w": 24,
-        "h": 1
+        "h": 1,
+        "x": 0,
+        "y": 39
       }
     },
     {
       "type": "logs",
-      "title": "Errori Textract / Bedrock (container queue)",
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
+      "title": "Errori Textract / Bedrock (worker documenti)",
       "gridPos": {
-        "x": 0,
-        "y": 23,
         "w": 24,
-        "h": 11
+        "h": 11,
+        "x": 0,
+        "y": 40
       },
       "options": {
         "showTime": true,
         "wrapLogMessage": true,
-        "prettifyLogMessage": true,
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
         "sortOrder": "Descending"
       },
       "targets": [
         {
           "refId": "A",
+          "expr": "{project=\"mvp\", service=\"queue\"} |~ \"(?i)level_name.{0,6}(error|critical)\" |~ \"(?i)textract|bedrock|extract|ocr|workflow\"",
           "datasource": {
             "type": "loki",
             "uid": "loki"
-          },
-          "expr": "{project=\"mvp\", service=\"queue\"} |~ \"(?i)level_name.{0,6}(error|critical)\" |~ \"(?i)textract|bedrock|extract|ocr|workflow\"",
-          "maxLines": 200
+          }
         }
-      ]
+      ],
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      }
     }
   ]
 }

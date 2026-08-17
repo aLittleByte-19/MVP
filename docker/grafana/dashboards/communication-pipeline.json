@@ -2,11 +2,11 @@
   "uid": "mvp-communication-pipeline",
   "title": "Communication Pipeline",
   "tags": [
-    "alittlebyte",
-    "pipeline"
+    "mvp",
+    "communications"
   ],
+  "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
   "refresh": "15s",
   "time": {
     "from": "now-6h",
@@ -14,29 +14,244 @@
   },
   "panels": [
     {
-      "type": "row",
-      "title": "Sintesi pipeline",
+      "type": "text",
+      "title": "",
       "gridPos": {
-        "x": 0,
-        "y": 0,
         "w": 24,
-        "h": 1
+        "h": 3,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Domanda:** le bozze vengono generate correttamente, e dove si ferma chi non arriva in fondo?\n\nStessa struttura della dashboard documenti, così le due pipeline si leggono con la stessa abitudine. Alert correlati: `CommunicationStuckInProcessing`, `CommunicationPipelineTaskFailed`, `CommunicationCoverStorageFailing` — Runbook: docs/runbooks/communication-pipeline.md"
       }
     },
     {
-      "type": "stat",
-      "title": "Comunicazioni generate",
+      "type": "row",
+      "title": "Dove si fermano",
+      "collapsed": false,
+      "panels": [],
       "gridPos": {
+        "w": 24,
+        "h": 1,
         "x": 0,
-        "y": 1,
-        "w": 6,
-        "h": 4
+        "y": 3
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Imbuto della pipeline comunicazioni",
+      "gridPos": {
+        "w": 16,
+        "h": 9,
+        "x": 0,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        }
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(mvp_communications_generation)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "1 · Richieste",
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum(mvp_communications_generation{generation_status=\"completed\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "2 · Testo generato",
+          "instant": true
+        },
+        {
+          "refId": "C",
+          "expr": "sum(mvp_communication_covers{cover_status=\"ready\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "3 · Copertina pronta",
+          "instant": true
+        },
+        {
+          "refId": "D",
+          "expr": "sum(mvp_communications{status=\"approved\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "4 · Approvate",
+          "instant": true
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Il passo 3 può restare indietro senza che sia un guasto: una copertina degradata non invalida la bozza, che resta leggibile e approvabile. Il salto fra 2 e 4 è invece la quota di bozze su cui nessuno ha ancora deciso."
+    },
+    {
+      "type": "stat",
+      "title": "Oltre timeout",
+      "gridPos": {
+        "w": 8,
+        "h": 4,
+        "x": 16,
+        "y": 4
       },
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "fixed",
-            "fixedColor": "green"
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(mvp_communications_stuck_processing)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "bloccate",
+          "instant": true
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Generazioni oltre MVP_COMMUNICATION_TIMEOUT_SECONDS. Su questo scatta CommunicationStuckInProcessing."
+    },
+    {
+      "type": "stat",
+      "title": "Generazioni fallite",
+      "gridPos": {
+        "w": 8,
+        "h": 5,
+        "x": 0,
+        "y": 13
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 1
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(mvp_communications_generation{generation_status=\"failed\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "fallite",
+          "instant": true
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "La generazione del testo non è riuscita: la comunicazione resta senza bozza."
+    },
+    {
+      "type": "row",
+      "title": "Stato corrente",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "w": 24,
+        "h": 1,
+        "x": 0,
+        "y": 18
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Generate",
+      "gridPos": {
+        "w": 6,
+        "h": 4,
+        "x": 0,
+        "y": 19
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
           }
         }
       },
@@ -47,18 +262,18 @@
           ]
         },
         "colorMode": "value",
-        "graphMode": "none"
+        "graphMode": "area"
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(mvp_communications_generation_total{generation_status=\"completed\"})",
-          "instant": true,
-          "legendFormat": "generate",
+          "expr": "sum(mvp_communications_generation{generation_status=\"completed\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "generate",
+          "instant": true
         }
       ],
       "datasource": {
@@ -70,16 +285,15 @@
       "type": "stat",
       "title": "In generazione",
       "gridPos": {
+        "w": 6,
+        "h": 4,
         "x": 6,
-        "y": 1,
-        "w": 6,
-        "h": 4
+        "y": 19
       },
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "fixed",
-            "fixedColor": "blue"
+            "mode": "thresholds"
           }
         }
       },
@@ -90,18 +304,18 @@
           ]
         },
         "colorMode": "value",
-        "graphMode": "none"
+        "graphMode": "area"
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(mvp_communications_generation_total{generation_status=\"processing\"})",
-          "instant": true,
+          "expr": "sum(mvp_communications_generation{generation_status=\"processing\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "legendFormat": "in corso",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
+          "instant": true
         }
       ],
       "datasource": {
@@ -111,18 +325,17 @@
     },
     {
       "type": "stat",
-      "title": "Generazioni fallite",
+      "title": "Copertine degradate",
       "gridPos": {
+        "w": 6,
+        "h": 4,
         "x": 12,
-        "y": 1,
-        "w": 6,
-        "h": 4
+        "y": 19
       },
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "fixed",
-            "fixedColor": "red"
+            "mode": "thresholds"
           }
         }
       },
@@ -133,39 +346,83 @@
           ]
         },
         "colorMode": "value",
-        "graphMode": "none"
+        "graphMode": "area"
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(mvp_communications_generation_total{generation_status=\"failed\"})",
-          "instant": true,
-          "legendFormat": "fallite",
+          "expr": "sum(mvp_communication_covers{cover_status=\"failed\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "degradate",
+          "instant": true
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "Esito previsto, non un guasto: CommunicationCoverGenerationDegraded scatta solo oltre tre in trenta minuti."
     },
     {
       "type": "stat",
-      "title": "Bloccate oltre timeout",
+      "title": "Media stelle",
       "gridPos": {
-        "x": 18,
-        "y": 1,
         "w": 6,
-        "h": 4
+        "h": 4,
+        "x": 18,
+        "y": 19
       },
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "fixed",
-            "fixedColor": "orange"
+            "mode": "thresholds"
+          },
+          "unit": "none"
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mvp_communication_rating_average",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "media",
+          "instant": true
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Qualità percepita delle bozze, su 5. Zero quando nessuna bozza è stata ancora valutata."
+    },
+    {
+      "type": "stat",
+      "title": "Bozze valutate",
+      "gridPos": {
+        "w": 6,
+        "h": 4,
+        "x": 0,
+        "y": 23
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
           }
         }
       },
@@ -176,207 +433,52 @@
           ]
         },
         "colorMode": "value",
-        "graphMode": "none"
+        "graphMode": "area"
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(mvp_communication_stuck_processing_total)",
-          "instant": true,
-          "legendFormat": "bloccate",
+          "expr": "sum(mvp_communications_rated)",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "valutate",
+          "instant": true
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "Numero di bozze su cui è stata espressa una valutazione: dà la base su cui è calcolata la media stelle accanto."
     },
     {
-      "type": "table",
-      "title": "Comunicazioni per stato generazione",
+      "type": "row",
+      "title": "Flusso e cause",
+      "collapsed": false,
+      "panels": [],
       "gridPos": {
+        "w": 24,
+        "h": 1,
         "x": 0,
-        "y": 5,
-        "w": 8,
-        "h": 9
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (generation_status) (mvp_communications_generation_total)",
-          "instant": true,
-          "format": "table",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            },
-            "renameByName": {
-              "generation_status": "Stato",
-              "Value": "Comunicazioni"
-            }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "fields": "",
-            "sort": [
-              {
-                "field": "Comunicazioni",
-                "desc": true
-              }
-            ]
-          }
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      }
-    },
-    {
-      "type": "table",
-      "title": "Copertine per stato",
-      "gridPos": {
-        "x": 8,
-        "y": 5,
-        "w": 8,
-        "h": 9
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (cover_status) (mvp_communication_covers_total)",
-          "instant": true,
-          "format": "table",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            },
-            "renameByName": {
-              "cover_status": "Stato copertina",
-              "Value": "Copertine"
-            }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "fields": "",
-            "sort": [
-              {
-                "field": "Copertine",
-                "desc": true
-              }
-            ]
-          }
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      }
-    },
-    {
-      "type": "table",
-      "title": "Step di elaborazione (coda SQS)",
-      "gridPos": {
-        "x": 16,
-        "y": 5,
-        "w": 8,
-        "h": 9
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (task_type) (mvp_sqs_messages_received_total{task_type=~\"communication.*\"})",
-          "instant": true,
-          "format": "table",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            },
-            "renameByName": {
-              "task_type": "Task",
-              "Value": "Messaggi"
-            }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "fields": "",
-            "sort": [
-              {
-                "field": "Messaggi",
-                "desc": true
-              }
-            ]
-          }
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "y": 27
       }
     },
     {
       "type": "timeseries",
-      "title": "Esecuzioni Step Functions (rate 5m)",
+      "title": "Throughput step pipeline (rate 5m)",
       "gridPos": {
-        "x": 0,
-        "y": 14,
         "w": 12,
-        "h": 8
+        "h": 8,
+        "x": 0,
+        "y": 28
       },
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10
+            "lineWidth": 2,
+            "fillOpacity": 8
           },
           "unit": "ops"
         }
@@ -384,42 +486,98 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(mvp_stepfunctions_executions_started_total{state_machine=~\".*communication.*\"}[5m]))",
-          "legendFormat": "avviate",
+          "expr": "sum by (task_type) (rate(mvp_sqs_messages_received_total{task_type=~\"communication.*\"}[5m]))",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "{{task_type}} ricevuti"
         },
         {
           "refId": "B",
-          "expr": "sum(rate(mvp_stepfunctions_executions_failed_total{state_machine=~\".*communication.*\"}[5m]))",
-          "legendFormat": "fallite",
+          "expr": "sum by (task_type) (rate(mvp_sqs_messages_failed_total{task_type=~\"communication.*\"}[5m]))",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
+          },
+          "legendFormat": "{{task_type}} falliti"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Solo i task della pipeline comunicazioni, in simmetria con il filtro della dashboard documenti."
+    },
+    {
+      "type": "table",
+      "title": "Fallimenti Step Functions per motivo",
+      "gridPos": {
+        "w": 12,
+        "h": 8,
+        "x": 12,
+        "y": 28
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        }
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (reason) (mvp_stepfunctions_executions_failed_total{state_machine=~\".*communication-pipeline\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "fallimenti",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "reason": "Motivo",
+              "Value": "Fallimenti"
+            }
           }
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "`start_failure` è un avvio rifiutato, `task_failure` un task interrotto. Prima del fix sulle label, i secondi non comparivano in questa dashboard."
     },
     {
       "type": "timeseries",
       "title": "Copertine: esito (rate 5m)",
       "gridPos": {
-        "x": 12,
-        "y": 14,
         "w": 12,
-        "h": 8
+        "h": 8,
+        "x": 0,
+        "y": 36
       },
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10
+            "lineWidth": 2,
+            "fillOpacity": 8
           },
           "unit": "ops"
         }
@@ -428,154 +586,122 @@
         {
           "refId": "A",
           "expr": "sum by (source) (rate(mvp_communication_covers_generated_total[5m]))",
-          "legendFormat": "generate {{source}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "legendFormat": "generate {{source}}"
         },
         {
           "refId": "B",
           "expr": "sum by (reason) (rate(mvp_communication_covers_failed_total[5m]))",
-          "legendFormat": "degradate {{reason}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
+          },
+          "legendFormat": "degradate {{reason}}"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "`source` distingue le copertine prodotte dal modello da quelle caricate a mano."
+    },
+    {
+      "type": "table",
+      "title": "Decisione sulla bozza",
+      "gridPos": {
+        "w": 12,
+        "h": 7,
+        "x": 12,
+        "y": 36
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        }
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (mvp_communications)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "legendFormat": "comunicazioni",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "status": "Decisione",
+              "Value": "Comunicazioni"
+            }
           }
         }
       ],
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
-      }
+      },
+      "description": "Esito del prodotto, distinto dallo stato tecnico della generazione: una bozza generata correttamente può comunque essere scartata."
     },
     {
       "type": "row",
-      "title": "Log di generazione",
+      "title": "Log",
+      "collapsed": false,
+      "panels": [],
       "gridPos": {
-        "x": 0,
-        "y": 22,
         "w": 24,
-        "h": 1
+        "h": 1,
+        "x": 0,
+        "y": 44
       }
     },
     {
       "type": "logs",
       "title": "Errori pipeline (worker comunicazioni + app)",
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
       "gridPos": {
-        "x": 0,
-        "y": 23,
         "w": 24,
-        "h": 11
+        "h": 11,
+        "x": 0,
+        "y": 45
       },
       "options": {
         "showTime": true,
         "wrapLogMessage": true,
-        "prettifyLogMessage": true,
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
         "sortOrder": "Descending"
       },
       "targets": [
         {
           "refId": "A",
+          "expr": "{project=\"mvp\", service=~\"queue-communications|app\"} |~ \"(?i)level_name.{0,6}(error|critical|emergency)\"",
           "datasource": {
             "type": "loki",
             "uid": "loki"
-          },
-          "expr": "{project=\"mvp\", service=~\"queue-communications|app\"} |~ \"(?i)level_name.{0,6}(error|critical|emergency)\"",
-          "maxLines": 200
-        }
-      ]
-    },
-    {
-      "type": "stat",
-      "title": "Bozze valutate",
-      "gridPos": {
-        "x": 0,
-        "y": 34,
-        "w": 6,
-        "h": 4
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "green"
-          },
-          "unit": "short"
-        }
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "colorMode": "value",
-        "graphMode": "none"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "mvp_communications_rated_total",
-          "instant": true,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
           }
         }
       ],
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Media stelle",
-      "gridPos": {
-        "x": 6,
-        "y": 34,
-        "w": 6,
-        "h": 4
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "green"
-          },
-          "unit": "short"
-        }
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "colorMode": "value",
-        "graphMode": "none"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "mvp_communication_rating_average",
-          "instant": true,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "loki",
+        "uid": "loki"
       }
     }
   ]
