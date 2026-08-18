@@ -1,9 +1,5 @@
 export type StatusTone = "neutral" | "info" | "success" | "warning" | "danger";
 
-export function getDocumentStatus(error?: string | null): "success" | "warning" {
-  return error ? "warning" : "success";
-}
-
 export function getReviewStatusTone(reviewStatus?: string, error?: string | null): StatusTone {
   if (reviewStatus === "quarantined") {
     return "danger";
