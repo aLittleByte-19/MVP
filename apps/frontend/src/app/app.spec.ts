@@ -85,4 +85,40 @@ describe("AppComponent", () => {
     animation.mockRestore();
     topbar.remove();
   });
+
+  it("da' un indirizzo reale a ogni voce di navigazione", () => {
+    // Le voci sono collegamenti: senza href non sarebbero apribili in una
+    // nuova scheda ne' annunciate come tali.
+    const fixture = TestBed.createComponent(AppComponent);
+
+    expect(fixture.componentInstance["linkTo"]("copilot")).toBe("/copilot");
+    expect(fixture.componentInstance["linkTo"]("copilot", "copilot-metrics")).toBe(
+      "/copilot#copilot-metrics"
+    );
+  });
+
+  it("gestisce il click semplice nella SPA e lascia al browser quello con modificatori", () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const plain = { button: 0, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, preventDefault: jest.fn() };
+
+    fixture.componentInstance["onNavigate"](plain as unknown as MouseEvent, "copilot");
+
+    expect(plain.preventDefault).toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith(["copilot"]);
+
+    navigate.mockClear();
+
+    for (const modifier of ["ctrlKey", "metaKey", "shiftKey", "altKey"]) {
+      const modified = { ...plain, [modifier]: true, preventDefault: jest.fn() };
+      fixture.componentInstance["onNavigate"](modified as unknown as MouseEvent, "copilot");
+      expect(modified.preventDefault).not.toHaveBeenCalled();
+    }
+
+    // Tasto centrale: apre in una nuova scheda, non deve essere intercettato.
+    const middle = { ...plain, button: 1, preventDefault: jest.fn() };
+    fixture.componentInstance["onNavigate"](middle as unknown as MouseEvent, "copilot");
+
+    expect(middle.preventDefault).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
 });

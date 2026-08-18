@@ -30,7 +30,9 @@ export const mvpNavGroups: SidebarNavGroup[] = [
         label: "Overview",
         children: [
           { label: "Moduli", targetId: "overview-modules" },
-          { label: "Priorità", targetId: "overview-priorities" }
+          { label: "Priorità", targetId: "overview-priorities" },
+          { label: "Qualità", targetId: "overview-quality" },
+          { label: "Attività recenti", targetId: "overview-activity" }
         ]
       }
     ]
@@ -44,7 +46,8 @@ export const mvpNavGroups: SidebarNavGroup[] = [
         children: [
           { label: "Generazione", targetId: "assistant-compose" },
           { label: "Revisione", targetId: "assistant-review" },
-          { label: "Storico contenuti", targetId: "assistant-history" }
+          { label: "Storico contenuti", targetId: "assistant-history" },
+          { label: "Metriche", targetId: "assistant-metrics" }
         ]
       }
     ]
