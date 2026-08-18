@@ -72,10 +72,25 @@
   line-height: 1;
 }
 
+/* Valore, totale di riferimento e unita' condividono la linea di base: il
+   numero piccolo resta sulla stessa riga di quello grande invece di finire in
+   una riga di contesto a parte. */
+.lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 2px;
+  min-width: 0;
+}
+
+.total {
+  color: var(--mvp-muted);
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .unit {
-  align-self: flex-end;
-  margin-right: auto;
-  margin-left: -6px;
   color: var(--mvp-muted);
   font-size: 0.95rem;
   font-weight: 600;
@@ -142,15 +157,6 @@
   .skeleton {
     animation: none;
   }
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 
 :host {

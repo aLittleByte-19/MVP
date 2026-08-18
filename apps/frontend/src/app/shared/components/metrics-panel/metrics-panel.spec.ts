@@ -55,17 +55,24 @@ describe("MetricsPanelComponent", () => {
     expect(host.querySelectorAll(".skeleton").length).toBeGreaterThan(0);
   });
 
-  it("compone il contesto con il rapporto sul totale e gli ingressi di oggi", () => {
+  it("mette il totale accanto al valore e lascia al contesto i soli ingressi di oggi", () => {
     const host = render({
       metrics,
       presentation: { "copilot.needs_review": { tone: "watch", outOf: 412 } }
     });
 
-    const context = host.querySelector(".context")?.textContent?.trim();
-
-    expect(context).toContain("su 412 totali");
+    expect(host.querySelector(".total")?.textContent).toContain("412");
     // La serie e' un flusso di ingresso: si dice "nuovi oggi", non "rispetto a ieri".
-    expect(context).toContain("3 nuovi oggi");
+    expect(host.querySelector(".context")?.textContent?.trim()).toBe("3 nuovi oggi");
+  });
+
+  it("non affianca un totale a una media, dove il rapporto non direbbe nulla", () => {
+    const host = render({
+      metrics: [{ key: "assistant.rating_average", value: "4.3", label: "Media stelle" }],
+      presentation: { "assistant.rating_average": { outOf: 412 } }
+    });
+
+    expect(host.querySelector(".total")).toBeNull();
   });
 
   it("usa il singolare quando oggi e' entrato un solo elemento", () => {

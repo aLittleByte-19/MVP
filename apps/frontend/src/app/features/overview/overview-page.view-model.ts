@@ -3,7 +3,7 @@ import type { Router } from "@angular/router";
 import type { Metric, MvpState } from "../../../api/generated/model";
 import type { MvpView } from "../../core/navigation/app-views";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
-import { formatCount, formatMetric, type MetricTone, newToday } from "../../shared/util/metrics";
+import { formatMetric, type MetricTone, newToday } from "../../shared/util/metrics";
 
 /** Indicatore di qualità di un modulo, già formattato per la scheda. */
 export interface QualityMetric {
@@ -19,7 +19,9 @@ export interface PriorityMetric {
   readonly value: number | string | null;
   readonly tone: MetricTone;
   readonly history: number[] | undefined;
-  /** Riga sotto il numero: quota sul totale e ingressi di oggi. */
+  /** Totale di riferimento, reso accanto al valore come "23/412". */
+  readonly outOf: number | null;
+  /** Riga sotto il numero: gli ingressi di oggi. */
   readonly context: string | null;
 }
 
@@ -112,24 +114,28 @@ export class OverviewPageViewModel {
    * La serie è un flusso di ingresso, non la storia del totale (schema
    * `Metric` in OpenAPI): si dice "nuovi oggi", mai "rispetto a ieri".
    */
-  private contextFor(entry: Metric | null, outOf: number | null): string | null {
+  private contextFor(entry: Metric | null): string | null {
     if (entry === null) {
       return null;
     }
 
-    const parts: string[] = [];
-
-    if (outOf !== null && outOf > 0 && typeof entry.value === "number") {
-      parts.push(`su ${formatCount(outOf)} sotto-documenti`);
-    }
-
     const today = newToday(entry.history);
 
-    if (today !== null && today > 0) {
-      parts.push(today === 1 ? "1 nuovo oggi" : `${today} nuovi oggi`);
+    if (today === null || today <= 0) {
+      return null;
     }
 
-    return parts.length ? parts.join(" · ") : null;
+    return today === 1 ? "1 nuovo oggi" : `${today} nuovi oggi`;
+  }
+
+  /**
+   * Totale di riferimento accanto al valore ("23/412"): vale solo per i
+   * conteggi, e non prima che lo stato sia stato caricato.
+   */
+  private outOfFor(entry: Metric | null, outOf: number | null): number | null {
+    return entry !== null && outOf !== null && outOf > 0 && typeof entry.value === "number"
+      ? outOf
+      : null;
   }
 
   /**
@@ -148,7 +154,8 @@ export class OverviewPageViewModel {
       value: entry === null ? null : entry.value,
       tone,
       history: entry?.history,
-      context: this.contextFor(entry, outOf)
+      outOf: this.outOfFor(entry, outOf),
+      context: this.contextFor(entry)
     };
   }
 }
