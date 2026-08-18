@@ -11,7 +11,7 @@
   min-height: 38px;
   padding: 4px;
   border: 1px solid var(--mvp-border);
-  border-radius: 999px;
+  border-radius: var(--mvp-radius-pill);
   background: var(--mvp-surface);
   color: var(--mvp-muted);
   box-shadow: var(--mvp-shadow);

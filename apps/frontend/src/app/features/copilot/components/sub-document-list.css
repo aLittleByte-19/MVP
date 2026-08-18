@@ -76,7 +76,7 @@
   top: 11px;
   width: 5px;
   height: 5px;
-  border-radius: 999px;
+  border-radius: var(--mvp-radius-pill);
   background: var(--mvp-primary);
   opacity: 0.55;
 }

@@ -2,7 +2,7 @@
   display: flex;
   height: 26px;
   overflow: hidden;
-  border-radius: 5px;
+  border-radius: var(--mvp-radius-sm);
   background: var(--mvp-surface-soft);
 }
 
@@ -32,7 +32,7 @@
   width: 11px;
   height: 11px;
   flex: none;
-  border-radius: 3px;
+  border-radius: var(--mvp-radius-sm);
 }
 
 .n {
