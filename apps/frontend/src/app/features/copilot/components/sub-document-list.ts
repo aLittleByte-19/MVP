@@ -279,9 +279,9 @@ const emptySendMessageForm: SendMessageFormState = {
                     <svg lucideX aria-hidden="true"></svg>
                     Annulla
                   </button>
-                  <button mvpButton type="button" [disabled]="isSavingReview()" (click)="saveReview()">
+                  <button mvpButton type="button" [disabled]="isSavingReview()" [busy]="isSavingReview()" (click)="saveReview()">
                     <svg lucideSave aria-hidden="true"></svg>
-                    {{ isSavingReview() ? "Salvataggio" : "Salva" }}
+                    Salva
                   </button>
                 } @else {
                   <button
@@ -376,6 +376,7 @@ const emptySendMessageForm: SendMessageFormState = {
                       variant="secondary"
                       type="button"
                       [disabled]="isSavingSendMessage()"
+                      [busy]="isSavingSendMessage()"
                       (click)="saveSendMessage(document)"
                     >
                       <svg lucideSave aria-hidden="true"></svg>
