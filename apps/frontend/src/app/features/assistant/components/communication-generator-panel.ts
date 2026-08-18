@@ -57,7 +57,7 @@ import type {
       }
       <p class="status" aria-live="polite">{{ status() }}</p>
 
-      <div class="config-actions">
+      <div class="configActions">
         @if (isConfiguringName()) {
           <label class="field configName">
             <span>Nome configurazione (opzionale)</span>

@@ -42,7 +42,7 @@ import {
         <article class="draft">
           @if (hasCover(currentDraft)) {
             <img
-              class="preview-image"
+              class="previewImage"
               [src]="currentDraft.coverImageUrl"
               [alt]="'Immagine di copertina della bozza: ' + currentDraft.title"
             />
@@ -57,10 +57,10 @@ import {
           }
 
           @if (!isDiscarded(currentDraft)) {
-            <div class="cover-actions">
+            <div class="coverActions">
               <input
                 #coverInput
-                class="cover-input"
+                class="coverInput"
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
                 [disabled]="isUpdatingCover()"
@@ -97,7 +97,7 @@ import {
                 formControlName="body"
               ></textarea>
             </label>
-            <div class="review-actions">
+            <div class="reviewActions">
               @if (isEditing()) {
                 <button mvpButton variant="secondary" type="button" [disabled]="isSaving()" (click)="cancelEdit(currentDraft)">
                   <svg lucideX aria-hidden="true"></svg>
@@ -116,9 +116,9 @@ import {
             </div>
           </form>
           @if (isReadyForPreview(currentDraft)) {
-            <div class="preview-block">
-              <h3 class="preview-label">Documento finale</h3>
-              <div class="preview-actions">
+            <div class="previewBlock">
+              <h3 class="previewLabel">Documento finale</h3>
+              <div class="previewActions">
                 <a class="previewLink" [href]="currentDraft.previewUrl" target="_blank" rel="noreferrer">
                   Apri anteprima
                 </a>
@@ -127,10 +127,10 @@ import {
             </div>
           }
 
-          <div class="rating-section">
-            <h3 class="rating-label">Valuta questa bozza</h3>
+          <div class="ratingSection">
+            <h3 class="ratingLabel">Valuta questa bozza</h3>
             @if (!hasRated()) {
-              <p class="rating-note">La valutazione si assegna una volta sola.</p>
+              <p class="ratingNote">La valutazione si assegna una volta sola.</p>
             }
             <mvp-star-rating
               [rating]="displayRating()"
@@ -140,30 +140,30 @@ import {
             ></mvp-star-rating>
 
             @if (!hasRated()) {
-              <label class="field comment-field">
+              <label class="field commentField">
                 <span>Commento qualitativo (opzionale)</span>
                 <textarea
                   rows="3"
                   [formControl]="commentControl"
                   placeholder="Aggiungi un commento alla valutazione"
                 ></textarea>
-                <span class="comment-meta" [class.isInvalid]="commentTooLong()">
+                <span class="commentMeta" [class.isInvalid]="commentTooLong()">
                   {{ commentLength() }} / {{ commentMaxLength }}
                 </span>
               </label>
 
               @if (commentTooLong()) {
-                <p class="rating-error" role="alert">
+                <p class="ratingError" role="alert">
                   Il commento supera la lunghezza massima consentita ({{ commentMaxLength }} caratteri).
                 </p>
               }
 
               @if (localError(); as error) {
-                <p class="rating-error" role="alert">{{ error }}</p>
+                <p class="ratingError" role="alert">{{ error }}</p>
               }
 
               @if (rateError(); as error) {
-                <p class="rating-error" role="alert">{{ error }}</p>
+                <p class="ratingError" role="alert">{{ error }}</p>
               }
 
               <button
@@ -176,12 +176,12 @@ import {
               </button>
             } @else {
               @if (currentDraft.ratingComment) {
-                <p class="saved-comment">
+                <p class="savedComment">
                   <span>Commento</span>
                   {{ currentDraft.ratingComment }}
                 </p>
               }
-              <p class="rating-success">Valutazione registrata con successo.</p>
+              <p class="ratingSuccess">Valutazione registrata con successo.</p>
             }
           </div>
 
@@ -189,7 +189,7 @@ import {
             <mvp-status-badge>{{ currentDraft.status }}</mvp-status-badge>
             <span>Creato da AI Assistant{{ isEditing() ? "" : " · anteprima in sola lettura" }}</span>
           </div>
-          <div class="review-actions">
+          <div class="reviewActions">
             @if (!isDiscarded(currentDraft)) {
               @if (!isApproved(currentDraft)) {
                 <button
