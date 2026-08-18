@@ -86,6 +86,7 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
               [label]="priority.label"
               [value]="priority.value"
               [tone]="priority.tone"
+              [outOf]="priority.outOf"
               [history]="priority.history"
               [isLoading]="vm.loading()"
               [context]="priority.context"
@@ -94,7 +95,7 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
         </div>
       </mvp-section>
 
-      <mvp-section title="Qualità degli strumenti">
+      <mvp-section id="overview-quality" title="Qualità degli strumenti">
         <div class="qualityGrid">
           <div class="qualityItem">
             <h3>AI Assistant</h3>
@@ -129,7 +130,7 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
         </div>
       </mvp-section>
 
-      <mvp-section title="Attività recenti">
+      <mvp-section id="overview-activity" title="Attività recenti">
         @if (vm.communications().length) {
           <div class="tableWrapper">
             <table class="table">

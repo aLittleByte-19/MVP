@@ -32,29 +32,29 @@ import { ThemeService } from "./core/theme/theme.service";
         </div>
         <nav class="nav">
           @for (group of navGroups; track group.title) {
-            <div class="section">
-              <p class="sectionTitle">{{ group.title }}</p>
+            <div class="section" role="group" [attr.aria-labelledby]="'nav-group-' + $index">
+              <p class="sectionTitle" [id]="'nav-group-' + $index">{{ group.title }}</p>
               @for (item of group.items; track item.id) {
                 <div class="itemGroup">
-                  <button
+                  <a
                     class="item"
                     [class.active]="item.id === activeView()"
-                    type="button"
+                    [href]="linkTo(item.id)"
                     [attr.aria-current]="item.id === activeView() ? 'page' : null"
-                    (click)="navigate(item.id)"
+                    (click)="onNavigate($event, item.id)"
                   >
                     <span>{{ item.label }}</span>
-                  </button>
+                  </a>
                   @for (child of item.children ?? []; track child.targetId) {
-                    <button
+                    <a
                       class="subitem"
                       [class.subitemActive]="item.id === activeView() && child.targetId === activeChildId()"
-                      type="button"
+                      [href]="linkTo(item.id, child.targetId)"
                       [attr.aria-current]="item.id === activeView() && child.targetId === activeChildId() ? 'location' : null"
-                      (click)="navigate(item.id, child.targetId)"
+                      (click)="onNavigate($event, item.id, child.targetId)"
                     >
                       {{ child.label }}
-                    </button>
+                    </a>
                   }
                 </div>
               }
@@ -180,6 +180,28 @@ export class AppComponent {
         observer?.disconnect();
       });
     });
+  }
+
+  /** Indirizzo reale della voce, cosi' il collegamento e' apribile in una nuova scheda. */
+  protected linkTo(view: MvpView, targetId?: string): string {
+    return targetId === undefined ? `/${view}` : `/${view}#${targetId}`;
+  }
+
+  /**
+   * Le voci di navigazione sono collegamenti, non pulsanti: portano a rotte
+   * distinte e a sezioni di pagina, quindi devono avere un indirizzo, essere
+   * annunciate come link e apribili in una nuova scheda. Il click semplice
+   * resta gestito dal router — niente ricaricamento della SPA — mentre quello
+   * con un modificatore o con un tasto diverso dal primario viene lasciato al
+   * browser, che sa gia' cosa farne.
+   */
+  protected onNavigate(event: MouseEvent, view: MvpView, targetId?: string): void {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+      return;
+    }
+
+    event.preventDefault();
+    this.navigate(view, targetId);
   }
 
   protected navigate(view: MvpView, targetId?: string): void {

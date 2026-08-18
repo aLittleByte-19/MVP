@@ -65,9 +65,11 @@
   color: var(--mvp-text);
   font-weight: 700;
   text-align: left;
+  text-decoration: none;
 }
 
 .subitem {
+  display: block;
   width: 100%;
   padding: 8px 12px 8px 22px;
   border-radius: var(--mvp-radius);
@@ -76,6 +78,7 @@
   font-size: var(--mvp-font-sm);
   font-weight: 700;
   text-align: left;
+  text-decoration: none;
 }
 
 .item:hover,
