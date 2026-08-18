@@ -13,7 +13,7 @@ const GLYPHS: Record<StatusTone, string> = {
 /**
  * Etichetta di stato.
  *
- * Il testo porta già l'informazione ("Da revisionare", "Inviato"), quindi il
+ * Il testo porta già l'informazione ("Da revisionare", "Scaricato"), quindi il
  * colore non è l'unico veicolo; il glifo aggiunge una **forma** distinta per
  * tono, che sopravvive alla stampa in bianco e nero e alle discromatopsie. È
  * marcato `aria-hidden`: chi usa uno screen reader riceve già il testo, e

@@ -56,7 +56,7 @@ export type ConfidenceCriterion = "above" | "below";
 export interface DocumentFilters {
   /** Ricerca testuale su nome/cognome dipendente e azienda (UC-35). */
   search?: string;
-  /** Stato di invio: "sent" (Inviato) o "pending" (Non inviato) (UC-36). */
+  /** Stato di scaricamento del messaggio: "sent" (Scaricato) o "pending" (Non scaricato) (UC-36). */
   sendStatus?: SubDocumentSendStatus;
   /** Soglia di confidenza e criterio di confronto rispetto alla soglia (UC-37). */
   confidenceThreshold?: number;

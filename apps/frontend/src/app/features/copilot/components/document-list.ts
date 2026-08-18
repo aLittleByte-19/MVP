@@ -23,7 +23,7 @@ import { getReviewStatusTone, getSendStatusTone } from "../../../shared/util/sta
               <th scope="col" data-column="uploadedAt">Caricato il</th>
               <th scope="col" data-column="confidence">Confidenza</th>
               <th scope="col" data-column="status">Stato</th>
-              <th scope="col" data-column="send-status">Invio</th>
+              <th scope="col" data-column="send-status">Scaricamento</th>
               <th scope="col" data-column="actions">Azioni</th>
             </tr>
           </thead>
@@ -54,7 +54,7 @@ import { getReviewStatusTone, getSendStatusTone } from "../../../shared/util/sta
                     {{ documentItem.reviewStatusLabel }}
                   </mvp-status-badge>
                 </td>
-                <td data-column="send-status" data-label="Invio">
+                <td data-column="send-status" data-label="Scaricamento">
                   <mvp-status-badge [tone]="getSendStatusTone(documentItem.sendStatus)">
                     {{ documentItem.sendStatusLabel }}
                   </mvp-status-badge>

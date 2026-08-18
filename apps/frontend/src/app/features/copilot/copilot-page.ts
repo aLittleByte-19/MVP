@@ -81,11 +81,11 @@ const MONTHS = [
             <input id="filter-search" type="text" formControlName="search" placeholder="Cerca nello storico..." />
           </label>
           <label class="field" for="filter-send-status">
-            <span>Stato invio</span>
+            <span>Stato scaricamento</span>
             <select id="filter-send-status" formControlName="sendStatus">
               <option value="">Tutti</option>
-              <option [value]="sendStatuses.sent">Inviato</option>
-              <option [value]="sendStatuses.pending">Non inviato</option>
+              <option [value]="sendStatuses.sent">Scaricato</option>
+              <option [value]="sendStatuses.pending">Non scaricato</option>
             </select>
           </label>
           <label class="field" for="filter-confidence-criterion">
@@ -156,7 +156,7 @@ const MONTHS = [
           [presentation]="vm.metricsPresentation()"
           ariaLabel="Metriche del Co-Pilot documentale"
         />
-        <h3 class="compositionTitle">Esito della revisione</h3>
+        <h3>Esito della revisione</h3>
         <mvp-metric-composition
           [parts]="vm.reviewComposition()"
           subject="sotto-documenti"

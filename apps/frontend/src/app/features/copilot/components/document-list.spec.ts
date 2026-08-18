@@ -15,7 +15,7 @@ function subDocument(overrides: Partial<SubDocument> = {}): SubDocument {
     reviewStatus: "auto_validated",
     reviewStatusLabel: "Validato automaticamente",
     sendStatus: "pending",
-    sendStatusLabel: "Da inviare",
+    sendStatusLabel: "Non scaricato",
     previewLines: [],
     ...overrides
   };
@@ -82,12 +82,12 @@ describe("DocumentListComponent", () => {
   it("mostra le etichette di stato che arrivano dal backend", () => {
     const element = render({
       documents: [
-        subDocument({ reviewStatusLabel: "In quarantena", sendStatusLabel: "Inviato" })
+        subDocument({ reviewStatusLabel: "In quarantena", sendStatusLabel: "Scaricato" })
       ]
     }).nativeElement as HTMLElement;
 
     expect(element.textContent).toContain("In quarantena");
-    expect(element.textContent).toContain("Inviato");
+    expect(element.textContent).toContain("Scaricato");
   });
 
   it("evidenzia il documento selezionato", () => {
