@@ -13,7 +13,7 @@ import { EmptyStateComponent } from "../../../shared/components/empty-state/empt
 import { StatusBadgeComponent } from "../../../shared/components/status-badge/status-badge";
 import { ButtonComponent } from "../../../shared/components/button/button";
 import { SectionComponent } from "../../../layout/section/section";
-import { StarRating } from "../../../components/star-rating/star-rating";
+import { StarRating } from "../../../shared/components/star-rating/star-rating";
 import type { UpdateCommunicationRequest } from "../../../../api/generated/model";
 import {
   RATING_COMMENT_MAX_LENGTH,
@@ -129,9 +129,13 @@ import {
 
           <div class="rating-section">
             <h3 class="rating-label">Valuta questa bozza</h3>
+            @if (!hasRated()) {
+              <p class="rating-note">La valutazione si assegna una volta sola.</p>
+            }
             <mvp-star-rating
               [rating]="displayRating()"
               [disabled]="hasRated() || isRating()"
+              [label]="hasRated() ? 'Punteggio assegnato' : 'Assegna un punteggio da 1 a 5 stelle'"
               (rated)="onStarsSelected($event)"
             ></mvp-star-rating>
 
