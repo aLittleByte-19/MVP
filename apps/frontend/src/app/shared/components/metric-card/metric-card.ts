@@ -1,5 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, input } from "@angular/core";
-import { type MetricTone, NOT_AVAILABLE, sparklineEnd, sparklinePoints } from "../../util/metrics";
+import {
+  formatCount,
+  type MetricTone,
+  NOT_AVAILABLE,
+  sparklineEnd,
+  sparklinePoints
+} from "../../util/metrics";
 
 const SPARK_WIDTH = 96;
 const SPARK_HEIGHT = 30;
@@ -26,12 +32,19 @@ const SPARK_HEIGHT = 30;
         <span class="figure">
           @if (isLoading()) {
             <span class="skeleton num" aria-hidden="true"></span>
-            <span class="sr-only">Caricamento in corso</span>
+            <span class="srOnly">Caricamento in corso</span>
           } @else {
-            <span class="num">{{ displayValue() }}</span>
-            @if (unit(); as unitText) {
-              <span class="unit">{{ unitText }}</span>
-            }
+            <span class="lead">
+              <span class="num">{{ displayValue() }}</span>
+              @if (outOfDisplay(); as total) {
+                <span class="total"
+                  ><span class="srOnly">su </span><span aria-hidden="true">/</span>{{ total }}</span
+                >
+              }
+              @if (unit(); as unitText) {
+                <span class="unit">{{ unitText }}</span>
+              }
+            </span>
             @if (sparkPoints(); as points) {
               <svg
                 class="spark"
@@ -68,6 +81,12 @@ export class MetricCardComponent {
   readonly label = input.required<string>();
   readonly value = input.required<string | number | null>();
   readonly unit = input<string | null>(null);
+  /**
+   * Totale di riferimento, reso accanto al valore come "23/412" invece che in
+   * una riga a parte: cosi' il numero piccolo resta sulla linea di base del
+   * numero grande e le schede affiancate restano allineate.
+   */
+  readonly outOf = input<number | null>(null);
   readonly tone = input<MetricTone>("neutral");
   /** Riga sotto il numero: rapporto sul totale, elementi nuovi oggi, o l'errore. */
   readonly context = input<string | null>(null);
@@ -82,6 +101,12 @@ export class MetricCardComponent {
     const current = this.value();
 
     return current === null || current === "" ? NOT_AVAILABLE : String(current);
+  });
+
+  protected readonly outOfDisplay = computed(() => {
+    const total = this.outOf();
+
+    return total === null ? null : formatCount(total);
   });
 
   protected readonly sparkPoints = computed(() =>

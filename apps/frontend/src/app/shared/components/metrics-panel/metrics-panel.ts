@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from "@angular/core";
 import type { Metric } from "../../../../api/generated/model";
-import { formatCount, formatMetric, type MetricTone, newToday } from "../../util/metrics";
+import { formatMetric, type MetricTone, newToday } from "../../util/metrics";
 import { EmptyStateComponent } from "../empty-state/empty-state";
 import { MetricCardComponent } from "../metric-card/metric-card";
 
@@ -35,6 +35,7 @@ export interface MetricPresentation {
               [value]="entry.value"
               [unit]="entry.unit"
               [tone]="entry.tone"
+              [outOf]="entry.outOf"
               [context]="entry.context"
               [history]="entry.history"
             />
@@ -72,31 +73,36 @@ export class MetricsPanelComponent {
         value: formatted.value,
         unit: formatted.unit,
         tone: presentation?.tone ?? ("neutral" as MetricTone),
-        context: this.contextFor(metric, presentation),
+        outOf: outOfFor(metric, presentation),
+        context: this.contextFor(metric),
         history: metric.history
       };
     })
   );
 
   /**
-   * Riga di contesto: risponde a "e' tanto?" con il rapporto sul totale, e a
-   * "sta crescendo?" con gli ingressi di oggi. La serie e' un flusso, quindi
-   * si dice "nuovi oggi" e mai "rispetto a ieri" (vedi lo schema Metric).
+   * Riga di contesto: risponde a "sta crescendo?" con gli ingressi di oggi. Il
+   * rapporto sul totale non passa piu' di qui, sta accanto al valore. La serie
+   * e' un flusso, quindi si dice "nuovi oggi" e mai "rispetto a ieri" (vedi lo
+   * schema Metric).
    */
-  private contextFor(metric: Metric, presentation?: MetricPresentation): string | null {
-    const parts: string[] = [];
-    const total = presentation?.outOf;
-
-    if (total !== undefined && total > 0 && typeof metric.value === "number") {
-      parts.push(`su ${formatCount(total)} totali`);
-    }
-
+  private contextFor(metric: Metric): string | null {
     const today = newToday(metric.history);
 
-    if (today !== null && today > 0) {
-      parts.push(today === 1 ? "1 nuovo oggi" : `${today} nuovi oggi`);
+    if (today === null || today <= 0) {
+      return null;
     }
 
-    return parts.length ? parts.join(" · ") : null;
+    return today === 1 ? "1 nuovo oggi" : `${today} nuovi oggi`;
   }
+}
+
+/**
+ * Totale di riferimento da mostrare accanto al valore ("23/412"). Vale solo per
+ * i conteggi: accanto a una media il rapporto non direbbe nulla.
+ */
+function outOfFor(metric: Metric, presentation?: MetricPresentation): number | null {
+  const total = presentation?.outOf;
+
+  return total !== undefined && total > 0 && typeof metric.value === "number" ? total : null;
 }

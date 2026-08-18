@@ -71,14 +71,17 @@ describe("OverviewPageViewModel", () => {
 
     expect(vm.priorities().every((priority) => priority.value === null)).toBe(true);
     expect(vm.priorities().every((priority) => priority.context === null)).toBe(true);
+    expect(vm.priorities().every((priority) => priority.outOf === null)).toBe(true);
   });
 
-  it("descrive la quota sul totale e gli ingressi di oggi", () => {
+  it("espone la quota sul totale e gli ingressi di oggi", () => {
     const vm = createViewModel();
     const review = vm.priorities()[0]!;
 
     expect(review.value).toBe(3);
-    expect(review.context).toBe("su 412 sotto-documenti · 1 nuovo oggi");
+    // Il totale sta accanto al valore ("3/412"), non nella riga di contesto.
+    expect(review.outOf).toBe(412);
+    expect(review.context).toBe("1 nuovo oggi");
     expect(review.tone).toBe("watch");
   });
 
