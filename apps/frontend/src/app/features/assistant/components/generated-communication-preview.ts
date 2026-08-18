@@ -83,7 +83,7 @@ import {
           @if (saveError()) {
             <p class="errorNote">{{ saveError() }}</p>
           }
-          <form [formGroup]="form" [class.isEditing]="isEditing()" (ngSubmit)="save(currentDraft.id)">
+          <form id="draftForm" [formGroup]="form" [class.isEditing]="isEditing()" (ngSubmit)="save(currentDraft.id)">
             <label class="field">
               <span>Titolo</span>
               <input [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" formControlName="title" />
@@ -97,23 +97,6 @@ import {
                 formControlName="body"
               ></textarea>
             </label>
-            <div class="reviewActions">
-              @if (isEditing()) {
-                <button mvpButton variant="secondary" type="button" [disabled]="isSaving()" (click)="cancelEdit(currentDraft)">
-                  <svg lucideX aria-hidden="true"></svg>
-                  Annulla
-                </button>
-                <button mvpButton type="submit" [disabled]="isSaving() || form.invalid">
-                  <svg lucideSave aria-hidden="true"></svg>
-                  {{ isSaving() ? "Salvataggio" : "Salva" }}
-                </button>
-              } @else if (!isDiscarded(currentDraft)) {
-                <button mvpButton variant="secondary" type="button" (click)="startEdit(currentDraft)">
-                  <svg lucidePencil aria-hidden="true"></svg>
-                  Modifica
-                </button>
-              }
-            </div>
           </form>
           @if (isReadyForPreview(currentDraft)) {
             <div class="previewBlock">
@@ -189,8 +172,24 @@ import {
             <mvp-status-badge>{{ currentDraft.status }}</mvp-status-badge>
             <span>Creato da AI Assistant{{ isEditing() ? "" : " · anteprima in sola lettura" }}</span>
           </div>
-          <div class="reviewActions">
-            @if (!isDiscarded(currentDraft)) {
+          <div class="actionBar">
+            @if (isEditing()) {
+              <button mvpButton variant="secondary" type="button" [disabled]="isSaving()" (click)="cancelEdit(currentDraft)">
+                <svg lucideX aria-hidden="true"></svg>
+                Annulla
+              </button>
+              <!-- Il comando sta fuori dal form: l'attributo form lo lega
+                   comunque al suo invio, e la barra resta una sola invece di
+                   due divise dai metadati della bozza. -->
+              <button mvpButton type="submit" form="draftForm" [disabled]="isSaving() || form.invalid">
+                <svg lucideSave aria-hidden="true"></svg>
+                {{ isSaving() ? "Salvataggio" : "Salva" }}
+              </button>
+            } @else if (!isDiscarded(currentDraft)) {
+              <button mvpButton variant="secondary" type="button" (click)="startEdit(currentDraft)">
+                <svg lucidePencil aria-hidden="true"></svg>
+                Modifica
+              </button>
               @if (!isApproved(currentDraft)) {
                 <button
                   mvpButton
@@ -210,8 +209,6 @@ import {
               >
                 Rigenera bozza
               </button>
-            }
-            @if (!isDiscarded(currentDraft)) {
               @if (isConfirmingDiscard()) {
                 <p class="warning" role="status">
                   Sei sicuro di voler scartare questa bozza? Non sarà più modificabile né rigenerabile.

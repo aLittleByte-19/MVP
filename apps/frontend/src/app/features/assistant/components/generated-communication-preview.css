@@ -122,11 +122,22 @@
   color: var(--mvp-muted);
 }
 
-.reviewActions {
+/* Una sola barra dei comandi, in fondo alla scheda. Erano due blocchi divisi
+   dai metadati della bozza: chi cercava "Salva" lo trovava sopra o sotto a
+   seconda di cosa stesse facendo. */
+.actionBar {
   display: flex;
   flex-wrap: wrap;
   gap: var(--mvp-space-2);
   align-items: center;
+  padding-top: var(--mvp-space-3);
+  border-top: 1px solid var(--mvp-border-soft);
+}
+
+/* Il vincolo occupa la riga per intero: separa la domanda dai due comandi che
+   la rispondono, invece di infilarsi fra loro. */
+.actionBar .warning {
+  flex-basis: 100%;
 }
 
 .draft h3,
