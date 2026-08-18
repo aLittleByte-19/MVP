@@ -16,14 +16,6 @@
   background: var(--mvp-surface-muted);
 }
 
-.eyebrow {
-  margin: 0;
-  color: var(--mvp-primary-deep);
-  font-size: var(--mvp-font-xs);
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
 .previewFrame {
   display: grid;
   gap: var(--mvp-space-2);
@@ -49,41 +41,14 @@
 
 .previewFrame strong {
   color: var(--mvp-text);
-  line-height: 1.35;
+  line-height: var(--mvp-line-tight);
   overflow-wrap: anywhere;
 }
 
 .previewFrame span {
   color: var(--mvp-muted);
-  line-height: 1.45;
+  line-height: var(--mvp-line-body);
   overflow-wrap: anywhere;
-}
-
-.previewLink {
-  margin-top: var(--mvp-space-1);
-  min-height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  justify-self: stretch;
-  padding: 8px 12px;
-  border-radius: var(--mvp-radius);
-  background: var(--mvp-surface-soft);
-  color: var(--mvp-primary-deep);
-  font-weight: 700;
-  text-align: center;
-  text-decoration: none;
-}
-
-.previewLink:hover,
-.previewLink:focus-visible {
-  box-shadow: 0 8px 18px rgba(47, 103, 143, 0.14);
-}
-
-.downloadLink {
-  background: var(--mvp-primary);
-  color: #ffffff;
 }
 
 .previewLines {
@@ -100,7 +65,7 @@
   padding: 5px 0 5px 16px;
   color: var(--mvp-muted);
   font-size: var(--mvp-font-xs);
-  line-height: 1.45;
+  line-height: var(--mvp-line-body);
   overflow-wrap: anywhere;
 }
 
@@ -114,16 +79,6 @@
   border-radius: 999px;
   background: var(--mvp-primary);
   opacity: 0.55;
-}
-
-.errorNote {
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px solid #f0bf98;
-  border-radius: var(--mvp-radius);
-  background: var(--mvp-warning-soft);
-  color: var(--mvp-warning);
-  font-weight: 700;
 }
 
 .inspectorHeading {
@@ -176,42 +131,25 @@
   gap: var(--mvp-space-3);
 }
 
-/* align-content start: le celle della griglia sono alte quanto la piu' alta
-   della riga, e senza questo vincolo il campo affiancato a uno in errore si
-   stirerebbe per riempire lo spazio, disallineando le caselle. */
-.field {
-  display: grid;
-  align-content: start;
-  gap: var(--mvp-space-1);
-  color: var(--mvp-text);
-  font-weight: 700;
-}
+/* Il campo base sta in `shared/styles/field.css`. Qui restano solo gli stati:
+   da chi viene il valore, e se e' modificabile adesso. */
 
-.field span {
-  color: var(--mvp-muted);
-  font-size: var(--mvp-font-xs);
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
+/* Il testo di un dato estratto pesa piu' di quello che si digita: si legge in
+   diagonale insieme agli altri dodici. */
 .field input,
-.field textarea {
-  width: 100%;
-  min-height: 40px;
-  padding: 9px 11px;
-  border: 1px solid var(--mvp-border-soft);
-  border-radius: var(--mvp-radius);
-  background: var(--mvp-surface);
-  color: var(--mvp-text);
-  -webkit-text-fill-color: var(--mvp-text);
+.field textarea,
+.field select {
   font-weight: 700;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
+  line-height: var(--mvp-line-tight);
 }
 
 .field textarea {
   min-height: 94px;
-  resize: vertical;
+}
+
+.field input,
+.field textarea {
+  -webkit-text-fill-color: var(--mvp-text);
 }
 
 .editableField input[readonly],
@@ -222,22 +160,22 @@
 
 .confidenceLow .editableField input[readonly],
 .confidenceLow .editableField textarea[readonly] {
-  border-color: #f0bf98;
+  border-color: var(--mvp-warning-border);
   background: var(--mvp-warning-soft);
 }
 
-/* Validato automaticamente (alta confidenza): campi in azzurro. */
+/* Validato automaticamente (alta confidenza). */
 .statusAuto .editableField input[readonly],
 .statusAuto .editableField textarea[readonly] {
-  border-color: var(--mvp-primary);
-  background: rgba(121, 173, 211, 0.16);
+  border-color: var(--mvp-primary-border);
+  background: var(--mvp-primary-soft);
 }
 
-/* Validato/corretto manualmente: campi in verde. Ultima regola a pari
-   specificita': la conferma umana prevale anche su una confidenza bassa. */
+/* Validato o corretto manualmente. Ultima regola a pari specificita': la
+   conferma umana prevale anche su una confidenza bassa. */
 .statusManual .editableField input[readonly],
 .statusManual .editableField textarea[readonly] {
-  border-color: #c9e5d3;
+  border-color: var(--mvp-success-border);
   background: var(--mvp-success-soft);
 }
 
@@ -257,35 +195,22 @@
   -webkit-text-fill-color: var(--mvp-text);
 }
 
-.isEditing .editableField input:focus,
-.isEditing .editableField textarea:focus {
-  border-color: var(--mvp-primary);
-  outline: 3px solid rgba(111, 166, 207, 0.22);
-}
-
+/* Un campo che non passa la validazione va segnalato mentre lo si corregge,
+   cioe' proprio quando `.isEditing .editableField` e `.statusManual ...` sono
+   attive: la specificita' deve superare le loro tre classi, altrimenti
+   l'errore resta invisibile. */
 .field input.invalid,
-.field select.invalid {
-  border-color: #f0bf98;
-  background: var(--mvp-warning-soft);
+.field textarea.invalid,
+.field select.invalid,
+.isEditing .editableField input.invalid,
+.isEditing .editableField textarea.invalid {
+  border-color: var(--mvp-danger-border);
+  background: var(--mvp-danger-soft);
 }
 
-/* Piu' specifico di ".field span": a parita' di peso quella regola vincerebbe
-   e imporrebbe al messaggio lo stile dell'etichetta, cioe' maiuscolo, 800 e
-   colore muted, rendendolo indistinguibile da un titolo di campo. */
-.field .fieldError {
-  color: var(--mvp-warning);
-  font-size: var(--mvp-font-sm);
-  font-weight: 600;
-  text-transform: none;
-}
-
-.field select {
-  width: 100%;
-  padding: 9px 11px;
-  border: 1px solid var(--mvp-border-soft);
-  border-radius: var(--mvp-radius);
-  background: var(--mvp-surface);
-  color: var(--mvp-text);
+.copyFeedback {
+  color: var(--mvp-success);
+  font-size: var(--mvp-font-xs);
   font-weight: 700;
 }
 
@@ -305,13 +230,6 @@
 
 .copyButton {
   flex-shrink: 0;
-}
-
-.copyFeedback {
-  color: var(--mvp-success);
-  font-size: var(--mvp-font-xs);
-  font-weight: 700;
-  text-transform: none;
 }
 
 .reviewActions {

@@ -1,0 +1,81 @@
+/**
+ * La coppia etichetta + controllo, definita una volta sola (ADR 0012).
+ *
+ * Era riscritta in otto varianti divergenti: bordo `--mvp-border`,
+ * `--mvp-border-strong` o `--mvp-border-soft`, fondo `--mvp-surface` o
+ * `--mvp-surface-muted`, altezza 40 o 42px, etichetta maiuscola solo
+ * nell'ispettore. Un campo aveva quindi un aspetto diverso a seconda della
+ * pagina in cui capitava.
+ *
+ * Si importa via `styleUrls` come gia' fa `data-table.css`: e' un foglio
+ * condiviso, non un componente. La griglia che dispone i campi resta di chi lo
+ * usa — qui c'e' il campo, non il modulo.
+ */
+
+.field {
+  display: grid;
+  gap: var(--mvp-space-1);
+  align-content: start;
+  color: var(--mvp-text);
+}
+
+/* Etichetta di campo: minuscola e di peso medio. Il maiuscolo serve dove la
+   stringa e' breve e marca una categoria; qui puo' essere lunga ("Data e ora di
+   caricamento") e diventerebbe un blocco. */
+.field > span {
+  font-size: var(--mvp-label-b-size);
+  font-weight: var(--mvp-label-b-weight);
+  color: var(--mvp-muted);
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-height: var(--mvp-control-h);
+  padding: 0 var(--mvp-space-3);
+  border: 1px solid var(--mvp-border-strong);
+  border-radius: var(--mvp-radius);
+  background: var(--mvp-surface);
+  color: var(--mvp-text);
+  font: inherit;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.field textarea {
+  min-height: 120px;
+  padding: var(--mvp-space-3);
+  line-height: var(--mvp-line-body);
+  resize: vertical;
+}
+
+/* Un valore non modificabile non e' un campo spento: e' un dato. Resta
+   riconoscibile come tale senza somigliare a una casella rotta. */
+.field input:disabled,
+.field textarea:disabled {
+  background: var(--mvp-surface-soft);
+  border-color: var(--mvp-border-soft);
+  color: var(--mvp-muted);
+  -webkit-text-fill-color: var(--mvp-muted);
+}
+
+.field .hint {
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-xs);
+}
+
+/* Piu' specifico di `.field > span`: senza, il messaggio erediterebbe lo stile
+   dell'etichetta e sarebbe indistinguibile da un titolo di campo. */
+.field .fieldError {
+  color: var(--mvp-danger);
+  font-size: var(--mvp-font-sm);
+  font-weight: 600;
+}
+
+.field input.invalid,
+.field select.invalid,
+.field textarea.invalid {
+  border-color: var(--mvp-danger);
+  background: var(--mvp-danger-soft);
+}

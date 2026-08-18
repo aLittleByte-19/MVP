@@ -102,7 +102,11 @@ import type {
       </div>
     </mvp-section>
   `,
-  styleUrl: "./communication-generator-panel.css"
+  styleUrls: [
+    "../../../shared/styles/field.css",
+    "../../../shared/styles/notice.css",
+    "./communication-generator-panel.css"
+  ]
 })
 export class CommunicationGeneratorPanelComponent {
   readonly isGenerating = input.required<boolean>();

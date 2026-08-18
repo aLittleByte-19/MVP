@@ -73,7 +73,7 @@ import { formatDateForDisplay } from "../../../shared/util/formatters";
       </div>
     }
   `,
-  styleUrl: "./prompt-configuration-list.css"
+  styleUrls: ["../../../shared/styles/notice.css", "./prompt-configuration-list.css"]
 })
 export class PromptConfigurationListComponent {
   readonly configurations = input<PromptConfiguration[]>([]);

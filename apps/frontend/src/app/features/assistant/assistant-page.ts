@@ -157,7 +157,7 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
       </mvp-section>
     </section>
   `,
-  styleUrls: ["../overview/overview-page.css"],
+  styleUrls: ["../../shared/styles/page.css", "../../shared/styles/field.css"],
   styles: [
     `
     .filters {

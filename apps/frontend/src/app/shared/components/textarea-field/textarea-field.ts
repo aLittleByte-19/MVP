@@ -16,7 +16,7 @@ import { type FormControl, ReactiveFormsModule } from "@angular/forms";
       ></textarea>
     </label>
   `,
-  styleUrl: "./textarea-field.css"
+  styleUrls: ["../../styles/field.css", "./textarea-field.css"]
 })
 export class TextAreaFieldComponent {
   readonly label = input.required<string>();
