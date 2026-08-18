@@ -75,7 +75,7 @@ describe("PromptConfigurationListComponent", () => {
     fixture.componentInstance.confirmDeleteRequested.subscribe(confirmRequested);
     fixture.componentInstance.deleteRequested.subscribe(deleteRequested);
 
-    expect(host.textContent).toContain("Eliminare definitivamente questa configurazione salvata?");
+    expect(host.textContent).toContain("La configurazione viene rimossa in modo definitivo.");
 
     const [conferma, annulla] = Array.from(
       host.querySelectorAll<HTMLButtonElement>(".cardActions button")

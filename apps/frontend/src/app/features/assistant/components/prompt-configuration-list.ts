@@ -46,7 +46,7 @@ import { formatDateForDisplay } from "../../../shared/util/formatters";
             </div>
             @if (confirmingDeleteId() === configuration.id) {
               <div class="cardConfirm">
-                <p class="warning" role="status">Eliminare definitivamente questa configurazione salvata?</p>
+                <p class="warning" role="status">La configurazione viene rimossa in modo definitivo.</p>
                 <div class="cardActions">
                   <button
                     mvpButton

@@ -94,7 +94,7 @@ describe("CommunicationHistoryListComponent", () => {
     fixture.componentInstance.confirmDeleteRequested.subscribe(confirmRequested);
     fixture.componentInstance.deleteRequested.subscribe(deleteRequested);
 
-    expect(host.textContent).toContain("Eliminare definitivamente questo elemento dallo storico?");
+    expect(host.textContent).toContain("L'elemento viene rimosso dallo storico in modo definitivo.");
 
     const [conferma, annulla] = Array.from(
       host.querySelectorAll<HTMLButtonElement>(".cardActions button")

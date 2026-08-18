@@ -34,13 +34,14 @@ import type {
   template: `
     <mvp-section class="form" id="assistant-compose" title="Crea una bozza">
       <p class="note">
-        Inserisci cosa comunicare e pochi parametri editoriali. Genera la bozza e rivedi titolo e testo nell'anteprima.
+        Il prompt descrive cosa comunicare; tono e stile guidano la resa. La bozza generata resta modificabile
+        nell'anteprima.
       </p>
       <form [formGroup]="form" (ngSubmit)="submit()">
         <mvp-textarea-field
           label="Prompt"
           [rows]="6"
-          placeholder="Descrivi la comunicazione interna da generare."
+          placeholder="Oggetto della comunicazione interna"
           [control]="form.controls.prompt"
         />
         <div class="fieldRow">
@@ -64,7 +65,7 @@ import type {
             <input
               type="text"
               [formControl]="configNameControl"
-              placeholder="Lascia vuoto per un nome automatico"
+              placeholder="Nome automatico se lasciato vuoto"
               maxlength="150"
             />
           </label>

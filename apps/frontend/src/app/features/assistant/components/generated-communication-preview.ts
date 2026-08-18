@@ -128,7 +128,7 @@ import {
                 <textarea
                   rows="3"
                   [formControl]="commentControl"
-                  placeholder="Aggiungi un commento alla valutazione"
+                  placeholder="Commento alla valutazione"
                 ></textarea>
                 <span class="commentMeta" [class.isInvalid]="commentTooLong()">
                   {{ commentLength() }} / {{ commentMaxLength }}
@@ -213,7 +213,7 @@ import {
               </button>
               @if (isConfirmingDiscard()) {
                 <p class="warning" role="status">
-                  Sei sicuro di voler scartare questa bozza? Non sarà più modificabile né rigenerabile.
+                  Una bozza scartata non è più modificabile né rigenerabile.
                 </p>
                 <button mvpButton type="button" [disabled]="isDiscarding()" (click)="discard.emit()">
                   Conferma eliminazione
@@ -242,7 +242,7 @@ import {
           </div>
         </article>
       } @else {
-        <mvp-empty-state>La bozza generata apparira qui.</mvp-empty-state>
+        <mvp-empty-state>La bozza generata compare qui.</mvp-empty-state>
       }
     </mvp-section>
   `,
