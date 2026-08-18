@@ -135,14 +135,17 @@ const emptySendMessageForm: SendMessageFormState = {
               <p class="errorNote">{{ reviewError() }}</p>
             }
 
-            <form
+            <!-- Non e' un <form>: il pannello non si invia. Per quasi tutto il
+                 tempo e' in sola lettura, e un form senza comando di invio e'
+                 una promessa che l'elemento non mantiene. Il salvataggio e'
+                 un comando esplicito. -->
+            <div
               [formGroup]="form"
               class="inspectorForm"
               [class.isEditing]="isEditing()"
               [class.confidenceLow]="document.reviewStatus === 'needs_review'"
               [class.statusAuto]="document.reviewStatus === 'auto_validated'"
               [class.statusManual]="document.reviewStatus === 'manually_validated'"
-              (ngSubmit)="saveReview()"
             >
               <div class="inspectorGrid">
                 <label class="field editableField">
@@ -276,7 +279,7 @@ const emptySendMessageForm: SendMessageFormState = {
                     <svg lucideX aria-hidden="true"></svg>
                     Annulla
                   </button>
-                  <button mvpButton type="submit" [disabled]="isSavingReview()">
+                  <button mvpButton type="button" [disabled]="isSavingReview()" (click)="saveReview()">
                     <svg lucideSave aria-hidden="true"></svg>
                     {{ isSavingReview() ? "Salvataggio" : "Salva" }}
                   </button>
@@ -314,14 +317,13 @@ const emptySendMessageForm: SendMessageFormState = {
                   }
                 }
               </div>
-            </form>
+            </div>
 
             @if (isSendOpen()) {
-              <form
+              <div
                 [formGroup]="sendForm"
                 class="sendSection"
                 [class.isEditing]="isSendEditing()"
-                (ngSubmit)="saveSendMessage(document)"
               >
                 <div class="inspectorHeading">
                   <h3 class="eyebrow">Messaggio precompilato</h3>
@@ -369,7 +371,13 @@ const emptySendMessageForm: SendMessageFormState = {
                       <svg lucideX aria-hidden="true"></svg>
                       Annulla
                     </button>
-                    <button mvpButton variant="secondary" type="submit" [disabled]="isSavingSendMessage()">
+                    <button
+                      mvpButton
+                      variant="secondary"
+                      type="button"
+                      [disabled]="isSavingSendMessage()"
+                      (click)="saveSendMessage(document)"
+                    >
                       <svg lucideSave aria-hidden="true"></svg>
                       Salva
                     </button>
@@ -384,7 +392,7 @@ const emptySendMessageForm: SendMessageFormState = {
                     <a class="previewLink downloadLink" [href]="document.sendExportUrl">Scarica PDF</a>
                   }
                 </div>
-              </form>
+              </div>
             }
           </article>
         </div>

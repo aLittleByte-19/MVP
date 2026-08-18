@@ -87,7 +87,7 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
 
         <span actions>{{ vm.filteredCommunications().length }} record</span>
 
-        <form class="filters" [formGroup]="filterForm" aria-label="Filtra storico comunicazioni">
+        <div class="filters" role="search" [formGroup]="filterForm" aria-label="Filtra storico comunicazioni">
           <label class="field" for="filter-keyword">
             <span>Parola chiave</span>
             <input id="filter-keyword" type="text" formControlName="keyword" placeholder="Cerca nel prompt..." />
@@ -115,7 +115,7 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
             <input id="filter-date" type="date" formControlName="date" />
           </label>
           <button mvpButton variant="secondary" type="button" (click)="resetFilters()">Azzera filtri</button>
-        </form>
+        </div>
 
         <mvp-prompt-configuration-list
           [configurations]="vm.filteredPromptConfigurations()"

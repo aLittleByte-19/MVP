@@ -131,9 +131,12 @@
   color: var(--mvp-success);
 }
 
+/* Il grigio del bordo non basta: e' un contorno, non un testo, e a 1.48:1
+   contro la superficie SC 1.4.3 lo boccia. Il contrassegno resta comunque il
+   piu' silenzioso dei quattro. */
 .lockedMark .mark,
 .lockedField .mark {
-  color: var(--mvp-border-strong);
+  color: var(--mvp-muted);
 }
 
 .field > span {
