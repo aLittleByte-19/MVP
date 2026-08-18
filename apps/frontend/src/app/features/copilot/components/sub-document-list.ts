@@ -264,7 +264,7 @@ const emptySendMessageForm: SendMessageFormState = {
                 </label>
               </div>
 
-              <div class="reviewActions">
+              <div class="actionBar">
                 @if (isEditing()) {
                   <button
                     mvpButton
