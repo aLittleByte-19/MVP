@@ -104,7 +104,7 @@
   color: var(--mvp-primary-deep);
 }
 
-@media (max-width: 920px) {
+@media (max-width: 1100px) {
   .sidebar {
     position: static;
     height: auto;

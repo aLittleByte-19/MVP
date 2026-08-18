@@ -1,14 +1,55 @@
+/* Le larghezze appartengono a questa tabella, non al foglio condiviso: con
+   `table-layout: fixed` una colonna senza regola resterebbe a zero, quindi
+   sommano a 100%. */
+.table th[data-column="recipient"],
+.table td[data-column="recipient"] {
+  width: 26%;
+}
+
+.table th[data-column="type"],
+.table td[data-column="type"] {
+  width: 15%;
+}
+
+.table th[data-column="uploadedAt"],
+.table td[data-column="uploadedAt"] {
+  width: 14%;
+}
+
+.table th[data-column="confidence"],
+.table td[data-column="confidence"] {
+  width: 9%;
+}
+
+.table th[data-column="review"],
+.table td[data-column="review"] {
+  width: 16%;
+}
+
+.table th[data-column="download"],
+.table td[data-column="download"] {
+  width: 12%;
+}
+
+.table th[data-column="actions"],
+.table td[data-column="actions"] {
+  width: 8%;
+}
+
 .recipient {
   display: grid;
-  gap: var(--mvp-space-1);
+  gap: 2px;
 }
 
 .recipient small {
   color: var(--mvp-muted);
 }
 
-.date {
-  white-space: nowrap;
+/* Il documento di partenza: nome del file e data che porta scritta sopra. Sta
+   sotto al destinatario perche' serve a riconoscere l'originale, non a
+   confrontare righe fra loro — per quello ci sono le colonne. */
+.origin {
+  font-size: var(--mvp-font-xs);
 }
 
 /* Data e ora di caricamento (UC-39.15): data e orario restano interi, ma
@@ -18,8 +59,15 @@
   word-break: keep-all;
 }
 
+/* Le cifre restano nel carattere del testo, con le figure a larghezza fissa:
+   incolonnate come in un monospaziato, ma senza cambiare voce a meta' riga. */
+.figure {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
 .action {
-  min-height: 34px;
+  min-height: var(--mvp-control-h-compact);
   padding: 0 var(--mvp-space-3);
   /* L'etichetta resta su una riga: la cella eredita overflow-wrap anywhere,
      che altrimenti spezzerebbe la parola dentro il pulsante. */

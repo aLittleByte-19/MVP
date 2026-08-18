@@ -65,7 +65,7 @@ mvp-attention-note + .priorityGrid {
   width: 100%;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 900px) {
   .qualityGrid,
   .priorityGrid {
     grid-template-columns: 1fr;
@@ -76,3 +76,22 @@ mvp-attention-note + .priorityGrid {
   }
 }
 
+
+/* Le tre colonne dell'attività recente. Prima ereditavano quelle dello storico
+   documenti dal foglio condiviso: solo "status" trovava una regola, e le altre
+   due si spartivano lo spazio per il comportamento di default di
+   `table-layout: fixed`. */
+.table th[data-column="title"],
+.table td[data-column="title"] {
+  width: 52%;
+}
+
+.table th[data-column="status"],
+.table td[data-column="status"] {
+  width: 26%;
+}
+
+.table th[data-column="createdAt"],
+.table td[data-column="createdAt"] {
+  width: 22%;
+}
