@@ -118,10 +118,15 @@ const emptySendMessageForm: SendMessageFormState = {
           <article class="extracted">
             <div class="inspectorHeading">
               <h3 class="eyebrow">Dati estratti dall'OCR</h3>
-              <div class="fieldLegend" aria-label="Legenda campi">
-                <span><i class="editableDot"></i>Modificabile</span>
-                <span><i class="lockedDot"></i>Sola lettura</span>
-              </div>
+              <p class="fieldLegend">
+                <span class="legendItem extractedMark"
+                  ><i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i
+                  >{{ fieldMarkLabel(document) }}</span
+                >
+                <span class="legendItem lockedMark"
+                  ><i class="mark" aria-hidden="true">▪</i>Non modificabile</span
+                >
+              </p>
             </div>
             @if (document.error) {
               <p class="errorNote">{{ document.error }}</p>
@@ -141,19 +146,19 @@ const emptySendMessageForm: SendMessageFormState = {
             >
               <div class="inspectorGrid">
                 <label class="field editableField">
-                  <span>Nome e cognome</span>
+                  <span>Nome e cognome<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
                   <input formControlName="employeeName" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
                 </label>
                 <label class="field editableField">
-                  <span>Azienda</span>
+                  <span>Azienda<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
                   <input formControlName="companyName" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
                 </label>
                 <label class="field lockedField">
-                  <span>Nome file</span>
+                  <span>Nome file<i class="mark" aria-hidden="true">▪</i></span>
                   <input [value]="formatFallback(document.file)" readOnly disabled tabindex="-1" />
                 </label>
                 <label class="field editableField" for="document-date-field">
-                  <span>Data documento</span>
+                  <span>Data documento<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
                   @if (isEditing()) {
                     <input id="document-date-field" type="date" formControlName="documentDate" />
                   } @else {
@@ -161,11 +166,11 @@ const emptySendMessageForm: SendMessageFormState = {
                   }
                 </label>
                 <label class="field lockedField">
-                  <span>Numero pagine</span>
+                  <span>Numero pagine<i class="mark" aria-hidden="true">▪</i></span>
                   <input [value]="formatFallback(document.pages)" readOnly disabled tabindex="-1" />
                 </label>
                 <label class="field editableField" for="document-type-field">
-                  <span>Tipologia documento</span>
+                  <span>Tipologia documento<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
                   @if (isEditing()) {
                     <select id="document-type-field" formControlName="documentType">
                       <option value="">Seleziona...</option>
@@ -186,15 +191,15 @@ const emptySendMessageForm: SendMessageFormState = {
                   }
                 </label>
                 <label class="field lockedField">
-                  <span>Confidenza</span>
+                  <span>Confidenza<i class="mark" aria-hidden="true">▪</i></span>
                   <input [value]="confidenceDisplay(document)" readOnly disabled tabindex="-1" />
                 </label>
                 <label class="field lockedField">
-                  <span>Stato revisione</span>
+                  <span>Stato revisione<i class="mark" aria-hidden="true">▪</i></span>
                   <input [value]="document.reviewStatusLabel" readOnly disabled tabindex="-1" />
                 </label>
                 <label class="field lockedField">
-                  <span>Email destinatario</span>
+                  <span>Email destinatario<i class="mark" aria-hidden="true">▪</i></span>
                   <div class="fieldWithAction">
                     <input [value]="formatFallback(document.recipientEmail)" readOnly disabled tabindex="-1" />
                     @if (document.recipientEmail) {
@@ -215,11 +220,11 @@ const emptySendMessageForm: SendMessageFormState = {
                   }
                 </label>
                 <label class="field lockedField">
-                  <span>Data e ora di caricamento</span>
+                  <span>Data e ora di caricamento<i class="mark" aria-hidden="true">▪</i></span>
                   <input [value]="formatFallback(document.uploadedAt)" readOnly disabled tabindex="-1" />
                 </label>
                 <label class="field editableField formFull">
-                  <span>Descrizione</span>
+                  <span>Descrizione<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
                   <textarea
                     rows="3"
                     formControlName="description"
@@ -228,7 +233,7 @@ const emptySendMessageForm: SendMessageFormState = {
                   ></textarea>
                 </label>
                 <label class="field editableField">
-                  <span>Email destinatario</span>
+                  <span>Email destinatario<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
                   <input
                     formControlName="recipientEmail"
                     [readOnly]="!isEditing()"
@@ -241,7 +246,7 @@ const emptySendMessageForm: SendMessageFormState = {
                 </label>
 
                 <label class="field editableField">
-                  <span>Codice Fiscale</span>
+                  <span>Codice Fiscale<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
                   <input
                     formControlName="fiscalCode"
                     [readOnly]="!isEditing()"
@@ -254,7 +259,7 @@ const emptySendMessageForm: SendMessageFormState = {
                 </label>
 
                 <label class="field editableField">
-                  <span>Matricola dipendente</span>
+                  <span>Matricola dipendente<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
                   <input formControlName="employeeId" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
                 </label>
               </div>
@@ -531,6 +536,44 @@ export class SubDocumentListComponent {
    * quarantena, cioe' uno la cui estrazione il sistema stesso dichiara
    * inaffidabile, e produceva un messaggio su dati che nessuno aveva verificato.
    */
+  /**
+   * Contrassegno del campo estratto, a destra dell'etichetta.
+   *
+   * L'evidenziazione dei campi passa dal colore — azzurro, verde o ambra a
+   * seconda di come il dato e' stato stabilito — e SC 1.4.1 chiede che quella
+   * stessa informazione arrivi anche per altra via. Il glifo e' quello che
+   * l'etichetta di stato usa gia' per lo stesso tono, cosi' la riga della
+   * tabella e la scheda parlano la stessa lingua. Resta `aria-hidden`: chi
+   * legge con uno screen reader ha il campo "Stato revisione" e la sola
+   * lettura marcata su ogni controllo.
+   */
+  protected fieldMark(documentItem: SubDocument): string {
+    switch (documentItem.reviewStatus) {
+      case "manually_validated":
+        return "✓";
+      case "auto_validated":
+        return "◆";
+      case "needs_review":
+        return "!";
+      default:
+        return "×";
+    }
+  }
+
+  /** La legenda dice a parole cosa significa l'evidenziazione in corso. */
+  protected fieldMarkLabel(documentItem: SubDocument): string {
+    switch (documentItem.reviewStatus) {
+      case "manually_validated":
+        return "Confermato dall'operatore";
+      case "auto_validated":
+        return "Estratto e validato in automatico";
+      case "needs_review":
+        return "Estratto, da verificare";
+      default:
+        return "In quarantena";
+    }
+  }
+
   protected canPrepareMessage(documentItem: SubDocument): boolean {
     return (
       documentItem.reviewStatus === "auto_validated" ||
