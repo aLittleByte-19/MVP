@@ -90,6 +90,44 @@ describe("DocumentListComponent", () => {
     expect(element.textContent).toContain("Scaricato");
   });
 
+  it("tiene nelle colonne i dati dell'analisi e nella prima cella il documento di partenza", () => {
+    // La riga si legge come un documento in lavorazione, non come un elenco di
+    // nove campi alla pari: azienda, nome del file e data del documento
+    // stanno sotto al destinatario.
+    const element = render({ documents: [subDocument()] }).nativeElement as HTMLElement;
+    const columns = [...element.querySelectorAll("thead th")].map((th) =>
+      th.getAttribute("data-column")
+    );
+
+    expect(columns).toEqual([
+      "recipient",
+      "type",
+      "uploadedAt",
+      "confidence",
+      "review",
+      "download",
+      "actions"
+    ]);
+
+    const recipient = element.querySelector('td[data-column="recipient"]');
+
+    expect(recipient?.textContent).toContain("Acme SpA");
+    expect(recipient?.textContent).toContain("cedolini.pdf");
+  });
+
+  it("distingue lo stato di scaricamento da quello di validazione", () => {
+    // Due domande diverse, due forme diverse: rettangolo per la revisione,
+    // pallino pieno o vuoto per il download.
+    const element = render({
+      documents: [subDocument({ sendStatus: "sent", sendStatusLabel: "Scaricato" })]
+    }).nativeElement as HTMLElement;
+
+    expect(element.querySelector('td[data-column="review"] .badge')).not.toBeNull();
+    expect(element.querySelector('td[data-column="download"] .indicator')?.classList).toContain(
+      "done"
+    );
+  });
+
   it("evidenzia il documento selezionato", () => {
     const fixture = render({ documents: [subDocument(), subDocument({ id: "sub-2" })] });
     fixture.componentRef.setInput("selectedDocumentId", "sub-2");

@@ -1,4 +1,4 @@
-import { getReviewStatusTone, getSendStatusTone } from "./status";
+import { getReviewStatusTone } from "./status";
 
 describe("status utilities", () => {
   it("maps review states to visual tones used by badges", () => {
@@ -7,10 +7,5 @@ describe("status utilities", () => {
     expect(getReviewStatusTone("auto_validated")).toBe("info");
     expect(getReviewStatusTone("manually_validated")).toBe("success");
     expect(getReviewStatusTone("unknown")).toBe("neutral");
-  });
-
-  it("maps send status to visual tones used by badges", () => {
-    expect(getSendStatusTone("sent")).toBe("success");
-    expect(getSendStatusTone("pending")).toBe("warning");
   });
 });

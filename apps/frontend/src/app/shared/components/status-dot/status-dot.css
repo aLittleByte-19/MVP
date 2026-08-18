@@ -1,0 +1,31 @@
+.indicator {
+  display: inline-flex;
+  gap: var(--mvp-space-2);
+  align-items: center;
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-sm);
+  font-weight: 600;
+}
+
+.dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--mvp-border-strong);
+  border-radius: var(--mvp-radius-pill);
+}
+
+.done {
+  color: var(--mvp-success);
+}
+
+/* Pieno: il bordo diventa riempimento, cosi' l'ingombro non cambia e i pallini
+   di righe diverse restano incolonnati. */
+.done .dot {
+  border-color: var(--mvp-success);
+  background: var(--mvp-success);
+}
+
+:host {
+  display: contents;
+}

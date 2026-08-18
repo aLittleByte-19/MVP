@@ -22,7 +22,3 @@ export function getReviewStatusTone(reviewStatus?: string, error?: string | null
 
   return "neutral";
 }
-
-export function getSendStatusTone(sendStatus?: string): StatusTone {
-  return sendStatus === "sent" ? "success" : "warning";
-}

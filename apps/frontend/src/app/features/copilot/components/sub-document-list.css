@@ -265,7 +265,7 @@
   gap: var(--mvp-space-2);
 }
 
-@media (max-width: 760px) {
+@media (max-width: 900px) {
   .detailGrid,
   .inspectorGrid {
     grid-template-columns: 1fr;
