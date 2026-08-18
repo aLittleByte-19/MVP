@@ -49,7 +49,7 @@
 
 .danger {
   --tag-accent: var(--mvp-danger);
-  --tag-bg: var(--mvp-accent-soft);
+  --tag-bg: var(--mvp-danger-soft);
   --tag-color: var(--mvp-danger);
 }
 
