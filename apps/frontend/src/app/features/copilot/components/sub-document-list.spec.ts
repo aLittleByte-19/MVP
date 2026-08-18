@@ -24,7 +24,7 @@ function subDocument(overrides: Partial<SubDocument> = {}): SubDocument {
     reviewStatus: "auto_validated",
     reviewStatusLabel: "Validato automaticamente",
     sendStatus: "pending",
-    sendStatusLabel: "Da inviare",
+    sendStatusLabel: "Non scaricato",
     previewUrl: "/api/v1/documents/1/preview",
     sendRecipient: "paghe@example.test",
     sendSubject: "Cedolino",
@@ -56,6 +56,7 @@ interface TestableSubDocumentList {
   confidenceDisplay(document: SubDocument): string;
   documentDateDisplay(document: SubDocument): string;
   saveReview(): void;
+  canPrepareMessage(documentItem: SubDocument): boolean;
   readonly copiedEmail: Signal<boolean>;
   copyRecipientEmail(email: string): void;
 }
@@ -311,6 +312,21 @@ describe("SubDocumentListComponent", () => {
     await Promise.resolve();
 
     expect(component.copiedEmail()).toBe(false);
+  });
+
+  it("non lascia preparare il messaggio finche' i dati non sono stabiliti come corretti", () => {
+    // Prima il comando non aveva alcuna condizione: restava attivo anche su un
+    // documento in quarantena, cioe' su dati che il sistema stesso dichiara
+    // inaffidabili.
+    const { component } = render(subDocument());
+
+    for (const reviewStatus of ["needs_review", "quarantined"] as const) {
+      expect(component.canPrepareMessage(subDocument({ reviewStatus }))).toBe(false);
+    }
+
+    for (const reviewStatus of ["auto_validated", "manually_validated"] as const) {
+      expect(component.canPrepareMessage(subDocument({ reviewStatus }))).toBe(true);
+    }
   });
 
   it("annulla la sottoscrizione alla preview quando il componente viene distrutto", () => {

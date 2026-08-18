@@ -324,6 +324,15 @@
   border-top: 1px solid var(--mvp-border-soft);
 }
 
+/* Il motivo sta a sinistra delle azioni: un comando inattivo senza
+   spiegazione lascia l'operatore senza sapere cosa lo sblocca. */
+.actionHint {
+  margin-right: auto;
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-sm);
+  font-weight: 400;
+}
+
 .sendSection {
   display: grid;
   gap: var(--mvp-space-3);
