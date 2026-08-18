@@ -93,7 +93,7 @@
 
 .active {
   background: var(--mvp-primary);
-  color: #ffffff;
+  color: var(--mvp-surface);
 }
 
 /* L'hover generico non deve sovrascrivere lo sfondo dell'item attivo: in tema
@@ -101,7 +101,7 @@
    rendendo illeggibile il titolo della sezione corrente. */
 .item.active:hover {
   background: var(--mvp-primary);
-  color: #ffffff;
+  color: var(--mvp-surface);
 }
 
 .subitemActive {

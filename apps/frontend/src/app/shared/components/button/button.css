@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--mvp-space-2);
-  min-height: 44px;
+  min-height: var(--mvp-control-h);
   padding: 0 var(--mvp-space-4);
   border-radius: var(--mvp-radius);
   font-weight: 700;
@@ -12,7 +12,7 @@
 
 :host(.primary) {
   background: var(--mvp-primary);
-  color: #ffffff;
+  color: var(--mvp-surface);
 }
 
 :host(.secondary) {
@@ -24,7 +24,7 @@
 :host(.secondary):hover:not(:disabled),
 :host(.primary):focus-visible,
 :host(.secondary):focus-visible {
-  box-shadow: 0 8px 18px rgba(47, 103, 143, 0.14);
+  box-shadow: var(--mvp-shadow);
   transform: translateY(-1px);
 }
 
@@ -36,10 +36,42 @@
 }
 
 :host(.icon) {
-  width: 42px;
-  height: 42px;
+  width: var(--mvp-control-h);
+  height: var(--mvp-control-h);
   padding: 0;
   border: 1px solid var(--mvp-border);
   background: var(--mvp-surface);
   color: var(--mvp-primary-deep);
+}
+
+/* L'indicatore occupa spazio solo quando serve: la larghezza del pulsante non
+   deve cambiare a metà clic, quindi si aggiunge in coda invece di sostituire
+   il testo. */
+.spinner {
+  width: 0;
+  height: 14px;
+  border-radius: var(--mvp-radius-pill);
+  overflow: hidden;
+  transition: width 160ms ease;
+}
+
+.spinner.on {
+  width: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: mvpSpin 700ms linear infinite;
+}
+
+@keyframes mvpSpin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* Un movimento continuo è la prima cosa che SC 2.3.3 chiede di poter spegnere:
+   senza animazione l'indicatore resta comunque visibile come anello. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner.on {
+    animation: none;
+  }
 }

@@ -47,9 +47,9 @@ import type {
           <mvp-select-field label="Tono" [options]="tones" [control]="form.controls.tone" />
           <mvp-select-field label="Stile" [options]="styles" [control]="form.controls.style" />
         </div>
-        <button mvpButton type="submit" [disabled]="isGenerating()">
+        <button mvpButton type="submit" [disabled]="isGenerating()" [busy]="isGenerating()">
           <svg lucideSend aria-hidden="true"></svg>
-          <span>{{ isGenerating() ? "Generazione" : "Genera bozza" }}</span>
+          <span>Genera bozza</span>
         </button>
       </form>
       @if (phase() !== null && phase() !== "idle") {
@@ -77,7 +77,7 @@ import type {
             [disabled]="isSavingConfiguration() || form.controls.prompt.invalid"
             (click)="confirmSaveConfiguration()"
           >
-            {{ isSavingConfiguration() ? "Salvataggio…" : "Conferma salvataggio" }}
+            Conferma salvataggio
           </button>
           <button
             mvpButton

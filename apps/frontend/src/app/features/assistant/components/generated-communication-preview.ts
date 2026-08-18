@@ -153,9 +153,10 @@ import {
                 mvpButton
                 type="button"
                 [disabled]="isRating() || !selectedRating() || commentTooLong()"
+                [busy]="isRating()"
                 (click)="submitRating()"
               >
-                {{ isRating() ? "Invio in corso…" : "Invia valutazione" }}
+                Invia valutazione
               </button>
             } @else {
               @if (currentDraft.ratingComment) {
@@ -181,9 +182,9 @@ import {
               <!-- Il comando sta fuori dal form: l'attributo form lo lega
                    comunque al suo invio, e la barra resta una sola invece di
                    due divise dai metadati della bozza. -->
-              <button mvpButton type="submit" form="draftForm" [disabled]="isSaving() || form.invalid">
+              <button mvpButton type="submit" form="draftForm" [disabled]="isSaving() || form.invalid" [busy]="isSaving()">
                 <svg lucideSave aria-hidden="true"></svg>
-                {{ isSaving() ? "Salvataggio" : "Salva" }}
+                Salva
               </button>
             } @else if (!isDiscarded(currentDraft)) {
               <button mvpButton variant="secondary" type="button" (click)="startEdit(currentDraft)">
@@ -195,9 +196,10 @@ import {
                   mvpButton
                   type="button"
                   [disabled]="isGenerating() || isDiscarding() || isSavingToHistory()"
+                  [busy]="isSavingToHistory()"
                   (click)="saveToHistory.emit()"
                 >
-                  {{ isSavingToHistory() ? "Salvataggio in corso…" : "Salva nello storico" }}
+                  Salva nello storico
                 </button>
               }
               <button

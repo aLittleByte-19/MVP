@@ -56,8 +56,13 @@ describe("CommunicationGeneratorPanelComponent", () => {
     const element = render({ isGenerating: true, phase: "generating-text", status: "Testo in corso" })
       .nativeElement as HTMLElement;
 
-    expect(element.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
-    expect(element.textContent).toContain("Generazione");
+    // L'etichetta non cambia mentre il comando lavora: lo stato lo dice
+    // `aria-busy`, non una parola diversa al posto di quella cercata.
+    const submit = element.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+    expect(submit?.disabled).toBe(true);
+    expect(submit?.getAttribute("aria-busy")).toBe("true");
+    expect(submit?.textContent).toContain("Genera bozza");
     expect(element.textContent).toContain("Testo in corso");
     expect(element.querySelector("mvp-generation-progress")).not.toBeNull();
   });
