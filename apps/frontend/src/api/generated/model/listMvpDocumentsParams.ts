@@ -15,7 +15,7 @@ export type ListMvpDocumentsParams = {
  */
 search?: string;
 /**
- * Stato di invio, che coincide con l'avvenuto scaricamento del PDF (UC-36).
+ * Stato di scaricamento del messaggio precompilato in PDF (UC-36). L'invio non fa parte del perimetro MVP; i valori `pending`/`sent` dell'enum restano per compatibilita' del contratto, ma si leggono come "Non scaricato" e "Scaricato".
  */
 sendStatus?: SubDocumentSendStatus;
 /**

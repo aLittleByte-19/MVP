@@ -106,7 +106,7 @@ Incluso:
 
 Fuori scope MVP:
 
-- invio dei documenti e relativo "stato invio" (`Inviato`/`Non inviato`): la colonna `sub_documents.send_status` e l'identità SES Terraform esistono ma non c'è codice di invio;
+- invio dei documenti: la colonna `sub_documents.send_status` e l'identità SES Terraform esistono ma non c'è codice di invio. Il campo resta come **stato di scaricamento** del messaggio precompilato (`Scaricato`/`Non scaricato`, UC-36/UC-39.11): i valori `pending`/`sent` dell'enum non cambiano, cambia solo cosa dichiarano;
 - estrazione AI automatica dell'email destinatario (campo `recipient_email` esposto in sola lettura nel pannello dati estratti, ma non popolato dalla pipeline OCR/Bedrock) e dei campi codice fiscale e matricola dipendente;
 - classificazione manuale iniziale in upload;
 - metriche e dashboard sugli invii.
