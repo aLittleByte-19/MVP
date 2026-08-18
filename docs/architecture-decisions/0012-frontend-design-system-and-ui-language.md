@@ -207,6 +207,41 @@ Già applicato (branch `refactor/ui_ux`, precede l'approvazione di questo ADR):
 - `Makefile`, `.github/workflows/ci.yml` — gate a11y esteso a `/overview`, `/assistant`, `/copilot`.
 - `app/Mvp/Documents/Domain/Enums/SendStatus.php`, `openapi/v1/alittlebyte-mvp-api.yaml` —
   terminologia dello stato allineata a UC-37 e UC-40.11.
+- `apps/frontend/src/app/shared/styles/` — `field.css`, `notice.css`, `link-button.css`, `page.css`:
+  il campo era riscritto otto volte, `.warning` quattro, `.errorNote` e i collegamenti-azione due.
+  Copilot e Assistant non importano più `overview-page.css`.
+- `apps/frontend/src/styles/tokens.css` — bordi di stato (`--mvp-*-border`, `--mvp-primary-soft`)
+  al posto di `#f0bf98`, `#c9e5d3`, `#d99a3f`, `#6bb58a`; via i tre token senza consumatori.
+- Cinque soglie responsive ridotte alle tre dichiarate (640, 900, 1100).
+- `apps/frontend/src/app/features/copilot/components/document-list.*` — storico a sette colonne, con
+  il documento di partenza nella prima cella; le larghezze stanno nel foglio di chi le usa.
+- `apps/frontend/src/app/shared/components/status-dot/` — pallino per lo stato di scaricamento,
+  distinto dal rettangolo della validazione.
+- `apps/frontend/src/app/shared/components/star-rating/` — gruppo di radio con stelle vettoriali,
+  bersagli da 44px, nome per ogni valore e punteggio come `X/5`. Spostato sotto `shared/components/`.
+- `apps/frontend/src/app/features/copilot/components/sub-document-list.*` — contrassegno per campo e
+  legenda che dicono l'origine del dato senza dipendere dal colore.
+- `apps/frontend/src/app/shared/components/stage-progress/` — tempo trascorso accanto alle tappe.
+- `apps/frontend/src/app/shared/components/button/` — `busy`: l'etichetta del comando resta ferma e
+  il lavoro in corso passa da un indicatore e da `aria-busy`.
+
+Scostamenti rispetto a quanto deciso in catalogo, e perché:
+
+- **Provenienza per campo.** Il contratto espone un solo `reviewStatus` per sotto-documento e un
+  solo punteggio di confidenza: non dice quali campi siano stati dichiarati a mano. Il contrassegno
+  riflette quindi lo stato del sotto-documento, non del singolo campo. Colmarlo richiede un campo
+  nuovo nel contratto.
+- **Valutazione ripetibile.** Non implementata: resta la questione aperta 2. La View ora dichiara il
+  vincolo prima del clic invece di comunicarlo dopo.
+- **`<form>` nei pannelli che non si inviano.** Filtri, metadati di caricamento, ispettore e
+  messaggio precompilato erano `<form>` senza comando di invio: Pa11y lo segnalava su tre pagine
+  (H32.2). Sono diventati gruppi di controlli (`role="search"`, `role="group"`) e il salvataggio è
+  un comando esplicito.
+
+Esito del gate di accessibilità sulle tre pagine, con lo stack locale in piedi: **axe 0 violazioni,
+Pa11y 0 problemi**. Il solo `csp-smoke` fallisce su `/copilot` per una condizione d'ambiente e non
+di codice: con `MVP_DOCUMENT_DISK=real_s3` l'anteprima cerca il file sul bucket AWS reale, che in
+locale non lo ha, e l'endpoint risponde 503.
 
 ## Related documents
 
