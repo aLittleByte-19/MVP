@@ -390,7 +390,12 @@ const emptySendMessageForm: SendMessageFormState = {
       </mvp-section>
     }
   `,
-  styleUrl: "./sub-document-list.css"
+  styleUrls: [
+    "../../../shared/styles/field.css",
+    "../../../shared/styles/notice.css",
+    "../../../shared/styles/link-button.css",
+    "./sub-document-list.css"
+  ]
 })
 export class SubDocumentListComponent {
   readonly documentItem = input<SubDocument | null>(null);

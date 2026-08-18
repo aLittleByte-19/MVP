@@ -105,7 +105,7 @@ export interface DocumentUploadRequest {
       <p class="status" aria-live="polite">{{ status() }}</p>
     </mvp-section>
   `,
-  styleUrl: "./document-upload-panel.css"
+  styleUrls: ["../../../shared/styles/field.css", "./document-upload-panel.css"]
 })
 export class DocumentUploadPanelComponent {
   readonly isUploading = input.required<boolean>();

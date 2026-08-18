@@ -145,7 +145,11 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
       </mvp-section>
     </section>
   `,
-  styleUrls: ["./overview-page.css", "../../shared/components/data-table/data-table.css"]
+  styleUrls: [
+    "../../shared/styles/page.css",
+    "./overview-page.css",
+    "../../shared/components/data-table/data-table.css"
+  ]
 })
 export class OverviewPage {
   protected readonly store = inject(MvpStateStore);

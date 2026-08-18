@@ -243,7 +243,12 @@ import {
       }
     </mvp-section>
   `,
-  styleUrl: "./generated-communication-preview.css"
+  styleUrls: [
+    "../../../shared/styles/field.css",
+    "../../../shared/styles/notice.css",
+    "../../../shared/styles/link-button.css",
+    "./generated-communication-preview.css"
+  ]
 })
 export class GeneratedCommunicationPreviewComponent {
   readonly draft = input<GeneratedDraft | null>(null);

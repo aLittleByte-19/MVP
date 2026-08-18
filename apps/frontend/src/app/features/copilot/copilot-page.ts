@@ -165,7 +165,7 @@ const MONTHS = [
       </mvp-section>
     </section>
   `,
-  styleUrls: ["../overview/overview-page.css"],
+  styleUrls: ["../../shared/styles/page.css", "../../shared/styles/field.css"],
   styles: [
     `
     .filters {

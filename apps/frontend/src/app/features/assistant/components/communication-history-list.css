@@ -67,16 +67,6 @@
   align-items: center;
 }
 
-.warning {
-  margin: 0;
-  padding: var(--mvp-space-2) var(--mvp-space-3);
-  border: 1px solid color-mix(in srgb, var(--mvp-warning) 50%, transparent);
-  border-radius: var(--mvp-radius);
-  background: color-mix(in srgb, var(--mvp-warning) 14%, var(--mvp-surface));
-  color: var(--mvp-text);
-  font-size: var(--mvp-font-sm);
-}
-
 .favoriteToggle svg {
   stroke: currentColor;
   fill: none;

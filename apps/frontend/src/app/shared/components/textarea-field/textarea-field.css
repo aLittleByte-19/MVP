@@ -1,24 +1,7 @@
-.field {
-  display: grid;
-  gap: var(--mvp-space-2);
-  color: var(--mvp-text);
-  font-weight: 700;
-}
-
-.field span {
-  font-size: var(--mvp-font-sm);
-}
-
+/* Qui si scrive un messaggio intero, non una riga: l'altezza di partenza e'
+   maggiore di quella del campo condiviso. */
 .field textarea {
-  width: 100%;
   min-height: 190px;
-  padding: var(--mvp-space-3);
-  resize: vertical;
-  border: 1px solid var(--mvp-border-strong);
-  border-radius: var(--mvp-radius);
-  background: var(--mvp-surface-muted);
-  color: var(--mvp-text);
-  line-height: 1.45;
 }
 
 :host {

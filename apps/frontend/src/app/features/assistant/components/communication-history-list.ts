@@ -88,7 +88,7 @@ import { formatFallback } from "../../../shared/util/formatters";
       <mvp-empty-state>Le bozze generate compariranno qui.</mvp-empty-state>
     }
   `,
-  styleUrl: "./communication-history-list.css"
+  styleUrls: ["../../../shared/styles/notice.css", "./communication-history-list.css"]
 })
 export class CommunicationHistoryListComponent {
   readonly communications = input<Communication[]>([]);

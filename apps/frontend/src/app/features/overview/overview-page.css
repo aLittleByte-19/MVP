@@ -1,18 +1,9 @@
-.view {
-  display: grid;
-  gap: 18px;
-}
-
 .hero {
   padding: 34px;
 }
 
 .hero h2,
 .hero p,
-.eyebrow {
-  margin: 0;
-}
-
 .hero h2 {
   max-width: 820px;
   font-size: 1.8rem;
@@ -23,14 +14,7 @@
   max-width: 820px;
   color: var(--mvp-muted);
   font-size: 1.05rem;
-  line-height: 1.5;
-}
-
-.eyebrow {
-  color: var(--mvp-primary-deep);
-  font-size: var(--mvp-font-xs);
-  font-weight: 800;
-  text-transform: uppercase;
+  line-height: var(--mvp-line-body);
 }
 
 .buttonRow {
@@ -92,6 +76,3 @@ mvp-attention-note + .priorityGrid {
   }
 }
 
-:host {
-  display: contents;
-}
