@@ -57,7 +57,7 @@ describe("GeneratedCommunicationPreviewComponent", () => {
   });
 
   it.each([
-    [draft({ coverImageUrl: "/cover.png", coverStatus: "ready" }), "img.preview-image"],
+    [draft({ coverImageUrl: "/cover.png", coverStatus: "ready" }), "img.previewImage"],
     [draft({ coverStatus: "processing" }), "mvp-empty-state"],
     [draft({ coverStatus: "failed", coverError: "Cover non disponibile" }), ".warning"]
   ])("rende lo stato della copertina", (current, selector) => {
