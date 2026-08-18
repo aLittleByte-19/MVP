@@ -295,9 +295,18 @@ const emptySendMessageForm: SendMessageFormState = {
                     <svg lucideCheckCircle2 aria-hidden="true"></svg>
                     Conferma dati correnti
                   </button>
-                  <button mvpButton variant="secondary" type="button" (click)="isSendOpen.set(true)">
+                  <button
+                    mvpButton
+                    variant="secondary"
+                    type="button"
+                    [disabled]="!canPrepareMessage(document)"
+                    (click)="isSendOpen.set(true)"
+                  >
                     Invia
                   </button>
+                  @if (!canPrepareMessage(document)) {
+                    <span class="actionHint">Conferma i dati per preparare il messaggio.</span>
+                  }
                 }
               </div>
             </form>
@@ -508,6 +517,20 @@ export class SubDocumentListComponent {
     }
 
     return null;
+  }
+
+  /**
+   * Il messaggio si prepara solo su un documento i cui dati sono stati
+   * stabiliti come corretti, dal sistema o dall'operatore. Prima non c'era
+   * alcuna condizione: il comando restava attivo anche su un sotto-documento in
+   * quarantena, cioe' uno la cui estrazione il sistema stesso dichiara
+   * inaffidabile, e produceva un messaggio su dati che nessuno aveva verificato.
+   */
+  protected canPrepareMessage(documentItem: SubDocument): boolean {
+    return (
+      documentItem.reviewStatus === "auto_validated" ||
+      documentItem.reviewStatus === "manually_validated"
+    );
   }
 
   protected isPredefinedDocumentType(value: string): boolean {
