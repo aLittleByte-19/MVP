@@ -523,13 +523,16 @@ jobs:
         run: docker compose --profile tools run --rm node npm ci --ignore-scripts
 
       - name: Smoke SPA with enforced CSP
-        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/csp-smoke.mjs https://traefik:8443
+        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/csp-smoke.mjs
+          https://traefik:8443/overview https://traefik:8443/assistant https://traefik:8443/copilot
 
       - name: Run axe
-        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/axe-playwright.mjs https://traefik:8443
+        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/axe-playwright.mjs
+          https://traefik:8443/overview https://traefik:8443/assistant https://traefik:8443/copilot
 
       - name: Run Pa11y
-        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/pa11y-runner.mjs https://traefik:8443
+        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/pa11y-runner.mjs
+          https://traefik:8443/overview https://traefik:8443/assistant https://traefik:8443/copilot
 
       - name: Collect stack diagnostics
         if: failure()

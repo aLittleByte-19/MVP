@@ -16,6 +16,9 @@ TERRAFORM := docker compose --profile tools run --rm -T terraform
 NODE := docker compose --profile tools run --rm -T node
 AWS_CLI := docker compose --profile tools run --rm -T --entrypoint aws aws-cli --endpoint-url=$(LOCALSTACK_ENDPOINT_INTERNAL)
 FRONTEND_AUDIT := docker compose --profile tools run --rm -T frontend-audit
+# RVC9-OB chiede axe e Pa11y sulle interfacce utente principali, al plurale: la
+# sola root reindirizza su /overview e lascerebbe fuori le due pagine piu' dense.
+A11Y_URLS := https://traefik:8443/overview https://traefik:8443/assistant https://traefik:8443/copilot
 TLS_TOOL := docker compose --profile tools run --rm -T tls-tool
 # Pest viene invocato direttamente e con un limite di memoria esplicito, lo
 # stesso usato dal workflow CI. Con i 128M di default dell'immagine PHP la suite
@@ -172,9 +175,9 @@ frontend-audit: node-install
 frontend-a11y: frontend-s3-local-deploy
 	@if [ ! -f docker/traefik/certs/mvp-local.test.crt ] || [ ! -f docker/traefik/certs/mvp-local.test.key ]; then $(MAKE) local-tls; fi
 	docker compose up -d --wait --force-recreate app nginx edge-cdn traefik
-	$(FRONTEND_AUDIT) node scripts/a11y/csp-smoke.mjs https://traefik:8443
-	$(FRONTEND_AUDIT) node scripts/a11y/axe-playwright.mjs https://traefik:8443
-	$(FRONTEND_AUDIT) node scripts/a11y/pa11y-runner.mjs https://traefik:8443
+	$(FRONTEND_AUDIT) node scripts/a11y/csp-smoke.mjs $(A11Y_URLS)
+	$(FRONTEND_AUDIT) node scripts/a11y/axe-playwright.mjs $(A11Y_URLS)
+	$(FRONTEND_AUDIT) node scripts/a11y/pa11y-runner.mjs $(A11Y_URLS)
 
 openapi-generate: node-install
 	$(NODE) npm run openapi:generate

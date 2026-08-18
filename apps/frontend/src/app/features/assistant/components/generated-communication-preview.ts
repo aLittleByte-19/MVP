@@ -117,7 +117,7 @@ import {
           </form>
           @if (isReadyForPreview(currentDraft)) {
             <div class="preview-block">
-              <span class="preview-label">Documento finale</span>
+              <h3 class="preview-label">Documento finale</h3>
               <div class="preview-actions">
                 <a class="previewLink" [href]="currentDraft.previewUrl" target="_blank" rel="noreferrer">
                   Apri anteprima
@@ -128,7 +128,7 @@ import {
           }
 
           <div class="rating-section">
-            <span class="rating-label">Valuta questa bozza</span>
+            <h3 class="rating-label">Valuta questa bozza</h3>
             <mvp-star-rating
               [rating]="displayRating()"
               [disabled]="hasRated() || isRating()"

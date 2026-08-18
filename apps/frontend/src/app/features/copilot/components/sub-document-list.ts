@@ -84,7 +84,7 @@ const emptySendMessageForm: SendMessageFormState = {
 
         <div class="detailGrid">
           <article class="preview">
-            <p class="eyebrow">Anteprima documento</p>
+            <h3 class="eyebrow">Anteprima documento</h3>
             <div class="previewFrame">
               <strong>{{ formatFallback(document.file, "Documento") }}</strong>
               @if (previewStatus() === "available" && previewSrc(); as src) {
@@ -117,7 +117,7 @@ const emptySendMessageForm: SendMessageFormState = {
 
           <article class="extracted">
             <div class="inspectorHeading">
-              <p class="eyebrow">Dati estratti dall'OCR</p>
+              <h3 class="eyebrow">Dati estratti dall'OCR</h3>
               <div class="fieldLegend" aria-label="Legenda campi">
                 <span><i class="editableDot"></i>Modificabile</span>
                 <span><i class="lockedDot"></i>Sola lettura</span>
@@ -310,7 +310,7 @@ const emptySendMessageForm: SendMessageFormState = {
                 (ngSubmit)="saveSendMessage(document)"
               >
                 <div class="inspectorHeading">
-                  <p class="eyebrow">Messaggio di invio</p>
+                  <h3 class="eyebrow">Messaggio precompilato</h3>
                   <button mvpButton variant="icon" type="button" aria-label="Chiudi" (click)="isSendOpen.set(false)">
                     <svg lucideX aria-hidden="true"></svg>
                   </button>
