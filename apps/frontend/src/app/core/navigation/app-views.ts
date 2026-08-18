@@ -29,7 +29,6 @@ export const mvpNavGroups: SidebarNavGroup[] = [
         id: "overview",
         label: "Overview",
         children: [
-          { label: "Moduli", targetId: "overview-modules" },
           { label: "Priorità", targetId: "overview-priorities" },
           { label: "Qualità", targetId: "overview-quality" },
           { label: "Attività recenti", targetId: "overview-activity" }

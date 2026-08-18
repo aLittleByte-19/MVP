@@ -39,32 +39,6 @@
   gap: var(--mvp-space-3);
 }
 
-.flowList {
-  display: grid;
-  gap: var(--mvp-space-3);
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.flowList li {
-  display: grid;
-  gap: var(--mvp-space-2);
-  padding: var(--mvp-space-4);
-  border: 1px solid var(--mvp-border);
-  border-radius: var(--mvp-radius);
-  background: var(--mvp-surface-muted);
-}
-
-.flowList strong {
-  font-size: 1.05rem;
-}
-
-.flowList span {
-  color: var(--mvp-muted);
-  line-height: 1.45;
-}
-
 .priorityGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
