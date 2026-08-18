@@ -34,7 +34,7 @@ describe("GeneratedCommunicationPreviewComponent", () => {
     const fixture = render();
 
     expect(fixture.componentInstance["bodyLength"]()).toBe(0);
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain("La bozza generata apparira qui.");
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain("La bozza generata compare qui.");
   });
 
   it("riconosce copertina, attesa, scarto e disponibilita anteprima", () => {

@@ -90,7 +90,7 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
         <div class="filters" role="search" [formGroup]="filterForm" aria-label="Filtra storico comunicazioni">
           <label class="field" for="filter-keyword">
             <span>Parola chiave</span>
-            <input id="filter-keyword" type="text" formControlName="keyword" placeholder="Cerca nel prompt..." />
+            <input id="filter-keyword" type="text" formControlName="keyword" placeholder="Cerca nel prompt" />
           </label>
           <label class="field" for="filter-tone">
             <span>Tono</span>

@@ -176,7 +176,7 @@ const emptySendMessageForm: SendMessageFormState = {
                   <span>Tipologia documento<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
                   @if (isEditing()) {
                     <select id="document-type-field" formControlName="documentType">
-                      <option value="">Seleziona...</option>
+                      <option value="">Nessuna tipologia</option>
                       @for (option of documentTypeOptions(); track option) {
                         <option [value]="option">
                           {{ isPredefinedDocumentType(option) ? capitalizeFirst(option) : option }}

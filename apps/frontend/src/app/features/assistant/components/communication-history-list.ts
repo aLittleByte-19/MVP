@@ -63,7 +63,7 @@ import { formatFallback } from "../../../shared/util/formatters";
           </div>
           @if (confirmingDeleteId() === communication.id) {
             <div class="cardConfirm">
-              <p class="warning" role="status">Eliminare definitivamente questo elemento dallo storico?</p>
+              <p class="warning" role="status">L'elemento viene rimosso dallo storico in modo definitivo.</p>
               <div class="cardActions">
                 <button mvpButton type="button" [disabled]="isDeleting()" (click)="deleteRequested.emit(communication.id)">
                   Conferma eliminazione

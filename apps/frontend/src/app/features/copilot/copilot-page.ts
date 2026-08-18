@@ -78,7 +78,7 @@ const MONTHS = [
         <div class="filters" role="search" [formGroup]="filterForm" aria-label="Filtra storico documenti">
           <label class="field" for="filter-search">
             <span>Nome, cognome o azienda</span>
-            <input id="filter-search" type="text" formControlName="search" placeholder="Cerca nello storico..." />
+            <input id="filter-search" type="text" formControlName="search" placeholder="Cerca nello storico" />
           </label>
           <label class="field" for="filter-send-status">
             <span>Stato scaricamento</span>
