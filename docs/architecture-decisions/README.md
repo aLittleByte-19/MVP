@@ -42,6 +42,7 @@ ADR che referenzia il precedente. La numerazione è progressiva e a quattro cifr
 | [0009](0009-communication-async-pipeline-and-cover-storage.md) | Pipeline asincrona delle comunicazioni e copertine su storage a oggetti | Accepted, implemented |
 | [0010](0010-hexagonal-architecture-documents-communications.md) | Architettura esagonale (ports & adapters) per i domini Documents e Communications | Accepted, implemented |
 | [0011](0011-frontend-presentation-model-and-sse-client.md) | ViewModel puro (Presentation Model) e client SSE su `fetch` | Accepted, implemented |
+| [0012](0012-frontend-design-system-and-ui-language.md) | Sistema visivo e linguaggio dell'interfaccia della SPA | Proposed |
 
 ## Aggiungere un ADR
 
