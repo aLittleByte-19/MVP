@@ -30,7 +30,6 @@
   --mvp-warning-border: #d9a273;
   --mvp-success-border: #7fbc9c;
   --mvp-danger-border: #d79a9a;
-  --mvp-overlay-locked: rgba(245, 248, 251, 0.72);
   --mvp-shadow: 0 10px 28px rgba(38, 82, 120, 0.08);
 
   /* Colore del focus (ADR 0012). Non e' l'accento: l'arancione stava a
@@ -54,7 +53,6 @@
   --mvp-space-4: 16px;
   --mvp-space-5: 20px;
   --mvp-space-6: 24px;
-  --mvp-space-8: 32px;
 
   /* Altezza dei controlli. Valevano 34, 36, 38, 40 e 42px a seconda del file:
      due valori bastano, ed entrambi restano sopra i 24px minimi di SC 2.5.8.
@@ -65,7 +63,6 @@
 
   --mvp-font-xs: 0.78rem;
   --mvp-font-sm: 0.9rem;
-  --mvp-font-md: 1rem;
   --mvp-font-lg: 1.25rem;
   --mvp-font-xl: 1.55rem;
 
@@ -127,7 +124,6 @@
   --mvp-warning-border: #7d5c34;
   --mvp-success-border: #3f6c54;
   --mvp-danger-border: #7c4646;
-  --mvp-overlay-locked: rgba(15, 23, 32, 0.62);
   --mvp-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
   --mvp-series-1: #79add3;
   --mvp-series-2: #5b8db4;

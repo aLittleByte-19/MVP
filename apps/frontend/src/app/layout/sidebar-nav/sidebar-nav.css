@@ -26,8 +26,13 @@
   border-radius: var(--mvp-radius);
 }
 
+/* In tema scuro il marchio stava su una piastra chiara invece di essere reso
+   bianco pieno: `brightness(0) invert(1)` appiattiva ogni colore proprio del
+   logo, restituendo una silhouette. Il fondo e' quello delle superfici chiare,
+   non un bianco a parte, cosi' la piastra appartiene alla paletta. */
 :host-context([data-mvp-theme="dark"]) .brand img {
-  filter: brightness(0) invert(1);
+  padding: var(--mvp-space-2);
+  background: #f5f8fb;
 }
 
 .nav {
