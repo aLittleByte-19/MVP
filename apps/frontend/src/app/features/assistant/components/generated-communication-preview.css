@@ -47,8 +47,16 @@
 .rating-label {
   margin: 0;
   color: var(--mvp-muted);
+  font-size: var(--mvp-label-b-size);
+  font-weight: var(--mvp-label-b-weight);
+}
+
+/* Il vincolo si dichiara prima del click, non dopo: dopo sarebbe una notizia,
+   prima e' un'informazione su cui decidere. */
+.rating-note {
+  margin: calc(var(--mvp-space-3) * -1) 0 0;
+  color: var(--mvp-muted);
   font-size: var(--mvp-font-sm);
-  font-weight: 800;
 }
 
 .preview-actions {
@@ -68,20 +76,20 @@
 }
 
 .comment-meta.isInvalid {
-  color: var(--mvp-danger, #b42318);
+  color: var(--mvp-danger);
   font-weight: 700;
 }
 
 .rating-error {
   margin: 0;
-  color: var(--mvp-danger, #b42318);
+  color: var(--mvp-danger);
   font-size: var(--mvp-font-sm);
   font-weight: 600;
 }
 
 .rating-success {
   margin: 0;
-  color: var(--mvp-success, #027a48);
+  color: var(--mvp-success);
   font-size: var(--mvp-font-sm);
   font-weight: 700;
 }
@@ -96,8 +104,8 @@
 
 .saved-comment span {
   color: var(--mvp-muted);
-  font-size: var(--mvp-font-sm);
-  font-weight: 800;
+  font-size: var(--mvp-label-b-size);
+  font-weight: var(--mvp-label-b-weight);
 }
 
 .isEditing .field input,
