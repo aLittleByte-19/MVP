@@ -75,7 +75,7 @@ const MONTHS = [
           <mvp-error-state [message]="error" />
         }
 
-        <form class="filters" [formGroup]="filterForm" aria-label="Filtra storico documenti">
+        <div class="filters" role="search" [formGroup]="filterForm" aria-label="Filtra storico documenti">
           <label class="field" for="filter-search">
             <span>Nome, cognome o azienda</span>
             <input id="filter-search" type="text" formControlName="search" placeholder="Cerca nello storico..." />
@@ -120,7 +120,7 @@ const MONTHS = [
             <input id="filter-year" type="number" formControlName="year" placeholder="es. 2026" />
           </label>
           <button mvpButton variant="secondary" type="button" (click)="resetFilters()">Azzera filtri</button>
-        </form>
+        </div>
 
         <mvp-document-list
           [documents]="vm.filteredDocuments()"

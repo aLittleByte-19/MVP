@@ -40,7 +40,7 @@ export interface DocumentUploadRequest {
         impostati qui restano autoritativi e non vengono sovrascritti dall'AI.
       </p>
 
-      <form class="metadata" [formGroup]="metadataForm" aria-label="Metadati documento (opzionali)">
+      <div class="metadata" role="group" [formGroup]="metadataForm" aria-label="Metadati documento (opzionali)">
         <fieldset class="types">
           <legend>Tipologia documento</legend>
           <div class="typeButtons" role="group" aria-label="Seleziona tipologia documento">
@@ -92,7 +92,7 @@ export interface DocumentUploadRequest {
             />
           </label>
         </div>
-      </form>
+      </div>
 
       <mvp-file-dropzone
         [disabled]="isUploading()"
