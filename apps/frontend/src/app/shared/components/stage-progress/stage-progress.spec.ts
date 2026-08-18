@@ -8,7 +8,7 @@ describe("StageProgressComponent", () => {
     { id: "completed", label: "Completato" }
   ];
 
-  function render(inputs: Record<string, unknown>): HTMLElement {
+  function renderFixture(inputs: Record<string, unknown>) {
     const fixture = TestBed.createComponent(StageProgressComponent);
     fixture.componentRef.setInput("stages", stages);
 
@@ -18,7 +18,11 @@ describe("StageProgressComponent", () => {
 
     fixture.detectChanges();
 
-    return fixture.nativeElement as HTMLElement;
+    return fixture;
+  }
+
+  function render(inputs: Record<string, unknown>): HTMLElement {
+    return renderFixture(inputs).nativeElement as HTMLElement;
   }
 
   function statesOf(host: HTMLElement): string[] {
@@ -71,5 +75,47 @@ describe("StageProgressComponent", () => {
     const host = render({ currentId: "processing", slow: true, failed: true });
 
     expect(host.textContent).not.toContain("più del previsto");
+  });
+
+  it("conta il tempo trascorso e lo formatta in minuti quando supera i sessanta secondi", () => {
+    // Senza, un'attesa lunga e' indistinguibile da un blocco: la tappa resta
+    // la stessa e nulla si muove.
+    jest.useFakeTimers().setSystemTime(new Date("2026-08-18T10:00:00Z"));
+
+    try {
+      const fixture = renderFixture({ currentId: "processing" });
+
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain("In corso da 0 s");
+
+      jest.advanceTimersByTime(75_000);
+      fixture.detectChanges();
+
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain("In corso da 1 min 15 s");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("ferma il contatore a corsa conclusa, che a quel punto dice quanto e' durata", () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-08-18T10:00:00Z"));
+
+    try {
+      const fixture = renderFixture({ currentId: "processing" });
+      jest.advanceTimersByTime(30_000);
+      fixture.detectChanges();
+
+      fixture.componentRef.setInput("failed", true);
+      fixture.detectChanges();
+      jest.advanceTimersByTime(60_000);
+      fixture.detectChanges();
+
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain("Interrotta dopo 30 s");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("non mostra alcun tempo finche' la pipeline non e' partita", () => {
+    expect(render({ currentId: null }).textContent).not.toContain("In corso da");
   });
 });

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input } from "@angular/core";
+import { ChangeDetectionStrategy, Component, computed, effect, input, signal } from "@angular/core";
 
 /** Una tappa della pipeline, con la sua etichetta leggibile. */
 export interface ProgressStage {
@@ -20,6 +20,12 @@ type StageState = "done" | "current" | "pending" | "failed";
  *
  * `slow` non è una tappa ma un'annotazione su quella corrente: la pipeline sta
  * ancora nello stesso stato, solo da più tempo del previsto.
+ *
+ * Accanto alle tappe scorre il tempo trascorso. Senza, un'attesa lunga è
+ * indistinguibile da un blocco: la tappa resta la stessa e nulla si muove.
+ * Il contatore è `aria-hidden` perché un valore che cambia ogni secondo dentro
+ * una regione live coprirebbe qualunque altro annuncio; per chi ascolta
+ * restano il messaggio di lentezza e lo stato delle tappe.
  */
 @Component({
   selector: "mvp-stage-progress",
@@ -36,6 +42,9 @@ type StageState = "done" | "current" | "pending" | "failed";
         </li>
       }
     </ol>
+    @if (elapsedLabel(); as elapsed) {
+      <p class="elapsed" aria-hidden="true">{{ failed() ? "Interrotta dopo" : "In corso da" }} {{ elapsed }}</p>
+    }
     @if (slow() && !failed()) {
       <p class="slow" role="status">
         L'elaborazione sta impiegando più del previsto. La lavorazione continua in background.
@@ -51,6 +60,54 @@ export class StageProgressComponent {
   readonly failed = input(false);
   readonly slow = input(false);
   readonly label = input("Avanzamento elaborazione");
+
+  protected readonly elapsedSeconds = signal<number | null>(null);
+
+  protected readonly elapsedLabel = computed(() => {
+    const seconds = this.elapsedSeconds();
+    if (seconds === null) {
+      return null;
+    }
+
+    if (seconds < 60) {
+      return `${seconds} s`;
+    }
+
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes} min ${String(seconds % 60).padStart(2, "0")} s`;
+  });
+
+  /** Istante di partenza della corsa in corso; azzerato quando finisce. */
+  private startedAt: number | null = null;
+
+  constructor() {
+    effect((onCleanup) => {
+      const currentIndex = this.stages().findIndex((stage) => stage.id === this.currentId());
+      const failed = this.failed();
+      const finished = failed || currentIndex === this.stages().length - 1;
+
+      if (currentIndex === -1) {
+        this.startedAt = null;
+        this.elapsedSeconds.set(null);
+        return;
+      }
+
+      this.startedAt ??= Date.now();
+
+      const tick = () => this.elapsedSeconds.set(Math.floor((Date.now() - (this.startedAt ?? 0)) / 1000));
+      tick();
+
+      // A corsa conclusa il numero resta fermo sull'ultimo valore: dice quanto
+      // è durata, che è un'informazione, mentre continuare a contare sarebbe
+      // una misura di nulla.
+      if (finished) {
+        return;
+      }
+
+      const timer = setInterval(tick, 1000);
+      onCleanup(() => clearInterval(timer));
+    });
+  }
 
   protected readonly decorated = computed(() => {
     const stages = this.stages();
