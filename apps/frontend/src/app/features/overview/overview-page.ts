@@ -53,23 +53,6 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
         </div>
       </mvp-section>
 
-      <mvp-section id="overview-modules" title="Da dove partire">
-        <ul class="flowList">
-          <li>
-            <strong>AI Assistant Generativo</strong>
-            <span>Scrivi il contenuto da comunicare, scegli tono e stile, poi revisiona la bozza proposta.</span>
-          </li>
-          <li>
-            <strong>AI Co-Pilot per CdL</strong>
-            <span>Carica un PDF e consulta metadati, destinatari e livello di confidenza dopo l'analisi.</span>
-          </li>
-          <li>
-            <strong>Metriche operative</strong>
-            <span>Controlla volumi, qualità e stato delle attività direttamente nelle pagine degli strumenti.</span>
-          </li>
-        </ul>
-      </mvp-section>
-
       <mvp-section id="overview-priorities" title="Priorità essenziali">
         @if (vm.quarantined() > 0) {
           <mvp-attention-note
