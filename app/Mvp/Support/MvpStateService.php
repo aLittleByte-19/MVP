@@ -7,7 +7,10 @@ use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
 use App\Models\PromptConfiguration;
 use App\Models\SubDocument;
+use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
+use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Support\Identity\Actor;
 use Illuminate\Database\Eloquent\Builder;
@@ -82,7 +85,39 @@ class MvpStateService
                     // entrati, quindi un flusso giornaliero non la descrive.
                     'key' => 'assistant.rating_average',
                     'value' => $averageRating === null ? '—' : number_format((float) $averageRating, 1, '.', ''),
+                    'unit' => '/ 5',
                     'label' => 'Media stelle',
+                ],
+                // Le quattro che seguono portano nell'interfaccia i segnali che
+                // finora stavano solo nelle dashboard Grafana: dove la pipeline
+                // si ferma, quanto ci mette e cosa e' degradato. Sono le stesse
+                // definizioni dei gauge di PrometheusExporter, ristrette al
+                // tenant di chi guarda.
+                [
+                    'key' => 'assistant.generation_failed',
+                    'value' => (clone $baseQuery)->where('generation_status', CommunicationGenerationStatus::Failed)->count(),
+                    'label' => 'Generazioni non riuscite',
+                    'history' => $this->dailySeries(
+                        Communication::query()->where('tenant_id', $actor->tenantId)->where('generation_status', CommunicationGenerationStatus::Failed)
+                    ),
+                ],
+                [
+                    'key' => 'assistant.generation_stuck',
+                    'value' => (clone $baseQuery)
+                        ->where('generation_status', CommunicationGenerationStatus::Processing)
+                        ->where('workflow_started_at', '<', now()->subSeconds($this->generationTimeoutSeconds()))
+                        ->count(),
+                    'label' => 'Oltre il tempo previsto',
+                ],
+                $this->durationMetric(
+                    'assistant.generation_seconds',
+                    'Tempo medio di generazione',
+                    $this->averageWorkflowSeconds(Communication::query()->where('tenant_id', $actor->tenantId))
+                ),
+                [
+                    'key' => 'assistant.covers_failed',
+                    'value' => (clone $baseQuery)->where('cover_status', CoverImageStatus::Failed)->count(),
+                    'label' => 'Copertine non riuscite',
                 ],
             ],
             'history' => $history->map(fn ($communication) => $this->communication($communication))->values()->all(),
@@ -127,6 +162,75 @@ class MvpStateService
     }
 
     /**
+     * Durata media in secondi delle corse concluse negli ultimi sette giorni.
+     *
+     * La finestra e' la stessa della serie storica: una media su tutto lo
+     * storico descriverebbe un sistema che non e' piu' quello in esercizio, e
+     * una corsa lenta di mesi fa peserebbe quanto una di stamattina.
+     *
+     * La differenza fra i due istanti si calcola in PHP e non con una funzione
+     * di data SQL, per la stessa ragione di `dailySeries`: deve valere su
+     * PostgreSQL e su SQLite senza dialetti diversi.
+     *
+     * @param  Builder<OriginalDocument>|Builder<Communication>  $query
+     */
+    private function averageWorkflowSeconds(Builder $query): ?float
+    {
+        $since = now()->subDays(self::HISTORY_DAYS - 1)->startOfDay();
+
+        $durations = (clone $query)
+            ->whereNotNull('workflow_started_at')
+            ->whereNotNull('workflow_completed_at')
+            ->where('workflow_completed_at', '>=', $since)
+            ->get(['workflow_started_at', 'workflow_completed_at'])
+            ->map(fn ($row): float => (float) $row->workflow_started_at->diffInSeconds($row->workflow_completed_at, true));
+
+        return $durations->isEmpty() ? null : (float) $durations->avg();
+    }
+
+    /**
+     * Scheda di una durata media: sotto il minuto e mezzo si legge in secondi,
+     * oltre in minuti con un decimale. Un "312 s" e' un numero che va convertito
+     * a mente, e un "0,4 min" e' una precisione che la misura non ha.
+     *
+     * @return array<string, mixed>
+     */
+    private function durationMetric(string $key, string $label, ?float $seconds): array
+    {
+        if ($seconds === null) {
+            return ['key' => $key, 'value' => '—', 'label' => $label];
+        }
+
+        return $seconds < 90
+            ? ['key' => $key, 'value' => (int) round($seconds), 'unit' => 's', 'label' => $label]
+            : ['key' => $key, 'value' => number_format($seconds / 60, 1, '.', ''), 'unit' => 'min', 'label' => $label];
+    }
+
+    /**
+     * Media con un decimale, o il segnaposto quando non c'e' nulla su cui farla:
+     * uno zero verrebbe letto come una misura reale.
+     */
+    private function averageDecimal(mixed $average): string
+    {
+        return $average === null ? '—' : number_format((float) $average, 1, '.', '');
+    }
+
+    /**
+     * Oltre questa eta' una generazione ancora in corso e' considerata bloccata.
+     * Stessa soglia del gauge `mvp_communications_stuck_processing`.
+     */
+    private function generationTimeoutSeconds(): int
+    {
+        return (int) config('mvp.communications.generation_timeout_seconds', 900);
+    }
+
+    /** Come sopra, per la pipeline documentale (`mvp_documents_stuck_processing`). */
+    private function processingTimeoutSeconds(): int
+    {
+        return (int) config('mvp.document_limits.processing_timeout_seconds', 1800);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function promptConfiguration(PromptConfiguration $configuration): array
@@ -155,7 +259,8 @@ class MvpStateService
             ->limit(40)
             ->get();
 
-        $originalCount = OriginalDocument::query()->where('tenant_id', $actor->tenantId)->count();
+        $documentsOfTenant = OriginalDocument::query()->where('tenant_id', $actor->tenantId);
+        $originalCount = (clone $documentsOfTenant)->count();
         $confidenceThreshold = (int) config('services.bedrock.mvp_confidence_threshold', 80);
 
         $ofTenant = fn ($query) => $query->whereHas('originalDocument', fn ($documents) => $documents->where('tenant_id', $actor->tenantId));
@@ -195,6 +300,50 @@ class MvpStateService
                     'value' => $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::Quarantined)->count(),
                     'label' => 'In quarantena',
                     'history' => $this->dailySeries($ofTenant(SubDocument::query())->where('review_status', ReviewStatus::Quarantined)),
+                ],
+                // Le cinque che seguono portano nell'interfaccia i segnali che
+                // finora stavano solo nelle dashboard Grafana: quanto lavoro e'
+                // in corso, quanto e' fermo oltre il tempo previsto, quanto e'
+                // fallito, quanto e' affidabile l'OCR e quanto dura una corsa.
+                // Sono le stesse definizioni dei gauge di PrometheusExporter,
+                // ristrette al tenant di chi guarda.
+                [
+                    'key' => 'copilot.in_progress',
+                    'value' => (clone $documentsOfTenant)
+                        ->whereIn('processing_status', [ProcessingStatus::Pending, ProcessingStatus::Processing])
+                        ->count(),
+                    'label' => 'Documenti in lavorazione',
+                ],
+                [
+                    'key' => 'copilot.processing_stuck',
+                    'value' => (clone $documentsOfTenant)
+                        ->where('processing_status', ProcessingStatus::Processing)
+                        ->where('workflow_started_at', '<', now()->subSeconds($this->processingTimeoutSeconds()))
+                        ->count(),
+                    'label' => 'Oltre il tempo previsto',
+                ],
+                [
+                    'key' => 'copilot.processing_failed',
+                    'value' => (clone $documentsOfTenant)->where('processing_status', ProcessingStatus::Failed)->count(),
+                    'label' => 'Elaborazioni non riuscite',
+                    'history' => $this->dailySeries(
+                        OriginalDocument::query()->where('tenant_id', $actor->tenantId)->where('processing_status', ProcessingStatus::Failed)
+                    ),
+                ],
+                $this->durationMetric(
+                    'copilot.processing_seconds',
+                    'Tempo medio di elaborazione',
+                    $this->averageWorkflowSeconds(OriginalDocument::query()->where('tenant_id', $actor->tenantId))
+                ),
+                [
+                    // Media delle confidenze OCR dichiarate da Textract, non la
+                    // quota di campi sopra soglia gia' esposta da
+                    // `confident_fields`: dice quanto e' leggibile cio' che
+                    // arriva, non quanto ne e' stato accettato.
+                    'key' => 'copilot.ocr_confidence',
+                    'value' => $this->averageDecimal((clone $documentsOfTenant)->whereNotNull('ocr_confidence_avg')->avg('ocr_confidence_avg')),
+                    'unit' => '%',
+                    'label' => 'Confidenza media OCR',
                 ],
             ],
             'documents' => $documents->map(fn ($document) => $this->document($document))->values()->all(),

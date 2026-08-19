@@ -11,6 +11,8 @@ export interface Metric {
   key: string;
   value: number | string;
   label: string;
+  /** Unità di misura del valore, quando ne ha una ("%", "s", "min", "/ 5"). Sta nel contratto e non nel frontend perché è un fatto della metrica: è chi la calcola a sapere se una media è in secondi o in minuti, e una tabella chiave → unità nell'interfaccia andrebbe fuori sincrono alla prima metrica aggiunta. Assente sui conteggi, che sono numeri puri. */
+  unit?: string;
   /**
      * Conteggio giornaliero degli ultimi sette giorni, dal più vecchio al più recente. È il flusso di ingresso — quanti elementi sono entrati in quello stato ogni giorno — non la storia del totale, che richiederebbe snapshot giornalieri non conservati dal modello dati. Va quindi presentato come "n nuovi oggi", mai come variazione del valore. Assente sulle metriche per cui un flusso non ha significato, come le medie.
      * @minItems 7

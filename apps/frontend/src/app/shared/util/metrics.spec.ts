@@ -13,23 +13,30 @@ describe("formatMetric", () => {
     });
   });
 
-  it("separa l'unita' dalla media stelle, cosi' non pesa come un conteggio", () => {
+  it("porta l'unita' dichiarata dal contratto accanto alla media", () => {
     // "4.3" e "128" avevano la stessa resa pur essendo una media su 5 e un
     // conteggio: l'unita' e' l'unico elemento che li distingue a colpo d'occhio.
-    expect(formatMetric(metric({ key: "assistant.rating_average", value: "4.3" }))).toEqual({
+    expect(formatMetric(metric({ key: "assistant.rating_average", value: "4.3", unit: "/ 5" }))).toEqual({
       value: "4,3",
       unit: "/ 5"
     });
   });
 
-  it("riconosce il segnaposto del backend quando non ci sono valutazioni", () => {
-    expect(formatMetric(metric({ key: "assistant.rating_average", value: "—" }))).toEqual({
+  it("accompagna anche i conteggi che hanno una scala, come le durate", () => {
+    expect(formatMetric(metric({ key: "copilot.processing_seconds", value: 42, unit: "s" }))).toEqual({
+      value: "42",
+      unit: "s"
+    });
+  });
+
+  it("riconosce il segnaposto del backend e lascia cadere l'unita', che non qualifica nulla", () => {
+    expect(formatMetric(metric({ key: "copilot.ocr_confidence", value: "—", unit: "%" }))).toEqual({
       value: "—",
       unit: null
     });
   });
 
-  it("lascia intatte le altre stringhe", () => {
+  it("lascia intatte le stringhe senza unita'", () => {
     expect(formatMetric(metric({ key: "custom", value: "n/d" }))).toEqual({
       value: "n/d",
       unit: null
