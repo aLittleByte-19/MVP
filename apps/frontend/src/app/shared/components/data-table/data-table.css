@@ -1,5 +1,14 @@
+/* `overflow: hidden` tagliava a destra tutto cio' che non entrava: con
+   `table-layout: fixed` una cella incomprimibile — un pulsante che non va a
+   capo, una data che non si spezza — allarga comunque la tabella oltre il
+   contenitore, e quello che sporgeva spariva invece di essere raggiungibile.
+   Le larghezze vanno calibrate perche' non succeda; qui resta la rete. */
 .tableWrapper {
-  overflow: hidden;
+  /* Spaziatura orizzontale delle celle: la sceglie chi usa la tabella, perche'
+     dipende da quante colonne deve reggere. */
+  --mvp-cell-pad-x: var(--mvp-space-3);
+
+  overflow-x: auto;
   border: 1px solid var(--mvp-border-soft);
   border-radius: var(--mvp-radius);
   background: var(--mvp-surface);
@@ -13,7 +22,7 @@
 
 .table th,
 .table td {
-  padding: var(--mvp-space-3);
+  padding: var(--mvp-space-3) var(--mvp-cell-pad-x);
   border-bottom: 1px solid var(--mvp-border-soft);
   text-align: left;
   vertical-align: middle;
