@@ -6,6 +6,8 @@ import { EmptyStateComponent } from "../../shared/components/empty-state/empty-s
 import { ErrorStateComponent } from "../../shared/components/error-state/error-state";
 import { AttentionNoteComponent } from "../../shared/components/attention-note/attention-note";
 import { MetricCardComponent } from "../../shared/components/metric-card/metric-card";
+import { MetricGaugeComponent } from "../../shared/components/metric-gauge/metric-gauge";
+import { MetricShareComponent } from "../../shared/components/metric-share/metric-share";
 import { StatusBadgeComponent } from "../../shared/components/status-badge/status-badge";
 import { SectionComponent } from "../../layout/section/section";
 import { formatFallback } from "../../shared/util/formatters";
@@ -29,6 +31,8 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
     EmptyStateComponent,
     ErrorStateComponent,
     MetricCardComponent,
+    MetricGaugeComponent,
+    MetricShareComponent,
     SectionComponent,
     StatusBadgeComponent
   ],
@@ -65,15 +69,25 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
         }
         <div class="priorityGrid">
           @for (priority of vm.priorities(); track priority.key) {
-            <mvp-metric-card
-              [label]="priority.label"
-              [value]="priority.value"
-              [tone]="priority.tone"
-              [outOf]="priority.outOf"
-              [history]="priority.history"
-              [isLoading]="vm.loading()"
-              [context]="priority.context"
-            />
+            @if (priority.outOf !== null) {
+              <mvp-metric-share
+                [label]="priority.label"
+                [value]="priority.value"
+                [total]="priority.outOf"
+                [tone]="priority.tone"
+                [isLoading]="vm.loading()"
+                [context]="priority.context"
+              />
+            } @else {
+              <mvp-metric-card
+                [label]="priority.label"
+                [value]="priority.value"
+                [tone]="priority.tone"
+                [history]="priority.history"
+                [isLoading]="vm.loading()"
+                [context]="priority.context"
+              />
+            }
           }
         </div>
       </mvp-section>
@@ -81,22 +95,43 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
       <mvp-section id="overview-quality" title="Qualità degli strumenti">
         <div class="qualityGrid">
           <div class="qualityItem">
-            <h3>AI Assistant</h3>
+            <div class="qualityHead">
+              <h3>AI Assistant</h3>
+              <button
+                mvpButton
+                class="qualityLink"
+                variant="secondary"
+                type="button"
+                (click)="vm.navigate('assistant', 'assistant-metrics')"
+              >
+                Vedi tutte le metriche
+              </button>
+            </div>
             @if (vm.assistantQuality(); as quality) {
-              <mvp-metric-card
+              <mvp-metric-gauge
                 [label]="quality.label"
                 [value]="quality.value"
+                [numeric]="quality.numeric"
+                [max]="5"
                 [unit]="quality.unit"
                 [isLoading]="vm.loading()"
                 context="qualità percepita delle bozze"
               />
             }
-            <button mvpButton variant="secondary" type="button" (click)="vm.navigate('assistant', 'assistant-metrics')">
-              Vedi tutte le metriche
-            </button>
           </div>
           <div class="qualityItem">
-            <h3>Co-Pilot documentale</h3>
+            <div class="qualityHead">
+              <h3>Co-Pilot documentale</h3>
+              <button
+                mvpButton
+                class="qualityLink"
+                variant="secondary"
+                type="button"
+                (click)="vm.navigate('copilot', 'copilot-metrics')"
+              >
+                Vedi tutte le metriche
+              </button>
+            </div>
             @if (vm.copilotQuality(); as quality) {
               <mvp-metric-card
                 [label]="quality.label"
@@ -106,9 +141,6 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
                 context="campi oltre la soglia di confidenza"
               />
             }
-            <button mvpButton variant="secondary" type="button" (click)="vm.navigate('copilot', 'copilot-metrics')">
-              Vedi tutte le metriche
-            </button>
           </div>
         </div>
       </mvp-section>

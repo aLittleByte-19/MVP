@@ -89,11 +89,19 @@ describe("OverviewPageViewModel", () => {
   it("formatta gli indicatori di qualità dei due moduli", () => {
     const vm = createViewModel();
 
-    expect(vm.assistantQuality()).toEqual({ label: "Media stelle", value: "4,3", unit: "/ 5" });
+    // `numeric` accompagna il valore formattato: la scheda a scala deve
+    // collocarlo, e "4,3" non e' un numero.
+    expect(vm.assistantQuality()).toEqual({
+      label: "Media stelle",
+      value: "4,3",
+      unit: "/ 5",
+      numeric: 4.3
+    });
     expect(vm.copilotQuality()).toEqual({
       label: "Campi con confidenza",
       value: "1.284",
-      unit: null
+      unit: null,
+      numeric: 1284
     });
   });
 

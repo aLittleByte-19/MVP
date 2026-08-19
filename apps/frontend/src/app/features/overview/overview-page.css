@@ -1,19 +1,16 @@
-.hero {
-  padding: 34px;
-}
-
-.hero h2,
-.hero p,
+/* Il blocco di apertura aveva una spaziatura e una scala tipografica sue —
+   34px di margine interno, titolo a 1.8rem — e sopra le altre sezioni sembrava
+   una pagina diversa. Ora e' una sezione come le altre, con il titolo alla
+   misura maggiore della scala. */
 .hero h2 {
-  max-width: 820px;
-  font-size: 1.8rem;
-  line-height: 1.16;
+  max-width: 780px;
+  font-size: var(--mvp-font-xl);
+  line-height: var(--mvp-line-tight);
 }
 
 .hero p {
-  max-width: 820px;
+  max-width: 780px;
   color: var(--mvp-muted);
-  font-size: 1.05rem;
   line-height: var(--mvp-line-body);
 }
 
@@ -48,31 +45,40 @@ mvp-attention-note + .priorityGrid {
   display: grid;
   gap: var(--mvp-space-3);
   align-content: start;
-  justify-items: start;
   padding: var(--mvp-space-3);
   border: 1px solid var(--mvp-border);
   border-radius: var(--mvp-radius);
   background: var(--mvp-surface-muted);
 }
 
-.qualityItem h3 {
-  margin: 0;
+/* Titolo del modulo e rimando alle sue metriche sulla stessa riga: erano due
+   righe separate da una scheda, e il riquadro cresceva in altezza per un
+   comando solo. Sotto i 640px tornano incolonnati, dove non ci starebbero. */
+.qualityHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mvp-space-2) var(--mvp-space-3);
+  align-items: center;
+  justify-content: space-between;
 }
 
-/* La scheda non ha larghezza propria (`:host { display: contents }`): dentro
-   una griglia a colonna singola occupa comunque tutta la riga. */
-.qualityItem mvp-metric-card {
-  width: 100%;
+.qualityItem h3 {
+  margin: 0;
+  font-size: var(--mvp-font-lg);
+}
+
+/* Il rimando e' un comando secondario: non deve pesare quanto quelli del
+   blocco di apertura. */
+.qualityLink {
+  min-height: var(--mvp-control-h-compact);
+  padding: 0 var(--mvp-space-3);
+  font-size: var(--mvp-font-sm);
 }
 
 @media (max-width: 900px) {
   .qualityGrid,
   .priorityGrid {
     grid-template-columns: 1fr;
-  }
-
-  .hero {
-    padding: var(--mvp-space-5);
   }
 }
 
