@@ -28,8 +28,9 @@ const GLYPHS: Record<StatusTone, string> = {
     [class.success]="tone() === 'success'"
     [class.warning]="tone() === 'warning'"
     [class.danger]="tone() === 'danger'"
-    >@if (glyph()) {<span class="glyph" aria-hidden="true">{{ glyph() }}</span>}<ng-content
-  /></span>`,
+    >@if (glyph()) {<span class="glyph" aria-hidden="true">{{ glyph() }}</span>}<span class="text"
+      ><ng-content
+    /></span></span>`,
   styleUrl: "./status-badge.css"
 })
 export class StatusBadgeComponent {
