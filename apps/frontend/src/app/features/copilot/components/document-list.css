@@ -1,14 +1,25 @@
+/* Sette colonne su un contenitore che al minimo del layout con barra laterale
+   vale circa 790px: la spaziatura orizzontale delle celle scende a un passo,
+   che su sette colonne sono 56px restituiti al contenuto. Quella verticale
+   resta, e' li' che si legge la riga. */
+.tableWrapper {
+  --mvp-cell-pad-x: var(--mvp-space-2);
+}
+
 /* Le larghezze appartengono a questa tabella, non al foglio condiviso: con
    `table-layout: fixed` una colonna senza regola resterebbe a zero, quindi
-   sommano a 100%. */
+   sommano a 100%. Le due incomprimibili — l'orario di caricamento, che non si
+   spezza, e il comando, che non va a capo — avevano l'8% e il 14%: non
+   bastavano, la tabella si allargava oltre il contenitore e la parte a destra
+   finiva tagliata. */
 .table th[data-column="recipient"],
 .table td[data-column="recipient"] {
-  width: 26%;
+  width: 24%;
 }
 
 .table th[data-column="type"],
 .table td[data-column="type"] {
-  width: 15%;
+  width: 13%;
 }
 
 .table th[data-column="uploadedAt"],
@@ -23,17 +34,17 @@
 
 .table th[data-column="review"],
 .table td[data-column="review"] {
-  width: 16%;
+  width: 15%;
 }
 
 .table th[data-column="download"],
 .table td[data-column="download"] {
-  width: 12%;
+  width: 11%;
 }
 
 .table th[data-column="actions"],
 .table td[data-column="actions"] {
-  width: 8%;
+  width: 14%;
 }
 
 .recipient {
@@ -68,7 +79,7 @@
 
 .action {
   min-height: var(--mvp-control-h-compact);
-  padding: 0 var(--mvp-space-3);
+  padding: 0 var(--mvp-space-2);
   /* L'etichetta resta su una riga: la cella eredita overflow-wrap anywhere,
      che altrimenti spezzerebbe la parola dentro il pulsante. */
   white-space: nowrap;
