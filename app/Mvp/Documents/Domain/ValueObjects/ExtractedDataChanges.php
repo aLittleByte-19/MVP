@@ -59,6 +59,21 @@ final class ExtractedDataChanges
         return $this->with('documentDate', $value);
     }
 
+    public function withRecipientEmail(?string $value): self
+    {
+        return $this->with('recipientEmail', $value);
+    }
+
+    public function withFiscalCode(?string $value): self
+    {
+        return $this->with('fiscalCode', $value);
+    }
+
+    public function withEmployeeId(?string $value): self
+    {
+        return $this->with('employeeId', $value);
+    }
+
     public function withDocumentType(?string $value): self
     {
         return $this->with('documentType', $value);

@@ -629,7 +629,7 @@ class BedrockService
      * Extract structured fields for a single recipient from its OCR text.
      * Works on any document type, not just payslips.
      *
-     * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}
+     * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, recipient_email: ?string, fiscal_code: ?string, employee_id: ?string, confidence_score: ?int}
      *
      * @throws \RuntimeException
      */
@@ -638,8 +638,12 @@ class BedrockService
         $this->ensureConfigured();
 
         $prompt = "Estrai i seguenti campi dal testo OCR di questo documento (qualsiasi tipologia).\n"
-            ."Rispondi SOLO con JSON valido con le chiavi: employee_first_name (nome del destinatario), employee_last_name (cognome del destinatario), company_name (azienda o ente, se presente), document_date (formato YYYY-MM-DD), document_type (tipologia del documento rilevata dal contenuto), description (max 200 caratteri), confidence_score (intero 0-100).\n"
-            ."Usa null per i campi non trovati.\n\n"
+            ."Rispondi SOLO con JSON valido con le chiavi: employee_first_name (nome del destinatario), employee_last_name (cognome del destinatario), company_name (azienda o ente, se presente), document_date (formato YYYY-MM-DD), document_type (tipologia del documento rilevata dal contenuto), description (max 200 caratteri), recipient_email (indirizzo email del destinatario), fiscal_code (codice fiscale del destinatario, 16 caratteri), employee_id (matricola o codice dipendente), confidence_score (intero 0-100).\n"
+            ."Usa null per i campi non trovati.\n"
+            // I tre identificativi valgono solo se stanno scritti nel
+            // documento: un codice fiscale plausibile ma inventato passerebbe
+            // per dato estratto, e l'operatore non ha modo di distinguerlo.
+            ."Per recipient_email, fiscal_code e employee_id riporta esclusivamente valori presenti alla lettera nel testo: se non compaiono, usa null senza dedurli.\n\n"
             ."Per confidence_score usa questa scala:\n"
             ."- 90-100: tutti i campi principali (nome, cognome, azienda, data) sono chiaramente leggibili\n"
             ."- 70-89: la maggior parte dei campi è leggibile ma uno o due sono ambigui o parziali\n"

@@ -343,6 +343,7 @@ class MvpStateService
                     'key' => 'copilot.ocr_confidence',
                     'value' => $this->averageDecimal((clone $documentsOfTenant)->whereNotNull('ocr_confidence_avg')->avg('ocr_confidence_avg')),
                     'unit' => '%',
+                    'threshold' => $confidenceThreshold,
                     'label' => 'Confidenza media OCR',
                 ],
             ],

@@ -13,6 +13,7 @@ use App\Mvp\Documents\Domain\Ports\Inbound\ExtractSubDocumentFieldsUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentAiGatewayPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
+use App\Mvp\Documents\Domain\Support\CodiceFiscale;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Support\Persistence\TransactionManagerPort;
@@ -71,6 +72,9 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
                     ->withDocumentDate($fields['document_date'])
                     ->withDocumentType($fields['document_type'])
                     ->withDescription($fields['description'])
+                    ->withRecipientEmail($fields['recipient_email'])
+                    ->withFiscalCode($fields['fiscal_code'])
+                    ->withEmployeeId($fields['employee_id'])
                     ->withConfidenceScore($confidenceScore)
                     ->withAiPayload($aiFields));
             });
@@ -185,7 +189,7 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
     }
 
     /**
-     * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}
+     * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, recipient_email: ?string, fiscal_code: ?string, employee_id: ?string, confidence_score: ?int}
      */
     private function extractFields(SubDocument $subDocument, OriginalDocument $original): array
     {
@@ -195,12 +199,43 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
             throw new \RuntimeException('Testo OCR non disponibile per l\'intervallo di pagine del destinatario.');
         }
 
-        return $this->ai->extractFields($ocrText);
+        return $this->sanitizeIdentifiers($this->ai->extractFields($ocrText));
     }
 
     /**
-     * @param  array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}  $fields
-     * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}
+     * Codice fiscale, email e matricola arrivano dal modello come qualunque
+     * altro campo, ma sono identificativi: un valore dalla forma sbagliata non
+     * e' un'estrazione imprecisa, e' un dato falso che l'operatore non ha modo
+     * di riconoscere come tale. Chi non supera il proprio controllo formale
+     * torna quindi a null — il campo resta vuoto e compilabile a mano, che e'
+     * il comportamento che aveva prima.
+     *
+     * La matricola non ha una forma dichiarata: varia da azienda ad azienda,
+     * quindi passa cosi' com'e'.
+     *
+     * @param  array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, recipient_email: ?string, fiscal_code: ?string, employee_id: ?string, confidence_score: ?int}  $fields
+     * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, recipient_email: ?string, fiscal_code: ?string, employee_id: ?string, confidence_score: ?int}
+     */
+    private function sanitizeIdentifiers(array $fields): array
+    {
+        $email = $fields['recipient_email'] ?? null;
+        $fields['recipient_email'] = is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL) !== false
+            ? strtolower($email)
+            : null;
+
+        $fiscalCode = $fields['fiscal_code'] ?? null;
+        $fields['fiscal_code'] = is_string($fiscalCode) && CodiceFiscale::isValid(strtoupper($fiscalCode))
+            ? strtoupper($fiscalCode)
+            : null;
+
+        $fields['employee_id'] ??= null;
+
+        return $fields;
+    }
+
+    /**
+     * @param  array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, recipient_email: ?string, fiscal_code: ?string, employee_id: ?string, confidence_score: ?int}  $fields
+     * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, recipient_email: ?string, fiscal_code: ?string, employee_id: ?string, confidence_score: ?int}
      */
     private function applyManualMetadataOverrides(array $fields, OriginalDocument $original): array
     {

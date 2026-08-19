@@ -11,6 +11,8 @@ export interface Metric {
   key: string;
   value: number | string;
   label: string;
+  /** Valore oltre il quale il sistema decide da solo, per le metriche che ne hanno uno (la confidenza media OCR ha la soglia di validazione automatica). Lo conosce solo il backend, che la legge dalla configurazione: l'interfaccia la mostra sulla scala della scheda ma non la stabilisce. */
+  threshold?: number;
   /** Unità di misura del valore, quando ne ha una ("%", "s", "min", "/ 5"). Sta nel contratto e non nel frontend perché è un fatto della metrica: è chi la calcola a sapere se una media è in secondi o in minuti, e una tabella chiave → unità nell'interfaccia andrebbe fuori sincrono alla prima metrica aggiunta. Assente sui conteggi, che sono numeri puri. */
   unit?: string;
   /**
