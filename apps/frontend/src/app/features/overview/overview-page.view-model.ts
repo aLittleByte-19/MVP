@@ -10,16 +10,23 @@ export interface QualityMetric {
   readonly label: string;
   readonly value: string;
   readonly unit: string | null;
+  /** Lo stesso valore come numero, per le schede che lo collocano su una scala. */
+  readonly numeric: number | null;
 }
 
-/** Una priorità della Overview: la metrica, il suo rilievo e il totale di riferimento. */
+/**
+ * Una priorità della Overview.
+ *
+ * `outOf` sceglie anche la forma della scheda: con un totale la priorità è una
+ * quota del corpus ("23 sotto-documenti su 412"), senza è un conteggio con il
+ * suo andamento. Sono due domande diverse e due schede diverse.
+ */
 export interface PriorityMetric {
   readonly key: string;
   readonly label: string;
-  readonly value: number | string | null;
+  readonly value: number | null;
   readonly tone: MetricTone;
   readonly history: number[] | undefined;
-  /** Totale di riferimento, reso accanto al valore come "23/412". */
   readonly outOf: number | null;
   /** Riga sotto il numero: gli ingressi di oggi. */
   readonly context: string | null;
@@ -107,7 +114,12 @@ export class OverviewPageViewModel {
 
     const formatted = formatMetric(entry);
 
-    return { label: entry.label, value: formatted.value, unit: formatted.unit };
+    return {
+      label: entry.label,
+      value: formatted.value,
+      unit: formatted.unit,
+      numeric: typeof entry.value === "number" ? entry.value : numericOf(formatted.value)
+    };
   }
 
   /**
@@ -151,11 +163,18 @@ export class OverviewPageViewModel {
       label,
       // `null` finché lo stato non è caricato: uno zero verrebbe letto come
       // un conteggio reale.
-      value: entry === null ? null : entry.value,
+      value: typeof entry?.value === "number" ? entry.value : null,
       tone,
       history: entry?.history,
       outOf: this.outOfFor(entry, outOf),
       context: this.contextFor(entry)
     };
   }
+}
+
+/** Il numero dietro una media già formattata per la lettura ("4,3"). */
+function numericOf(display: string): number | null {
+  const parsed = Number(display.replace(",", "."));
+
+  return Number.isFinite(parsed) ? parsed : null;
 }
