@@ -1,17 +1,17 @@
 import { ChangeDetectionStrategy, Component, computed, input } from "@angular/core";
-import {
-  formatCount,
-  type MetricTone,
-  NOT_AVAILABLE,
-  sparklineEnd,
-  sparklinePoints
-} from "../../util/metrics";
+import { type MetricTone, NOT_AVAILABLE, sparklineEnd, sparklinePoints } from "../../util/metrics";
 
 const SPARK_WIDTH = 96;
 const SPARK_HEIGHT = 30;
 
 /**
- * Scheda di una singola metrica.
+ * Scheda di andamento: un conteggio e la linea dei sette giorni.
+ *
+ * E' una delle quattro forme di scheda metrica (vedi `metrics-panel`): questa
+ * risponde a "quanto, e sta crescendo?". Dove la domanda e' un'altra —
+ * quanta parte del totale, quanto vale su una scala, se c'e' un guasto — la
+ * scheda e' un'altra, perche' un numero grande uguale per tutti costringeva a
+ * leggere l'etichetta per capire che cosa si stesse guardando.
  *
  * Coppia `dl/dt/dd` invece di due elementi affiancati: lo screen reader legge
  * "Documenti analizzati: 128" come una cosa sola, mentre prima riceveva due
@@ -36,11 +36,6 @@ const SPARK_HEIGHT = 30;
           } @else {
             <span class="lead">
               <span class="num">{{ displayValue() }}</span>
-              @if (outOfDisplay(); as total) {
-                <span class="total"
-                  ><span class="srOnly">su </span><span aria-hidden="true">/</span>{{ total }}</span
-                >
-              }
               @if (unit(); as unitText) {
                 <span class="unit">{{ unitText }}</span>
               }
@@ -75,18 +70,12 @@ const SPARK_HEIGHT = 30;
       </dd>
     </dl>
   `,
-  styleUrl: "./metric-card.css"
+  styleUrls: ["../../styles/metric-shell.css", "./metric-card.css"]
 })
 export class MetricCardComponent {
   readonly label = input.required<string>();
   readonly value = input.required<string | number | null>();
   readonly unit = input<string | null>(null);
-  /**
-   * Totale di riferimento, reso accanto al valore come "23/412" invece che in
-   * una riga a parte: cosi' il numero piccolo resta sulla linea di base del
-   * numero grande e le schede affiancate restano allineate.
-   */
-  readonly outOf = input<number | null>(null);
   readonly tone = input<MetricTone>("neutral");
   /** Riga sotto il numero: rapporto sul totale, elementi nuovi oggi, o l'errore. */
   readonly context = input<string | null>(null);
@@ -101,12 +90,6 @@ export class MetricCardComponent {
     const current = this.value();
 
     return current === null || current === "" ? NOT_AVAILABLE : String(current);
-  });
-
-  protected readonly outOfDisplay = computed(() => {
-    const total = this.outOf();
-
-    return total === null ? null : formatCount(total);
   });
 
   protected readonly sparkPoints = computed(() =>

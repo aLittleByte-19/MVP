@@ -1,0 +1,7 @@
+/* Il guscio sta in `shared/styles/metric-shell.css`. Qui la sola pastiglia,
+   che sulla riga del numero deve stargli accanto senza abbassarne la linea di
+   base. */
+
+.figure {
+  align-items: center;
+}

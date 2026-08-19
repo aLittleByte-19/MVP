@@ -79,18 +79,6 @@ describe("MetricCardComponent", () => {
     expect(host.querySelector("svg.spark")).toBeNull();
   });
 
-  it("tiene il totale di riferimento sulla riga del valore, non in quella di contesto", () => {
-    const host = render({ label: "Da verificare", value: 23, outOf: 412 });
-    const total = host.querySelector(".total");
-
-    expect(host.querySelector(".num")?.textContent?.trim()).toBe("23");
-    expect(total?.textContent).toContain("412");
-    // La barra e' solo un segno grafico: chi usa uno screen reader sente
-    // "Da verificare: 23 su 412", non "23 slash 412".
-    expect(total?.querySelector("[aria-hidden='true']")?.textContent).toBe("/");
-    expect(total?.querySelector(".srOnly")?.textContent?.trim()).toBe("su");
-    expect(host.querySelector(".context")).toBeNull();
-  });
 
   it("omette il totale quando la metrica non ne ha uno", () => {
     const host = render({ label: "Bozze da valutare", value: 8 });

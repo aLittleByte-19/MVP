@@ -1,0 +1,157 @@
+/**
+ * Guscio comune delle schede metrica.
+ *
+ * Le quattro schede — andamento, quota, misura su scala, stato — dicono cose
+ * diverse ma sono lo stesso oggetto sulla pagina: stessa cornice, stessa
+ * etichetta, stesso peso del numero, stessa striscia di tono. Qui sta cio' che
+ * condividono; ogni componente aggiunge solo la propria parte bassa — la
+ * sparkline, la barra della quota, la scala, la pastiglia di stato.
+ *
+ * Si importa via `styleUrls`, come `field.css` e `data-table.css`.
+ */
+
+.card {
+  position: relative;
+  display: grid;
+  gap: var(--mvp-space-2);
+  margin: 0;
+  padding: var(--mvp-space-4);
+  padding-left: var(--mvp-space-5);
+  overflow: hidden;
+  border: 1px solid var(--mvp-border-soft);
+  border-radius: var(--mvp-radius);
+  background: var(--mvp-surface);
+}
+
+/* Il tono e' una striscia verticale, non un fondo colorato: resta leggibile
+   accanto ad altre schede e non compete con il valore. */
+.card::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  background: var(--mvp-primary);
+  content: "";
+}
+
+.card.ok::before {
+  background: var(--mvp-success);
+}
+
+.card.watch::before {
+  background: var(--mvp-accent);
+}
+
+.card.alert::before {
+  background: var(--mvp-danger);
+}
+
+/* Ordine DOM etichetta -> valore (ordine di lettura), invertito qui perche'
+   visivamente il numero viene prima. */
+.label {
+  order: 1;
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-xs);
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+/* Valore e contesto stanno entrambi dentro il <dd>: un <dl> ammette come figli
+   diretti solo dt, dd e div, e la riga di contesto come <span> fratello
+   violava la regola definition-list di axe. */
+.value {
+  display: grid;
+  gap: var(--mvp-space-2);
+  margin: 0;
+  order: 2;
+}
+
+.figure {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mvp-space-2) var(--mvp-space-3);
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.num {
+  color: var(--mvp-text);
+  font-size: 2rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* Valore, totale di riferimento e unita' condividono la linea di base: il
+   numero piccolo resta sulla stessa riga di quello grande invece di finire in
+   una riga di contesto a parte. */
+.lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 2px;
+  min-width: 0;
+}
+
+.total {
+  color: var(--mvp-muted);
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.unit {
+  color: var(--mvp-muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.context {
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-xs);
+}
+
+.skeleton {
+  display: block;
+  border-radius: var(--mvp-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--mvp-surface-soft) 25%,
+    var(--mvp-border-soft) 50%,
+    var(--mvp-surface-soft) 75%
+  );
+  background-size: 240% 100%;
+  animation: mvp-metric-shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton.num {
+  width: 74px;
+  height: 28px;
+}
+
+.skeleton.txt {
+  width: 118px;
+  height: 13px;
+}
+
+@keyframes mvp-metric-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+
+  to {
+    background-position: -120% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+:host {
+  display: contents;
+}
