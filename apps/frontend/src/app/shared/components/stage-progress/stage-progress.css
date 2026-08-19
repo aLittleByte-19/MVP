@@ -11,20 +11,26 @@
   flex: 1 1 132px;
   display: grid;
   gap: var(--mvp-space-2);
+  justify-items: center;
   min-width: 0;
+  text-align: center;
 }
 
-/* Il contrassegno e il tratto che porta alla tappa seguente. Prima la traccia
-   era il bordo superiore della voce: un filo che correva sopra l'etichetta e
-   non somigliava a nulla del resto dell'applicativo, dove lo stato sta sempre
-   dentro una forma — pastiglia, contrassegno, pallino. */
+/* Il contrassegno sta al centro della sua tappa, con mezzo tratto per lato che
+   lo lega a quelle vicine: nome e stato cadono sotto il cerchio invece di
+   partire dal suo bordo sinistro, dove sembravano appesi di lato. Prima la
+   traccia era il bordo superiore della voce, un filo che correva sopra
+   l'etichetta e non somigliava a nulla del resto dell'applicativo, dove lo
+   stato sta sempre dentro una forma — pastiglia, contrassegno, pallino. */
 .track {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: var(--mvp-space-2);
   align-items: center;
+  width: 100%;
 }
 
+.track::before,
 .track::after {
   content: "";
   height: 2px;
@@ -32,7 +38,8 @@
   background: var(--mvp-border-soft);
 }
 
-/* Dopo l'ultima tappa non c'e' nulla a cui il tratto porti. */
+/* Prima della prima tappa e dopo l'ultima non c'e' nulla da collegare. */
+.stages li:first-child .track::before,
 .stages li:last-child .track::after {
   visibility: hidden;
 }
@@ -59,6 +66,9 @@
   color: var(--mvp-success);
 }
 
+/* Il tratto si riempie fino a dove la corsa e' arrivata: interamente sulle
+   tappe concluse, solo nella meta' di entrata su quella corrente. */
+.stages li.done .track::before,
 .stages li.done .track::after {
   background: var(--mvp-success-border);
 }
@@ -69,10 +79,18 @@
   color: var(--mvp-primary-deep);
 }
 
+.stages li.current .track::before {
+  background: var(--mvp-primary-border);
+}
+
 .stages li.failed .marker {
   border-color: var(--mvp-danger);
   background: var(--mvp-danger-soft);
   color: var(--mvp-danger);
+}
+
+.stages li.failed .track::before {
+  background: var(--mvp-danger-border);
 }
 
 .body {

@@ -15,7 +15,7 @@ const STAGES: readonly ProgressStage[] = [
   { id: "queued", label: "In coda" },
   { id: "generating-text", label: "Testo" },
   { id: "generating-cover", label: "Copertina" },
-  { id: "completed", label: "Completata" }
+  { id: "completed", label: "Bozza pronta" }
 ];
 
 /**

@@ -117,7 +117,7 @@ export class StageProgressComponent {
     const failed = this.failed();
 
     return stages.map((stage, index) => {
-      const state = this.stateFor(index, currentIndex, failed);
+      const state = this.stateFor(index, currentIndex, failed, stages.length - 1);
 
       return {
         id: stage.id,
@@ -129,7 +129,7 @@ export class StageProgressComponent {
     });
   });
 
-  private stateFor(index: number, currentIndex: number, failed: boolean): StageState {
+  private stateFor(index: number, currentIndex: number, failed: boolean, lastIndex: number): StageState {
     if (currentIndex === -1) {
       return "pending";
     }
@@ -144,7 +144,15 @@ export class StageProgressComponent {
 
     // Il fallimento colora la tappa in cui si è verificato, non tutte: le
     // precedenti erano riuscite davvero.
-    return failed ? "failed" : "current";
+    if (failed) {
+      return "failed";
+    }
+
+    // Raggiungere l'ultima tappa vuol dire che la corsa è finita, non che ne
+    // è cominciato un altro passo: restando "in corso" l'avanzamento si
+    // fermava per sempre a un passo dalla fine, con l'ultima tappa che
+    // annunciava "Completato — In corso".
+    return index === lastIndex ? "done" : "current";
   }
 }
 

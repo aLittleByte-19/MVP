@@ -25,10 +25,18 @@ describe("UploadProgressComponent", () => {
     ["uploading", "Caricamento"],
     ["queued", "In coda"],
     ["processing", "Analisi OCR"],
-    ["extracting", "Estrazione campi"],
-    ["completed", "Completato"]
+    ["extracting", "Estrazione campi"]
   ] as [DocumentUploadPhase, string][])("colloca la fase %s sulla tappa %s", (phase, expected) => {
     expect(currentStage(render(phase))).toBe(expected);
+  });
+
+  it("chiude l'avanzamento sull'ultima tappa invece di lasciarla in corso", () => {
+    // Arrivare all'ultima tappa vuol dire che la corsa e' finita: mostrarla
+    // "in corso" teneva l'avanzamento per sempre a un passo dalla fine.
+    const host = render("completed");
+
+    expect(currentStage(host)).toBeNull();
+    expect(host.querySelector("li:last-child")?.className).toBe("done");
   });
 
   it("non evidenzia alcuna tappa prima che l'elaborazione inizi", () => {

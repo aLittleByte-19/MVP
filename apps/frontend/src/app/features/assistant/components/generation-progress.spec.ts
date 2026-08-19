@@ -24,8 +24,7 @@ describe("GenerationProgressComponent", () => {
   it.each([
     ["queued", "In coda"],
     ["generating-text", "Testo"],
-    ["generating-cover", "Copertina"],
-    ["completed", "Completata"]
+    ["generating-cover", "Copertina"]
   ] as [CommunicationGenerationPhase, string][])("colloca la fase %s sulla tappa %s", (phase, expected) => {
     expect(currentStage(render(phase))).toBe(expected);
   });
@@ -55,10 +54,13 @@ describe("GenerationProgressComponent", () => {
     expect(failed.querySelector("li.failed .name")?.textContent?.trim()).toBe("Copertina");
     expect(failed.querySelector("li.current")).toBeNull();
 
+    // A generazione conclusa nessuna tappa resta in corso: l'ultima e'
+    // completata, non un passo ancora aperto.
     const completed = render("completed");
 
     expect(completed.querySelector("li.failed")).toBeNull();
-    expect(currentStage(completed)).toBe("Completata");
+    expect(currentStage(completed)).toBeNull();
+    expect(completed.querySelector("li:last-child")?.className).toBe("done");
   });
 
   it("la copertina mancante non invalida una bozza gia' leggibile", () => {
