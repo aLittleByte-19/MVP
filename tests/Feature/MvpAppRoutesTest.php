@@ -10,6 +10,7 @@ use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Communications\Domain\Ports\Inbound\StartCommunicationWorkflowUseCase;
+use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Enums\SendStatus;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
@@ -1102,6 +1103,84 @@ test('state metrics expose stable keys alongside the presentation label', functi
         'copilot.validated',
         'copilot.quarantined',
     );
+});
+
+test('document metrics report the operational signals of the pipeline', function () {
+    // Gli stessi segnali dei gauge letti dalle dashboard Grafana — quanto e' in
+    // lavorazione, quanto e' fermo oltre il tempo previsto, quanto e' fallito —
+    // ristretti al tenant di chi guarda.
+    config()->set('mvp.document_limits.processing_timeout_seconds', 600);
+
+    OriginalDocument::factory()->create([
+        'processing_status' => ProcessingStatus::Processing,
+        'workflow_started_at' => now()->subMinutes(30),
+    ]);
+    OriginalDocument::factory()->create([
+        'processing_status' => ProcessingStatus::Processing,
+        'workflow_started_at' => now()->subMinute(),
+    ]);
+    OriginalDocument::factory()->create(['processing_status' => ProcessingStatus::Pending]);
+    OriginalDocument::factory()->failed()->create();
+    OriginalDocument::factory()->completed()->create([
+        'workflow_started_at' => now()->subSeconds(40),
+        'workflow_completed_at' => now()->subSeconds(10),
+    ]);
+
+    $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
+
+    expect($metrics['copilot.in_progress']['value'])->toBe(3)
+        ->and($metrics['copilot.processing_stuck']['value'])->toBe(1)
+        ->and($metrics['copilot.processing_failed']['value'])->toBe(1)
+        ->and($metrics['copilot.processing_seconds']['value'])->toBe(30)
+        ->and($metrics['copilot.processing_seconds']['unit'])->toBe('s');
+});
+
+test('an average duration past ninety seconds is expressed in minutes', function () {
+    // "312 s" e' un numero da convertire a mente; sotto il minuto e mezzo, al
+    // contrario, i minuti con un decimale darebbero una precisione inventata.
+    OriginalDocument::factory()->completed()->create([
+        'workflow_started_at' => now()->subMinutes(4),
+        'workflow_completed_at' => now(),
+        'ocr_confidence_avg' => 91.4,
+    ]);
+
+    $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
+
+    expect($metrics['copilot.processing_seconds']['value'])->toBe('4.0')
+        ->and($metrics['copilot.processing_seconds']['unit'])->toBe('min')
+        ->and($metrics['copilot.ocr_confidence']['value'])->toBe('91.4')
+        ->and($metrics['copilot.ocr_confidence']['unit'])->toBe('%');
+});
+
+test('a metric without any measurement exposes the placeholder instead of a zero', function () {
+    // Uno zero verrebbe letto come una misura reale: nessuna corsa conclusa non
+    // significa che sia durata zero secondi.
+    $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
+
+    expect($metrics['copilot.processing_seconds']['value'])->toBe('—')
+        ->and($metrics['copilot.processing_seconds'])->not->toHaveKey('unit')
+        ->and($metrics['copilot.ocr_confidence']['value'])->toBe('—');
+});
+
+test('communication metrics report failed, stuck and degraded generations', function () {
+    config()->set('mvp.communications.generation_timeout_seconds', 300);
+
+    Communication::factory()->draft()->create(['generation_status' => CommunicationGenerationStatus::Failed]);
+    Communication::factory()->draft()->create([
+        'generation_status' => CommunicationGenerationStatus::Processing,
+        'workflow_started_at' => now()->subMinutes(10),
+    ]);
+    Communication::factory()->draft()->create([
+        'generation_status' => CommunicationGenerationStatus::Processing,
+        'workflow_started_at' => now()->subMinute(),
+    ]);
+    Communication::factory()->draft()->create(['cover_status' => CoverImageStatus::Failed]);
+
+    $metrics = collect($this->getJson('/api/v1/state')->json('assistant.metrics'))->keyBy('key');
+
+    expect($metrics['assistant.generation_failed']['value'])->toBe(1)
+        ->and($metrics['assistant.generation_stuck']['value'])->toBe(1)
+        ->and($metrics['assistant.covers_failed']['value'])->toBe(1);
 });
 
 test('the ready documents metric counts validated sub-documents without the quarantined ones', function () {

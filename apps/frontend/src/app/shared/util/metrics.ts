@@ -32,28 +32,42 @@ export function formatCount(value: number): string {
  * Formatta il valore di una metrica separando l'unita' dal numero.
  *
  * Il backend invia gia' una stringa per le medie (`4.3`, oppure `—` quando non
- * ci sono valutazioni) e un intero per i conteggi: qui si distingue solo la
- * resa, senza reinterpretare il dato. I conteggi passano da `formatCount`
- * perche' `1284` va letto `1.284` in italiano.
+ * ce n'e' una) e un intero per i conteggi: qui si distingue solo la resa, senza
+ * reinterpretare il dato. I conteggi passano da `formatCount` perche' `1284` va
+ * letto `1.284` in italiano, e il separatore decimale diventa la virgola.
+ *
+ * L'unita' arriva dal contratto (campo `unit`). Prima era una tabella chiave →
+ * unita' scritta qui, con dentro una sola metrica: alla seconda misura non
+ * pura — secondi, minuti, percentuali — sarebbe andata fuori sincrono col
+ * backend, che e' l'unico a sapere in che scala ha calcolato il valore.
  */
 export function formatMetric(metric: Metric): FormattedMetric {
   const raw = metric.value;
+  const unit = metric.unit ?? null;
 
   if (typeof raw === "number") {
-    return { value: formatCount(raw), unit: null };
+    return { value: formatCount(raw), unit };
   }
 
   if (raw === NOT_AVAILABLE || raw.trim() === "") {
+    // Senza valore l'unita' non ha nulla da qualificare: "— %" e' rumore.
     return { value: NOT_AVAILABLE, unit: null };
   }
 
-  // La media stelle e' l'unica stringa numerica del contratto: l'unita' rende
-  // leggibile la scala, altrimenti "4.3" e "128" hanno lo stesso aspetto.
-  if (metric.key === "assistant.rating_average") {
-    return { value: raw.replace(".", ","), unit: "/ 5" };
-  }
+  return { value: raw.replace(".", ","), unit };
+}
 
-  return { value: raw, unit: null };
+/**
+ * Tono di un conteggio di guasti — corse fallite, corse ferme oltre il tempo
+ * previsto, prodotti degradati. Il rilievo dipende dal valore invece di essere
+ * fisso: un rosso permanente segnalerebbe un problema anche sullo zero, che e'
+ * invece la notizia buona, e l'operatore imparerebbe a ignorarlo.
+ *
+ * `whenPositive` distingue cio' che blocca da cio' che degrada: una copertina
+ * non generata non ferma nulla, il PDF esce comunque senza immagine.
+ */
+export function faultTone(entry: Metric | null, whenPositive: MetricTone = "alert"): MetricTone {
+  return typeof entry?.value === "number" && entry.value > 0 ? whenPositive : "ok";
 }
 
 /**

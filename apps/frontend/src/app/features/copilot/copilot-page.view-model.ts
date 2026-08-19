@@ -8,6 +8,7 @@ import type {
 import { extractFieldErrors, getApiErrorMessage } from "../../core/errors/api-error";
 import type { CompositionSlice } from "../../shared/components/metric-composition/metric-composition";
 import type { MetricPresentation } from "../../shared/components/metrics-panel/metrics-panel";
+import { faultTone } from "../../shared/util/metrics";
 
 /** Metriche che il pannello non ripete perché sono le parti della ripartizione. */
 const MODULE_COMPOSITION_KEYS = ["copilot.needs_review", "copilot.validated", "copilot.quarantined"];
@@ -83,7 +84,12 @@ export class CopilotPageViewModel {
     const documents = this.store.metricEntry("copilot.documents");
     const total = typeof documents?.value === "number" ? documents.value : undefined;
 
-    return { "copilot.sub_documents": { outOf: total } };
+    return {
+      "copilot.sub_documents": { outOf: total },
+      "copilot.in_progress": { outOf: total },
+      "copilot.processing_stuck": { tone: faultTone(this.store.metricEntry("copilot.processing_stuck")) },
+      "copilot.processing_failed": { tone: faultTone(this.store.metricEntry("copilot.processing_failed")) }
+    };
   });
 
   /**

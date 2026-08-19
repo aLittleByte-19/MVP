@@ -25,6 +25,7 @@ describe("OverviewPageViewModel", () => {
     "assistant.rating_average": {
       key: "assistant.rating_average",
       value: "4.3",
+      unit: "/ 5",
       label: "Media stelle"
     },
     "copilot.confident_fields": {
