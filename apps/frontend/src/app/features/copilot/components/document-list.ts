@@ -5,10 +5,15 @@ import { EmptyStateComponent } from "../../../shared/components/empty-state/empt
 import { StatusBadgeComponent } from "../../../shared/components/status-badge/status-badge";
 import { StatusDotComponent } from "../../../shared/components/status-dot/status-dot";
 import { formatConfidence, formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
-import { getReviewStatusTone } from "../../../shared/util/status";
+import { getReviewStatusShortLabel, getReviewStatusTone } from "../../../shared/util/status";
 
 /**
  * Storico documenti analizzati.
+ *
+ * Le intestazioni lunghe portano un punto di sillabazione (`&shy;`): sono
+ * parole sole, e in una colonna stretta il browser le spezzerebbe dove capita
+ * — "CONFIDENZ/A" — senza segnare la rottura. Cosi' invece vanno a capo dove
+ * si dividerebbero leggendo, con il trattino.
  *
  * Le colonne portano cio' che riguarda l'analisi — tipologia, quando e' stato
  * caricato, quanto e' affidabile l'estrazione, a che punto e' la revisione, se
@@ -27,12 +32,12 @@ import { getReviewStatusTone } from "../../../shared/util/status";
         <table class="table">
           <thead>
             <tr>
-              <th scope="col" data-column="recipient">Destinatario</th>
+              <th scope="col" data-column="recipient">Destina&shy;tario</th>
               <th scope="col" data-column="type">Tipologia</th>
               <th scope="col" data-column="uploadedAt">Caricato il</th>
-              <th scope="col" data-column="confidence">Confidenza</th>
-              <th scope="col" data-column="review">Validazione</th>
-              <th scope="col" data-column="download">Scaricamento</th>
+              <th scope="col" data-column="confidence">Confiden&shy;za</th>
+              <th scope="col" data-column="review">Valida&shy;zione</th>
+              <th scope="col" data-column="download">Scarica&shy;mento</th>
               <th scope="col" data-column="actions">Azioni</th>
             </tr>
           </thead>
@@ -60,7 +65,7 @@ import { getReviewStatusTone } from "../../../shared/util/status";
                 </td>
                 <td data-column="review" data-label="Validazione">
                   <mvp-status-badge [tone]="getReviewStatusTone(documentItem.reviewStatus, documentItem.error)">
-                    {{ documentItem.reviewStatusLabel }}
+                    {{ getReviewStatusShortLabel(documentItem.reviewStatus, documentItem.reviewStatusLabel) }}
                   </mvp-status-badge>
                 </td>
                 <td data-column="download" data-label="Scaricamento">
@@ -100,4 +105,5 @@ export class DocumentListComponent {
   protected readonly formatConfidence = formatConfidence;
   protected readonly formatDateForDisplay = formatDateForDisplay;
   protected readonly getReviewStatusTone = getReviewStatusTone;
+  protected readonly getReviewStatusShortLabel = getReviewStatusShortLabel;
 }

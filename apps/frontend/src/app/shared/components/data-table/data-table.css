@@ -30,7 +30,12 @@
   word-break: normal;
 }
 
+/* L'intestazione non si spezza in mezzo alla parola: "CONFIDENZ/A" non e' una
+   riga andata a capo, e' una parola rotta. Con `break-word` la parola intera
+   resta la misura minima della colonna, quindi le larghezze qui sotto vanno
+   calibrate perche' ci stia. */
 .table th {
+  overflow-wrap: break-word;
   background: var(--mvp-surface-soft);
   color: var(--mvp-muted);
   font-size: var(--mvp-label-a-size);
