@@ -1,3 +1,16 @@
+/* Il testo sta in un elemento suo invece di essere un figlio anonimo del
+   flex: cosi' puo' restringersi (`min-width: 0`) e spezzarsi. `anywhere`
+   andava a capo in mezzo alla parola — "automat/icamente" — e, dicendo al
+   layout della tabella che alla pastiglia basta un carattere, lasciava che la
+   colonna fosse dimensionata su quel nulla; `break-word` tiene la parola
+   intera come misura minima e la spezza solo dove non ci sta davvero, con il
+   trattino della sillabazione quando il browser sa farla. */
+.text {
+  min-width: 0;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
 .glyph {
   flex: none;
   font-size: 0.72rem;
@@ -25,7 +38,6 @@
   font-weight: 600;
   letter-spacing: 0.01em;
   line-height: 1.25;
-  overflow-wrap: anywhere;
 }
 
 /* Validato automaticamente (alta confidenza): teal, il colore che l'ispettore
