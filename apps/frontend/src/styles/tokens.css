@@ -27,6 +27,14 @@
      chiede a un contorno che porta informazione. */
   --mvp-primary-border: #7fa9c8;
   --mvp-primary-soft: #e9f1f8;
+  /* Teal della validazione automatica. Serviva un terzo colore: il primario
+     dice "questa e' l'applicazione" — pulsanti, voce attiva, collegamenti — e
+     usarlo anche per uno stato lo confondeva con la cromia di base, lasciando
+     leggibili come stato solo l'arancione e il verde. Il teal non appartiene a
+     nessun altro ruolo, e sta fra i due: sopra soglia ma senza mano umana. */
+  --mvp-info: #116b7a;
+  --mvp-info-soft: #e3f2f6;
+  --mvp-info-border: #5faabb;
   --mvp-warning-border: #d9a273;
   --mvp-success-border: #7fbc9c;
   --mvp-danger-border: #d79a9a;
@@ -121,6 +129,9 @@
   --mvp-danger-soft: #3b2222;
   --mvp-primary-border: #47708f;
   --mvp-primary-soft: #1e3243;
+  --mvp-info: #8ad3e3;
+  --mvp-info-soft: #14323c;
+  --mvp-info-border: #44899b;
   --mvp-warning-border: #7d5c34;
   --mvp-success-border: #3f6c54;
   --mvp-danger-border: #7c4646;

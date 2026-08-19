@@ -123,7 +123,7 @@
 
 .statusAuto .extractedMark .mark,
 .statusAuto .editableField .mark {
-  color: var(--mvp-primary-deep);
+  color: var(--mvp-info);
 }
 
 .statusManual .extractedMark .mark,
@@ -190,11 +190,14 @@
   background: var(--mvp-warning-soft);
 }
 
-/* Validato automaticamente (alta confidenza). */
+/* Validato automaticamente, cioe' confidenza sopra soglia: teal. I tre stati
+   ora hanno tre colori distinti — arancione sotto soglia, teal sopra soglia
+   senza revisione, verde dopo la conferma umana — mentre il teal di prima era
+   il primario, lo stesso di pulsanti e navigazione. */
 .statusAuto .editableField input[readonly],
 .statusAuto .editableField textarea[readonly] {
-  border-color: var(--mvp-primary-border);
-  background: var(--mvp-primary-soft);
+  border-color: var(--mvp-info-border);
+  background: var(--mvp-info-soft);
 }
 
 /* Validato o corretto manualmente. Ultima regola a pari specificita': la

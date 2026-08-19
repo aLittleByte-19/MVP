@@ -28,11 +28,13 @@
   overflow-wrap: anywhere;
 }
 
-/* Validato automaticamente (alta confidenza): azzurro della palette primary. */
+/* Validato automaticamente (alta confidenza): teal, il colore che l'ispettore
+   da' allo stesso stato. Era il primario, cioe' la cromia dell'applicazione:
+   lo stato si confondeva con pulsanti e voce di menu attiva. */
 .info {
-  --tag-accent: var(--mvp-primary);
-  --tag-bg: rgba(121, 173, 211, 0.16);
-  --tag-color: var(--mvp-primary-deep);
+  --tag-accent: var(--mvp-info-border);
+  --tag-bg: var(--mvp-info-soft);
+  --tag-color: var(--mvp-info);
 }
 
 .success {
