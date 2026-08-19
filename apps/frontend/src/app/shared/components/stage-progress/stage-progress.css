@@ -1,57 +1,84 @@
 .stages {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--mvp-space-2);
+  gap: var(--mvp-space-3);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .stages li {
-  flex: 1 1 128px;
+  flex: 1 1 132px;
   display: grid;
-  gap: 1px;
-  padding-top: var(--mvp-space-2);
-  /* Il bordo superiore è la traccia: si riempie tappa per tappa invece di
-     scorrere con una percentuale che non misura nulla. */
-  border-top: 3px solid var(--mvp-border-soft);
+  gap: var(--mvp-space-2);
+  min-width: 0;
 }
 
-.stages li.done {
-  border-top-color: var(--mvp-success);
-}
-
-.stages li.current {
-  border-top-color: var(--mvp-primary);
-}
-
-.stages li.failed {
-  border-top-color: var(--mvp-danger);
-}
-
-.mark {
-  display: inline-flex;
-  gap: 5px;
+/* Il contrassegno e il tratto che porta alla tappa seguente. Prima la traccia
+   era il bordo superiore della voce: un filo che correva sopra l'etichetta e
+   non somigliava a nulla del resto dell'applicativo, dove lo stato sta sempre
+   dentro una forma — pastiglia, contrassegno, pallino. */
+.track {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--mvp-space-2);
   align-items: center;
-  color: var(--mvp-muted);
-  font-size: var(--mvp-font-xs);
 }
 
-.stages li.done .mark {
+.track::after {
+  content: "";
+  height: 2px;
+  border-radius: var(--mvp-radius-pill);
+  background: var(--mvp-border-soft);
+}
+
+/* Dopo l'ultima tappa non c'e' nulla a cui il tratto porti. */
+.stages li:last-child .track::after {
+  visibility: hidden;
+}
+
+.marker {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--mvp-border-strong);
+  border-radius: var(--mvp-radius-pill);
+  background: var(--mvp-surface);
+  color: var(--mvp-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.stages li.done .marker {
+  border-color: var(--mvp-success);
+  background: var(--mvp-success-soft);
   color: var(--mvp-success);
 }
 
-.stages li.current .mark {
-  color: var(--mvp-primary);
+.stages li.done .track::after {
+  background: var(--mvp-success-border);
 }
 
-.stages li.failed .mark {
+.stages li.current .marker {
+  border-color: var(--mvp-primary);
+  background: var(--mvp-primary-soft);
+  color: var(--mvp-primary-deep);
+}
+
+.stages li.failed .marker {
+  border-color: var(--mvp-danger);
+  background: var(--mvp-danger-soft);
   color: var(--mvp-danger);
 }
 
-.glyph {
-  font-size: 0.72rem;
-  line-height: 1;
+.body {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
 }
 
 .name {
@@ -63,6 +90,26 @@
 .stages li.pending .name {
   color: var(--mvp-muted);
   font-weight: 600;
+}
+
+/* Lo stato accompagna il nome della tappa come testo, cosi' non e' il solo
+   colore a dirlo. Prende il ruolo B delle etichette: stringa breve ma non una
+   categoria da incolonnare, quindi niente maiuscolo. */
+.state {
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-xs);
+}
+
+.stages li.done .state {
+  color: var(--mvp-success);
+}
+
+.stages li.current .state {
+  color: var(--mvp-primary-deep);
+}
+
+.stages li.failed .state {
+  color: var(--mvp-danger);
 }
 
 .slow {
