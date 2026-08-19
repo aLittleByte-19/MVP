@@ -20,6 +20,11 @@ import {
 import { MvpStateStore } from "./core/state/mvp-state.store";
 import { ThemeService } from "./core/theme/theme.service";
 
+/** Quota di viewport oltre cui l'inizio di una sezione la rende quella corrente. */
+const ACTIVE_SECTION_THRESHOLD = 0.3;
+/** Margine entro cui lo scroll si considera esaurito, per gli arrotondamenti a frazioni di pixel. */
+const SCROLL_END_TOLERANCE = 2;
+
 @Component({
   selector: "mvp-root",
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -140,45 +145,20 @@ export class AppComponent {
     // throttling per non gravare sul rendering).
     fromEvent(window, "scroll", { passive: true })
       .pipe(auditTime(120), takeUntilDestroyed())
-      .subscribe(() => this.updateBackToTopVisibility());
+      .subscribe(() => {
+        this.updateBackToTopVisibility();
+        this.updateActiveChild();
+      });
     this.updateBackToTopVisibility();
 
+    // Cambio di vista: si riparte dalla prima sezione e si rilegge la posizione
+    // al frame successivo, quando le sezioni della nuova pagina sono montate.
     effect((onCleanup) => {
       const ids = this.activeChildIds();
+      this.activeChildId.set(ids[0] ?? null);
 
-      if (typeof IntersectionObserver !== "function" || ids.length === 0) {
-        this.activeChildId.set(ids[0] ?? null);
-        return;
-      }
-
-      let observer: IntersectionObserver | null = null;
-      const frameId = window.requestAnimationFrame(() => {
-        observer = new IntersectionObserver(
-          (entries) => {
-            const visible = entries
-              .filter((entry) => entry.isIntersecting)
-              .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-
-            if (visible?.target.id) {
-              this.activeChildId.set(visible.target.id);
-            }
-          },
-          { rootMargin: "-18% 0px -65% 0px", threshold: 0.01 }
-        );
-
-        for (const id of ids) {
-          const element = document.getElementById(id);
-
-          if (element) {
-            observer.observe(element);
-          }
-        }
-      });
-
-      onCleanup(() => {
-        window.cancelAnimationFrame(frameId);
-        observer?.disconnect();
-      });
+      const frameId = window.requestAnimationFrame(() => this.updateActiveChild(ids));
+      onCleanup(() => window.cancelAnimationFrame(frameId));
     });
   }
 
@@ -214,6 +194,43 @@ export class AppComponent {
 
   private updateBackToTopVisibility(): void {
     this.showBackToTop.set(window.scrollY > 320);
+  }
+
+  /**
+   * Sezione corrente nella sidebar.
+   *
+   * Sostituisce l'IntersectionObserver con una banda fissa a un quinto del
+   * viewport: quella banda le ultime sezioni non la raggiungevano mai, perche'
+   * il documento finisce prima che il loro titolo possa risalirci, e restavano
+   * quindi senza evidenziazione per tutta la pagina. Qui la regola e' invece
+   * "l'ultima sezione il cui inizio e' gia' passato", che a fine pagina si
+   * ferma comunque sull'ultima: nessuna posizione di scroll resta scoperta.
+   *
+   * A fondo pagina vince l'ultima sezione anche se breve — con lo scroll
+   * esaurito nulla puo' piu' portarla oltre la soglia.
+   */
+  private updateActiveChild(knownIds?: readonly string[]): void {
+    const ids = knownIds ?? this.activeChildIds();
+    const positioned = ids
+      .map((id) => ({ id, element: document.getElementById(id) }))
+      .filter((entry): entry is { id: string; element: HTMLElement } => entry.element !== null);
+
+    if (positioned.length === 0) {
+      return;
+    }
+
+    const documentHeight = document.documentElement.scrollHeight;
+    const atBottom = window.scrollY + window.innerHeight >= documentHeight - SCROLL_END_TOLERANCE;
+
+    if (atBottom) {
+      this.activeChildId.set(positioned[positioned.length - 1].id);
+      return;
+    }
+
+    const threshold = window.innerHeight * ACTIVE_SECTION_THRESHOLD;
+    const passed = positioned.filter((entry) => entry.element.getBoundingClientRect().top <= threshold);
+
+    this.activeChildId.set((passed[passed.length - 1] ?? positioned[0]).id);
   }
 
   private syncActiveView(url: string): void {
