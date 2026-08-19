@@ -897,6 +897,13 @@ components:
             - type: string
         label:
           type: string
+        threshold:
+          type: number
+          description: >-
+            Valore oltre il quale il sistema decide da solo, per le metriche che ne hanno uno
+            (la confidenza media OCR ha la soglia di validazione automatica). Lo conosce solo
+            il backend, che la legge dalla configurazione: l'interfaccia la mostra sulla scala
+            della scheda ma non la stabilisce.
         unit:
           type: string
           description: >-
