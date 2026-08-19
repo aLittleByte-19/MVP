@@ -34,11 +34,13 @@ type StageState = "done" | "current" | "pending" | "failed";
     <ol class="stages" [attr.aria-label]="label()">
       @for (stage of decorated(); track stage.id) {
         <li [class]="stage.state" [attr.aria-current]="stage.state === 'current' ? 'step' : null">
-          <span class="mark">
-            <span class="glyph" aria-hidden="true">{{ stage.glyph }}</span>
+          <span class="track">
+            <span class="marker" aria-hidden="true">{{ stage.glyph }}</span>
+          </span>
+          <span class="body">
+            <span class="name">{{ stage.label }}</span>
             <span class="state">{{ stage.stateLabel }}</span>
           </span>
-          <span class="name">{{ stage.label }}</span>
         </li>
       }
     </ol>
