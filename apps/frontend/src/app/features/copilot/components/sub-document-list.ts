@@ -150,11 +150,13 @@ const emptySendMessageForm: SendMessageFormState = {
               <div class="inspectorGrid">
                 <label class="field editableField">
                   <span>Nome e cognome<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
-                  <input formControlName="employeeName" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
+                  <input formControlName="employeeName" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()"
+                    [attr.tabindex]="isEditing() ? null : -1" />
                 </label>
                 <label class="field editableField">
                   <span>Azienda<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
-                  <input formControlName="companyName" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
+                  <input formControlName="companyName" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()"
+                    [attr.tabindex]="isEditing() ? null : -1" />
                 </label>
                 <label class="field lockedField">
                   <span>Nome file<i class="mark" aria-hidden="true">▪</i></span>
@@ -165,7 +167,13 @@ const emptySendMessageForm: SendMessageFormState = {
                   @if (isEditing()) {
                     <input id="document-date-field" type="date" formControlName="documentDate" />
                   } @else {
-                    <input id="document-date-field" [value]="documentDateDisplay(document)" readOnly aria-readonly="true" />
+                    <input
+                      id="document-date-field"
+                      [value]="documentDateDisplay(document)"
+                      readOnly
+                      aria-readonly="true"
+                      tabindex="-1"
+                    />
                   }
                 </label>
                 <label class="field lockedField">
@@ -202,10 +210,34 @@ const emptySendMessageForm: SendMessageFormState = {
                   <input [value]="document.reviewStatusLabel" readOnly disabled tabindex="-1" />
                 </label>
                 <label class="field lockedField">
-                  <span>Email destinatario<i class="mark" aria-hidden="true">▪</i></span>
+                  <span>Data e ora di caricamento<i class="mark" aria-hidden="true">▪</i></span>
+                  <input [value]="formatFallback(document.uploadedAt)" readOnly disabled tabindex="-1" />
+                </label>
+                <label class="field editableField formFull">
+                  <span>Descrizione<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
+                  <textarea
+                    rows="3"
+                    formControlName="description"
+                    [readOnly]="!isEditing()"
+                    [attr.aria-readonly]="!isEditing()"
+                    [attr.tabindex]="isEditing() ? null : -1"
+                  ></textarea>
+                </label>
+                <!-- Un campo solo: l'email compariva due volte, una in sola
+                     lettura con il comando di copia e una modificabile, sullo
+                     stesso valore. Il comando resta, accanto al campo che si
+                     puo' anche correggere. -->
+                <label class="field editableField">
+                  <span>Email destinatario<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
                   <div class="fieldWithAction">
-                    <input [value]="formatFallback(document.recipientEmail)" readOnly disabled tabindex="-1" />
-                    @if (document.recipientEmail) {
+                    <input
+                      formControlName="recipientEmail"
+                      [readOnly]="!isEditing()"
+                      [attr.aria-readonly]="!isEditing()"
+                      [attr.tabindex]="isEditing() ? null : -1"
+                      [class.invalid]="fieldError('recipientEmail')"
+                    />
+                    @if (document.recipientEmail && !isEditing()) {
                       <button
                         mvpButton
                         variant="icon"
@@ -218,33 +250,11 @@ const emptySendMessageForm: SendMessageFormState = {
                       </button>
                     }
                   </div>
-                  @if (copiedEmail()) {
-                    <small class="copyFeedback">Email copiata negli appunti.</small>
-                  }
-                </label>
-                <label class="field lockedField">
-                  <span>Data e ora di caricamento<i class="mark" aria-hidden="true">▪</i></span>
-                  <input [value]="formatFallback(document.uploadedAt)" readOnly disabled tabindex="-1" />
-                </label>
-                <label class="field editableField formFull">
-                  <span>Descrizione<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
-                  <textarea
-                    rows="3"
-                    formControlName="description"
-                    [readOnly]="!isEditing()"
-                    [attr.aria-readonly]="!isEditing()"
-                  ></textarea>
-                </label>
-                <label class="field editableField">
-                  <span>Email destinatario<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
-                  <input
-                    formControlName="recipientEmail"
-                    [readOnly]="!isEditing()"
-                    [attr.aria-readonly]="!isEditing()"
-                    [class.invalid]="fieldError('recipientEmail')"
-                  />
                   @if (fieldError("recipientEmail"); as message) {
                     <span class="fieldError">{{ message }}</span>
+                  }
+                  @if (copiedEmail()) {
+                    <small class="copyFeedback">Email copiata negli appunti.</small>
                   }
                 </label>
 
@@ -254,6 +264,7 @@ const emptySendMessageForm: SendMessageFormState = {
                     formControlName="fiscalCode"
                     [readOnly]="!isEditing()"
                     [attr.aria-readonly]="!isEditing()"
+                    [attr.tabindex]="isEditing() ? null : -1"
                     [class.invalid]="fieldError('fiscalCode')"
                   />
                   @if (fieldError("fiscalCode"); as message) {
@@ -263,7 +274,8 @@ const emptySendMessageForm: SendMessageFormState = {
 
                 <label class="field editableField">
                   <span>Matricola dipendente<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
-                  <input formControlName="employeeId" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
+                  <input formControlName="employeeId" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()"
+                    [attr.tabindex]="isEditing() ? null : -1" />
                 </label>
               </div>
 
@@ -340,6 +352,7 @@ const emptySendMessageForm: SendMessageFormState = {
                     formControlName="recipient"
                     [readOnly]="!isSendEditing()"
                     [attr.aria-readonly]="!isSendEditing()"
+                    [attr.tabindex]="isSendEditing() ? null : -1"
                   />
                 </label>
                 <label class="field editableField">
@@ -348,6 +361,7 @@ const emptySendMessageForm: SendMessageFormState = {
                     formControlName="subject"
                     [readOnly]="!isSendEditing()"
                     [attr.aria-readonly]="!isSendEditing()"
+                    [attr.tabindex]="isSendEditing() ? null : -1"
                   />
                 </label>
                 <label class="field editableField">
@@ -357,6 +371,7 @@ const emptySendMessageForm: SendMessageFormState = {
                     formControlName="body"
                     [readOnly]="!isSendEditing()"
                     [attr.aria-readonly]="!isSendEditing()"
+                    [attr.tabindex]="isSendEditing() ? null : -1"
                   ></textarea>
                 </label>
                 <div class="previewActions">
