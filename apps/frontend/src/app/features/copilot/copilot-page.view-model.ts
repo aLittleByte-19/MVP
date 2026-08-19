@@ -8,7 +8,6 @@ import type {
 import { extractFieldErrors, getApiErrorMessage } from "../../core/errors/api-error";
 import type { CompositionSlice } from "../../shared/components/metric-composition/metric-composition";
 import type { MetricPresentation } from "../../shared/components/metrics-panel/metrics-panel";
-import { faultTone } from "../../shared/util/metrics";
 
 /** Metriche che il pannello non ripete perché sono le parti della ripartizione. */
 const MODULE_COMPOSITION_KEYS = ["copilot.needs_review", "copilot.validated", "copilot.quarantined"];
@@ -79,16 +78,32 @@ export class CopilotPageViewModel {
       .filter((metric) => !MODULE_COMPOSITION_KEYS.includes(metric.key))
   );
 
-  /** Rilievo e totale di riferimento per le schede del pannello. */
+  /**
+   * Forma e parametri di ciascuna scheda. Non tutte le metriche rispondono
+   * alla stessa domanda: due sono quote sul totale dei documenti, due sono
+   * conteggi di guasti che quasi sempre valgono zero, una e' una misura su
+   * una scala con la soglia oltre cui il sistema valida da solo.
+   */
   readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => {
     const documents = this.store.metricEntry("copilot.documents");
     const total = typeof documents?.value === "number" ? documents.value : undefined;
 
     return {
-      "copilot.sub_documents": { outOf: total },
-      "copilot.in_progress": { outOf: total },
-      "copilot.processing_stuck": { tone: faultTone(this.store.metricEntry("copilot.processing_stuck")) },
-      "copilot.processing_failed": { tone: faultTone(this.store.metricEntry("copilot.processing_failed")) }
+      "copilot.sub_documents": { kind: "share", outOf: total },
+      "copilot.in_progress": { kind: "share", outOf: total },
+      "copilot.processing_stuck": {
+        kind: "status",
+        okLabel: "Nessuna in ritardo",
+        issueLabel: "Da sbloccare"
+      },
+      "copilot.processing_failed": {
+        kind: "status",
+        okLabel: "Nessun errore",
+        issueLabel: "Da ricaricare"
+      },
+      // La soglia arriva dal contratto: la stabilisce la configurazione del
+      // backend, non questa pagina.
+      "copilot.ocr_confidence": { kind: "gauge" }
     };
   });
 

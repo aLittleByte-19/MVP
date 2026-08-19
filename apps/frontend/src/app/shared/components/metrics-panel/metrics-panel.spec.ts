@@ -55,24 +55,44 @@ describe("MetricsPanelComponent", () => {
     expect(host.querySelectorAll(".skeleton").length).toBeGreaterThan(0);
   });
 
-  it("mette il totale accanto al valore e lascia al contesto i soli ingressi di oggi", () => {
+  it("rende come quota la metrica che ha un totale di riferimento", () => {
     const host = render({
       metrics,
-      presentation: { "copilot.needs_review": { tone: "watch", outOf: 412 } }
+      presentation: { "copilot.needs_review": { kind: "share", tone: "watch", outOf: 412 } }
     });
 
+    expect(host.querySelector("mvp-metric-share")).not.toBeNull();
     expect(host.querySelector(".total")?.textContent).toContain("412");
     // La serie e' un flusso di ingresso: si dice "nuovi oggi", non "rispetto a ieri".
     expect(host.querySelector(".context")?.textContent?.trim()).toBe("3 nuovi oggi");
   });
 
-  it("non affianca un totale a una media, dove il rapporto non direbbe nulla", () => {
+  it("sceglie la forma della scheda in base alla domanda a cui la metrica risponde", () => {
     const host = render({
-      metrics: [{ key: "assistant.rating_average", value: "4.3", label: "Media stelle" }],
-      presentation: { "assistant.rating_average": { outOf: 412 } }
+      metrics: [
+        { key: "media", value: "4.3", unit: "/ 5", label: "Media stelle" },
+        { key: "guasti", value: 0, label: "Errori" },
+        { key: "conteggio", value: 12, label: "Documenti" }
+      ],
+      presentation: {
+        media: { kind: "gauge", max: 5 },
+        guasti: { kind: "status", okLabel: "Nessun errore" }
+      }
     });
 
-    expect(host.querySelector(".total")).toBeNull();
+    expect(host.querySelector("mvp-metric-gauge .num")?.textContent?.trim()).toBe("4,3");
+    expect(host.querySelector("mvp-metric-status")?.textContent).toContain("Nessun errore");
+    // Senza indicazioni resta la scheda di andamento, che e' il caso comune.
+    expect(host.querySelector("mvp-metric-card .num")?.textContent?.trim()).toBe("12");
+  });
+
+  it("colloca la soglia dichiarata dal contratto sulla scala", () => {
+    const host = render({
+      metrics: [{ key: "ocr", value: "90.0", unit: "%", threshold: 80, label: "Confidenza" }],
+      presentation: { ocr: { kind: "gauge" } }
+    });
+
+    expect(host.querySelector<HTMLElement>(".tick")?.style.left).toBe("80%");
   });
 
   it("usa il singolare quando oggi e' entrato un solo elemento", () => {

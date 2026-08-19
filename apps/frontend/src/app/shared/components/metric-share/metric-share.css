@@ -1,0 +1,36 @@
+/* Il guscio sta in `shared/styles/metric-shell.css`. Qui la sola parte della
+   quota: la porzione riempita e la sua percentuale. */
+
+.percent {
+  color: var(--mvp-muted);
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--mvp-radius-pill);
+  background: var(--mvp-surface-soft);
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--mvp-primary);
+}
+
+.card.ok .fill {
+  background: var(--mvp-success);
+}
+
+.card.watch .fill {
+  background: var(--mvp-accent);
+}
+
+.card.alert .fill {
+  background: var(--mvp-danger);
+}

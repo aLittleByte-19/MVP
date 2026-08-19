@@ -12,7 +12,6 @@ import { getApiErrorMessage } from "../../core/errors/api-error";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import type { CompositionSlice } from "../../shared/components/metric-composition/metric-composition";
 import type { MetricPresentation } from "../../shared/components/metrics-panel/metrics-panel";
-import { faultTone } from "../../shared/util/metrics";
 import type {
   CommunicationDraftForm,
   CommunicationGenerationPhase,
@@ -133,13 +132,25 @@ export class AssistantPageViewModel {
     const outOf = typeof total?.value === "number" ? total.value : undefined;
 
     return {
-      "assistant.rated": { outOf },
-      "assistant.generation_failed": { tone: faultTone(this.store.metricEntry("assistant.generation_failed")) },
-      "assistant.generation_stuck": { tone: faultTone(this.store.metricEntry("assistant.generation_stuck")) },
+      "assistant.rated": { kind: "share", outOf },
+      "assistant.rating_average": { kind: "gauge", max: 5 },
+      "assistant.generation_failed": {
+        kind: "status",
+        okLabel: "Nessun errore",
+        issueLabel: "Da rigenerare"
+      },
+      "assistant.generation_stuck": {
+        kind: "status",
+        okLabel: "Nessuna in ritardo",
+        issueLabel: "Da sbloccare"
+      },
       // La copertina non generata non ferma nulla: il PDF esce comunque, senza
       // immagine. E' un avviso, non un guasto.
       "assistant.covers_failed": {
-        tone: faultTone(this.store.metricEntry("assistant.covers_failed"), "watch")
+        kind: "status",
+        issueTone: "warning",
+        okLabel: "Tutte generate",
+        issueLabel: "PDF senza immagine"
       }
     };
   });

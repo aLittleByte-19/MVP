@@ -3,18 +3,47 @@ import type { Metric } from "../../../../api/generated/model";
 import { formatMetric, type MetricTone, newToday } from "../../util/metrics";
 import { EmptyStateComponent } from "../empty-state/empty-state";
 import { MetricCardComponent } from "../metric-card/metric-card";
+import { MetricGaugeComponent } from "../metric-gauge/metric-gauge";
+import { MetricShareComponent } from "../metric-share/metric-share";
+import { MetricStatusComponent } from "../metric-status/metric-status";
 
-/** Tono e contesto assegnati a una metrica dalla pagina che la mostra. */
+/**
+ * Forma di scheda con cui rendere una metrica.
+ *
+ * Non e' una preferenza estetica ma il tipo di domanda a cui il numero
+ * risponde: quanto e in che direzione (`trend`), quanta parte di un totale
+ * (`share`), dove cade dentro una scala nota (`gauge`), se c'e' qualcosa da
+ * guardare (`status`). Con una forma sola le otto schede di un pannello si
+ * leggevano tutte uguali, e per capire che cosa si stesse guardando bisognava
+ * ogni volta tornare all'etichetta.
+ */
+export type MetricKind = "trend" | "share" | "gauge" | "status";
+
+/** Come la pagina che conosce il contesto vuole che una metrica sia resa. */
 export interface MetricPresentation {
+  readonly kind?: MetricKind;
   readonly tone?: MetricTone;
-  /** Totale su cui calcolare il rapporto, quando la metrica e' una quota. */
+  /** Totale di riferimento della quota (`share`). */
   readonly outOf?: number;
+  /** Estremo della scala (`gauge`); di default cento. */
+  readonly max?: number;
+  /** Verdetto a zero e verdetto con almeno un caso (`status`). */
+  readonly okLabel?: string;
+  readonly issueLabel?: string;
+  /** Un guasto blocca (`danger`), un degrado no (`warning`). */
+  readonly issueTone?: "danger" | "warning";
 }
 
 @Component({
   selector: "mvp-metrics-panel",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [EmptyStateComponent, MetricCardComponent],
+  imports: [
+    EmptyStateComponent,
+    MetricCardComponent,
+    MetricGaugeComponent,
+    MetricShareComponent,
+    MetricStatusComponent
+  ],
   template: `
     @if (isLoading()) {
       <ul class="grid" [attr.aria-label]="ariaLabel()" aria-busy="true">
@@ -30,15 +59,49 @@ export interface MetricPresentation {
       <ul class="grid" [attr.aria-label]="ariaLabel()">
         @for (entry of entries(); track entry.key) {
           <li>
-            <mvp-metric-card
-              [label]="entry.label"
-              [value]="entry.value"
-              [unit]="entry.unit"
-              [tone]="entry.tone"
-              [outOf]="entry.outOf"
-              [context]="entry.context"
-              [history]="entry.history"
-            />
+            @switch (entry.kind) {
+              @case ("share") {
+                <mvp-metric-share
+                  [label]="entry.label"
+                  [value]="entry.numeric"
+                  [total]="entry.outOf"
+                  [tone]="entry.tone"
+                  [context]="entry.context"
+                />
+              }
+              @case ("gauge") {
+                <mvp-metric-gauge
+                  [label]="entry.label"
+                  [value]="entry.value"
+                  [numeric]="entry.numeric"
+                  [max]="entry.max"
+                  [threshold]="entry.threshold"
+                  [unit]="entry.unit"
+                  [tone]="entry.tone"
+                  [context]="entry.context"
+                />
+              }
+              @case ("status") {
+                <mvp-metric-status
+                  [label]="entry.label"
+                  [value]="entry.numeric"
+                  [okLabel]="entry.okLabel"
+                  [issueLabel]="entry.issueLabel"
+                  [issueTone]="entry.issueTone"
+                  [context]="entry.context"
+                />
+              }
+              @default {
+                <mvp-metric-card
+                  [label]="entry.label"
+                  [value]="entry.value"
+                  [unit]="entry.unit"
+                  [tone]="entry.tone"
+                  [context]="entry.context"
+                  [history]="entry.history"
+                />
+              }
+            }
           </li>
         }
       </ul>
@@ -57,7 +120,7 @@ export class MetricsPanelComponent {
   readonly hasError = input<boolean>(false);
   readonly metrics = input<Metric[]>([]);
   readonly ariaLabel = input<string>("Metriche");
-  /** Tono e rapporto per chiave, decisi dalla pagina che conosce il contesto. */
+  /** Forma, rilievo e parametri per chiave, decisi dalla pagina che conosce il contesto. */
   readonly presentation = input<Record<string, MetricPresentation>>({});
 
   protected readonly placeholders = [0, 1, 2, 3];
@@ -69,11 +132,20 @@ export class MetricsPanelComponent {
 
       return {
         key: metric.key,
+        kind: presentation?.kind ?? ("trend" as MetricKind),
         label: metric.label,
         value: formatted.value,
+        numeric: numericValue(metric),
         unit: formatted.unit,
         tone: presentation?.tone ?? ("neutral" as MetricTone),
-        outOf: outOfFor(metric, presentation),
+        outOf: presentation?.outOf ?? null,
+        max: presentation?.max ?? 100,
+        // La soglia e' un parametro di sistema e arriva dal contratto: la
+        // pagina sceglie come disegnare la scala, non dove cade la soglia.
+        threshold: metric.threshold ?? null,
+        okLabel: presentation?.okLabel ?? "Nessun caso",
+        issueLabel: presentation?.issueLabel ?? "Da esaminare",
+        issueTone: presentation?.issueTone ?? ("danger" as const),
         context: this.contextFor(metric),
         history: metric.history
       };
@@ -81,10 +153,9 @@ export class MetricsPanelComponent {
   );
 
   /**
-   * Riga di contesto: risponde a "sta crescendo?" con gli ingressi di oggi. Il
-   * rapporto sul totale non passa piu' di qui, sta accanto al valore. La serie
-   * e' un flusso, quindi si dice "nuovi oggi" e mai "rispetto a ieri" (vedi lo
-   * schema Metric).
+   * Riga di contesto: risponde a "sta crescendo?" con gli ingressi di oggi. La
+   * serie e' un flusso, quindi si dice "nuovi oggi" e mai "rispetto a ieri"
+   * (vedi lo schema Metric).
    */
   private contextFor(metric: Metric): string | null {
     const today = newToday(metric.history);
@@ -98,11 +169,19 @@ export class MetricsPanelComponent {
 }
 
 /**
- * Totale di riferimento da mostrare accanto al valore ("23/412"). Vale solo per
- * i conteggi: accanto a una media il rapporto non direbbe nulla.
+ * Il valore come numero, per le schede che devono posizionarlo — la porzione
+ * di una quota, il riempimento di una scala. Il backend manda un intero per i
+ * conteggi e una stringa decimale per le medie ("98.5"), quindi entrambe le
+ * forme vanno riconosciute; il segnaposto "—" non e' un numero e resta `null`.
  */
-function outOfFor(metric: Metric, presentation?: MetricPresentation): number | null {
-  const total = presentation?.outOf;
+function numericValue(metric: Metric): number | null {
+  const raw = metric.value;
 
-  return total !== undefined && total > 0 && typeof metric.value === "number" ? total : null;
+  if (typeof raw === "number") {
+    return raw;
+  }
+
+  const parsed = Number(raw.replace(",", "."));
+
+  return Number.isFinite(parsed) ? parsed : null;
 }
