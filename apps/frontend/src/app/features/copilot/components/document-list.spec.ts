@@ -79,15 +79,31 @@ describe("DocumentListComponent", () => {
     expect(element.textContent).toContain("cedolino");
   });
 
-  it("mostra le etichette di stato che arrivano dal backend", () => {
+  it("abbrevia la validazione nella colonna e tiene l'etichetta del backend per lo scaricamento", () => {
+    // "Validato automaticamente" e' una frase: dentro una colonna larga un
+    // sesto di tabella andava a capo in mezzo alla parola, e sotto
+    // l'intestazione "Validazione" la sola qualificazione dice gia' tutto.
     const element = render({
       documents: [
-        subDocument({ reviewStatusLabel: "In quarantena", sendStatusLabel: "Scaricato" })
+        subDocument({
+          reviewStatus: "manually_validated",
+          reviewStatusLabel: "Validato manualmente",
+          sendStatusLabel: "Scaricato"
+        })
       ]
     }).nativeElement as HTMLElement;
 
-    expect(element.textContent).toContain("In quarantena");
+    expect(element.textContent).toContain("Manuale");
+    expect(element.textContent).not.toContain("Validato manualmente");
     expect(element.textContent).toContain("Scaricato");
+  });
+
+  it("ripiega sull'etichetta del backend quando lo stato non arriva", () => {
+    const element = render({
+      documents: [subDocument({ reviewStatus: undefined, reviewStatusLabel: "In quarantena" })]
+    }).nativeElement as HTMLElement;
+
+    expect(element.textContent).toContain("In quarantena");
   });
 
   it("tiene nelle colonne i dati dell'analisi e nella prima cella il documento di partenza", () => {

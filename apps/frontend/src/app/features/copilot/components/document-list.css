@@ -8,43 +8,46 @@
 
 /* Le larghezze appartengono a questa tabella, non al foglio condiviso: con
    `table-layout: fixed` una colonna senza regola resterebbe a zero, quindi
-   sommano a 100%. Le due incomprimibili — l'orario di caricamento, che non si
-   spezza, e il comando, che non va a capo — avevano l'8% e il 14%: non
-   bastavano, la tabella si allargava oltre il contenitore e la parte a destra
-   finiva tagliata. */
+   sommano a 100%. Sono calibrate sul contenitore piu' stretto in cui la
+   tabella resta tale — circa 750px, il guscio con la barra laterale appena
+   sopra i 1100px — e su cio' che in ogni colonna non si puo' comprimere: la
+   parola dell'intestazione (spezzabile solo al punto di sillabazione), la
+   pastiglia di stato, la data che non si spezza, il comando che non va a capo.
+   Sotto quella misura le intestazioni si rompevano in mezzo alla parola e il
+   comando sfondava la tabella a destra. */
 .table th[data-column="recipient"],
 .table td[data-column="recipient"] {
-  width: 24%;
+  width: 18%;
 }
 
 .table th[data-column="type"],
 .table td[data-column="type"] {
-  width: 13%;
+  width: 12.5%;
 }
 
 .table th[data-column="uploadedAt"],
 .table td[data-column="uploadedAt"] {
-  width: 14%;
+  width: 12%;
 }
 
 .table th[data-column="confidence"],
 .table td[data-column="confidence"] {
-  width: 9%;
+  width: 12%;
 }
 
 .table th[data-column="review"],
 .table td[data-column="review"] {
-  width: 15%;
+  width: 17%;
 }
 
 .table th[data-column="download"],
 .table td[data-column="download"] {
-  width: 11%;
+  width: 14%;
 }
 
 .table th[data-column="actions"],
 .table td[data-column="actions"] {
-  width: 14%;
+  width: 14.5%;
 }
 
 .recipient {
@@ -71,7 +74,15 @@
 }
 
 /* Le cifre restano nel carattere del testo, con le figure a larghezza fissa:
-   incolonnate come in un monospaziato, ma senza cambiare voce a meta' riga. */
+   incolonnate come in un monospaziato, ma senza cambiare voce a meta' riga.
+   Al centro della colonna, non a filo del bordo sinistro: accanto all'orario
+   di caricamento, che va a capo, "10:10" e "98%" finivano appaiati e si
+   leggevano come un numero solo. */
+.table th[data-column="confidence"],
+.table td[data-column="confidence"] {
+  text-align: center;
+}
+
 .figure {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
