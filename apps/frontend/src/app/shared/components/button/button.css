@@ -35,9 +35,13 @@
   opacity: 0.58;
 }
 
+/* Il gap verso lo spinner vale fra etichetta e indicatore; qui il contenuto e'
+   la sola icona, e otto pixel di vuoto a destra la spostavano di quattro a
+   sinistra dal centro del pulsante. */
 :host(.icon) {
   width: var(--mvp-control-h);
   height: var(--mvp-control-h);
+  gap: 0;
   padding: 0;
   border: 1px solid var(--mvp-border);
   background: var(--mvp-surface);
