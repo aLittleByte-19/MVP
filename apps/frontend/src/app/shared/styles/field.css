@@ -43,6 +43,20 @@
   overflow-wrap: anywhere;
 }
 
+/* Le frecce di incremento sono disegnate dal browser e non seguono ne' il
+   bordo ne' il fondo del campo: dentro un input alto 44px restano due
+   triangolini di sistema in alto a destra. I valori qui sono anni e soglie,
+   che si scrivono, non si scorrono. */
+.field input[type="number"] {
+  appearance: textfield;
+}
+
+.field input[type="number"]::-webkit-outer-spin-button,
+.field input[type="number"]::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
 .field textarea {
   min-height: 120px;
   padding: var(--mvp-space-3);
