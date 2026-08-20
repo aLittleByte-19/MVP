@@ -66,6 +66,19 @@ export interface DocumentFilters {
   year?: number;
 }
 
+/**
+ * Una pagina dello storico documenti, con il totale che le sta dietro.
+ *
+ * Il totale non e' ridondante: e' l'unico modo per sapere quante pagine
+ * esistono, e senza di esso l'elenco non puo' dire che c'e' altro da vedere.
+ */
+export interface DocumentPage {
+  items: SubDocument[];
+  total: number;
+  page: number;
+  perPage: number;
+}
+
 /** Metadati manuali inviati insieme al file in upload. */
 export interface DocumentUploadMetadata {
   documentType?: (typeof DOCUMENT_TYPE_OPTIONS)[number];
@@ -209,11 +222,16 @@ export class DocumentWorkflowService {
   }
 
   /**
-   * Storico filtrato (UC-35..UC-38): i criteri viaggiano al backend, che resta
-   * l'unica autorita' sui dati. Anche senza filtri la lista arriva da qui,
-   * cosi' la vista ha una sola sorgente invece di due rappresentazioni.
+   * Storico filtrato e impaginato (UC-35..UC-38): i criteri e la pagina
+   * viaggiano al backend, che resta l'unica autorita' sui dati. Anche senza
+   * filtri la lista arriva da qui, cosi' la vista ha una sola sorgente invece
+   * di due rappresentazioni.
+   *
+   * Restituisce la risposta intera e non i soli `items`: senza `total` la vista
+   * non puo' sapere quante pagine esistono, e prima di questa firma i risultati
+   * oltre la prima pagina sparivano senza che nulla lo segnalasse.
    */
-  searchDocuments(filters: DocumentFilters): Observable<SubDocument[]> {
+  searchDocuments(filters: DocumentFilters, page: number, perPage: number): Observable<DocumentPage> {
     return this.api
       .listMvpDocuments({
         search: filters.search,
@@ -221,9 +239,18 @@ export class DocumentWorkflowService {
         confidenceThreshold: filters.confidenceThreshold,
         confidenceCriterion: filters.confidenceCriterion,
         month: filters.month,
-        year: filters.year
+        year: filters.year,
+        page,
+        perPage
       })
-      .pipe(map((response) => response.items));
+      .pipe(
+        map((response) => ({
+          items: response.items,
+          total: response.total ?? response.items.length,
+          page: response.page ?? page,
+          perPage: response.perPage ?? perPage
+        }))
+      );
   }
 
   /**

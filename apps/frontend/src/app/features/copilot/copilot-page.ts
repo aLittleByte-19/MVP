@@ -128,7 +128,10 @@ const MONTHS = [
               ? 'Nessun documento corrisponde ai filtri selezionati.'
               : 'I documenti caricati compariranno qui.'
           "
+          [page]="vm.currentPage()"
+          [totalPages]="vm.totalPages()"
           (selectDocument)="vm.selectDocument($event)"
+          (goToPage)="vm.goToPage($event)"
         />
       </mvp-section>
 

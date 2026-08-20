@@ -99,3 +99,30 @@
 :host {
   display: contents;
 }
+
+/* Navigazione fra le pagine dello storico, ripetuta sopra e sotto la tabella:
+   con dieci righe la coppia resta vicina, ma sopra serve a chi arriva dai
+   filtri e sotto a chi ha appena finito di leggere l'elenco. */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--mvp-space-2);
+  padding: var(--mvp-space-2) 0;
+}
+
+.pager[data-position="top"] {
+  border-bottom: 1px solid var(--mvp-border-soft);
+  margin-bottom: var(--mvp-space-2);
+}
+
+.pager[data-position="bottom"] {
+  border-top: 1px solid var(--mvp-border-soft);
+  margin-top: var(--mvp-space-2);
+}
+
+.pagerLabel {
+  font-size: 0.85rem;
+  color: var(--mvp-muted);
+  font-variant-numeric: tabular-nums;
+}

@@ -1,4 +1,6 @@
+import { NgTemplateOutlet } from "@angular/common";
 import { ChangeDetectionStrategy, Component, input, output } from "@angular/core";
+import { LucideChevronLeft, LucideChevronRight } from "@lucide/angular";
 import type { SubDocument } from "../../../../api/generated/model";
 import { ButtonComponent } from "../../../shared/components/button/button";
 import { EmptyStateComponent } from "../../../shared/components/empty-state/empty-state";
@@ -25,9 +27,46 @@ import { getReviewStatusShortLabel, getReviewStatusTone } from "../../../shared/
 @Component({
   selector: "mvp-document-list",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ButtonComponent, EmptyStateComponent, StatusBadgeComponent, StatusDotComponent],
+  imports: [
+    ButtonComponent,
+    EmptyStateComponent,
+    LucideChevronLeft,
+    LucideChevronRight,
+    NgTemplateOutlet,
+    StatusBadgeComponent,
+    StatusDotComponent
+  ],
   template: `
+    <ng-template #pager let-position="position">
+      @if (totalPages() > 1) {
+        <nav class="pager" [attr.data-position]="position" aria-label="Pagine dello storico">
+          <button
+            mvpButton
+            variant="icon"
+            type="button"
+            aria-label="Pagina precedente"
+            [disabled]="page() <= 1"
+            (click)="goToPage.emit(page() - 1)"
+          >
+            <svg lucideChevronLeft aria-hidden="true"></svg>
+          </button>
+          <span class="pagerLabel">Pagina {{ page() }} di {{ totalPages() }}</span>
+          <button
+            mvpButton
+            variant="icon"
+            type="button"
+            aria-label="Pagina successiva"
+            [disabled]="page() >= totalPages()"
+            (click)="goToPage.emit(page() + 1)"
+          >
+            <svg lucideChevronRight aria-hidden="true"></svg>
+          </button>
+        </nav>
+      }
+    </ng-template>
+
     @if (documents().length) {
+      <ng-container *ngTemplateOutlet="pager; context: { position: 'top' }" />
       <div class="tableWrapper">
         <table class="table">
           <thead>
@@ -89,6 +128,7 @@ import { getReviewStatusShortLabel, getReviewStatusTone } from "../../../shared/
           </tbody>
         </table>
       </div>
+      <ng-container *ngTemplateOutlet="pager; context: { position: 'bottom' }" />
     } @else {
       <mvp-empty-state>{{ emptyMessage() }}</mvp-empty-state>
     }
@@ -98,6 +138,9 @@ import { getReviewStatusShortLabel, getReviewStatusTone } from "../../../shared/
 export class DocumentListComponent {
   readonly documents = input<SubDocument[]>([]);
   readonly selectedDocumentId = input<string | null>(null);
+  readonly page = input<number>(1);
+  readonly totalPages = input<number>(1);
+  readonly goToPage = output<number>();
   readonly emptyMessage = input<string>("I documenti caricati compariranno qui.");
   readonly selectDocument = output<string>();
 

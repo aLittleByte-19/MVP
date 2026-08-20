@@ -27,8 +27,15 @@ import type { DocumentUploadRequest } from "./components/document-upload-panel";
 import {
   DocumentWorkflowService,
   type DocumentFilters,
+  type DocumentPage,
   type DocumentUploadPhase
 } from "./data/document-workflow.service";
+
+/**
+ * Righe per pagina dello storico. Dieci: la tabella resta leggibile senza
+ * scorrere, e il dettaglio del documento sotto resta raggiungibile.
+ */
+const DOCUMENTS_PER_PAGE = 10;
 
 /**
  * ViewModel (Presentation Model, Fowler) del Co-Pilot documentale: non tocca
@@ -74,6 +81,20 @@ export class CopilotPageViewModel {
   readonly hasActiveFilters: Signal<boolean> = computed(() => Object.keys(this.activeFilters()).length > 0);
   readonly filteredDocuments: WritableSignal<SubDocument[]> = signal([]);
   readonly documentsError: WritableSignal<string | null> = signal(null);
+
+  /**
+   * Paginazione dello storico. Prima esisteva solo lato backend, che rispondeva
+   * con i primi quaranta risultati mentre la vista ne scartava il totale: oltre
+   * il quarantesimo i documenti sparivano senza che nulla lo segnalasse.
+   */
+  readonly currentPage: WritableSignal<number> = signal(1);
+  readonly totalDocuments: WritableSignal<number> = signal(0);
+  readonly pageSize = DOCUMENTS_PER_PAGE;
+  readonly totalPages: Signal<number> = computed(() =>
+    Math.max(1, Math.ceil(this.totalDocuments() / this.pageSize))
+  );
+  readonly hasPreviousPage: Signal<boolean> = computed(() => this.currentPage() > 1);
+  readonly hasNextPage: Signal<boolean> = computed(() => this.currentPage() < this.totalPages());
 
   readonly error: Signal<string | null> = computed(() => this.store.error());
   readonly loading: Signal<boolean> = computed(() => this.store.loading());
@@ -126,6 +147,19 @@ export class CopilotPageViewModel {
 
   setActiveFilters(filters: DocumentFilters): void {
     this.activeFilters.set(filters);
+    // Cambiare filtro rimescola i risultati: restare alla pagina cinque di un
+    // elenco che ora ne ha due mostrerebbe una tabella vuota senza spiegazione.
+    this.currentPage.set(1);
+  }
+
+  /** Va alla pagina indicata, entro i limiti dell'elenco corrente. */
+  goToPage(page: number): void {
+    const target = Math.min(Math.max(1, page), this.totalPages());
+
+    if (target !== this.currentPage()) {
+      this.currentPage.set(target);
+      this.reload();
+    }
   }
 
   /**
@@ -136,10 +170,12 @@ export class CopilotPageViewModel {
    */
   reload(): void {
     this.searchSubscription?.unsubscribe();
-    this.searchSubscription = this.workflow.searchDocuments(this.activeFilters()).subscribe({
-      next: (documents) => this.setFilteredDocuments(documents),
-      error: (error: unknown) => this.handleDocumentsError(error)
-    });
+    this.searchSubscription = this.workflow
+      .searchDocuments(this.activeFilters(), this.currentPage(), this.pageSize)
+      .subscribe({
+        next: (page) => this.setFilteredDocuments(page),
+        error: (error: unknown) => this.handleDocumentsError(error)
+      });
   }
 
   /**
@@ -163,9 +199,16 @@ export class CopilotPageViewModel {
     this.searchSubscription?.unsubscribe();
   }
 
-  private setFilteredDocuments(documents: SubDocument[]): void {
-    this.filteredDocuments.set(documents);
+  private setFilteredDocuments(page: DocumentPage): void {
+    this.filteredDocuments.set(page.items);
+    this.totalDocuments.set(page.total);
     this.documentsError.set(null);
+
+    // L'ultima pagina puo' svuotarsi mentre la si guarda, per esempio dopo
+    // un'eliminazione: si torna a quella prima invece di mostrare il vuoto.
+    if (page.items.length === 0 && this.currentPage() > 1) {
+      this.goToPage(this.currentPage() - 1);
+    }
   }
 
   private handleDocumentsError(error: unknown): void {
