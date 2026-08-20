@@ -18,6 +18,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $description
  * @property string|null $recipient_email
  * @property int|null $confidence_score
+ * @property array<string, float|null>|null $field_confidences
  * @property array<string, mixed>|null $ai_payload
  * @property SubDocument|null $subDocument
  */
@@ -38,6 +39,7 @@ class ExtractedData extends Model
         'description',
         'recipient_email',
         'confidence_score',
+        'field_confidences',
         'ai_payload',
     ];
 
@@ -49,6 +51,7 @@ class ExtractedData extends Model
         return [
             'document_date' => 'date',
             'confidence_score' => 'integer',
+            'field_confidences' => 'array',
             'ai_payload' => 'array',
         ];
     }
