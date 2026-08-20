@@ -19,35 +19,26 @@
   height: 100%;
   margin: 0;
   padding: var(--mvp-space-4);
-  padding-left: var(--mvp-space-5);
   overflow: hidden;
   border: 1px solid var(--mvp-border-soft);
   border-radius: var(--mvp-radius);
   background: var(--mvp-surface);
 }
 
-/* Il tono e' una striscia verticale, non un fondo colorato: resta leggibile
-   accanto ad altre schede e non compete con il valore. */
-.card::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 4px;
-  background: var(--mvp-primary);
-  content: "";
+/* Il tono e' il bordo della scheda, appena piu' marcato del grigio abituale:
+   una striscia verticale piantata sul fianco sinistro segnava un rilievo che
+   quasi tutte le schede non hanno, e in griglia diventava una fila di bandiere.
+   Le schede senza accento tengono il bordo di sempre. */
+.card.ok {
+  border-color: var(--mvp-success-border);
 }
 
-.card.ok::before {
-  background: var(--mvp-success);
+.card.watch {
+  border-color: var(--mvp-warning-border);
 }
 
-.card.watch::before {
-  background: var(--mvp-accent);
-}
-
-.card.alert::before {
-  background: var(--mvp-danger);
+.card.alert {
+  border-color: var(--mvp-danger-border);
 }
 
 /* Ordine DOM etichetta -> valore (ordine di lettura), invertito qui perche'
