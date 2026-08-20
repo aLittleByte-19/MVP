@@ -10,6 +10,7 @@ import { capitalizeFirst, formatConfidence, formatDateForDisplay, formatFallback
 import { DOCUMENT_TYPE_OPTIONS, codiceFiscaleValidator } from "../../../shared/util/document-field-validators";
 import { DocumentWorkflowService, type DocumentPreviewStatus } from "../data/document-workflow.service";
 import { DocumentStatusTimelineComponent } from "./document-status-timeline";
+import { FieldOriginComponent, type FieldOrigin, originForReviewStatus } from "./field-origin/field-origin";
 
 interface ReviewFormState {
   employeeName: string;
@@ -56,6 +57,7 @@ const emptySendMessageForm: SendMessageFormState = {
     ButtonComponent,
     DocumentStatusTimelineComponent,
     EmptyStateComponent,
+    FieldOriginComponent,
     LucideCheckCircle2,
     LucideCopy,
     LucidePencil,
@@ -118,15 +120,6 @@ const emptySendMessageForm: SendMessageFormState = {
           <article class="extracted">
             <div class="inspectorHeading">
               <h3 class="eyebrow">Dati estratti dall'OCR</h3>
-              <p class="fieldLegend">
-                <span class="legendItem extractedMark"
-                  ><i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i
-                  >{{ fieldMarkLabel(document) }}</span
-                >
-                <span class="legendItem lockedMark"
-                  ><i class="mark" aria-hidden="true">▪</i>Non modificabile</span
-                >
-              </p>
             </div>
             @if (document.error) {
               <p class="errorNote">{{ document.error }}</p>
@@ -149,87 +142,126 @@ const emptySendMessageForm: SendMessageFormState = {
             >
               <div class="inspectorGrid">
                 <label class="field editableField">
-                  <span>Nome e cognome<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
-                  <input formControlName="employeeName" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()"
-                    [attr.tabindex]="isEditing() ? null : -1" />
+                  <span>Nome e cognome</span>
+                  <div class="control">
+                    <mvp-field-origin [origin]="originFor(document)" />
+                    <input
+                      formControlName="employeeName"
+                      [readOnly]="!isEditing()"
+                      [attr.aria-readonly]="!isEditing()"
+                      [attr.tabindex]="isEditing() ? null : -1"
+                    />
+                  </div>
                 </label>
                 <label class="field editableField">
-                  <span>Azienda<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
-                  <input formControlName="companyName" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()"
-                    [attr.tabindex]="isEditing() ? null : -1" />
+                  <span>Azienda</span>
+                  <div class="control">
+                    <mvp-field-origin [origin]="originFor(document)" />
+                    <input
+                      formControlName="companyName"
+                      [readOnly]="!isEditing()"
+                      [attr.aria-readonly]="!isEditing()"
+                      [attr.tabindex]="isEditing() ? null : -1"
+                    />
+                  </div>
                 </label>
                 <label class="field lockedField">
-                  <span>Nome file<i class="mark" aria-hidden="true">▪</i></span>
-                  <input [value]="formatFallback(document.file)" readOnly disabled tabindex="-1" />
+                  <span>Nome file</span>
+                  <div class="control">
+                    <mvp-field-origin origin="locked" />
+                    <input [value]="formatFallback(document.file)" readOnly disabled tabindex="-1" />
+                  </div>
                 </label>
                 <label class="field editableField" for="document-date-field">
-                  <span>Data documento<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
-                  @if (isEditing()) {
-                    <input id="document-date-field" type="date" formControlName="documentDate" />
-                  } @else {
-                    <input
-                      id="document-date-field"
-                      [value]="documentDateDisplay(document)"
-                      readOnly
-                      aria-readonly="true"
-                      tabindex="-1"
-                    />
-                  }
+                  <span>Data documento</span>
+                  <div class="control">
+                    <mvp-field-origin [origin]="originFor(document)" />
+                    @if (isEditing()) {
+                      <input id="document-date-field" type="date" formControlName="documentDate" />
+                    } @else {
+                      <input
+                        id="document-date-field"
+                        [value]="documentDateDisplay(document)"
+                        readOnly
+                        aria-readonly="true"
+                        tabindex="-1"
+                      />
+                    }
+                  </div>
                 </label>
                 <label class="field lockedField">
-                  <span>Numero pagine<i class="mark" aria-hidden="true">▪</i></span>
-                  <input [value]="formatFallback(document.pages)" readOnly disabled tabindex="-1" />
+                  <span>Numero pagine</span>
+                  <div class="control">
+                    <mvp-field-origin origin="locked" />
+                    <input [value]="formatFallback(document.pages)" readOnly disabled tabindex="-1" />
+                  </div>
                 </label>
                 <label class="field editableField" for="document-type-field">
-                  <span>Tipologia documento<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
-                  @if (isEditing()) {
-                    <select id="document-type-field" formControlName="documentType">
-                      <option value="">Nessuna tipologia</option>
-                      @for (option of documentTypeOptions(); track option) {
-                        <option [value]="option">
-                          {{ isPredefinedDocumentType(option) ? capitalizeFirst(option) : option }}
-                        </option>
-                      }
-                    </select>
-                  } @else {
-                    <input
-                      id="document-type-field"
-                      [value]="formatFallback(document.documentType)"
-                      readOnly
-                      disabled
-                      tabindex="-1"
-                    />
-                  }
+                  <span>Tipologia documento</span>
+                  <div class="control">
+                    <mvp-field-origin [origin]="originFor(document)" />
+                    @if (isEditing()) {
+                      <select id="document-type-field" formControlName="documentType">
+                        <option value="">Nessuna tipologia</option>
+                        @for (option of documentTypeOptions(); track option) {
+                          <option [value]="option">
+                            {{ isPredefinedDocumentType(option) ? capitalizeFirst(option) : option }}
+                          </option>
+                        }
+                      </select>
+                    } @else {
+                      <input
+                        id="document-type-field"
+                        [value]="formatFallback(document.documentType)"
+                        readOnly
+                        disabled
+                        tabindex="-1"
+                      />
+                    }
+                  </div>
                 </label>
                 <label class="field lockedField">
-                  <span>Confidenza<i class="mark" aria-hidden="true">▪</i></span>
-                  <input [value]="confidenceDisplay(document)" readOnly disabled tabindex="-1" />
+                  <span>Confidenza</span>
+                  <div class="control">
+                    <mvp-field-origin origin="locked" />
+                    <input [value]="confidenceDisplay(document)" readOnly disabled tabindex="-1" />
+                  </div>
                 </label>
                 <label class="field lockedField">
-                  <span>Stato revisione<i class="mark" aria-hidden="true">▪</i></span>
-                  <input [value]="document.reviewStatusLabel" readOnly disabled tabindex="-1" />
+                  <span>Stato revisione</span>
+                  <div class="control">
+                    <mvp-field-origin origin="locked" />
+                    <input [value]="document.reviewStatusLabel" readOnly disabled tabindex="-1" />
+                  </div>
                 </label>
                 <label class="field lockedField">
-                  <span>Data e ora di caricamento<i class="mark" aria-hidden="true">▪</i></span>
-                  <input [value]="formatFallback(document.uploadedAt)" readOnly disabled tabindex="-1" />
+                  <span>Data e ora di caricamento</span>
+                  <div class="control">
+                    <mvp-field-origin origin="locked" />
+                    <input [value]="formatFallback(document.uploadedAt)" readOnly disabled tabindex="-1" />
+                  </div>
                 </label>
                 <label class="field editableField formFull">
-                  <span>Descrizione<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
-                  <textarea
-                    rows="3"
-                    formControlName="description"
-                    [readOnly]="!isEditing()"
-                    [attr.aria-readonly]="!isEditing()"
-                    [attr.tabindex]="isEditing() ? null : -1"
-                  ></textarea>
+                  <span>Descrizione</span>
+                  <div class="control">
+                    <mvp-field-origin class="tall" [origin]="originFor(document)" />
+                    <textarea
+                      rows="3"
+                      formControlName="description"
+                      [readOnly]="!isEditing()"
+                      [attr.aria-readonly]="!isEditing()"
+                      [attr.tabindex]="isEditing() ? null : -1"
+                    ></textarea>
+                  </div>
                 </label>
                 <!-- Un campo solo: l'email compariva due volte, una in sola
                      lettura con il comando di copia e una modificabile, sullo
                      stesso valore. Il comando resta, accanto al campo che si
                      puo' anche correggere. -->
                 <label class="field editableField">
-                  <span>Email destinatario<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
-                  <div class="fieldWithAction">
+                  <span>Email destinatario</span>
+                  <div class="control withAction">
+                    <mvp-field-origin [origin]="originFor(document)" />
                     <input
                       formControlName="recipientEmail"
                       [readOnly]="!isEditing()"
@@ -259,25 +291,40 @@ const emptySendMessageForm: SendMessageFormState = {
                 </label>
 
                 <label class="field editableField">
-                  <span>Codice Fiscale<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
-                  <input
-                    formControlName="fiscalCode"
-                    [readOnly]="!isEditing()"
-                    [attr.aria-readonly]="!isEditing()"
-                    [attr.tabindex]="isEditing() ? null : -1"
-                    [class.invalid]="fieldError('fiscalCode')"
-                  />
+                  <span>Codice Fiscale</span>
+                  <div class="control">
+                    <mvp-field-origin [origin]="originFor(document)" />
+                    <input
+                      formControlName="fiscalCode"
+                      [readOnly]="!isEditing()"
+                      [attr.aria-readonly]="!isEditing()"
+                      [attr.tabindex]="isEditing() ? null : -1"
+                      [class.invalid]="fieldError('fiscalCode')"
+                    />
+                  </div>
                   @if (fieldError("fiscalCode"); as message) {
                     <span class="fieldError">{{ message }}</span>
                   }
                 </label>
 
                 <label class="field editableField">
-                  <span>Matricola dipendente<i class="mark" aria-hidden="true">{{ fieldMark(document) }}</i></span>
-                  <input formControlName="employeeId" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()"
-                    [attr.tabindex]="isEditing() ? null : -1" />
+                  <span>Matricola dipendente</span>
+                  <div class="control">
+                    <mvp-field-origin [origin]="originFor(document)" />
+                    <input
+                      formControlName="employeeId"
+                      [readOnly]="!isEditing()"
+                      [attr.aria-readonly]="!isEditing()"
+                      [attr.tabindex]="isEditing() ? null : -1"
+                    />
+                  </div>
                 </label>
               </div>
+
+              <p class="fieldLegend">
+                <span class="legendItem"><mvp-field-origin [origin]="originFor(document)" />{{ originLabel(document) }}</span>
+                <span class="legendItem"><mvp-field-origin origin="locked" />Dato di sistema</span>
+              </p>
 
               <div class="actionBar">
                 @if (isEditing()) {
@@ -571,32 +618,27 @@ export class SubDocumentListComponent {
    * legge con uno screen reader ha il campo "Stato revisione" e la sola
    * lettura marcata su ogni controllo.
    */
-  protected fieldMark(documentItem: SubDocument): string {
-    switch (documentItem.reviewStatus) {
-      case "manually_validated":
-        return "✓";
-      case "auto_validated":
-        return "◆";
-      case "needs_review":
-        return "!";
-      default:
-        return "×";
-    }
+  /**
+   * Da dove viene il dato dei campi estratti. E' lo stato del sotto-documento,
+   * non una provenienza per campo: il contratto non la porta (questione aperta
+   * 2 dell'ADR 0012).
+   */
+  protected originFor(documentItem: SubDocument): FieldOrigin {
+    return originForReviewStatus(documentItem.reviewStatus);
   }
 
-  /** La legenda dice a parole cosa significa l'evidenziazione in corso. */
-  protected fieldMarkLabel(documentItem: SubDocument): string {
+  /** La stessa cosa a parole, per la legenda in fondo al pannello. */
+  protected originLabel(documentItem: SubDocument): string {
     switch (documentItem.reviewStatus) {
       case "manually_validated":
         return "Confermato dall'operatore";
       case "auto_validated":
         return "Estratto e validato in automatico";
-      case "needs_review":
-        return "Estratto, da verificare";
       default:
-        return "In quarantena";
+        return "Estratto, da verificare";
     }
   }
+
 
   protected canPrepareMessage(documentItem: SubDocument): boolean {
     return (
