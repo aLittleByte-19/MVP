@@ -7,6 +7,7 @@ use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
 use App\Models\PromptConfiguration;
 use App\Models\SubDocument;
+use App\Models\WorkflowTask;
 use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
@@ -21,6 +22,64 @@ class MvpStateService
      * Giorni coperti dalla serie storica delle metriche.
      */
     private const HISTORY_DAYS = 7;
+
+    /**
+     * Le fasi della pipeline documentale, nell'ordine in cui l'elaborazione le
+     * attraversa, con l'etichetta con cui compaiono nella ripartizione. I nomi
+     * a sinistra sono i `task_type` scritti da WorkflowTaskRunner.
+     *
+     * `dispatch.domain_event` non compare: e' la notifica interna che segue il
+     * lavoro, dura millesimi di secondo e nella barra sarebbe un segmento
+     * invisibile con un'etichetta ingombrante.
+     */
+    private const DOCUMENT_PHASES = [
+        'textract.ocr' => 'OCR',
+        'bedrock.extract' => 'Estrazione',
+        'persist.results' => 'Salvataggio',
+    ];
+
+    /** Come sopra, per la pipeline delle comunicazioni. */
+    private const COMMUNICATION_PHASES = [
+        'communication.generate_text' => 'Testo',
+        'communication.generate_cover' => 'Copertina',
+        'communication.finalize' => 'Chiusura',
+    ];
+
+    /**
+     * I campi che l'estrazione puo' valorizzare. Sono il denominatore di
+     * "campi compilati": quanta parte della scheda il modello riesce a
+     * riempire da sola.
+     */
+    private const EXTRACTED_FIELDS = [
+        'employee_first_name',
+        'employee_last_name',
+        'company_name',
+        'document_date',
+        'document_type',
+        'description',
+        'recipient_email',
+        'fiscal_code',
+        'employee_id',
+    ];
+
+    /**
+     * Passi ammessi per l'asse dei tempi della densita'. Dieci intervalli di
+     * uno di questi valori coprono la durata piu' lunga: cosi' le tacche
+     * cadono su numeri che si leggono (30s, 60s) invece che su 17,3s.
+     *
+     * @var list<int>
+     */
+    private const DURATION_STEPS = [1, 2, 5, 10, 15, 20, 30, 60, 120, 300, 600];
+
+    /** Intervalli in cui si divide l'asse della densita'. */
+    private const DURATION_BUCKETS = 10;
+
+    /**
+     * Sotto questa soglia una curva di densita' e' piu' interpolazione che
+     * dato: l'interfaccia la sostituisce con una riga di testo, e per farlo
+     * deve sapere quante misure ci sono dietro.
+     */
+    private const DENSITY_MIN_SAMPLES = 8;
 
     /**
      * @return array<string, mixed>
@@ -65,34 +124,16 @@ class MvpStateService
             // presentazione e puo' cambiare senza rompere chi seleziona la
             // metrica (vedi overview-page, che ne mostra solo alcune).
             'metrics' => [
+                // L'ordine e' quello in cui le schede riempiono il mosaico del
+                // pannello: prima le quattro strette, che si leggono in un colpo
+                // d'occhio, poi le larghe a coppie. Cambiarlo lascia righe spaiate
+                // nella griglia a quattro colonne.
                 [
                     'key' => 'assistant.total',
                     'value' => $total,
                     'label' => 'Contenuti generati',
                     'history' => $this->dailySeries(Communication::query()->where('tenant_id', $actor->tenantId)),
                 ],
-                [
-                    'key' => 'assistant.drafts',
-                    'value' => $drafts,
-                    'label' => 'Bozze generate',
-                    'history' => $this->dailySeries(
-                        Communication::query()->where('tenant_id', $actor->tenantId)->where('status', CommunicationStatus::Draft)
-                    ),
-                ],
-                ['key' => 'assistant.rated', 'value' => $rated, 'label' => 'Valutazioni ricevute'],
-                [
-                    // Nessuna serie: e' una media, non un conteggio di elementi
-                    // entrati, quindi un flusso giornaliero non la descrive.
-                    'key' => 'assistant.rating_average',
-                    'value' => $averageRating === null ? '—' : number_format((float) $averageRating, 1, '.', ''),
-                    'unit' => '/ 5',
-                    'label' => 'Media stelle',
-                ],
-                // Le quattro che seguono portano nell'interfaccia i segnali che
-                // finora stavano solo nelle dashboard Grafana: dove la pipeline
-                // si ferma, quanto ci mette e cosa e' degradato. Sono le stesse
-                // definizioni dei gauge di PrometheusExporter, ristrette al
-                // tenant di chi guarda.
                 [
                     'key' => 'assistant.generation_failed',
                     'value' => (clone $baseQuery)->where('generation_status', CommunicationGenerationStatus::Failed)->count(),
@@ -109,15 +150,48 @@ class MvpStateService
                         ->count(),
                     'label' => 'Oltre il tempo previsto',
                 ],
-                $this->durationMetric(
-                    'assistant.generation_seconds',
-                    'Tempo medio di generazione',
-                    $this->averageWorkflowSeconds(Communication::query()->where('tenant_id', $actor->tenantId))
-                ),
                 [
                     'key' => 'assistant.covers_failed',
                     'value' => (clone $baseQuery)->where('cover_status', CoverImageStatus::Failed)->count(),
                     'label' => 'Copertine non riuscite',
+                ],
+                [
+                    'key' => 'assistant.rated',
+                    'value' => $rated,
+                    'outOf' => $total,
+                    'label' => 'Bozze valutate',
+                ],
+                [
+                    // Nessuna serie: e' una media, non un conteggio di elementi
+                    // entrati, quindi un flusso giornaliero non la descrive.
+                    'key' => 'assistant.rating_average',
+                    'value' => $averageRating === null ? '—' : number_format((float) $averageRating, 1, '.', ''),
+                    'unit' => '/ 5',
+                    'sampleSize' => $rated,
+                    'label' => 'Media stelle',
+                ],
+                $this->phaseMetric(
+                    'assistant.generation_seconds',
+                    'Tempo medio di generazione',
+                    'communication',
+                    Communication::query()->where('tenant_id', $actor->tenantId)->select('id'),
+                    self::COMMUNICATION_PHASES,
+                    $this->workflowDurations(Communication::query()->where('tenant_id', $actor->tenantId)),
+                ),
+                $this->distributionMetric(
+                    'assistant.duration',
+                    'Durata delle generazioni',
+                    $this->workflowDurations(Communication::query()->where('tenant_id', $actor->tenantId)),
+                ),
+                [
+                    // Non compare nel pannello: e' la parte "in bozza" della
+                    // ripartizione e, come priorita', vive nella Overview.
+                    'key' => 'assistant.drafts',
+                    'value' => $drafts,
+                    'label' => 'Bozze generate',
+                    'history' => $this->dailySeries(
+                        Communication::query()->where('tenant_id', $actor->tenantId)->where('status', CommunicationStatus::Draft)
+                    ),
                 ],
             ],
             'history' => $history->map(fn ($communication) => $this->communication($communication))->values()->all(),
@@ -186,6 +260,192 @@ class MvpStateService
             ->map(fn ($row): float => (float) $row->workflow_started_at->diffInSeconds($row->workflow_completed_at, true));
 
         return $durations->isEmpty() ? null : (float) $durations->avg();
+    }
+
+    /**
+     * Durate in secondi delle corse concluse negli ultimi sette giorni.
+     *
+     * La differenza fra i due istanti si calcola in PHP e non con una funzione
+     * di data SQL, per la stessa ragione di `dailySeries`: deve valere su
+     * PostgreSQL e su SQLite senza dialetti diversi.
+     *
+     * @param  Builder<OriginalDocument>|Builder<Communication>  $query
+     * @return list<float>
+     */
+    private function workflowDurations(Builder $query): array
+    {
+        $since = now()->subDays(self::HISTORY_DAYS - 1)->startOfDay();
+
+        return (clone $query)
+            ->whereNotNull('workflow_started_at')
+            ->whereNotNull('workflow_completed_at')
+            ->where('workflow_completed_at', '>=', $since)
+            ->get(['workflow_started_at', 'workflow_completed_at'])
+            ->map(fn ($row): float => (float) $row->workflow_started_at->diffInSeconds($row->workflow_completed_at, true))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Densita' delle durate: quante elaborazioni cadono in ciascun intervallo.
+     *
+     * L'asse arriva alla corsa piu' lunga, non al novantacinquesimo percentile:
+     * troncare la coda nasconderebbe proprio il caso che l'operatore cerca.
+     * Il valore della metrica resta la mediana, che serve alla descrizione
+     * accessibile e al testo di ripiego quando i campioni sono pochi.
+     *
+     * @param  list<float>  $durations
+     * @return array<string, mixed>
+     */
+    private function distributionMetric(string $key, string $label, array $durations): array
+    {
+        $sampleSize = count($durations);
+
+        if ($sampleSize === 0) {
+            return ['key' => $key, 'value' => '—', 'sampleSize' => 0, 'label' => $label];
+        }
+
+        sort($durations);
+        $median = $durations[intdiv($sampleSize, 2)];
+        $step = $this->durationStep(max($durations));
+        $distribution = [];
+
+        for ($bucket = 1; $bucket <= self::DURATION_BUCKETS; $bucket++) {
+            $upTo = $step * $bucket;
+            $from = $upTo - $step;
+            $distribution[] = [
+                'upTo' => $upTo,
+                'count' => count(array_filter(
+                    $durations,
+                    fn (float $seconds): bool => $seconds > $from && $seconds <= $upTo || ($from === 0 && $seconds === 0.0)
+                )),
+            ];
+        }
+
+        return [
+            'key' => $key,
+            'value' => (int) round($median),
+            'unit' => 's',
+            'sampleSize' => $sampleSize,
+            'distribution' => $distribution,
+            'label' => $label,
+        ];
+    }
+
+    /** Il passo piu' stretto i cui dieci intervalli coprono la corsa piu' lunga. */
+    private function durationStep(float $longest): int
+    {
+        foreach (self::DURATION_STEPS as $step) {
+            if ($step * self::DURATION_BUCKETS >= $longest) {
+                return $step;
+            }
+        }
+
+        return (int) ceil($longest / self::DURATION_BUCKETS);
+    }
+
+    /**
+     * Tempo medio di una corsa, ripartito fra le fasi che l'hanno consumato.
+     *
+     * Le fasi arrivano da `workflow_tasks`, che tiene inizio e fine di ogni
+     * passo; il tenant si filtra sui soggetti, perche' la tabella e' condivisa
+     * fra le due pipeline e non porta il tenant per se'. L'ultima voce e'
+     * l'attesa: la differenza fra la durata complessiva e la somma delle fasi,
+     * cioe' il tempo passato in coda fra un passo e l'altro. Senza, la barra
+     * direbbe che la corsa e' finita prima di quanto sia vero.
+     *
+     * @param  Builder<OriginalDocument>|Builder<Communication>  $subjects
+     * @param  array<string, string>  $phases
+     * @param  list<float>  $durations
+     * @return array<string, mixed>
+     */
+    private function phaseMetric(string $key, string $label, string $subjectType, Builder $subjects, array $phases, array $durations): array
+    {
+        $average = $durations === [] ? null : array_sum($durations) / count($durations);
+
+        if ($average === null) {
+            return ['key' => $key, 'value' => '—', 'label' => $label];
+        }
+
+        $since = now()->subDays(self::HISTORY_DAYS - 1)->startOfDay();
+        $byPhase = WorkflowTask::query()
+            ->where('subject_type', $subjectType)
+            ->whereIn('task_type', array_keys($phases))
+            ->whereNotNull('started_at')
+            ->whereNotNull('completed_at')
+            ->where('completed_at', '>=', $since)
+            ->whereIn('subject_id', $subjects)
+            ->get(['task_type', 'started_at', 'completed_at'])
+            ->groupBy('task_type')
+            ->map(fn ($tasks): float => (float) $tasks
+                ->map(fn ($task): float => (float) $task->started_at->diffInSeconds($task->completed_at, true))
+                ->avg());
+
+        $parts = [];
+
+        foreach ($phases as $taskType => $phaseLabel) {
+            $seconds = $byPhase[$taskType] ?? null;
+
+            if ($seconds !== null && $seconds > 0) {
+                $parts[] = ['label' => $phaseLabel, 'value' => round($seconds, 1)];
+            }
+        }
+
+        $waiting = round($average - array_sum(array_column($parts, 'value')), 1);
+
+        if ($parts !== [] && $waiting > 0) {
+            $parts[] = ['label' => 'Attesa', 'value' => $waiting];
+        }
+
+        // Con la ripartizione il totale resta in secondi anche oltre il minuto
+        // e mezzo: le parti sono in secondi, e "1,7 min" sopra una legenda che
+        // dice "OCR 60s" costringerebbe a convertire per verificare la somma.
+        if ($parts !== []) {
+            return [
+                'key' => $key,
+                'value' => (int) round($average),
+                'unit' => 's',
+                'parts' => $parts,
+                'label' => $label,
+            ];
+        }
+
+        return $this->durationMetric($key, $label, $average);
+    }
+
+    /**
+     * Quanta parte della scheda il modello riesce a riempire da solo.
+     *
+     * Il denominatore sono i nove campi estraibili per ogni sotto-documento,
+     * non i soli quattro principali: un codice fiscale mancante e' un campo che
+     * l'operatore dovra' scrivere a mano, e va contato come tale.
+     *
+     * @return array<string, mixed>
+     */
+    private function filledFieldsMetric(string $tenantId, int $subDocumentCount): array
+    {
+        $rows = ExtractedData::query()
+            ->whereHas('subDocument.originalDocument', fn ($query) => $query->where('tenant_id', $tenantId))
+            ->get(self::EXTRACTED_FIELDS);
+
+        $filled = 0;
+
+        foreach ($rows as $row) {
+            foreach (self::EXTRACTED_FIELDS as $field) {
+                $value = $row->getAttribute($field);
+
+                if ($value !== null && trim((string) $value) !== '') {
+                    $filled++;
+                }
+            }
+        }
+
+        return [
+            'key' => 'copilot.fields_filled',
+            'value' => $filled,
+            'outOf' => $subDocumentCount * count(self::EXTRACTED_FIELDS),
+            'label' => "Campi compilati dall'AI",
+        ];
     }
 
     /**
@@ -265,54 +525,41 @@ class MvpStateService
 
         $ofTenant = fn ($query) => $query->whereHas('originalDocument', fn ($documents) => $documents->where('tenant_id', $actor->tenantId));
 
+        $subDocumentCount = $ofTenant(SubDocument::query())->count();
+        $validated = $ofTenant(SubDocument::query())->whereIn('review_status', [ReviewStatus::AutoValidated, ReviewStatus::ManuallyValidated])->count();
+        $needsReview = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)->count();
+        $quarantined = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::Quarantined)->count();
+
         return [
             'metrics' => [
+                // L'ordine e' quello in cui le schede riempiono il mosaico del
+                // pannello: prima le quattro strette, poi le larghe a coppie.
+                // In fondo le quattro che il pannello non mostra — il totale e le
+                // parti della ripartizione — che restano nel contratto perche' la
+                // Overview e la barra degli esiti le leggono.
                 [
                     'key' => 'copilot.documents',
                     'value' => $originalCount,
                     'label' => 'Documenti analizzati',
-                    'history' => $this->dailySeries(OriginalDocument::query()->where('tenant_id', $actor->tenantId)),
+                    'history' => $this->dailySeries($documentsOfTenant),
                 ],
                 [
-                    'key' => 'copilot.sub_documents',
-                    'value' => $ofTenant(SubDocument::query())->count(),
-                    'label' => 'Sotto-documenti rilevati',
-                    'history' => $this->dailySeries($ofTenant(SubDocument::query())),
-                ],
-                ['key' => 'copilot.confident_fields', 'value' => ExtractedData::query()->whereHas('subDocument.originalDocument', fn ($query) => $query->where('tenant_id', $actor->tenantId))->where('confidence_score', '>=', $confidenceThreshold)->count(), 'label' => 'Campi con confidenza'],
-                [
-                    'key' => 'copilot.needs_review',
-                    'value' => $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)->count(),
-                    'label' => 'Da verificare',
-                    'history' => $this->dailySeries($ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)),
-                ],
-                // Pronti = validati, automaticamente o a mano. Non e' il
-                // complemento di "da verificare": la quarantena e' un terzo
-                // stato che non va contato come pronto.
-                [
-                    'key' => 'copilot.validated',
-                    'value' => $ofTenant(SubDocument::query())->whereIn('review_status', [ReviewStatus::AutoValidated, ReviewStatus::ManuallyValidated])->count(),
-                    'label' => 'Documenti pronti',
-                    'history' => $this->dailySeries($ofTenant(SubDocument::query())->whereIn('review_status', [ReviewStatus::AutoValidated, ReviewStatus::ManuallyValidated])),
+                    // Media delle confidenze OCR dichiarate da Textract: dice
+                    // quanto e' leggibile cio' che arriva, e la soglia accanto
+                    // dice oltre quale valore il sistema valida da solo.
+                    'key' => 'copilot.ocr_confidence',
+                    'value' => $this->averageDecimal((clone $documentsOfTenant)->whereNotNull('ocr_confidence_avg')->avg('ocr_confidence_avg')),
+                    'unit' => '%',
+                    'threshold' => $confidenceThreshold,
+                    'label' => 'Confidenza media OCR',
                 ],
                 [
-                    'key' => 'copilot.quarantined',
-                    'value' => $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::Quarantined)->count(),
-                    'label' => 'In quarantena',
-                    'history' => $this->dailySeries($ofTenant(SubDocument::query())->where('review_status', ReviewStatus::Quarantined)),
-                ],
-                // Le cinque che seguono portano nell'interfaccia i segnali che
-                // finora stavano solo nelle dashboard Grafana: quanto lavoro e'
-                // in corso, quanto e' fermo oltre il tempo previsto, quanto e'
-                // fallito, quanto e' affidabile l'OCR e quanto dura una corsa.
-                // Sono le stesse definizioni dei gauge di PrometheusExporter,
-                // ristrette al tenant di chi guarda.
-                [
-                    'key' => 'copilot.in_progress',
-                    'value' => (clone $documentsOfTenant)
-                        ->whereIn('processing_status', [ProcessingStatus::Pending, ProcessingStatus::Processing])
-                        ->count(),
-                    'label' => 'Documenti in lavorazione',
+                    'key' => 'copilot.processing_failed',
+                    'value' => (clone $documentsOfTenant)->where('processing_status', ProcessingStatus::Failed)->count(),
+                    'label' => 'Elaborazioni non riuscite',
+                    'history' => $this->dailySeries(
+                        OriginalDocument::query()->where('tenant_id', $actor->tenantId)->where('processing_status', ProcessingStatus::Failed)
+                    ),
                 ],
                 [
                     'key' => 'copilot.processing_stuck',
@@ -323,28 +570,53 @@ class MvpStateService
                     'label' => 'Oltre il tempo previsto',
                 ],
                 [
-                    'key' => 'copilot.processing_failed',
-                    'value' => (clone $documentsOfTenant)->where('processing_status', ProcessingStatus::Failed)->count(),
-                    'label' => 'Elaborazioni non riuscite',
-                    'history' => $this->dailySeries(
-                        OriginalDocument::query()->where('tenant_id', $actor->tenantId)->where('processing_status', ProcessingStatus::Failed)
-                    ),
+                    'key' => 'copilot.verified',
+                    'value' => $validated,
+                    'outOf' => $subDocumentCount,
+                    'label' => 'Sotto-documenti verificati',
                 ],
-                $this->durationMetric(
+                $this->filledFieldsMetric($actor->tenantId, $subDocumentCount),
+                $this->phaseMetric(
                     'copilot.processing_seconds',
                     'Tempo medio di elaborazione',
-                    $this->averageWorkflowSeconds(OriginalDocument::query()->where('tenant_id', $actor->tenantId))
+                    'original_document',
+                    OriginalDocument::query()->where('tenant_id', $actor->tenantId)->select('id'),
+                    self::DOCUMENT_PHASES,
+                    $this->workflowDurations(OriginalDocument::query()->where('tenant_id', $actor->tenantId)),
+                ),
+                $this->distributionMetric(
+                    'copilot.duration',
+                    'Durata delle elaborazioni',
+                    $this->workflowDurations(OriginalDocument::query()->where('tenant_id', $actor->tenantId)),
                 ),
                 [
-                    // Media delle confidenze OCR dichiarate da Textract, non la
-                    // quota di campi sopra soglia gia' esposta da
-                    // `confident_fields`: dice quanto e' leggibile cio' che
-                    // arriva, non quanto ne e' stato accettato.
-                    'key' => 'copilot.ocr_confidence',
-                    'value' => $this->averageDecimal((clone $documentsOfTenant)->whereNotNull('ocr_confidence_avg')->avg('ocr_confidence_avg')),
-                    'unit' => '%',
-                    'threshold' => $confidenceThreshold,
-                    'label' => 'Confidenza media OCR',
+                    // Fuori dal pannello: e' il totale su cui si misurano le
+                    // quote, e come conteggio a se' non aggiunge nulla.
+                    'key' => 'copilot.sub_documents',
+                    'value' => $subDocumentCount,
+                    'label' => 'Sotto-documenti rilevati',
+                    'history' => $this->dailySeries($ofTenant(SubDocument::query())),
+                ],
+                [
+                    'key' => 'copilot.needs_review',
+                    'value' => $needsReview,
+                    'label' => 'Da verificare',
+                    'history' => $this->dailySeries($ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)),
+                ],
+                // Pronti = validati, automaticamente o a mano. Non e' il
+                // complemento di "da verificare": la quarantena e' un terzo
+                // stato che non va contato come pronto.
+                [
+                    'key' => 'copilot.validated',
+                    'value' => $validated,
+                    'label' => 'Documenti pronti',
+                    'history' => $this->dailySeries($ofTenant(SubDocument::query())->whereIn('review_status', [ReviewStatus::AutoValidated, ReviewStatus::ManuallyValidated])),
+                ],
+                [
+                    'key' => 'copilot.quarantined',
+                    'value' => $quarantined,
+                    'label' => 'In quarantena',
+                    'history' => $this->dailySeries($ofTenant(SubDocument::query())->where('review_status', ReviewStatus::Quarantined)),
                 ],
             ],
             'documents' => $documents->map(fn ($document) => $this->document($document))->values()->all(),

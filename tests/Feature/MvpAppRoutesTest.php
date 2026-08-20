@@ -5,6 +5,7 @@ use App\Models\Communication;
 use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
 use App\Models\SubDocument;
+use App\Models\WorkflowTask;
 use App\Mvp\Ai\BedrockService;
 use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
@@ -700,14 +701,16 @@ test('assistant generated metric counts every stored communication', function ()
     Communication::factory()->draft()->rated(5)->create();
     Communication::factory()->draft()->rated(3, 'Ok')->create();
 
-    $this->getJson('/api/v1/state')
-        ->assertOk()
-        ->assertJsonPath('assistant.metrics.0.value', 4)
-        ->assertJsonPath('assistant.metrics.1.value', 3)
-        ->assertJsonPath('assistant.metrics.2.value', 2)
-        ->assertJsonPath('assistant.metrics.2.label', 'Valutazioni ricevute')
-        ->assertJsonPath('assistant.metrics.3.value', '4.0')
-        ->assertJsonPath('assistant.metrics.3.label', 'Media stelle');
+    // Per chiave e non per indice: l'ordine dell'array e' quello con cui le
+    // schede riempiono il mosaico del pannello, e cambia con il layout.
+    $metrics = collect($this->getJson('/api/v1/state')->assertOk()->json('assistant.metrics'))->keyBy('key');
+
+    expect($metrics['assistant.total']['value'])->toBe(4)
+        ->and($metrics['assistant.drafts']['value'])->toBe(3)
+        ->and($metrics['assistant.rated']['value'])->toBe(2)
+        ->and($metrics['assistant.rated']['outOf'])->toBe(4)
+        ->and($metrics['assistant.rating_average']['value'])->toBe('4.0')
+        ->and($metrics['assistant.rating_average']['label'])->toBe('Media stelle');
 });
 
 test('operator can correct extracted data and mark a sub document as manually validated', function () {
@@ -1128,11 +1131,94 @@ test('document metrics report the operational signals of the pipeline', function
 
     $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
 
-    expect($metrics['copilot.in_progress']['value'])->toBe(3)
-        ->and($metrics['copilot.processing_stuck']['value'])->toBe(1)
+    expect($metrics['copilot.processing_stuck']['value'])->toBe(1)
         ->and($metrics['copilot.processing_failed']['value'])->toBe(1)
         ->and($metrics['copilot.processing_seconds']['value'])->toBe(30)
         ->and($metrics['copilot.processing_seconds']['unit'])->toBe('s');
+});
+
+test('the verified share carries its own denominator', function () {
+    // Il totale sta nella metrica, non nella pagina: e' chi calcola il
+    // numeratore a sapere su che cosa si misura.
+    SubDocument::factory()->create(['review_status' => ReviewStatus::AutoValidated]);
+    SubDocument::factory()->create(['review_status' => ReviewStatus::ManuallyValidated]);
+    SubDocument::factory()->create(['review_status' => ReviewStatus::NeedsReview]);
+
+    $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
+
+    expect($metrics['copilot.verified']['value'])->toBe(2)
+        ->and($metrics['copilot.verified']['outOf'])->toBe(3);
+});
+
+test('the filled fields metric counts the nine extractable fields per sub-document', function () {
+    $subDocument = SubDocument::factory()->create();
+    ExtractedData::factory()->create([
+        'sub_document_id' => $subDocument->id,
+        'employee_first_name' => 'Mario',
+        'employee_last_name' => 'Rossi',
+        'company_name' => 'Acme Srl',
+        'document_date' => '2026-01-15',
+        'document_type' => 'cedolino',
+        'description' => null,
+        'recipient_email' => null,
+        'fiscal_code' => null,
+        'employee_id' => null,
+    ]);
+
+    $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
+
+    expect($metrics['copilot.fields_filled']['value'])->toBe(5)
+        ->and($metrics['copilot.fields_filled']['outOf'])->toBe(9);
+});
+
+test('the average duration is broken down into the phases that consumed it', function () {
+    // L'ultima voce e' l'attesa: la differenza fra la durata complessiva e la
+    // somma delle fasi, cioe' il tempo passato in coda fra un passo e l'altro.
+    $document = OriginalDocument::factory()->completed()->create([
+        'workflow_started_at' => now()->subSeconds(100),
+        'workflow_completed_at' => now(),
+    ]);
+
+    foreach ([['textract.ocr', 60], ['bedrock.extract', 30]] as [$taskType, $seconds]) {
+        WorkflowTask::query()->create([
+            'subject_type' => 'original_document',
+            'subject_id' => $document->id,
+            'task_type' => $taskType,
+            'task_token_hash' => hash('sha256', $taskType.$document->id),
+            'status' => 'succeeded',
+            'started_at' => now()->subSeconds($seconds),
+            'completed_at' => now(),
+        ]);
+    }
+
+    $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
+    $parts = collect($metrics['copilot.processing_seconds']['parts'])->pluck('value', 'label');
+
+    expect($metrics['copilot.processing_seconds']['value'])->toBe(100)
+        ->and($metrics['copilot.processing_seconds']['unit'])->toBe('s')
+        // toEqual e non toBe: un decimale tondo torna dal JSON come intero.
+        ->and($parts['OCR'])->toEqual(60)
+        ->and($parts['Estrazione'])->toEqual(30)
+        ->and($parts['Attesa'])->toEqual(10);
+});
+
+test('the duration distribution splits the runs into ten intervals', function () {
+    foreach ([4, 6, 7, 9, 12, 14, 19, 23] as $seconds) {
+        OriginalDocument::factory()->completed()->create([
+            'workflow_started_at' => now()->subSeconds($seconds),
+            'workflow_completed_at' => now(),
+        ]);
+    }
+
+    $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
+    $distribution = collect($metrics['copilot.duration']['distribution']);
+
+    // Passo di 5 secondi: dieci intervalli coprono la corsa piu' lunga (23s).
+    expect($distribution)->toHaveCount(10)
+        ->and($distribution->first()['upTo'])->toBe(5)
+        ->and($distribution->last()['upTo'])->toBe(50)
+        ->and($distribution->sum('count'))->toBe(8)
+        ->and($metrics['copilot.duration']['sampleSize'])->toBe(8);
 });
 
 test('an average duration past ninety seconds is expressed in minutes', function () {

@@ -27,6 +27,8 @@ export * from './listMvpCommunicationsParams';
 export * from './listMvpDocumentsConfidenceCriterion';
 export * from './listMvpDocumentsParams';
 export * from './metric';
+export * from './metricDistributionItem';
+export * from './metricPartsItem';
 export * from './mvpState';
 export * from './notFoundResponse';
 export * from './promptConfiguration';
