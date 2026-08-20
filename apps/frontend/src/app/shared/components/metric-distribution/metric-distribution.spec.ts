@@ -40,27 +40,28 @@ describe("MetricDistributionComponent", () => {
     expect(host.querySelector("svg")?.getAttribute("aria-label")).toContain("23 elaborazioni");
   });
 
-  it("non disegna una curva che i dati non reggono", () => {
-    // Con pochi campioni la forma la darebbe l'interpolazione, non le misure.
-    const host = render({ label: "Durata", buckets, sampleSize: 3, minSamples: 8 });
+  it("disegna la curva anche su pochi campioni, dicendo quanti sono", () => {
+    // La forma la da' l'interpolazione piu' che i dati, ma resta una forma: il
+    // conteggio sotto l'asse dice quanto pesarla.
+    const host = render({ label: "Durata", buckets, sampleSize: 3 });
 
-    expect(host.querySelector("path.line")).toBeNull();
-    expect(host.querySelector(".few")?.textContent).toContain("3 elaborazioni");
+    expect(host.querySelector("path.line")).not.toBeNull();
+    expect(host.querySelector(".samples")?.textContent?.trim()).toBe("Su 3 elaborazioni concluse");
   });
 
-  it("distingue il caso senza misure da quello con poche", () => {
+  it("senza misure lascia la griglia vuota invece di una frase al posto del grafico", () => {
     const host = render({ label: "Durata", buckets: undefined, sampleSize: 0 });
 
-    expect(host.querySelector(".few")?.textContent?.trim()).toBe(
-      "Nessuna elaborazione conclusa negli ultimi sette giorni."
+    expect(host.querySelector("path.line")).toBeNull();
+    expect(host.querySelectorAll("svg.empty line.grid").length).toBeGreaterThan(3);
+    expect(host.querySelector(".samples")?.textContent?.trim()).toBe(
+      "Nessuna elaborazione conclusa negli ultimi sette giorni"
     );
   });
 
   it("chiama le corse con il nome che hanno nel modulo", () => {
-    const host = render({ label: "Durata", buckets, sampleSize: 0, subject: "generazioni" });
+    const host = render({ label: "Durata", buckets, sampleSize: 12, subject: "generazioni" });
 
-    expect(host.querySelector(".few")?.textContent?.trim()).toBe(
-      "Nessuna generazione conclusa negli ultimi sette giorni."
-    );
+    expect(host.querySelector(".samples")?.textContent?.trim()).toBe("Su 12 generazioni concluse");
   });
 });
