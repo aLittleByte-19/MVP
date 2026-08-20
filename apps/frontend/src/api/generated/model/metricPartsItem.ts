@@ -5,9 +5,12 @@
  * Versioned JSON contract consumed by the Angular SPA.
  * OpenAPI spec version: 1.0.0
  */
+import type { MetricPartsItemTone } from './metricPartsItemTone';
 
 export type MetricPartsItem = {
   label: string;
   /** @minimum 0 */
   value: number;
+  /** Rilievo della parte, quando ne ha uno proprio. Gli stati di revisione e di scaricamento lo dichiarano già nel dominio (`ReviewStatus::color()`), quindi arriva da lì invece di essere ricostruito da una tabella nell'interfaccia. Assente sulle ripartizioni che non esprimono un giudizio — le fasi di una pipeline, dove verde e rosso direbbero qualcosa che il dato non dice. */
+  tone?: MetricPartsItemTone;
 };

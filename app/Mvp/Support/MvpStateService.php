@@ -13,6 +13,7 @@ use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
+use App\Mvp\Documents\Domain\Enums\SendStatus;
 use App\Mvp\Support\Identity\Actor;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -414,6 +415,40 @@ class MvpStateService
     }
 
     /**
+     * Ripartizione di un insieme fra gli stati in cui si trova.
+     *
+     * Il tono di ciascuno stato lo dichiara l'enum di dominio: arancione per
+     * cio' che aspetta una mano, teal per cio' che il sistema ha validato da
+     * solo, verde per cio' che una persona ha confermato. Ricostruirlo
+     * nell'interfaccia con una tabella chiave -> colore vorrebbe dire tenere
+     * due verita' allineate a mano.
+     *
+     * Gli stati a zero restano fuori: un segmento invisibile con la sua voce
+     * in legenda occupa spazio senza dire nulla.
+     *
+     * @param  array<string, int>  $counts  etichetta => quanti
+     * @param  array<string, string>  $tones  etichetta => tono
+     * @return array<string, mixed>
+     */
+    private function breakdownMetric(string $key, string $label, array $counts, array $tones): array
+    {
+        $parts = [];
+
+        foreach ($counts as $stateLabel => $count) {
+            if ($count > 0) {
+                $parts[] = ['label' => $stateLabel, 'value' => $count, 'tone' => $tones[$stateLabel]];
+            }
+        }
+
+        return [
+            'key' => $key,
+            'value' => array_sum($counts),
+            'parts' => $parts,
+            'label' => $label,
+        ];
+    }
+
+    /**
      * Quanta parte della scheda il modello riesce a riempire da solo.
      *
      * Il denominatore sono i nove campi estraibili per ogni sotto-documento,
@@ -526,17 +561,20 @@ class MvpStateService
         $ofTenant = fn ($query) => $query->whereHas('originalDocument', fn ($documents) => $documents->where('tenant_id', $actor->tenantId));
 
         $subDocumentCount = $ofTenant(SubDocument::query())->count();
-        $validated = $ofTenant(SubDocument::query())->whereIn('review_status', [ReviewStatus::AutoValidated, ReviewStatus::ManuallyValidated])->count();
+        $autoValidated = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::AutoValidated)->count();
+        $manuallyValidated = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::ManuallyValidated)->count();
+        $validated = $autoValidated + $manuallyValidated;
         $needsReview = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)->count();
         $quarantined = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::Quarantined)->count();
+        $downloaded = $ofTenant(SubDocument::query())->where('send_status', SendStatus::Sent)->count();
 
         return [
             'metrics' => [
                 // L'ordine e' quello in cui le schede riempiono il mosaico del
-                // pannello: prima le quattro strette, poi le larghe a coppie.
-                // In fondo le quattro che il pannello non mostra — il totale e le
-                // parti della ripartizione — che restano nel contratto perche' la
-                // Overview e la barra degli esiti le leggono.
+                // pannello: sette larghe a coppie e, a chiudere l'ultima riga, i
+                // due verdetti stretti. In fondo le quattro che il pannello non
+                // mostra — il totale e le parti della ripartizione — che restano
+                // nel contratto perche' la Overview le legge.
                 [
                     'key' => 'copilot.documents',
                     'value' => $originalCount,
@@ -553,6 +591,53 @@ class MvpStateService
                     'threshold' => $confidenceThreshold,
                     'label' => 'Confidenza media OCR',
                 ],
+                $this->breakdownMetric(
+                    'copilot.review_breakdown',
+                    'Esito della revisione',
+                    [
+                        ReviewStatus::NeedsReview->label() => $needsReview,
+                        ReviewStatus::AutoValidated->label() => $autoValidated,
+                        ReviewStatus::ManuallyValidated->label() => $manuallyValidated,
+                        ReviewStatus::Quarantined->label() => $quarantined,
+                        // I sotto-documenti ancora senza esito: senza questa
+                        // voce la ripartizione direbbe che tutto e' gia' stato
+                        // classificato.
+                        'In elaborazione' => max(0, $subDocumentCount - $needsReview - $validated - $quarantined),
+                    ],
+                    [
+                        ReviewStatus::NeedsReview->label() => ReviewStatus::NeedsReview->color(),
+                        ReviewStatus::AutoValidated->label() => ReviewStatus::AutoValidated->color(),
+                        ReviewStatus::ManuallyValidated->label() => ReviewStatus::ManuallyValidated->color(),
+                        ReviewStatus::Quarantined->label() => ReviewStatus::Quarantined->color(),
+                        'In elaborazione' => 'neutral',
+                    ],
+                ),
+                $this->breakdownMetric(
+                    'copilot.download_breakdown',
+                    'Scaricamento',
+                    [
+                        SendStatus::Sent->label() => $downloaded,
+                        SendStatus::Pending->label() => $subDocumentCount - $downloaded,
+                    ],
+                    [
+                        SendStatus::Sent->label() => SendStatus::Sent->color(),
+                        SendStatus::Pending->label() => SendStatus::Pending->color(),
+                    ],
+                ),
+                $this->filledFieldsMetric($actor->tenantId, $subDocumentCount),
+                $this->phaseMetric(
+                    'copilot.processing_seconds',
+                    'Tempo medio di elaborazione',
+                    'original_document',
+                    OriginalDocument::query()->where('tenant_id', $actor->tenantId)->select('id'),
+                    self::DOCUMENT_PHASES,
+                    $this->workflowDurations(OriginalDocument::query()->where('tenant_id', $actor->tenantId)),
+                ),
+                $this->distributionMetric(
+                    'copilot.duration',
+                    'Durata delle elaborazioni',
+                    $this->workflowDurations(OriginalDocument::query()->where('tenant_id', $actor->tenantId)),
+                ),
                 [
                     'key' => 'copilot.processing_failed',
                     'value' => (clone $documentsOfTenant)->where('processing_status', ProcessingStatus::Failed)->count(),
@@ -569,26 +654,6 @@ class MvpStateService
                         ->count(),
                     'label' => 'Oltre il tempo previsto',
                 ],
-                [
-                    'key' => 'copilot.verified',
-                    'value' => $validated,
-                    'outOf' => $subDocumentCount,
-                    'label' => 'Sotto-documenti verificati',
-                ],
-                $this->filledFieldsMetric($actor->tenantId, $subDocumentCount),
-                $this->phaseMetric(
-                    'copilot.processing_seconds',
-                    'Tempo medio di elaborazione',
-                    'original_document',
-                    OriginalDocument::query()->where('tenant_id', $actor->tenantId)->select('id'),
-                    self::DOCUMENT_PHASES,
-                    $this->workflowDurations(OriginalDocument::query()->where('tenant_id', $actor->tenantId)),
-                ),
-                $this->distributionMetric(
-                    'copilot.duration',
-                    'Durata delle elaborazioni',
-                    $this->workflowDurations(OriginalDocument::query()->where('tenant_id', $actor->tenantId)),
-                ),
                 [
                     // Fuori dal pannello: e' il totale su cui si misurano le
                     // quote, e come conteggio a se' non aggiunge nulla.
