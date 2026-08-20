@@ -1,50 +1,67 @@
 import { ChangeDetectionStrategy, Component, computed, input } from "@angular/core";
-import { formatCount, type MetricTone, NOT_AVAILABLE } from "../../util/metrics";
+import { ringDash } from "../../util/charts";
+import { formatCount, NOT_AVAILABLE } from "../../util/metrics";
+
+const SIZE = 76;
+const STROKE = 10;
+const RADIUS = (SIZE - STROKE) / 2;
 
 /**
  * Scheda di quota: quanta parte di un totale.
  *
- * "23" e "23 su 412" rispondono a due domande diverse, e la seconda non si
- * legge da un numero grande: serve vedere la porzione. Prima il rapporto era
- * un "/412" accanto al valore dentro la scheda di andamento, cioe' la stessa
- * forma per un conteggio e per una quota.
+ * L'anello porta la parte a posto, e il resto della circonferenza — non un
+ * grigio neutro — porta cio' che manca: e' quello il numero su cui l'operatore
+ * deve agire, e lasciarlo scolorito lo nasconderebbe. Al centro la
+ * percentuale, di fianco i due conteggi per esteso, perche' "94%" senza "77 da
+ * verificare" non dice quanto lavoro c'e' da fare.
  *
- * La barra e' `aria-hidden` e il rapporto viene detto per esteso nel testo:
- * ripeterlo come immagine con etichetta darebbe due annunci per lo stesso
- * dato.
+ * `restTone` distingue il residuo che chiede un intervento (rosso) da quello
+ * che e' solo il complemento di una misura (grigio): le bozze ancora senza
+ * voto non sono un guasto.
  */
 @Component({
   selector: "mvp-metric-share",
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <dl class="card" [class]="tone()" [attr.aria-busy]="isLoading() ? 'true' : null">
+    <dl class="card" [attr.aria-busy]="isLoading() ? 'true' : null">
       <dt class="label">{{ label() }}</dt>
       <dd class="value">
-        <span class="figure">
-          @if (isLoading()) {
-            <span class="skeleton num" aria-hidden="true"></span>
-            <span class="srOnly">Caricamento in corso</span>
-          } @else {
-            <span class="lead">
-              <span class="num">{{ displayValue() }}</span>
-              <span class="total"
-                ><span class="srOnly">su </span><span aria-hidden="true">/</span>{{ totalDisplay() }}</span
-              >
-            </span>
-            @if (percentDisplay(); as percent) {
-              <span class="percent">{{ percent }}</span>
-            }
-          }
-        </span>
-        @if (!isLoading() && percent() !== null) {
-          <span class="bar" aria-hidden="true">
-            <span class="fill" [style.width.%]="percent()"></span>
-          </span>
-        }
         @if (isLoading()) {
-          <span class="skeleton txt" aria-hidden="true"></span>
-        } @else if (context(); as contextText) {
-          <span class="context">{{ contextText }}</span>
+          <span class="skeleton num" aria-hidden="true"></span>
+          <span class="srOnly">Caricamento in corso</span>
+        } @else {
+          <span class="figure">
+            <svg class="ring" [attr.viewBox]="'0 0 ' + size + ' ' + size" role="img" [attr.aria-label]="summary()">
+              <circle
+                class="rest"
+                [class.plain]="restTone() === 'neutral'"
+                [attr.cx]="size / 2"
+                [attr.cy]="size / 2"
+                [attr.r]="radius"
+                [attr.stroke-width]="stroke"
+              />
+              @if (dash(); as segments) {
+                <circle
+                  class="done"
+                  [attr.cx]="size / 2"
+                  [attr.cy]="size / 2"
+                  [attr.r]="radius"
+                  [attr.stroke-width]="stroke"
+                  [attr.stroke-dasharray]="segments.filled + ' ' + segments.rest"
+                  [attr.transform]="'rotate(-90 ' + size / 2 + ' ' + size / 2 + ')'"
+                />
+              }
+              <text class="percent" [attr.x]="size / 2" [attr.y]="size / 2" text-anchor="middle" dominant-baseline="central">
+                {{ percentDisplay() }}
+              </text>
+            </svg>
+            <span class="side">
+              <b>{{ displayValue() }}</b> su {{ totalDisplay() }}
+              @if (restLabel(); as rest) {
+                <br /><span class="rest" [class.plain]="restTone() === 'neutral'">{{ rest }}</span>
+              }
+            </span>
+          </span>
         }
       </dd>
     </dl>
@@ -55,9 +72,15 @@ export class MetricShareComponent {
   readonly label = input.required<string>();
   readonly value = input.required<number | null>();
   readonly total = input.required<number | null>();
-  readonly tone = input<MetricTone>("neutral");
-  readonly context = input<string | null>(null);
+  /** Come si legge cio' che manca: un guasto da chiudere o un semplice resto. */
+  readonly restTone = input<"alert" | "neutral">("alert");
+  /** Nome di cio' che manca ("da verificare", "senza voto"). */
+  readonly restNoun = input("da completare");
   readonly isLoading = input(false);
+
+  protected readonly size = SIZE;
+  protected readonly stroke = STROKE;
+  protected readonly radius = RADIUS;
 
   protected readonly displayValue = computed(() => {
     const current = this.value();
@@ -71,7 +94,7 @@ export class MetricShareComponent {
     return total === null ? NOT_AVAILABLE : formatCount(total);
   });
 
-  /** Percentuale di riempimento, `null` quando manca uno dei due termini. */
+  /** Percentuale della parte a posto, `null` quando manca uno dei due termini. */
   protected readonly percent = computed(() => {
     const value = this.value();
     const total = this.total();
@@ -87,13 +110,41 @@ export class MetricShareComponent {
     const percent = this.percent();
 
     if (percent === null) {
-      return null;
+      return NOT_AVAILABLE;
     }
 
     // Sotto l'uno per cento l'arrotondamento a zero direbbe "nessuno" di
-    // qualcosa che invece c'e'.
-    const rounded = percent > 0 && percent < 1 ? "<1" : String(Math.round(percent));
+    // qualcosa che invece c'e'; sopra il novantanove, "100%" direbbe che non
+    // manca piu' nulla mentre qualcosa manca ancora.
+    if (percent > 0 && percent < 1) {
+      return "<1%";
+    }
 
-    return `${rounded}%`;
+    if (percent > 99 && percent < 100) {
+      return ">99%";
+    }
+
+    return `${Math.round(percent)}%`;
   });
+
+  protected readonly dash = computed(() => {
+    const percent = this.percent();
+
+    return percent === null ? null : ringDash(percent, RADIUS);
+  });
+
+  protected readonly restLabel = computed(() => {
+    const value = this.value();
+    const total = this.total();
+
+    if (value === null || total === null || total - value <= 0) {
+      return null;
+    }
+
+    return `${formatCount(total - value)} ${this.restNoun()}`;
+  });
+
+  protected readonly summary = computed(
+    () => `${this.label()}: ${this.displayValue()} su ${this.totalDisplay()}`
+  );
 }

@@ -59,24 +59,29 @@ describe("MetricCardComponent", () => {
     expect(host.querySelector("dl")?.classList.contains("watch")).toBe(true);
   });
 
-  it("disegna la sparkline con una descrizione accessibile", () => {
+  it("disegna una barra per giorno, con oggi in evidenza", () => {
+    // Barre e non una linea: la serie e' un flusso di ingressi, sette misure
+    // distinte, e una spezzata suggerirebbe un passaggio continuo fra un
+    // giorno e l'altro che non esiste.
     const host = render({
-      label: "Da verificare",
-      value: 23,
-      history: [1, 0, 4, 2, 0, 7, 3]
+      label: "Documenti analizzati",
+      value: 128,
+      history: [1, 4, 2, 8, 3, 9, 5]
     });
+    const bars = host.querySelectorAll("svg.chart rect");
 
-    const spark = host.querySelector("svg.spark");
-
-    expect(spark).not.toBeNull();
-    expect(spark?.getAttribute("aria-label")).toContain("ultimi 7 giorni");
-    expect(spark?.querySelector("polyline")?.getAttribute("points")).toBeTruthy();
+    expect(bars).toHaveLength(7);
+    expect(bars[6]?.classList.contains("today")).toBe(true);
+    expect(bars[0]?.classList.contains("today")).toBe(false);
+    expect(host.querySelector("svg.chart")?.getAttribute("aria-label")).toBe(
+      "Andamento degli ultimi 7 giorni per Documenti analizzati"
+    );
   });
 
-  it("omette la sparkline quando la metrica non ha una serie", () => {
+  it("omette il grafico quando la metrica non ha una serie", () => {
     const host = render({ label: "Campi con confidenza", value: 1284 });
 
-    expect(host.querySelector("svg.spark")).toBeNull();
+    expect(host.querySelector("svg.chart")).toBeNull();
   });
 
 

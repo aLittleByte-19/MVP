@@ -14,6 +14,9 @@
   position: relative;
   display: grid;
   gap: var(--mvp-space-2);
+  /* La scheda riempie la cella del mosaico: due schede affiancate hanno la
+     stessa altezza anche quando una porta un grafico e l'altra tre parole. */
+  height: 100%;
   margin: 0;
   padding: var(--mvp-space-4);
   padding-left: var(--mvp-space-5);

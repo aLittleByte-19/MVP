@@ -1,7 +1,41 @@
-/* Il guscio sta in `shared/styles/metric-shell.css`. Qui la sola pastiglia,
-   che sulla riga del numero deve stargli accanto senza abbassarne la linea di
-   base. */
+/* Il guscio sta in `shared/styles/metric-shell.css`. Qui il solo verdetto. */
 
-.figure {
+.card {
+  align-content: start;
+}
+
+/* Il titolo di una scheda di stato non e' una definizione: qui non c'e' un
+   valore da appaiare, c'e' una frase. Resta pero' la stessa etichetta delle
+   altre schede, per non spezzare la lettura in diagonale della griglia. */
+.label {
+  order: 0;
+}
+
+.verdict {
+  display: flex;
+  gap: var(--mvp-space-2);
   align-items: center;
+  min-height: 40px;
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: var(--mvp-line-tight);
+}
+
+.verdict svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.card.ok .verdict {
+  color: var(--mvp-success);
+}
+
+.card.alert .verdict {
+  color: var(--mvp-danger);
+}
+
+.card.watch .verdict {
+  color: var(--mvp-warning);
 }

@@ -20,8 +20,8 @@ describe("MetricGaugeComponent", () => {
 
     expect(host.querySelector(".num")?.textContent?.trim()).toBe("98,5");
     expect(host.querySelector<HTMLElement>(".fill")?.style.width).toBe("98.5%");
-    // Gli estremi portano il solo numero: l'unita' sta gia' accanto al valore.
-    expect(bounds).toEqual(["0", "100"]);
+    // L'estremo destro porta l'unita': "0 100%" si legge come un intervallo.
+    expect(bounds).toEqual(["0", "100%"]);
   });
 
   it("segna la soglia oltre la quale il sistema decide da solo", () => {
@@ -34,7 +34,7 @@ describe("MetricGaugeComponent", () => {
     const host = render({ label: "Media stelle", value: "4,3", numeric: 4.3, max: 5, unit: "/ 5" });
 
     expect(host.querySelector<HTMLElement>(".fill")?.style.width).toBe("86%");
-    expect(host.querySelectorAll(".bounds span")[1]?.textContent?.trim()).toBe("5");
+    expect(host.querySelectorAll(".bounds span")[1]?.textContent?.trim()).toBe("5/ 5");
   });
 
   it("non riempie nulla quando la misura non c'e'", () => {
