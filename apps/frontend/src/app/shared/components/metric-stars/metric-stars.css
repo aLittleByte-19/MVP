@@ -1,0 +1,30 @@
+/* Il guscio sta in `shared/styles/metric-shell.css`. Qui le sole stelle. */
+
+.stars {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.star {
+  width: 26px;
+  height: 26px;
+  flex: none;
+}
+
+.outline {
+  fill: none;
+  stroke: var(--mvp-border-strong);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* La parte piena e' ritagliata dalla maschera: il contorno resta sotto, cosi'
+   la stella conserva la sua forma anche dove il riempimento si ferma. */
+.fill {
+  fill: var(--mvp-accent);
+  stroke: var(--mvp-accent);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
