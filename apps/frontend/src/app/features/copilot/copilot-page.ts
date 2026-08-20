@@ -6,7 +6,6 @@ import { SubDocumentSendStatus } from "../../../api/generated/model";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { ButtonComponent } from "../../shared/components/button/button";
 import { ErrorStateComponent } from "../../shared/components/error-state/error-state";
-import { MetricCompositionComponent } from "../../shared/components/metric-composition/metric-composition";
 import { MetricsPanelComponent } from "../../shared/components/metrics-panel/metrics-panel";
 import { SectionComponent } from "../../layout/section/section";
 import { DocumentWorkflowService } from "./data/document-workflow.service";
@@ -49,7 +48,6 @@ const MONTHS = [
     DocumentListComponent,
     DocumentUploadPanelComponent,
     ErrorStateComponent,
-    MetricCompositionComponent,
     MetricsPanelComponent,
     ReactiveFormsModule,
     SectionComponent,
@@ -155,12 +153,6 @@ const MONTHS = [
           [metrics]="vm.metrics()"
           [presentation]="vm.metricsPresentation()"
           ariaLabel="Metriche del Co-Pilot documentale"
-        />
-        <h3>Esito della revisione</h3>
-        <mvp-metric-composition
-          [parts]="vm.reviewComposition()"
-          subject="sotto-documenti"
-          emptyLabel="Nessun sotto-documento ancora elaborato."
         />
       </mvp-section>
     </section>

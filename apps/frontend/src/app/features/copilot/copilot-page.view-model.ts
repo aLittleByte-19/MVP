@@ -6,17 +6,17 @@ import type {
   UpdateSendMessageRequest
 } from "../../../api/generated/model";
 import { extractFieldErrors, getApiErrorMessage } from "../../core/errors/api-error";
-import type { CompositionSlice } from "../../shared/components/metric-composition/metric-composition";
 import type { MetricPresentation } from "../../shared/components/metrics-panel/metrics-panel";
 
 /**
  * Metriche che il pannello non mostra come schede a sé.
  *
  * `needs_review`, `validated` e `quarantined` sono le parti della ripartizione
- * disegnata sotto; `sub_documents` è il totale su cui si misurano le quote e
- * come conteggio isolato non aggiunge nulla.
+ * disegnata dalla scheda degli esiti, e come priorità vivono nella Overview;
+ * `sub_documents` è il totale su cui si misurano le quote e come conteggio
+ * isolato non aggiunge nulla.
  */
-const MODULE_COMPOSITION_KEYS = [
+const HIDDEN_KEYS = [
   "copilot.needs_review",
   "copilot.validated",
   "copilot.quarantined",
@@ -77,30 +77,26 @@ export class CopilotPageViewModel {
 
   readonly error: Signal<string | null> = computed(() => this.store.error());
   readonly loading: Signal<boolean> = computed(() => this.store.loading());
-  /**
-   * Le metriche descrittive del modulo. `needs_review`, `validated` e
-   * `quarantined` sono escluse: qui non servono come conteggi separati, sono
-   * la ripartizione mostrata da `reviewComposition`, e in forma di priorità
-   * vivono già nella Overview.
-   */
+  /** Le metriche descrittive del modulo, meno quelle che il pannello non mostra. */
   readonly metrics = computed(() =>
     this.store
       .copilotMetrics()
-      .filter((metric) => !MODULE_COMPOSITION_KEYS.includes(metric.key))
+      .filter((metric) => !HIDDEN_KEYS.includes(metric.key))
   );
 
   /**
    * Forma e ingombro di ciascuna scheda del pannello.
    *
-   * Otto schede su dodici celle: quattro strette in alto — i due conteggi e i
-   * due verdetti, che si leggono in un colpo d'occhio — e due righe di schede
-   * larghe, dove ci sono un asse dei tempi o una scala da leggere. Il conto
-   * torna a multipli di quattro, cosi' non restano righe spaiate.
+   * Sedici celle su quattro righe: sette schede larghe a coppie e, a chiudere
+   * l'ultima riga, i due verdetti stretti. Le larghe sono quelle che portano
+   * un asse o una legenda da leggere; un verdetto di tre parole non ne ha
+   * bisogno.
    */
   readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => ({
-    "copilot.documents": { kind: "trend" },
-    "copilot.verified": { kind: "share", span: 2, restNoun: "da verificare" },
-    "copilot.ocr_confidence": { kind: "gauge" },
+    "copilot.documents": { kind: "trend", span: 2 },
+    "copilot.ocr_confidence": { kind: "gauge", span: 2 },
+    "copilot.review_breakdown": { kind: "breakdown", span: 2 },
+    "copilot.download_breakdown": { kind: "breakdown", span: 2 },
     "copilot.fields_filled": {
       kind: "share",
       span: 2,
@@ -120,37 +116,6 @@ export class CopilotPageViewModel {
       issueLabel: "da sbloccare"
     }
   }));
-
-  /**
-   * Stati di revisione come partizione dei sotto-documenti.
-   *
-   * I quattro stati coprono l'intero insieme, quindi la domanda utile non è
-   * "quanti sono da verificare" — a cui risponde già la Overview — ma "quanta
-   * parte del totale rappresentano".
-   */
-  readonly reviewComposition = computed<CompositionSlice[]>(() => {
-    const metrics = this.store.copilotMetrics();
-    const valueOf = (key: string): number => {
-      const found = metrics.find((metric) => metric.key === key);
-
-      return typeof found?.value === "number" ? found.value : 0;
-    };
-
-    const validated = valueOf("copilot.validated");
-    const needsReview = valueOf("copilot.needs_review");
-    const quarantined = valueOf("copilot.quarantined");
-    const known = validated + needsReview + quarantined;
-    const total = valueOf("copilot.sub_documents");
-
-    return [
-      { label: "Validati", value: validated },
-      { label: "Da verificare", value: needsReview },
-      { label: "In quarantena", value: quarantined },
-      // I sotto-documenti ancora senza esito: senza questa voce la barra
-      // direbbe che tutto è già stato classificato.
-      { label: "In elaborazione", value: Math.max(0, total - known) }
-    ];
-  });
 
   private searchSubscription: Subscription | null = null;
 
