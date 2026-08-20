@@ -8,6 +8,7 @@ import { ButtonComponent } from "../../shared/components/button/button";
 import { ErrorStateComponent } from "../../shared/components/error-state/error-state";
 import { MetricsPanelComponent } from "../../shared/components/metrics-panel/metrics-panel";
 import { SectionComponent } from "../../layout/section/section";
+import { scrollToElement } from "../../shared/util/scroll";
 import { DocumentWorkflowService } from "./data/document-workflow.service";
 import { createDocumentFilterForm, toDocumentFilters } from "./data/document-filters";
 import { DocumentListComponent } from "./components/document-list";
@@ -130,12 +131,13 @@ const MONTHS = [
           "
           [page]="vm.currentPage()"
           [totalPages]="vm.totalPages()"
-          (selectDocument)="vm.selectDocument($event)"
+          (selectDocument)="selectDocument($event)"
           (goToPage)="vm.goToPage($event)"
         />
       </mvp-section>
 
       <mvp-sub-document-list
+        id="copilot-document-detail"
         [documentItem]="vm.selectedDocument()"
         [isDeleting]="vm.isDeleting()"
         [isSavingReview]="vm.isSavingReview()"
@@ -242,6 +244,21 @@ export class CopilotPage {
     });
 
     inject(DestroyRef).onDestroy(() => this.vm.destroy());
+  }
+
+  /**
+   * Apre il dettaglio e ci porta la pagina.
+   *
+   * Lo scorrimento sta qui e non nel ViewModel: la View e' l'unica responsabile
+   * della resa visiva (ADR 0011), e il dettaglio sta sotto lo storico, che con
+   * dieci righe e i filtri sopra puo' restare tutto fuori dallo schermo.
+   */
+  protected selectDocument(documentId: string | null): void {
+    this.vm.selectDocument(documentId);
+
+    if (documentId) {
+      scrollToElement("copilot-document-detail");
+    }
   }
 
   protected resetFilters(): void {
