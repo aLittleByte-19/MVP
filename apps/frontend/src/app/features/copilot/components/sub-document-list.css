@@ -107,16 +107,18 @@
   gap: var(--mvp-space-2);
   align-items: center;
   padding-left: 24px;
+  min-height: 18px;
 }
 
 /* Nella legenda l'indicatore non e' dentro una casella: perde il separatore e
    si affianca al testo. */
 .legendItem mvp-field-origin {
   top: 50%;
+  right: auto;
   bottom: auto;
   left: 0;
   width: 18px;
-  border-right: 0;
+  border-left: 0;
   transform: translateY(-50%);
 }
 
@@ -130,7 +132,7 @@
 .control input,
 .control select,
 .control textarea {
-  padding-left: 44px;
+  padding-right: 44px;
 }
 
 .control.withAction {

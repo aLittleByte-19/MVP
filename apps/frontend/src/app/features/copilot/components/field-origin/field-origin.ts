@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from "@angular/core";
-import { LucideBot, LucideCircleHelp, LucideLock, LucidePenLine } from "@lucide/angular";
+import { LucideCircleHelp, LucideLock, LucidePenLine, LucideSparkles } from "@lucide/angular";
 
 /** Da dove viene il dato che sta nel campo. */
 export type FieldOrigin = "auto" | "manual" | "review" | "locked";
@@ -33,7 +33,7 @@ const LABELS: Record<FieldOrigin, string> = {
 @Component({
   selector: "mvp-field-origin",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LucideBot, LucideCircleHelp, LucideLock, LucidePenLine],
+  imports: [LucideCircleHelp, LucideLock, LucidePenLine, LucideSparkles],
   template: `
     @switch (origin()) {
       @case ("manual") {
@@ -46,7 +46,7 @@ const LABELS: Record<FieldOrigin, string> = {
         <svg lucideLock aria-hidden="true"></svg>
       }
       @default {
-        <svg lucideBot aria-hidden="true"></svg>
+        <svg lucideSparkles aria-hidden="true"></svg>
       }
     }
     <span class="srOnly">{{ label() }}</span>
