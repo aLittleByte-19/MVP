@@ -75,7 +75,7 @@ const emptySendMessageForm: SendMessageFormState = {
   ],
   template: `
     @if (documentItem(); as document) {
-      <mvp-section [title]="document.title || 'Verifica documento'">
+      <mvp-section id="copilot-document-detail" [title]="document.title || 'Verifica documento'">
         <button
           actions
           mvpButton

@@ -137,7 +137,6 @@ const MONTHS = [
       </mvp-section>
 
       <mvp-sub-document-list
-        id="copilot-document-detail"
         [documentItem]="vm.selectedDocument()"
         [isDeleting]="vm.isDeleting()"
         [isSavingReview]="vm.isSavingReview()"
@@ -252,6 +251,11 @@ export class CopilotPage {
    * Lo scorrimento sta qui e non nel ViewModel: la View e' l'unica responsabile
    * della resa visiva (ADR 0011), e il dettaglio sta sotto lo storico, che con
    * dieci righe e i filtri sopra puo' restare tutto fuori dallo schermo.
+   *
+   * L'ancora e' sulla `mvp-section` dentro il pannello, non sull'host di
+   * `mvp-sub-document-list`: quell'host ha `display: contents`, quindi non
+   * genera alcun box e `scrollIntoView` non ha nulla verso cui scorrere. La
+   * sezione invece e' una griglia e porta gia' il proprio `scroll-margin-top`.
    */
   protected selectDocument(documentId: string | null): void {
     this.vm.selectDocument(documentId);
