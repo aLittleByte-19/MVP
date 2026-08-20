@@ -48,10 +48,18 @@
   font-variant-numeric: tabular-nums;
 }
 
-.few {
+/* Quante misure ci sono dietro: la stessa forma su otto elaborazioni o su
+   ottocento vale in modo diverso. */
+.samples {
   margin: 0;
   color: var(--mvp-muted);
-  font-size: var(--mvp-font-sm);
+  font-size: var(--mvp-font-xs);
+}
+
+/* Senza dati restano la griglia e l'asse: dicono "qui ci sara' una curva"
+   meglio di una frase. */
+.chart.empty {
+  opacity: 0.6;
 }
 
 .skeleton.chart {

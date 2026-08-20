@@ -17,9 +17,10 @@ const HEIGHT = 74;
  * decina di misure, e numerarla darebbe una precisione che il dato non ha.
  * Quello orizzontale invece e' fitto, perche' e' li' che si legge la durata.
  *
- * Sotto una manciata di campioni la curva sarebbe disegnata
- * dall'interpolazione piu' che dai dati: al suo posto compare una riga di
- * testo che dice quante misure ci sono.
+ * Con pochi campioni la curva la disegna piu' l'interpolazione che i dati, ma
+ * resta una curva: il conteggio delle misure sta scritto sotto l'asse, cosi'
+ * chi guarda sa quanto pesarla. Finche' non c'e' proprio nulla da misurare
+ * restano la griglia e l'asse, vuoti.
  */
 @Component({
   selector: "mvp-metric-distribution",
@@ -49,8 +50,14 @@ const HEIGHT = 74;
             <span>{{ tick.label }}{{ $last ? unit() : "" }}</span>
           }
         </p>
+        <p class="samples">{{ sampleLabel() }}</p>
       } @else {
-        <p class="few">{{ fallback() }}</p>
+        <svg class="chart empty" [attr.viewBox]="'0 0 ' + width + ' ' + height" preserveAspectRatio="none" aria-hidden="true">
+          @for (tick of emptyTicks; track tick) {
+            <line class="grid" [attr.x1]="tick" y1="0" [attr.x2]="tick" [attr.y2]="height" />
+          }
+        </svg>
+        <p class="samples">{{ sampleLabel() }}</p>
       }
     </section>
   `,
@@ -61,7 +68,6 @@ export class MetricDistributionComponent {
   readonly buckets = input<readonly DensityBucket[] | undefined>(undefined);
   /** Quante misure stanno dietro la curva: sotto la soglia non si disegna. */
   readonly sampleSize = input(0);
-  readonly minSamples = input(8);
   readonly unit = input("s");
   /** Come si chiamano le corse misurate: elaborazioni, generazioni. */
   readonly subject = input("elaborazioni");
@@ -70,17 +76,21 @@ export class MetricDistributionComponent {
   protected readonly width = WIDTH;
   protected readonly height = HEIGHT;
 
+  /** Le sole verticali, quando non c'e' ancora una curva da appoggiarci. */
+  protected readonly emptyTicks = [0, 1, 2, 3, 4, 5, 6].map((index) => (WIDTH / 6) * index);
+
   protected readonly shape = computed(() => {
     const buckets = this.buckets();
 
-    if (buckets === undefined || this.sampleSize() < this.minSamples()) {
-      return null;
-    }
-
-    return densityShape(buckets, WIDTH, HEIGHT);
+    return buckets === undefined ? null : densityShape(buckets, WIDTH, HEIGHT);
   });
 
-  protected readonly fallback = computed(() => {
+  /**
+   * Quante misure stanno dietro la curva. Non e' un dettaglio: la stessa forma
+   * disegnata su otto elaborazioni o su ottocento vale in modo diverso, e senza
+   * questo numero non c'e' modo di saperlo.
+   */
+  protected readonly sampleLabel = computed(() => {
     const samples = this.sampleSize();
     const plural = this.subject();
     // Le due grandezze misurate sono "elaborazioni" e "generazioni": la stessa
@@ -88,12 +98,10 @@ export class MetricDistributionComponent {
     const singular = plural.replace(/ioni$/, "ione");
 
     if (samples === 0) {
-      return `Nessuna ${singular} conclusa negli ultimi sette giorni.`;
+      return `Nessuna ${singular} conclusa negli ultimi sette giorni`;
     }
 
-    return samples === 1
-      ? `Una sola ${singular} conclusa: troppo poche per un andamento.`
-      : `Solo ${samples} ${plural} concluse: troppo poche per un andamento.`;
+    return samples === 1 ? `Su una ${singular} conclusa` : `Su ${samples} ${plural} concluse`;
   });
 
   /** Descrizione per chi non vede la curva: dove sta la massa e dove finisce. */
