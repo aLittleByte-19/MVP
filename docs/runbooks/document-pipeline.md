@@ -13,7 +13,7 @@
 5. Step Functions sends callback-token tasks to SQS.
 6. `php artisan mvp:workflow:consume --queue=documents` receives each message, executes the task through `DocumentWorkflowTaskHandler`, and calls `SendTaskSuccess` or `SendTaskFailure`.
 7. `textract.ocr` calls real Textract only when `TEXTRACT_ENABLED=true` and stores the page-aware OCR text (`ocr_text` + `ocr_pages`) consumed by the next step.
-8. `bedrock.extract` classifies the document and splits it by recipient, then extracts fields, both from the OCR text via Bedrock (text-only Converse, no PDF document block); it persists `sub_documents` and `extracted_data`. The confidence score is computed from OCR legibility × key-field completeness, not from the model's self-assessment.
+8. `bedrock.extract` classifies the document and splits it by recipient, then extracts fields, both from the OCR text via Bedrock (text-only Converse, no PDF document block); it persists `sub_documents` and `extracted_data`. The confidence score is computed from OCR legibility, not from the model's self-assessment: each field takes the confidence of the OCR line it comes from, and the sub-document score is that of its weakest key field, with a dedicated higher threshold for the fiscal code (ADR 0013).
 9. `persist.results` returns the current processing state.
 10. `dispatch.domain_event` marks workflow completion metadata and records metrics.
 

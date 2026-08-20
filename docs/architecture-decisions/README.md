@@ -43,6 +43,7 @@ ADR che referenzia il precedente. La numerazione è progressiva e a quattro cifr
 | [0010](0010-hexagonal-architecture-documents-communications.md) | Architettura esagonale (ports & adapters) per i domini Documents e Communications | Accepted, implemented |
 | [0011](0011-frontend-presentation-model-and-sse-client.md) | ViewModel puro (Presentation Model) e client SSE su `fetch` | Accepted, implemented |
 | [0012](0012-frontend-design-system-and-ui-language.md) | Sistema visivo e linguaggio dell'interfaccia della SPA | Proposed |
+| [0013](0013-per-field-ocr-confidence.md) | Confidenza per campo invece che media di pagina | Proposed |
 
 ## Aggiungere un ADR
 
