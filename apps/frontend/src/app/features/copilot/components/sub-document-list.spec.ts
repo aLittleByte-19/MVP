@@ -57,8 +57,8 @@ interface TestableSubDocumentList {
   documentDateDisplay(document: SubDocument): string;
   saveReview(): void;
   canPrepareMessage(documentItem: SubDocument): boolean;
-  fieldMark(documentItem: SubDocument): string;
-  fieldMarkLabel(documentItem: SubDocument): string;
+  originFor(documentItem: SubDocument): "auto" | "manual" | "review" | "locked";
+  originLabel(documentItem: SubDocument): string;
   readonly copiedEmail: Signal<boolean>;
   copyRecipientEmail(email: string): void;
 }
@@ -347,26 +347,27 @@ describe("SubDocumentListComponent", () => {
     expect(teardown).toHaveBeenCalledTimes(1);
   });
 
-  it("da' all'evidenziazione dei campi un contrassegno che non dipende dal colore", () => {
-    // SC 1.4.1: azzurro, verde e ambra dicono da dove viene il dato, e la
-    // stessa cosa deve arrivare anche a chi quei colori non li distingue. I
-    // glifi sono quelli che l'etichetta di stato usa per lo stesso tono.
+  it("mette dentro la casella un'icona che dice da dove viene il dato", () => {
+    // SC 1.4.1: teal, verde e ambra dicono la provenienza, e la stessa cosa
+    // deve arrivare a chi quei colori non li distingue — qui con la forma
+    // dell'icona e con il testo che l'accompagna.
     const { component } = render();
 
-    expect(component.fieldMark(subDocument({ reviewStatus: "manually_validated" }))).toBe("✓");
-    expect(component.fieldMark(subDocument({ reviewStatus: "auto_validated" }))).toBe("◆");
-    expect(component.fieldMark(subDocument({ reviewStatus: "needs_review" }))).toBe("!");
-    expect(component.fieldMark(subDocument({ reviewStatus: "quarantined" }))).toBe("×");
+    expect(component.originFor(subDocument({ reviewStatus: "manually_validated" }))).toBe("manual");
+    expect(component.originFor(subDocument({ reviewStatus: "auto_validated" }))).toBe("auto");
+    expect(component.originFor(subDocument({ reviewStatus: "needs_review" }))).toBe("review");
+    expect(component.originFor(subDocument({ reviewStatus: "quarantined" }))).toBe("review");
   });
 
-  it("spiega a parole, nella legenda, cosa segnala l'evidenziazione in corso", () => {
+  it("spiega a parole, nella legenda in fondo, che cosa segnala l'icona", () => {
     const { component } = render();
 
-    expect(component.fieldMarkLabel(subDocument({ reviewStatus: "auto_validated" }))).toBe(
+    expect(component.originLabel(subDocument({ reviewStatus: "auto_validated" }))).toBe(
       "Estratto e validato in automatico"
     );
-    expect(component.fieldMarkLabel(subDocument({ reviewStatus: "quarantined" }))).toBe(
-      "In quarantena"
+    expect(component.originLabel(subDocument({ reviewStatus: "manually_validated" }))).toBe(
+      "Confermato dall'operatore"
     );
   });
+
 });

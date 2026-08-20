@@ -88,10 +88,13 @@
   gap: var(--mvp-space-3);
 }
 
+/* La legenda sta in fondo al pannello, dopo i campi: e' un promemoria dei
+   simboli, non la chiave per decifrarli — quella la da' l'icona dentro il
+   campo, con il suo tooltip. In cima rubava la prima riga di lettura. */
 .fieldLegend {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--mvp-space-3);
+  gap: var(--mvp-space-2) var(--mvp-space-5);
   margin: 0;
   color: var(--mvp-muted);
   font-size: var(--mvp-font-xs);
@@ -99,44 +102,41 @@
 }
 
 .legendItem {
+  position: relative;
   display: inline-flex;
   gap: var(--mvp-space-2);
   align-items: center;
+  padding-left: 24px;
 }
 
-/* Il contrassegno sta a destra dell'etichetta, dove finisce la lettura del
-   nome del campo: a sinistra si incuneava fra la griglia e il testo. Larghezza
-   fissa perche' glifi diversi non spostino l'etichetta di una riga rispetto a
-   quella accanto. */
-.mark {
-  display: inline-flex;
-  justify-content: center;
-  min-width: 1em;
-  font-style: normal;
-  font-weight: 700;
+/* Nella legenda l'indicatore non e' dentro una casella: perde il separatore e
+   si affianca al testo. */
+.legendItem mvp-field-origin {
+  top: 50%;
+  bottom: auto;
+  left: 0;
+  width: 18px;
+  border-right: 0;
+  transform: translateY(-50%);
 }
 
-.extractedMark .mark,
-.confidenceLow .mark {
-  color: var(--mvp-warning);
+/* Il contenitore del valore: l'indicatore ci sta dentro in posizione assoluta,
+   e il controllo gli lascia spazio a sinistra. */
+.control {
+  position: relative;
+  display: grid;
 }
 
-.statusAuto .extractedMark .mark,
-.statusAuto .editableField .mark {
-  color: var(--mvp-info);
+.control input,
+.control select,
+.control textarea {
+  padding-left: 44px;
 }
 
-.statusManual .extractedMark .mark,
-.statusManual .editableField .mark {
-  color: var(--mvp-success);
-}
-
-/* Il grigio del bordo non basta: e' un contorno, non un testo, e a 1.48:1
-   contro la superficie SC 1.4.3 lo boccia. Il contrassegno resta comunque il
-   piu' silenzioso dei quattro. */
-.lockedMark .mark,
-.lockedField .mark {
-  color: var(--mvp-muted);
+.control.withAction {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--mvp-space-2);
+  align-items: center;
 }
 
 .field > span {
@@ -178,34 +178,13 @@
   -webkit-text-fill-color: var(--mvp-text);
 }
 
+/* Fuori dalla modifica il campo e' un dato, non una casella spenta: fondo
+   appena piu' quieto e nessun colore di stato, che ora vive nell'indicatore a
+   sinistra. */
 .editableField input[readonly],
 .editableField textarea[readonly] {
   border-color: var(--mvp-border-soft);
   background: var(--mvp-surface-muted);
-}
-
-.confidenceLow .editableField input[readonly],
-.confidenceLow .editableField textarea[readonly] {
-  border-color: var(--mvp-warning-border);
-  background: var(--mvp-warning-soft);
-}
-
-/* Validato automaticamente, cioe' confidenza sopra soglia: teal. I tre stati
-   ora hanno tre colori distinti — arancione sotto soglia, teal sopra soglia
-   senza revisione, verde dopo la conferma umana — mentre il teal di prima era
-   il primario, lo stesso di pulsanti e navigazione. */
-.statusAuto .editableField input[readonly],
-.statusAuto .editableField textarea[readonly] {
-  border-color: var(--mvp-info-border);
-  background: var(--mvp-info-soft);
-}
-
-/* Validato o corretto manualmente. Ultima regola a pari specificita': la
-   conferma umana prevale anche su una confidenza bassa. */
-.statusManual .editableField input[readonly],
-.statusManual .editableField textarea[readonly] {
-  border-color: var(--mvp-success-border);
-  background: var(--mvp-success-soft);
 }
 
 .lockedField input,
@@ -245,16 +224,6 @@
 
 .formFull {
   grid-column: 1 / -1;
-}
-
-.fieldWithAction {
-  display: flex;
-  align-items: center;
-  gap: var(--mvp-space-2);
-}
-
-.fieldWithAction input {
-  flex: 1;
 }
 
 .copyButton {
