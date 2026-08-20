@@ -3,31 +3,45 @@ import type { Metric } from "../../../../api/generated/model";
 import { formatMetric, type MetricTone, newToday } from "../../util/metrics";
 import { EmptyStateComponent } from "../empty-state/empty-state";
 import { MetricCardComponent } from "../metric-card/metric-card";
+import { MetricDistributionComponent } from "../metric-distribution/metric-distribution";
 import { MetricGaugeComponent } from "../metric-gauge/metric-gauge";
+import { MetricPhasesComponent } from "../metric-phases/metric-phases";
 import { MetricShareComponent } from "../metric-share/metric-share";
+import { MetricStarsComponent } from "../metric-stars/metric-stars";
 import { MetricStatusComponent } from "../metric-status/metric-status";
 
 /**
  * Forma di scheda con cui rendere una metrica.
  *
  * Non e' una preferenza estetica ma il tipo di domanda a cui il numero
- * risponde: quanto e in che direzione (`trend`), quanta parte di un totale
- * (`share`), dove cade dentro una scala nota (`gauge`), se c'e' qualcosa da
- * guardare (`status`). Con una forma sola le otto schede di un pannello si
- * leggevano tutte uguali, e per capire che cosa si stesse guardando bisognava
- * ogni volta tornare all'etichetta.
+ * risponde: quanto e con che ritmo (`trend`), quanta parte di un totale
+ * (`share`), dove cade dentro una scala nota (`gauge`), com'e' distribuito
+ * (`distribution`), in che cosa si spende (`phases`), che voto ha preso
+ * (`stars`), se c'e' qualcosa da guardare (`status`). Con una forma sola le
+ * schede di un pannello si leggevano tutte uguali, e per capire che cosa si
+ * stesse guardando bisognava ogni volta tornare all'etichetta.
  */
-export type MetricKind = "trend" | "share" | "gauge" | "status";
+export type MetricKind = "trend" | "share" | "gauge" | "status" | "phases" | "distribution" | "stars";
 
 /** Come la pagina che conosce il contesto vuole che una metrica sia resa. */
 export interface MetricPresentation {
   readonly kind?: MetricKind;
   readonly tone?: MetricTone;
-  /** Totale di riferimento della quota (`share`). */
-  readonly outOf?: number;
+  /**
+   * Quante colonne occupa la scheda. Le forme che portano un grafico con un
+   * asse — la densita', la ripartizione in fasi — hanno bisogno di larghezza
+   * per restare leggibili; un verdetto di tre parole no. E' il mosaico a
+   * rendere il pannello una dashboard invece di una scacchiera.
+   */
+  readonly span?: 1 | 2;
   /** Estremo della scala (`gauge`); di default cento. */
   readonly max?: number;
-  /** Verdetto a zero e verdetto con almeno un caso (`status`). */
+  /** Come si legge cio' che manca alla quota (`share`). */
+  readonly restTone?: "alert" | "neutral";
+  readonly restNoun?: string;
+  /** Come si chiamano le corse misurate (`distribution`): elaborazioni, generazioni. */
+  readonly subject?: string;
+  /** Verdetto a zero e azione da fare quando ce n'e' almeno uno (`status`). */
   readonly okLabel?: string;
   readonly issueLabel?: string;
   /** Un guasto blocca (`danger`), un degrado no (`warning`). */
@@ -40,8 +54,11 @@ export interface MetricPresentation {
   imports: [
     EmptyStateComponent,
     MetricCardComponent,
+    MetricDistributionComponent,
     MetricGaugeComponent,
+    MetricPhasesComponent,
     MetricShareComponent,
+    MetricStarsComponent,
     MetricStatusComponent
   ],
   template: `
@@ -58,15 +75,15 @@ export interface MetricPresentation {
     } @else if (metrics().length) {
       <ul class="grid" [attr.aria-label]="ariaLabel()">
         @for (entry of entries(); track entry.key) {
-          <li>
+          <li [class.wide]="entry.span === 2">
             @switch (entry.kind) {
               @case ("share") {
                 <mvp-metric-share
                   [label]="entry.label"
                   [value]="entry.numeric"
                   [total]="entry.outOf"
-                  [tone]="entry.tone"
-                  [context]="entry.context"
+                  [restTone]="entry.restTone"
+                  [restNoun]="entry.restNoun"
                 />
               }
               @case ("gauge") {
@@ -88,6 +105,31 @@ export interface MetricPresentation {
                   [okLabel]="entry.okLabel"
                   [issueLabel]="entry.issueLabel"
                   [issueTone]="entry.issueTone"
+                  [context]="entry.context"
+                />
+              }
+              @case ("phases") {
+                <mvp-metric-phases
+                  [label]="entry.label"
+                  [value]="entry.value"
+                  [unit]="entry.unit"
+                  [parts]="entry.parts"
+                />
+              }
+              @case ("distribution") {
+                <mvp-metric-distribution
+                  [label]="entry.label"
+                  [buckets]="entry.distribution"
+                  [sampleSize]="entry.sampleSize"
+                  [subject]="entry.subject"
+                />
+              }
+              @case ("stars") {
+                <mvp-metric-stars
+                  [label]="entry.label"
+                  [value]="entry.value"
+                  [numeric]="entry.numeric"
+                  [max]="entry.max"
                   [context]="entry.context"
                 />
               }
@@ -120,7 +162,7 @@ export class MetricsPanelComponent {
   readonly hasError = input<boolean>(false);
   readonly metrics = input<Metric[]>([]);
   readonly ariaLabel = input<string>("Metriche");
-  /** Forma, rilievo e parametri per chiave, decisi dalla pagina che conosce il contesto. */
+  /** Forma, rilievo e ingombro per chiave, decisi dalla pagina che conosce il contesto. */
   readonly presentation = input<Record<string, MetricPresentation>>({});
 
   protected readonly placeholders = [0, 1, 2, 3];
@@ -133,19 +175,26 @@ export class MetricsPanelComponent {
       return {
         key: metric.key,
         kind: presentation?.kind ?? ("trend" as MetricKind),
+        span: presentation?.span ?? 1,
         label: metric.label,
         value: formatted.value,
         numeric: numericValue(metric),
         unit: formatted.unit,
         tone: presentation?.tone ?? ("neutral" as MetricTone),
-        outOf: presentation?.outOf ?? null,
+        outOf: metric.outOf ?? null,
         max: presentation?.max ?? 100,
         // La soglia e' un parametro di sistema e arriva dal contratto: la
         // pagina sceglie come disegnare la scala, non dove cade la soglia.
         threshold: metric.threshold ?? null,
+        restTone: presentation?.restTone ?? ("alert" as const),
+        restNoun: presentation?.restNoun ?? "da completare",
         okLabel: presentation?.okLabel ?? "Nessun caso",
-        issueLabel: presentation?.issueLabel ?? "Da esaminare",
+        issueLabel: presentation?.issueLabel ?? "da esaminare",
         issueTone: presentation?.issueTone ?? ("danger" as const),
+        parts: metric.parts,
+        distribution: metric.distribution,
+        sampleSize: metric.sampleSize ?? 0,
+        subject: presentation?.subject ?? "elaborazioni",
         context: this.contextFor(metric),
         history: metric.history
       };
@@ -170,9 +219,10 @@ export class MetricsPanelComponent {
 
 /**
  * Il valore come numero, per le schede che devono posizionarlo — la porzione
- * di una quota, il riempimento di una scala. Il backend manda un intero per i
- * conteggi e una stringa decimale per le medie ("98.5"), quindi entrambe le
- * forme vanno riconosciute; il segnaposto "—" non e' un numero e resta `null`.
+ * di una quota, il riempimento di una scala, le stelle. Il backend manda un
+ * intero per i conteggi e una stringa decimale per le medie ("98.5"), quindi
+ * entrambe le forme vanno riconosciute; il segnaposto "—" non e' un numero e
+ * resta `null`.
  */
 function numericValue(metric: Metric): number | null {
   const raw = metric.value;

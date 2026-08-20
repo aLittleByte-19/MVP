@@ -127,33 +127,41 @@ export class AssistantPageViewModel {
     this.store.assistantMetrics().filter((metric) => metric.key !== "assistant.drafts")
   );
 
-  readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => {
-    const total = this.store.metricEntry("assistant.total");
-    const outOf = typeof total?.value === "number" ? total.value : undefined;
-
-    return {
-      "assistant.rated": { kind: "share", outOf },
-      "assistant.rating_average": { kind: "gauge", max: 5 },
-      "assistant.generation_failed": {
-        kind: "status",
-        okLabel: "Nessun errore",
-        issueLabel: "Da rigenerare"
-      },
-      "assistant.generation_stuck": {
-        kind: "status",
-        okLabel: "Nessuna in ritardo",
-        issueLabel: "Da sbloccare"
-      },
-      // La copertina non generata non ferma nulla: il PDF esce comunque, senza
-      // immagine. E' un avviso, non un guasto.
-      "assistant.covers_failed": {
-        kind: "status",
-        issueTone: "warning",
-        okLabel: "Tutte generate",
-        issueLabel: "PDF senza immagine"
-      }
-    };
-  });
+  /**
+   * Forma e ingombro di ciascuna scheda: quattro strette in alto, poi le due
+   * righe larghe dove c'è un grafico da leggere. Dodici celle in tutto, così
+   * la griglia non lascia righe spaiate.
+   */
+  readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => ({
+    "assistant.total": { kind: "trend" },
+    "assistant.rated": {
+      kind: "share",
+      span: 2,
+      restTone: "neutral",
+      restNoun: "senza voto"
+    },
+    "assistant.rating_average": { kind: "stars", span: 2, max: 5 },
+    "assistant.generation_seconds": { kind: "phases", span: 2 },
+    "assistant.duration": { kind: "distribution", span: 2, subject: "generazioni" },
+    "assistant.generation_failed": {
+      kind: "status",
+      okLabel: "Nessun errore",
+      issueLabel: "da rigenerare"
+    },
+    "assistant.generation_stuck": {
+      kind: "status",
+      okLabel: "Nessuna in ritardo",
+      issueLabel: "da sbloccare"
+    },
+    // La copertina non generata non ferma nulla: il PDF esce comunque, senza
+    // immagine. E' un avviso, non un guasto.
+    "assistant.covers_failed": {
+      kind: "status",
+      issueTone: "warning",
+      okLabel: "Tutte generate",
+      issueLabel: "PDF senza immagine"
+    }
+  }));
 
   /**
    * Composizione dello stato delle bozze: è la decisione presa su ciascuna,
