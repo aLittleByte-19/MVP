@@ -79,9 +79,11 @@ Incluso:
   documento, sempre almeno un destinatario);
 - estrazione dei campi principali tramite Bedrock sul testo OCR (nome/cognome, azienda, data,
   tipologia, descrizione);
-- confidenza calcolata oggettivamente come leggibilità OCR (Textract) ponderata sulla completezza
-  dei campi chiave, non come auto-valutazione del modello; misura la sola estrazione automatica
-  (UC-39.10), quindi i campi dichiarati in fase di caricamento restano fuori dal calcolo;
+- confidenza calcolata oggettivamente sulla leggibilità OCR (Textract), non come auto-valutazione
+  del modello; ogni campo prende la confidenza della riga da cui proviene e il punteggio del
+  sotto-documento è quella del campo chiave più debole, con una soglia propria e più alta per il
+  codice fiscale (ADR 0013); misura la sola estrazione automatica (UC-39.10), quindi i campi
+  dichiarati in fase di caricamento restano fuori dal calcolo;
 - persistenza di documento originale, sotto-documenti e dati estratti;
 - dettaglio documento affiancato (anteprima a sinistra, dati estratti a destra);
 - correzione manuale dei campi estratti e validazione manuale (human-in-the-loop), con errori di
