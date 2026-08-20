@@ -744,7 +744,7 @@ class MvpStateService
      *
      * La decisione sta qui e non nella SPA perche' le soglie sono conoscenza di
      * dominio, e non sono una sola: il codice fiscale ne ha una piu' alta,
-     * chiesta dal Capitolato (vedi ADR 0013). Un campo senza confidenza nota
+     * perche' identifica la persona (vedi ADR 0013). Un campo senza confidenza nota
      * non entra nell'elenco: non e' stato rintracciato, il che non e' una prova
      * che sia stato letto male.
      *
@@ -758,7 +758,7 @@ class MvpStateService
         }
 
         $threshold = (int) config('services.bedrock.mvp_confidence_threshold', 80);
-        $fiscalCodeThreshold = (int) config('services.bedrock.mvp_fiscal_code_confidence_threshold', 99);
+        $fiscalCodeThreshold = (int) config('services.bedrock.mvp_fiscal_code_confidence_threshold', 95);
 
         $low = [];
 

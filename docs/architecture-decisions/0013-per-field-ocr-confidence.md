@@ -69,9 +69,16 @@ I documenti di progetto vincolano l'**interfaccia** della confidenza, non il suo
 - Capitolato, Criteri di Accettazione: «AI Co-Pilot: confidenza media OCR ≥ 90%,
   **mapping CF ≥ 99%**».
 
-Nessuna fonte prescrive la formula. Il criterio di accettazione, però, dice una cosa che
-l'implementazione precedente appiattiva: il committente distingue già **due soglie diverse per due
-grandezze diverse**, e chiede al codice fiscale una garanzia più stretta che al resto.
+Nessuna fonte prescrive la formula. Il criterio di accettazione dice però una cosa che
+l'implementazione precedente appiattiva: il committente **guarda al codice fiscale separatamente
+dal resto**, perché è il dato che identifica la persona.
+
+Attenzione a non leggerlo per più di quel che dice: «mapping CF ≥ 99%» è un obiettivo di
+**accuratezza misurato sulla popolazione** — il 99% dei codici fiscali dev'essere mappato
+correttamente — non una soglia di confidenza OCR da applicare a ogni singolo documento. Le due
+cose si somigliano e non lo sono: la prima si verifica contando gli errori su un campione, la
+seconda instrada un documento alla revisione. Confonderle porta a una soglia che nessun documento
+può superare (si veda la nota sulla taratura, più avanti).
 
 ### Riferimenti esterni
 
@@ -110,10 +117,11 @@ In concreto:
    stima più onesta.
 
 5. **Il codice fiscale ha una soglia propria**, `MVP_FISCAL_CODE_CONFIDENCE_THRESHOLD`, con valore
-   predefinito 99 in attuazione del criterio di accettazione. Si applica solo quando un codice
-   fiscale è presente e rintracciabile: un documento che non lo porta non viene penalizzato per un
-   dato che non gli compete. Sotto quella soglia il sotto-documento va in revisione anche se il
-   punteggio complessivo supera 80.
+   predefinito **95**: più alta della soglia generale, perché un carattere letto male assegna il
+   documento a un'altra persona, ma tarata su quanto Textract dichiara davvero su quel campo. Si
+   applica solo quando un codice fiscale è presente e rintracciabile: un documento che non lo porta
+   non viene penalizzato per un dato che non gli compete. Sotto quella soglia il sotto-documento va
+   in revisione anche se il punteggio complessivo supera 80.
 
 6. **Le confidenze per campo si persistono**, nella colonna `extracted_data.field_confidences`.
    `confidence_score` ne resta la sintesi: il punteggio dice *se* il documento regge, il dettaglio
@@ -142,11 +150,15 @@ cercarli fra le righe non direbbe nulla sulla loro affidabilità.
 - **Più documenti finiranno in revisione.** È l'effetto voluto — prima ne passavano di sbagliati —
   ma è un cambio di comportamento visibile sulle metriche, e va comunicato prima di leggerlo come
   un peggioramento.
-- **La soglia 99 sul codice fiscale è severa.** Su documenti impaginati digitalmente Textract sta
-  sopra quel valore, ma su qualunque scansione reale difficilmente ci arriva: di fatto un documento
-  scansionato con codice fiscale non si validerà da solo. È configurabile proprio perché il valore
-  giusto va tarato sui documenti veri, e la scelta di partire dal valore del Capitolato è
-  deliberata: si parte severi e si allenta con i dati in mano, non il contrario.
+- **La soglia dedicata al codice fiscale è stata tarata sui documenti, non sulla carta.** La prima
+  stesura di questo ADR la fissava a 99, leggendo il «mapping CF ≥ 99%» del Capitolato come una
+  soglia per documento. La misura l'ha smentita: su un cedolino reso digitalmente, con ogni campo
+  al suo posto, Textract dichiara 99,6 sul nome, 99,4 sull'azienda, 99,8 sulla data e **97,7 sul
+  codice fiscale**. Sedici caratteri alfanumerici senza contesto lessicale si leggono un po' peggio
+  di una parola, sempre. Con la soglia a 99 nemmeno il documento più pulito possibile si sarebbe
+  validato da solo, e l'intero criterio di validazione automatica sarebbe rimasto lettera morta.
+  Il valore predefinito è quindi 95: lascia passare un codice nitido e ferma quelli rovinati, che
+  stanno molto più in basso. Resta configurabile, ma il default ora poggia su una misura.
 - **La corrispondenza è testuale, non posizionale.** Non usa le coordinate dei blocchi: un valore
   che compare in due punti della pagina prende la confidenza dell'occorrenza più leggibile. È una
   semplificazione consapevole; la via posizionale richiederebbe di conservare le geometrie di
