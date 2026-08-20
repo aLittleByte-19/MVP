@@ -352,7 +352,7 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(OcrRangeReader::class),
                 $app->make(TransactionManagerPort::class),
                 max(0, min(100, (int) config('services.bedrock.mvp_confidence_threshold', 80))),
-                max(0, min(100, (int) config('services.bedrock.mvp_fiscal_code_confidence_threshold', 99))),
+                max(0, min(100, (int) config('services.bedrock.mvp_fiscal_code_confidence_threshold', 95))),
             );
         });
         $this->app->bind(ProcessDocumentUseCase::class, function ($app) {

@@ -64,10 +64,13 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
         private readonly OcrRangeReader $ocrRange,
         private readonly TransactionManagerPort $tx,
         private readonly int $confidenceThreshold = 80,
-        // Il Capitolato chiede «mapping CF ≥ 99%» come criterio a se' stante,
-        // separato dalla confidenza media OCR: il codice fiscale identifica la
-        // persona, e un carattere letto male lo assegna a un'altra.
-        private readonly int $fiscalCodeConfidenceThreshold = 99,
+        // Il codice fiscale identifica la persona: un carattere letto male
+        // assegna il documento a un'altra, quindi ha una soglia piu' alta di
+        // quella generale. Non e' pero' il «mapping CF >= 99%» del Capitolato:
+        // quello e' un obiettivo di accuratezza misurato sulla popolazione, e
+        // portato a soglia per documento renderebbe irraggiungibile la
+        // validazione automatica — Textract legge un codice nitido a 97,7.
+        private readonly int $fiscalCodeConfidenceThreshold = 95,
     ) {}
 
     public function extractAndSaveFields(int $subDocumentId): void

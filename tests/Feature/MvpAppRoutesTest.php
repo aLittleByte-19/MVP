@@ -2050,11 +2050,11 @@ test('delete communication endpoint rejects cross tenant access', function () {
 
 test('the document payload carries the per-field confidence and says which fields are doubtful', function () {
     // La soglia del codice fiscale e' piu' alta di quella generale (ADR 0013):
-    // 92 sta sopra 80 ma sotto 99, quindi e' un campo dubbio anche se il
-    // cognome, con lo stesso valore, non lo sarebbe.
+    // 92 sta sopra 80 ma sotto 95, quindi e' un campo dubbio anche se l'azienda,
+    // con lo stesso valore, non lo e'.
     config([
         'services.bedrock.mvp_confidence_threshold' => 80,
-        'services.bedrock.mvp_fiscal_code_confidence_threshold' => 99,
+        'services.bedrock.mvp_fiscal_code_confidence_threshold' => 95,
     ]);
 
     $subDocument = SubDocument::factory()->create();

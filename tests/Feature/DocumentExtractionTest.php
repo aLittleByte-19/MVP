@@ -438,11 +438,11 @@ test('the score is the weakest key field and the per-field confidences are kept'
 });
 
 test('a fiscal code below its own threshold holds back the automatic validation', function () {
-    // Il Capitolato chiede «mapping CF >= 99%» come criterio a se' stante: un
-    // codice fiscale letto male assegna il documento a un'altra persona.
+    // Il codice fiscale identifica la persona, quindi ha una soglia piu' alta
+    // della generale: 92 sta sopra 80 ma sotto 95, e basta a fermare il documento.
     config([
         'services.bedrock.mvp_confidence_threshold' => 80,
-        'services.bedrock.mvp_fiscal_code_confidence_threshold' => 99,
+        'services.bedrock.mvp_fiscal_code_confidence_threshold' => 95,
     ]);
 
     $this->mock(BedrockService::class, function ($mock) {
@@ -478,7 +478,7 @@ test('a fiscal code below its own threshold holds back the automatic validation'
 test('a document without a fiscal code is not penalised for a field it does not carry', function () {
     config([
         'services.bedrock.mvp_confidence_threshold' => 80,
-        'services.bedrock.mvp_fiscal_code_confidence_threshold' => 99,
+        'services.bedrock.mvp_fiscal_code_confidence_threshold' => 95,
     ]);
 
     $this->mock(BedrockService::class, function ($mock) {

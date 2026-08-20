@@ -286,6 +286,13 @@ La soglia di confidenza adottata è allineata al criterio di accettazione:
 > «AI Co-Pilot: confidenza media OCR ≥ 90%, mapping CF ≥ 99%.»
 > Fonte: Capitolato C5, sezione «Criteri di Accettazione»
 
+Nota sui due numeri, che misurano cose diverse. «Confidenza media OCR ≥ 90%» è la media che la
+dashboard espone e che si legge sull'insieme dei documenti. «Mapping CF ≥ 99%» è invece un
+obiettivo di **accuratezza sulla popolazione** — quanti codici fiscali risultano mappati
+correttamente — e non una soglia di confidenza da applicare al singolo documento: il codice fiscale
+ha sì una soglia propria e più alta della generale (ADR 0013), ma tarata su quanto l'OCR dichiara
+davvero su quel campo, non sul 99% del criterio.
+
 Nota: come per §11, lo specifico servizio (Bedrock/Textract) è scelta interna alla MVP; il
 Capitolato prescrive la funzione OCR ma non il vendor.
 
