@@ -12,14 +12,17 @@ export interface QualityMetric {
   readonly unit: string | null;
   /** Lo stesso valore come numero, per le schede che lo collocano su una scala. */
   readonly numeric: number | null;
+  /** Soglia dichiarata dal contratto, per le misure che ne hanno una. */
+  readonly threshold: number | null;
 }
 
 /**
- * Una priorità della Overview.
+ * Una priorità della Overview: un conteggio su cui agire, con il ritmo dei
+ * sette giorni.
  *
- * `outOf` sceglie anche la forma della scheda: con un totale la priorità è una
- * quota del corpus ("23 sotto-documenti su 412"), senza è un conteggio con il
- * suo andamento. Sono due domande diverse e due schede diverse.
+ * Non è una quota: la scheda ad anello mostra la parte a posto e il residuo in
+ * rosso, mentre qui il valore *è* il residuo — disegnarla come quota direbbe
+ * che il 94% del corpus è un problema.
  */
 export interface PriorityMetric {
   readonly key: string;
@@ -27,7 +30,6 @@ export interface PriorityMetric {
   readonly value: number | null;
   readonly tone: MetricTone;
   readonly history: number[] | undefined;
-  readonly outOf: number | null;
   /** Riga sotto il numero: gli ingressi di oggi. */
   readonly context: string | null;
 }
@@ -60,16 +62,11 @@ export class OverviewPageViewModel {
    * comparivano gli stessi valori due volte, una come priorità e una nei
    * pannelli sottostanti, e una terza volta dentro Co-Pilot.
    */
-  readonly priorities: Signal<PriorityMetric[]> = computed(() => {
-    const subDocuments = this.store.metricEntry("copilot.sub_documents");
-    const total = typeof subDocuments?.value === "number" ? subDocuments.value : null;
-
-    return [
-      this.priority("copilot.needs_review", "Da verificare", "watch", total),
-      this.priority("copilot.quarantined", "In quarantena", "alert", total),
-      this.priority("assistant.drafts", "Bozze da valutare", "neutral", null)
-    ];
-  });
+  readonly priorities: Signal<PriorityMetric[]> = computed(() => [
+    this.priority("copilot.needs_review", "Da verificare", "watch"),
+    this.priority("copilot.quarantined", "In quarantena", "alert"),
+    this.priority("assistant.drafts", "Bozze da valutare", "neutral")
+  ]);
 
   /**
    * Un solo indicatore di qualità per modulo, con rimando alla pagina che ne
@@ -80,8 +77,13 @@ export class OverviewPageViewModel {
     this.quality("assistant.rating_average")
   );
 
+  /**
+   * La confidenza media dell'OCR al posto del conteggio dei campi sopra soglia:
+   * è una misura su una scala, quindi si può disegnare come la media stelle
+   * accanto, e i due riquadri smettono di essere due cose diverse affiancate.
+   */
   readonly copilotQuality: Signal<QualityMetric | null> = computed(() =>
-    this.quality("copilot.confident_fields")
+    this.quality("copilot.ocr_confidence")
   );
 
   /** Numero di sotto-documenti in quarantena, per decidere se mostrare la segnalazione. */
@@ -118,7 +120,8 @@ export class OverviewPageViewModel {
       label: entry.label,
       value: formatted.value,
       unit: formatted.unit,
-      numeric: typeof entry.value === "number" ? entry.value : numericOf(formatted.value)
+      numeric: typeof entry.value === "number" ? entry.value : numericOf(formatted.value),
+      threshold: entry.threshold ?? null
     };
   }
 
@@ -141,21 +144,11 @@ export class OverviewPageViewModel {
   }
 
   /**
-   * Totale di riferimento accanto al valore ("23/412"): vale solo per i
-   * conteggi, e non prima che lo stato sia stato caricato.
-   */
-  private outOfFor(entry: Metric | null, outOf: number | null): number | null {
-    return entry !== null && outOf !== null && outOf > 0 && typeof entry.value === "number"
-      ? outOf
-      : null;
-  }
-
-  /**
    * Conteggi sull'intero tenant, non sulle finestre di elenco: `history` si
    * ferma a 10 e `documents` a 40, quindi ricalcolarli qui darebbe numeri
    * silenziosamente sbagliati appena i dati superano quelle soglie.
    */
-  private priority(key: string, label: string, tone: MetricTone, outOf: number | null): PriorityMetric {
+  private priority(key: string, label: string, tone: MetricTone): PriorityMetric {
     const entry = this.store.metricEntry(key);
 
     return {
@@ -166,7 +159,6 @@ export class OverviewPageViewModel {
       value: typeof entry?.value === "number" ? entry.value : null,
       tone,
       history: entry?.history,
-      outOf: this.outOfFor(entry, outOf),
       context: this.contextFor(entry)
     };
   }

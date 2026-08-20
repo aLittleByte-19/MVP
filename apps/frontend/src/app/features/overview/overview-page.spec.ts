@@ -26,7 +26,7 @@ describe("OverviewPage", () => {
     "copilot.quarantined": { key: "copilot.quarantined", value: 0, label: "In quarantena" },
     "copilot.sub_documents": { key: "copilot.sub_documents", value: 412, label: "Sotto-documenti" },
     "assistant.rating_average": { key: "assistant.rating_average", value: "4.3", label: "Media stelle" },
-    "copilot.confident_fields": { key: "copilot.confident_fields", value: 1284, label: "Campi con confidenza" }
+    "copilot.ocr_confidence": { key: "copilot.ocr_confidence", value: "92.4", unit: "%", threshold: 80, label: "Confidenza media OCR" }
   };
 
   beforeEach(() => {

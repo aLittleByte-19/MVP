@@ -28,10 +28,12 @@ describe("OverviewPageViewModel", () => {
       unit: "/ 5",
       label: "Media stelle"
     },
-    "copilot.confident_fields": {
-      key: "copilot.confident_fields",
-      value: 1284,
-      label: "Campi con confidenza"
+    "copilot.ocr_confidence": {
+      key: "copilot.ocr_confidence",
+      value: "92.4",
+      unit: "%",
+      threshold: 80,
+      label: "Confidenza media OCR"
     }
   };
 
@@ -72,16 +74,16 @@ describe("OverviewPageViewModel", () => {
 
     expect(vm.priorities().every((priority) => priority.value === null)).toBe(true);
     expect(vm.priorities().every((priority) => priority.context === null)).toBe(true);
-    expect(vm.priorities().every((priority) => priority.outOf === null)).toBe(true);
   });
 
-  it("espone la quota sul totale e gli ingressi di oggi", () => {
+  it("espone il conteggio, il suo ritmo e il rilievo", () => {
+    // Non una quota: qui il valore e' il residuo su cui agire, e mostrarlo
+    // come porzione direbbe che tutto il resto del corpus e' un problema.
     const vm = createViewModel();
     const review = vm.priorities()[0]!;
 
     expect(review.value).toBe(3);
-    // Il totale sta accanto al valore ("3/412"), non nella riga di contesto.
-    expect(review.outOf).toBe(412);
+    expect(review.history).toEqual([0, 1, 0, 0, 2, 0, 1]);
     expect(review.context).toBe("1 nuovo oggi");
     expect(review.tone).toBe("watch");
   });
@@ -95,13 +97,16 @@ describe("OverviewPageViewModel", () => {
       label: "Media stelle",
       value: "4,3",
       unit: "/ 5",
-      numeric: 4.3
+      numeric: 4.3,
+      threshold: null
     });
+    // La soglia viaggia con la metrica: la scheda la disegna sulla scala.
     expect(vm.copilotQuality()).toEqual({
-      label: "Campi con confidenza",
-      value: "1.284",
-      unit: null,
-      numeric: 1284
+      label: "Confidenza media OCR",
+      value: "92,4",
+      unit: "%",
+      numeric: 92.4,
+      threshold: 80
     });
   });
 
