@@ -169,6 +169,57 @@ export function segments(parts: readonly { label: string; value: number }[]): Se
   }));
 }
 
+/** Un arco dell'anello: quanto e' lungo, dove comincia, di che tono. */
+export interface RingArc {
+  readonly label: string;
+  readonly value: number;
+  readonly tone: string;
+  /** `stroke-dasharray`: lunghezza dell'arco e resto della circonferenza. */
+  readonly dash: string;
+  /** `stroke-dashoffset`: da dove parte, cioe' quanto lo precede. */
+  readonly offset: number;
+}
+
+/**
+ * Archi di un anello segmentato, uno per parte.
+ *
+ * Ogni arco e' un cerchio intero con un tratteggio che ne lascia visibile solo
+ * la propria fetta, spostata dall'offset: e' il modo di disegnare una corona
+ * segmentata con elementi SVG di base, senza calcolare archi a mano ne'
+ * dipendere da una libreria.
+ */
+export function ringArcs(
+  parts: readonly { label: string; value: number; tone?: string }[],
+  radius: number
+): RingArc[] {
+  const total = parts.reduce((sum, part) => sum + part.value, 0);
+
+  if (total <= 0) {
+    return [];
+  }
+
+  const circumference = 2 * Math.PI * radius;
+  let consumed = 0;
+
+  return parts
+    .filter((part) => part.value > 0)
+    .map((part) => {
+      const length = (circumference * part.value) / total;
+      const arc: RingArc = {
+        label: part.label,
+        value: part.value,
+        tone: part.tone ?? "neutral",
+        dash: `${round(length)} ${round(circumference - length)}`,
+        // `-0` non e' `0` per `Object.is`, e il primo arco parte proprio da li'.
+        offset: consumed === 0 ? 0 : round(-consumed)
+      };
+
+      consumed += length;
+
+      return arc;
+    });
+}
+
 /**
  * Tratteggio di un anello: quanta circonferenza colorare e quanta lasciarne
  * scoperta. `stroke-dasharray` vuole due lunghezze, non una percentuale.
