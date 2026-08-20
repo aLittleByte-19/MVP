@@ -81,16 +81,22 @@
   opacity: 0.55;
 }
 
+/* Con tre voci la legenda non ci sta accanto al titolo su un pannello stretto:
+   va a capo tutta intera invece di spezzare il titolo a meta'. */
 .inspectorHeading {
   display: flex;
-  align-items: start;
+  flex-wrap: wrap;
+  align-items: baseline;
   justify-content: space-between;
-  gap: var(--mvp-space-3);
+  gap: var(--mvp-space-2) var(--mvp-space-3);
 }
 
-/* La legenda sta in fondo al pannello, dopo i campi: e' un promemoria dei
-   simboli, non la chiave per decifrarli — quella la da' l'icona dentro il
-   campo, con il suo tooltip. In cima rubava la prima riga di lettura. */
+.inspectorHeading .eyebrow {
+  white-space: nowrap;
+}
+
+/* La legenda sta in cima, accanto al titolo: i simboli vanno letti prima dei
+   campi, non dopo averli attraversati tutti. */
 .fieldLegend {
   display: flex;
   flex-wrap: wrap;
@@ -135,7 +141,23 @@
   padding-right: 44px;
 }
 
-.control.withAction {
+/* La freccia della select e' disegnata dal browser a filo del bordo destro,
+   dove ora sta l'indicatore: sovrapposte diventavano un groviglio. Sostituita
+   con la stessa forma, messa prima del separatore. */
+.control select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--mvp-muted) 50%),
+    linear-gradient(135deg, var(--mvp-muted) 50%, transparent 50%);
+  background-position: right 52px top calc(50% - 2px), right 47px top calc(50% - 2px);
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* Il comando di copia sta fuori dalla casella, non dentro: l'indicatore di
+   provenienza occupa gia' il bordo destro, e sovrapposti diventavano un
+   groviglio di due icone. */
+.withAction {
+  display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--mvp-space-2);
   align-items: center;
