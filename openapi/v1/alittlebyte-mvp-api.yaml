@@ -923,9 +923,9 @@ components:
         parts:
           type: array
           description: >-
-            Ripartizione del valore fra le sue componenti, in ordine di percorrenza: il tempo medio
-            di una pipeline si spende in fasi (OCR, estrazione, salvataggio) e la somma delle parti
-            è il valore. Serve a dire dove il tempo se ne va, non solo quanto ne serve.
+            Ripartizione del valore fra le sue componenti, in ordine di lettura: il tempo medio di
+            una pipeline si spende in fasi (OCR, estrazione, salvataggio), un insieme di documenti
+            si divide fra gli stati in cui si trovano. La somma delle parti è il valore.
           items:
             type: object
             required: [label, value]
@@ -935,6 +935,15 @@ components:
               value:
                 type: number
                 minimum: 0
+              tone:
+                type: string
+                enum: [neutral, info, success, warning, danger]
+                description: >-
+                  Rilievo della parte, quando ne ha uno proprio. Gli stati di revisione e di
+                  scaricamento lo dichiarano già nel dominio (`ReviewStatus::color()`), quindi
+                  arriva da lì invece di essere ricostruito da una tabella nell'interfaccia.
+                  Assente sulle ripartizioni che non esprimono un giudizio — le fasi di una
+                  pipeline, dove verde e rosso direbbero qualcosa che il dato non dice.
         distribution:
           type: array
           description: >-

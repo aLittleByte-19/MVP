@@ -22,7 +22,7 @@ export interface Metric {
      * @minimum 0
      */
   outOf?: number;
-  /** Ripartizione del valore fra le sue componenti, in ordine di percorrenza: il tempo medio di una pipeline si spende in fasi (OCR, estrazione, salvataggio) e la somma delle parti è il valore. Serve a dire dove il tempo se ne va, non solo quanto ne serve. */
+  /** Ripartizione del valore fra le sue componenti, in ordine di lettura: il tempo medio di una pipeline si spende in fasi (OCR, estrazione, salvataggio), un insieme di documenti si divide fra gli stati in cui si trovano. La somma delle parti è il valore. */
   parts?: MetricPartsItem[];
   /** Densità delle durate: quante elaborazioni cadono in ciascun intervallo di tempo, dagli intervalli più brevi ai più lunghi. Gli intervalli hanno tutti la stessa ampiezza e `upTo` è l'estremo superiore in secondi, così l'interfaccia può disegnare l'asse senza ricostruire i confini. */
   distribution?: MetricDistributionItem[];
