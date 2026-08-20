@@ -30,6 +30,13 @@ module.exports = {
       branches: coverageThresholds.branches
     }
   },
+  // Jest apre un worker per CPU: con otto core dentro il container la memoria
+  // finisce a meta' suite e il kernel ne uccide qualcuno con SIGKILL, che si
+  // presenta come "Test suite failed to run" senza un solo test fallito.
+  // Quattro worker bastano a tenere il tempo di esecuzione, e il limite di
+  // memoria per worker li fa riciclare prima che il consumo si accumuli.
+  maxWorkers: 4,
+  workerIdleMemoryLimit: "768MB",
   moduleNameMapper: {
     "^src/(.*)$": "<rootDir>/src/$1"
   },
