@@ -58,6 +58,7 @@ interface TestableSubDocumentList {
   saveReview(): void;
   canPrepareMessage(documentItem: SubDocument): boolean;
   originFor(documentItem: SubDocument): "auto" | "manual" | "review" | "locked";
+  fieldOrigin(documentItem: SubDocument, controlName: string): "auto" | "manual" | "review" | "locked" | null;
   originLabel(documentItem: SubDocument): string;
   readonly copiedEmail: Signal<boolean>;
   copyRecipientEmail(email: string): void;
@@ -359,7 +360,7 @@ describe("SubDocumentListComponent", () => {
     expect(component.originFor(subDocument({ reviewStatus: "quarantined" }))).toBe("review");
   });
 
-  it("spiega a parole, nella legenda in fondo, che cosa segnala l'icona", () => {
+  it("spiega a parole, nella legenda, che cosa segnala l'icona", () => {
     const { component } = render();
 
     expect(component.originLabel(subDocument({ reviewStatus: "auto_validated" }))).toBe(
@@ -370,4 +371,26 @@ describe("SubDocumentListComponent", () => {
     );
   });
 
+  it("non dichiara alcuna provenienza su un campo vuoto", () => {
+    // Le scintille su una casella vuota affermavano che l'AI avesse estratto
+    // un nulla: i tre identificativi sono spesso assenti dal documento.
+    const document = subDocument({ reviewStatus: "auto_validated", fiscalCode: null, employeeId: null });
+    const { component } = render(document);
+
+    expect(component.fieldOrigin(document, "employeeName")).toBe("auto");
+    expect(component.fieldOrigin(document, "fiscalCode")).toBeNull();
+    expect(component.fieldOrigin(document, "employeeId")).toBeNull();
+  });
+
+  it("marca come manuale il campo appena corretto, prima ancora del salvataggio", () => {
+    const document = subDocument({ reviewStatus: "auto_validated" });
+    const { component } = render(document);
+
+    component.form.get("companyName")?.setValue("Acme Srl corretta");
+    component.form.get("companyName")?.markAsDirty();
+
+    expect(component.fieldOrigin(document, "companyName")).toBe("manual");
+    // Gli altri campi non seguono: la correzione riguarda quello toccato.
+    expect(component.fieldOrigin(document, "employeeName")).toBe("auto");
+  });
 });

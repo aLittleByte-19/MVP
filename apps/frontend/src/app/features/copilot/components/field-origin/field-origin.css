@@ -18,9 +18,16 @@
   pointer-events: none;
 }
 
+/* Il tracciato delle scintille non e' simmetrico dentro il suo riquadro: un
+   filo di spostamento lo riporta al centro ottico della colonna. */
 :host svg {
   width: 16px;
   height: 16px;
+  flex: none;
+}
+
+:host(.auto) svg {
+  transform: translateX(-0.5px);
 }
 
 /* I tre stati del dato estratto: sotto soglia, sopra soglia, confermato a mano.
@@ -46,8 +53,10 @@
   color: var(--mvp-muted);
 }
 
-/* Nella textarea l'icona resta in alto, all'altezza della prima riga. */
+/* Nella textarea il filo scende per tutta l'altezza — fermarlo a meta' faceva
+   sembrare la casella tagliata — mentre l'icona resta in alto, all'altezza
+   della prima riga, dove comincia il testo. */
 :host(.tall) {
-  bottom: auto;
-  height: 42px;
+  align-items: flex-start;
+  padding-top: 13px;
 }

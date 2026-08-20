@@ -120,6 +120,15 @@ const emptySendMessageForm: SendMessageFormState = {
           <article class="extracted">
             <div class="inspectorHeading">
               <h3 class="eyebrow">Dati estratti dall'OCR</h3>
+              <p class="fieldLegend">
+                @if (originFor(document) !== "manual") {
+                  <span class="legendItem"
+                    ><mvp-field-origin [origin]="originFor(document)" />{{ originLabel(document) }}</span
+                  >
+                }
+                <span class="legendItem"><mvp-field-origin origin="manual" />Corretto a mano</span>
+                <span class="legendItem"><mvp-field-origin origin="locked" />Dato di sistema</span>
+              </p>
             </div>
             @if (document.error) {
               <p class="errorNote">{{ document.error }}</p>
@@ -144,7 +153,9 @@ const emptySendMessageForm: SendMessageFormState = {
                 <label class="field editableField">
                   <span>Nome e cognome</span>
                   <div class="control">
-                    <mvp-field-origin [origin]="originFor(document)" />
+                    @if (fieldOrigin(document, "employeeName"); as origin) {
+                      <mvp-field-origin [origin]="origin" />
+                    }
                     <input
                       formControlName="employeeName"
                       [readOnly]="!isEditing()"
@@ -156,7 +167,9 @@ const emptySendMessageForm: SendMessageFormState = {
                 <label class="field editableField">
                   <span>Azienda</span>
                   <div class="control">
-                    <mvp-field-origin [origin]="originFor(document)" />
+                    @if (fieldOrigin(document, "companyName"); as origin) {
+                      <mvp-field-origin [origin]="origin" />
+                    }
                     <input
                       formControlName="companyName"
                       [readOnly]="!isEditing()"
@@ -175,7 +188,9 @@ const emptySendMessageForm: SendMessageFormState = {
                 <label class="field editableField" for="document-date-field">
                   <span>Data documento</span>
                   <div class="control">
-                    <mvp-field-origin [origin]="originFor(document)" />
+                    @if (fieldOrigin(document, "documentDate"); as origin) {
+                      <mvp-field-origin [origin]="origin" />
+                    }
                     @if (isEditing()) {
                       <input id="document-date-field" type="date" formControlName="documentDate" />
                     } @else {
@@ -199,7 +214,9 @@ const emptySendMessageForm: SendMessageFormState = {
                 <label class="field editableField" for="document-type-field">
                   <span>Tipologia documento</span>
                   <div class="control">
-                    <mvp-field-origin [origin]="originFor(document)" />
+                    @if (fieldOrigin(document, "documentType"); as origin) {
+                      <mvp-field-origin [origin]="origin" />
+                    }
                     @if (isEditing()) {
                       <select id="document-type-field" formControlName="documentType">
                         <option value="">Nessuna tipologia</option>
@@ -244,7 +261,9 @@ const emptySendMessageForm: SendMessageFormState = {
                 <label class="field editableField formFull">
                   <span>Descrizione</span>
                   <div class="control">
-                    <mvp-field-origin class="tall" [origin]="originFor(document)" />
+                    @if (fieldOrigin(document, "description"); as origin) {
+                      <mvp-field-origin class="tall" [origin]="origin" />
+                    }
                     <textarea
                       rows="3"
                       formControlName="description"
@@ -260,15 +279,19 @@ const emptySendMessageForm: SendMessageFormState = {
                      puo' anche correggere. -->
                 <label class="field editableField">
                   <span>Email destinatario</span>
-                  <div class="control withAction">
-                    <mvp-field-origin [origin]="originFor(document)" />
-                    <input
-                      formControlName="recipientEmail"
-                      [readOnly]="!isEditing()"
-                      [attr.aria-readonly]="!isEditing()"
-                      [attr.tabindex]="isEditing() ? null : -1"
-                      [class.invalid]="fieldError('recipientEmail')"
-                    />
+                  <div class="withAction">
+                    <div class="control">
+                      @if (fieldOrigin(document, "recipientEmail"); as origin) {
+                        <mvp-field-origin [origin]="origin" />
+                      }
+                      <input
+                        formControlName="recipientEmail"
+                        [readOnly]="!isEditing()"
+                        [attr.aria-readonly]="!isEditing()"
+                        [attr.tabindex]="isEditing() ? null : -1"
+                        [class.invalid]="fieldError('recipientEmail')"
+                      />
+                    </div>
                     @if (document.recipientEmail && !isEditing()) {
                       <button
                         mvpButton
@@ -293,7 +316,9 @@ const emptySendMessageForm: SendMessageFormState = {
                 <label class="field editableField">
                   <span>Codice Fiscale</span>
                   <div class="control">
-                    <mvp-field-origin [origin]="originFor(document)" />
+                    @if (fieldOrigin(document, "fiscalCode"); as origin) {
+                      <mvp-field-origin [origin]="origin" />
+                    }
                     <input
                       formControlName="fiscalCode"
                       [readOnly]="!isEditing()"
@@ -310,7 +335,9 @@ const emptySendMessageForm: SendMessageFormState = {
                 <label class="field editableField">
                   <span>Matricola dipendente</span>
                   <div class="control">
-                    <mvp-field-origin [origin]="originFor(document)" />
+                    @if (fieldOrigin(document, "employeeId"); as origin) {
+                      <mvp-field-origin [origin]="origin" />
+                    }
                     <input
                       formControlName="employeeId"
                       [readOnly]="!isEditing()"
@@ -320,11 +347,6 @@ const emptySendMessageForm: SendMessageFormState = {
                   </div>
                 </label>
               </div>
-
-              <p class="fieldLegend">
-                <span class="legendItem"><mvp-field-origin [origin]="originFor(document)" />{{ originLabel(document) }}</span>
-                <span class="legendItem"><mvp-field-origin origin="locked" />Dato di sistema</span>
-              </p>
 
               <div class="actionBar">
                 @if (isEditing()) {
@@ -619,10 +641,37 @@ export class SubDocumentListComponent {
    * lettura marcata su ogni controllo.
    */
   /**
-   * Da dove viene il dato dei campi estratti. E' lo stato del sotto-documento,
-   * non una provenienza per campo: il contratto non la porta (questione aperta
-   * 2 dell'ADR 0012).
+   * Da dove viene il dato di un singolo campo.
+   *
+   * Tre casi distinti, che prima collassavano tutti sullo stato del
+   * sotto-documento:
+   *
+   * - il campo e' stato toccato in questa sessione (`dirty`): il valore lo ha
+   *   scritto l'operatore, e lo dice la penna anche prima del salvataggio;
+   * - il campo e' vuoto: non c'e' alcuna provenienza da dichiarare, e le
+   *   scintille su una casella vuota affermavano che l'AI avesse estratto un
+   *   nulla;
+   * - altrimenti vale lo stato del sotto-documento, che e' quanto il contratto
+   *   sa dire (questione aperta 2 dell'ADR 0012: non c'e' una provenienza per
+   *   campo persistita).
    */
+  protected fieldOrigin(documentItem: SubDocument, controlName: string): FieldOrigin | null {
+    const control = this.form.get(controlName);
+
+    if (control?.dirty) {
+      return "manual";
+    }
+
+    const value = control?.value;
+
+    if (value === null || value === undefined || String(value).trim() === "") {
+      return null;
+    }
+
+    return originForReviewStatus(documentItem.reviewStatus);
+  }
+
+  /** Da dove vengono i campi estratti, per la legenda in cima al pannello. */
   protected originFor(documentItem: SubDocument): FieldOrigin {
     return originForReviewStatus(documentItem.reviewStatus);
   }
