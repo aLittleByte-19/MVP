@@ -1137,17 +1137,23 @@ test('document metrics report the operational signals of the pipeline', function
         ->and($metrics['copilot.processing_seconds']['unit'])->toBe('s');
 });
 
-test('the verified share carries its own denominator', function () {
-    // Il totale sta nella metrica, non nella pagina: e' chi calcola il
-    // numeratore a sapere su che cosa si misura.
+test('the review breakdown carries its own denominator', function () {
+    // Il totale sta nella metrica, non nella pagina: e' chi calcola le quote a
+    // sapere su che cosa si misurano. Le voci a zero restano fuori, perche' la
+    // ripartizione mostra gli esiti raggiunti, non quelli possibili.
     SubDocument::factory()->create(['review_status' => ReviewStatus::AutoValidated]);
     SubDocument::factory()->create(['review_status' => ReviewStatus::ManuallyValidated]);
     SubDocument::factory()->create(['review_status' => ReviewStatus::NeedsReview]);
 
     $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
+    $breakdown = $metrics['copilot.review_breakdown'];
+    $parts = collect($breakdown['parts'])->pluck('value', 'label');
 
-    expect($metrics['copilot.verified']['value'])->toBe(2)
-        ->and($metrics['copilot.verified']['outOf'])->toBe(3);
+    expect($breakdown['value'])->toBe(3)
+        ->and($parts['Validato automaticamente'])->toBe(1)
+        ->and($parts['Validato manualmente'])->toBe(1)
+        ->and($parts['Da revisionare'])->toBe(1)
+        ->and($parts->keys()->all())->not->toContain('In quarantena');
 });
 
 test('the filled fields metric counts the nine extractable fields per sub-document', function () {
