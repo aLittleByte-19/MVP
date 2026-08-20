@@ -35,6 +35,11 @@ import type { MetricTone } from "../../util/metrics";
         </span>
         @if (!isLoading()) {
           <span class="scale" aria-hidden="true">
+            @if (thresholdAt(); as position) {
+              <span class="thresholdRow">
+                <span class="thresholdLabel" [style.left.%]="position">soglia {{ threshold() }}{{ unit() }}</span>
+              </span>
+            }
             <span class="track">
               @if (fill() !== null) {
                 <span class="fill" [style.width.%]="fill()"></span>
@@ -45,7 +50,7 @@ import type { MetricTone } from "../../util/metrics";
             </span>
             <span class="bounds">
               <span>{{ minLabel }}</span>
-              <span>{{ maxLabel() }}</span>
+              <span>{{ maxLabel() }}{{ unit() }}</span>
             </span>
           </span>
           @if (context(); as contextText) {
@@ -73,8 +78,8 @@ export class MetricGaugeComponent {
   readonly context = input<string | null>(null);
   readonly isLoading = input(false);
 
-  /* Gli estremi portano il solo numero: l'unita' sta gia' accanto al valore,
-     e ripeterla qui dava "5/ 5" sulla media stelle. */
+  /* L'estremo destro porta l'unita', quello sinistro no: "0 100%" si legge
+     come un intervallo, "0% 100%" come due misure separate. */
   protected readonly minLabel = "0";
   protected readonly maxLabel = computed(() => String(this.max()));
 

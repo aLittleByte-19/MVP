@@ -1,22 +1,33 @@
 /* Il guscio sta in `shared/styles/metric-shell.css`, condiviso con le altre
-   tre schede. Qui resta la sola parte che distingue l'andamento: la linea dei
-   sette giorni. */
+   schede. Qui resta la sola parte che distingue l'andamento: i sette giorni. */
 
-.spark {
+.chart {
   display: block;
-  width: 96px;
-  height: 30px;
-  color: var(--mvp-primary);
+  width: 100%;
+  height: 46px;
 }
 
-.card.ok .spark {
-  color: var(--mvp-success);
+.chart rect {
+  fill: var(--mvp-border-strong);
 }
 
-.card.watch .spark {
-  color: var(--mvp-accent);
+/* Oggi: l'unica barra che porta il colore, cosi' si trova senza contare. */
+.chart rect.today {
+  fill: var(--mvp-primary);
 }
 
-.card.alert .spark {
-  color: var(--mvp-danger);
+.card.ok .chart rect.today {
+  fill: var(--mvp-success);
+}
+
+.card.watch .chart rect.today {
+  fill: var(--mvp-accent);
+}
+
+.card.alert .chart rect.today {
+  fill: var(--mvp-danger);
+}
+
+.skeleton.chart {
+  height: 46px;
 }

@@ -1,36 +1,58 @@
-/* Il guscio sta in `shared/styles/metric-shell.css`. Qui la sola parte della
-   quota: la porzione riempita e la sua percentuale. */
+/* Il guscio sta in `shared/styles/metric-shell.css`. Qui il solo anello. */
+
+.figure {
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--mvp-space-3);
+}
+
+.ring {
+  width: 76px;
+  height: 76px;
+  flex: none;
+}
+
+/* Il residuo porta il colore di cio' che manca, non un grigio di sfondo: e' il
+   numero su cui l'operatore deve agire. */
+.rest {
+  fill: none;
+  stroke: var(--mvp-danger);
+}
+
+.rest.plain {
+  stroke: var(--mvp-border-strong);
+}
+
+.done {
+  fill: none;
+  stroke: var(--mvp-primary);
+}
 
 .percent {
-  color: var(--mvp-muted);
-  font-size: 1.05rem;
-  font-weight: 700;
+  fill: var(--mvp-text);
+  font-size: 17px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
-.bar {
-  display: block;
-  height: 8px;
-  overflow: hidden;
-  border-radius: var(--mvp-radius-pill);
-  background: var(--mvp-surface-soft);
+.side {
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-xs);
+  line-height: 1.55;
 }
 
-.fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--mvp-primary);
+.side b {
+  color: var(--mvp-text);
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
 }
 
-.card.ok .fill {
-  background: var(--mvp-success);
+span.rest {
+  color: var(--mvp-danger);
+  font-weight: 700;
 }
 
-.card.watch .fill {
-  background: var(--mvp-accent);
-}
-
-.card.alert .fill {
-  background: var(--mvp-danger);
+span.rest.plain {
+  color: var(--mvp-muted);
+  font-weight: 600;
 }

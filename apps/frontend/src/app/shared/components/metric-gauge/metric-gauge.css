@@ -51,3 +51,19 @@
   font-size: var(--mvp-font-xs);
   font-variant-numeric: tabular-nums;
 }
+
+/* La soglia sta sopra la traccia, incolonnata sulla tacca: sotto finiva addosso
+   all'estremo destro appena superava i due terzi della scala. */
+.thresholdRow {
+  position: relative;
+  height: 14px;
+  font-size: 0.7rem;
+}
+
+.thresholdLabel {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  color: var(--mvp-text);
+  font-weight: 700;
+}

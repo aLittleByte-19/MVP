@@ -1,17 +1,18 @@
 import { ChangeDetectionStrategy, Component, computed, input } from "@angular/core";
-import { type MetricTone, NOT_AVAILABLE, sparklineEnd, sparklinePoints } from "../../util/metrics";
+import { dailyBars } from "../../util/charts";
+import { type MetricTone, NOT_AVAILABLE } from "../../util/metrics";
 
-const SPARK_WIDTH = 96;
-const SPARK_HEIGHT = 30;
+const WIDTH = 220;
+const HEIGHT = 46;
 
 /**
- * Scheda di andamento: un conteggio e la linea dei sette giorni.
+ * Scheda di andamento: un conteggio e i sette giorni che l'hanno prodotto.
  *
- * E' una delle quattro forme di scheda metrica (vedi `metrics-panel`): questa
- * risponde a "quanto, e sta crescendo?". Dove la domanda e' un'altra —
- * quanta parte del totale, quanto vale su una scala, se c'e' un guasto — la
- * scheda e' un'altra, perche' un numero grande uguale per tutti costringeva a
- * leggere l'etichetta per capire che cosa si stesse guardando.
+ * E' una delle forme di scheda metrica (vedi `metrics-panel`): questa risponde
+ * a "quanto, e con che ritmo?". I giorni sono barre e non una linea perche' la
+ * serie e' un flusso di ingressi — sette misure distinte, non un valore che
+ * scorre — e una spezzata suggerirebbe fra un giorno e l'altro un passaggio
+ * continuo che non esiste. L'ultima barra e' oggi, ed e' l'unica in evidenza.
  *
  * Coppia `dl/dt/dd` invece di due elementi affiancati: lo screen reader legge
  * "Documenti analizzati: 128" come una cosa sola, mentre prima riceveva due
@@ -40,32 +41,32 @@ const SPARK_HEIGHT = 30;
                 <span class="unit">{{ unitText }}</span>
               }
             </span>
-            @if (sparkPoints(); as points) {
-              <svg
-                class="spark"
-                [attr.viewBox]="'0 0 ' + sparkWidth + ' ' + sparkHeight"
-                role="img"
-                [attr.aria-label]="sparkLabel()"
-              >
-                <polyline
-                  [attr.points]="points"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-                @if (sparkTip(); as tip) {
-                  <circle [attr.cx]="tip.x" [attr.cy]="tip.y" r="2.8" fill="currentColor" />
-                }
-              </svg>
+            @if (context(); as contextText) {
+              <span class="context">{{ contextText }}</span>
             }
           }
         </span>
         @if (isLoading()) {
-          <span class="skeleton txt" aria-hidden="true"></span>
-        } @else if (context(); as contextText) {
-          <span class="context">{{ contextText }}</span>
+          <span class="skeleton chart" aria-hidden="true"></span>
+        } @else if (bars().length) {
+          <svg
+            class="chart"
+            [attr.viewBox]="'0 0 ' + width + ' ' + height"
+            preserveAspectRatio="none"
+            role="img"
+            [attr.aria-label]="chartLabel()"
+          >
+            @for (bar of bars(); track $index) {
+              <rect
+                [class.today]="bar.isLast"
+                [attr.x]="bar.x"
+                [attr.y]="bar.y"
+                [attr.width]="bar.width"
+                [attr.height]="bar.height"
+                rx="2"
+              />
+            }
+          </svg>
         }
       </dd>
     </dl>
@@ -77,14 +78,14 @@ export class MetricCardComponent {
   readonly value = input.required<string | number | null>();
   readonly unit = input<string | null>(null);
   readonly tone = input<MetricTone>("neutral");
-  /** Riga sotto il numero: rapporto sul totale, elementi nuovi oggi, o l'errore. */
+  /** Riga accanto al numero: gli ingressi di oggi. */
   readonly context = input<string | null>(null);
   /** Flusso giornaliero degli ultimi sette giorni, quando la metrica ne ha uno. */
   readonly history = input<readonly number[] | undefined>(undefined);
   readonly isLoading = input(false);
 
-  protected readonly sparkWidth = SPARK_WIDTH;
-  protected readonly sparkHeight = SPARK_HEIGHT;
+  protected readonly width = WIDTH;
+  protected readonly height = HEIGHT;
 
   protected readonly displayValue = computed(() => {
     const current = this.value();
@@ -92,15 +93,9 @@ export class MetricCardComponent {
     return current === null || current === "" ? NOT_AVAILABLE : String(current);
   });
 
-  protected readonly sparkPoints = computed(() =>
-    sparklinePoints(this.history(), SPARK_WIDTH, SPARK_HEIGHT)
-  );
+  protected readonly bars = computed(() => dailyBars(this.history() ?? [], WIDTH, HEIGHT));
 
-  protected readonly sparkTip = computed(() =>
-    sparklineEnd(this.history(), SPARK_WIDTH, SPARK_HEIGHT)
-  );
-
-  protected readonly sparkLabel = computed(() => {
+  protected readonly chartLabel = computed(() => {
     const series = this.history();
 
     return series === undefined
