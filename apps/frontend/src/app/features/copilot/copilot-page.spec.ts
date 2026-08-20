@@ -41,7 +41,7 @@ describe("CopilotPage", () => {
     error = signal<string | null>(null);
     reload = jest.fn();
     workflow = {
-      searchDocuments: jest.fn(() => of([])),
+      searchDocuments: jest.fn(() => of({ items: [], total: 0, page: 1, perPage: 10 })),
       upload: jest.fn(),
       deleteSubDocument: jest.fn(),
       markReviewed: jest.fn(),
@@ -81,7 +81,7 @@ describe("CopilotPage", () => {
   it("carica i risultati filtrati tramite l'effect e li rende nel template", () => {
     const first = subDocument("sub-1");
     const second = subDocument("sub-2");
-    workflow["searchDocuments"].mockReturnValue(of([first, second]));
+    workflow["searchDocuments"].mockReturnValue(of({ items: [first, second], total: 2, page: 1, perPage: 10 }));
     const fixture = TestBed.createComponent(CopilotPage);
     fixture.detectChanges();
 
