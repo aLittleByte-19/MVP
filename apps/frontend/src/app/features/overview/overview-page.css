@@ -45,8 +45,11 @@ mvp-attention-note + .priorityGrid {
 
 .qualityItem {
   display: grid;
+  /* Intestazione all'altezza del suo contenuto, scheda a riempire il resto:
+     con `align-content: start` i due riquadri restavano alti uguali ma la
+     scheda piu' corta lasciava un vuoto sotto di se'. */
+  grid-template-rows: auto 1fr;
   gap: var(--mvp-space-3);
-  align-content: start;
   padding: var(--mvp-space-3);
   border: 1px solid var(--mvp-border);
   border-radius: var(--mvp-radius);
