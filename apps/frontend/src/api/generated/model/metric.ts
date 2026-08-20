@@ -5,6 +5,8 @@
  * Versioned JSON contract consumed by the Angular SPA.
  * OpenAPI spec version: 1.0.0
  */
+import type { MetricDistributionItem } from './metricDistributionItem';
+import type { MetricPartsItem } from './metricPartsItem';
 
 export interface Metric {
   /** Identificativo stabile della metrica. La label è testo di presentazione e può cambiare; per selezionare una metrica si usa la key. */
@@ -15,6 +17,20 @@ export interface Metric {
   threshold?: number;
   /** Unità di misura del valore, quando ne ha una ("%", "s", "min", "/ 5"). Sta nel contratto e non nel frontend perché è un fatto della metrica: è chi la calcola a sapere se una media è in secondi o in minuti, e una tabella chiave → unità nell'interfaccia andrebbe fuori sincrono alla prima metrica aggiunta. Assente sui conteggi, che sono numeri puri. */
   unit?: string;
+  /**
+     * Totale di riferimento, per le metriche che sono una quota di un insieme ("1.207 sotto-documenti verificati su 1.284"). È un fatto del dato, non una scelta di resa: il denominatore lo conosce chi calcola il numeratore.
+     * @minimum 0
+     */
+  outOf?: number;
+  /** Ripartizione del valore fra le sue componenti, in ordine di percorrenza: il tempo medio di una pipeline si spende in fasi (OCR, estrazione, salvataggio) e la somma delle parti è il valore. Serve a dire dove il tempo se ne va, non solo quanto ne serve. */
+  parts?: MetricPartsItem[];
+  /** Densità delle durate: quante elaborazioni cadono in ciascun intervallo di tempo, dagli intervalli più brevi ai più lunghi. Gli intervalli hanno tutti la stessa ampiezza e `upTo` è l'estremo superiore in secondi, così l'interfaccia può disegnare l'asse senza ricostruire i confini. */
+  distribution?: MetricDistributionItem[];
+  /**
+     * Quante misure stanno dietro una distribuzione o una media. Con pochi campioni una curva di densità è più interpolazione che dato: l'interfaccia la sostituisce con una riga di testo, e per farlo deve sapere quante ne ha.
+     * @minimum 0
+     */
+  sampleSize?: number;
   /**
      * Conteggio giornaliero degli ultimi sette giorni, dal più vecchio al più recente. È il flusso di ingresso — quanti elementi sono entrati in quello stato ogni giorno — non la storia del totale, che richiederebbe snapshot giornalieri non conservati dal modello dati. Va quindi presentato come "n nuovi oggi", mai come variazione del valore. Assente sulle metriche per cui un flusso non ha significato, come le medie.
      * @minItems 7

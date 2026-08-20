@@ -913,6 +913,52 @@ components:
             una tabella chiave → unità nell'interfaccia andrebbe fuori sincrono
             alla prima metrica aggiunta. Assente sui conteggi, che sono numeri
             puri.
+        outOf:
+          type: integer
+          minimum: 0
+          description: >-
+            Totale di riferimento, per le metriche che sono una quota di un insieme
+            ("1.207 sotto-documenti verificati su 1.284"). È un fatto del dato, non una scelta
+            di resa: il denominatore lo conosce chi calcola il numeratore.
+        parts:
+          type: array
+          description: >-
+            Ripartizione del valore fra le sue componenti, in ordine di percorrenza: il tempo medio
+            di una pipeline si spende in fasi (OCR, estrazione, salvataggio) e la somma delle parti
+            è il valore. Serve a dire dove il tempo se ne va, non solo quanto ne serve.
+          items:
+            type: object
+            required: [label, value]
+            properties:
+              label:
+                type: string
+              value:
+                type: number
+                minimum: 0
+        distribution:
+          type: array
+          description: >-
+            Densità delle durate: quante elaborazioni cadono in ciascun intervallo di tempo,
+            dagli intervalli più brevi ai più lunghi. Gli intervalli hanno tutti la stessa ampiezza
+            e `upTo` è l'estremo superiore in secondi, così l'interfaccia può disegnare l'asse
+            senza ricostruire i confini.
+          items:
+            type: object
+            required: [upTo, count]
+            properties:
+              upTo:
+                type: number
+                minimum: 0
+              count:
+                type: integer
+                minimum: 0
+        sampleSize:
+          type: integer
+          minimum: 0
+          description: >-
+            Quante misure stanno dietro una distribuzione o una media. Con pochi campioni una curva
+            di densità è più interpolazione che dato: l'interfaccia la sostituisce con una riga di
+            testo, e per farlo deve sapere quante ne ha.
         history:
           type: array
           description: >-
