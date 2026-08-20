@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from "@angular/co
 import type { Metric } from "../../../../api/generated/model";
 import { formatMetric, type MetricTone, newToday } from "../../util/metrics";
 import { EmptyStateComponent } from "../empty-state/empty-state";
+import { MetricBreakdownComponent } from "../metric-breakdown/metric-breakdown";
 import { MetricCardComponent } from "../metric-card/metric-card";
 import { MetricDistributionComponent } from "../metric-distribution/metric-distribution";
 import { MetricGaugeComponent } from "../metric-gauge/metric-gauge";
@@ -16,12 +17,21 @@ import { MetricStatusComponent } from "../metric-status/metric-status";
  * Non e' una preferenza estetica ma il tipo di domanda a cui il numero
  * risponde: quanto e con che ritmo (`trend`), quanta parte di un totale
  * (`share`), dove cade dentro una scala nota (`gauge`), com'e' distribuito
- * (`distribution`), in che cosa si spende (`phases`), che voto ha preso
+ * (`distribution`), fra quali stati si divide (`breakdown`), in che cosa si
+ * spende (`phases`), che voto ha preso
  * (`stars`), se c'e' qualcosa da guardare (`status`). Con una forma sola le
  * schede di un pannello si leggevano tutte uguali, e per capire che cosa si
  * stesse guardando bisognava ogni volta tornare all'etichetta.
  */
-export type MetricKind = "trend" | "share" | "gauge" | "status" | "phases" | "distribution" | "stars";
+export type MetricKind =
+  | "trend"
+  | "share"
+  | "gauge"
+  | "status"
+  | "phases"
+  | "distribution"
+  | "breakdown"
+  | "stars";
 
 /** Come la pagina che conosce il contesto vuole che una metrica sia resa. */
 export interface MetricPresentation {
@@ -53,6 +63,7 @@ export interface MetricPresentation {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     EmptyStateComponent,
+    MetricBreakdownComponent,
     MetricCardComponent,
     MetricDistributionComponent,
     MetricGaugeComponent,
@@ -107,6 +118,9 @@ export interface MetricPresentation {
                   [issueTone]="entry.issueTone"
                   [context]="entry.context"
                 />
+              }
+              @case ("breakdown") {
+                <mvp-metric-breakdown [label]="entry.label" [parts]="entry.parts" />
               }
               @case ("phases") {
                 <mvp-metric-phases
