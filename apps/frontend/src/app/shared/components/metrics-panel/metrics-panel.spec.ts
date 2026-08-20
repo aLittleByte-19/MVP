@@ -55,16 +55,31 @@ describe("MetricsPanelComponent", () => {
     expect(host.querySelectorAll(".skeleton").length).toBeGreaterThan(0);
   });
 
-  it("rende come quota la metrica che ha un totale di riferimento", () => {
+  it("rende come quota la metrica che porta il proprio totale", () => {
+    // Il denominatore arriva dal contratto, non dalla pagina: e' chi calcola
+    // il numeratore a sapere su che cosa si misura.
     const host = render({
-      metrics,
-      presentation: { "copilot.needs_review": { kind: "share", tone: "watch", outOf: 412 } }
+      metrics: [{ key: "copilot.verified", value: 23, outOf: 412, label: "Verificati" }],
+      presentation: { "copilot.verified": { kind: "share" } }
     });
 
     expect(host.querySelector("mvp-metric-share")).not.toBeNull();
-    expect(host.querySelector(".total")?.textContent).toContain("412");
-    // La serie e' un flusso di ingresso: si dice "nuovi oggi", non "rispetto a ieri".
-    expect(host.querySelector(".context")?.textContent?.trim()).toBe("3 nuovi oggi");
+    expect(host.querySelector(".side")?.textContent).toContain("412");
+  });
+
+  it("da' alle schede con un grafico due colonne del mosaico", () => {
+    // Su una colonna sola le tacche dei tempi si accavallerebbero.
+    const host = render({
+      metrics: [
+        { key: "durata", value: 41, label: "Durata", sampleSize: 20, distribution: [] },
+        { key: "conteggio", value: 12, label: "Documenti" }
+      ],
+      presentation: { durata: { kind: "distribution", span: 2 } }
+    });
+    const cells = host.querySelectorAll("li");
+
+    expect(cells[0]?.classList.contains("wide")).toBe(true);
+    expect(cells[1]?.classList.contains("wide")).toBe(false);
   });
 
   it("sceglie la forma della scheda in base alla domanda a cui la metrica risponde", () => {
@@ -75,12 +90,12 @@ describe("MetricsPanelComponent", () => {
         { key: "conteggio", value: 12, label: "Documenti" }
       ],
       presentation: {
-        media: { kind: "gauge", max: 5 },
+        media: { kind: "stars", max: 5 },
         guasti: { kind: "status", okLabel: "Nessun errore" }
       }
     });
 
-    expect(host.querySelector("mvp-metric-gauge .num")?.textContent?.trim()).toBe("4,3");
+    expect(host.querySelector("mvp-metric-stars .num")?.textContent?.trim()).toBe("4,3");
     expect(host.querySelector("mvp-metric-status")?.textContent).toContain("Nessun errore");
     // Senza indicazioni resta la scheda di andamento, che e' il caso comune.
     expect(host.querySelector("mvp-metric-card .num")?.textContent?.trim()).toBe("12");

@@ -9,8 +9,19 @@ import { extractFieldErrors, getApiErrorMessage } from "../../core/errors/api-er
 import type { CompositionSlice } from "../../shared/components/metric-composition/metric-composition";
 import type { MetricPresentation } from "../../shared/components/metrics-panel/metrics-panel";
 
-/** Metriche che il pannello non ripete perché sono le parti della ripartizione. */
-const MODULE_COMPOSITION_KEYS = ["copilot.needs_review", "copilot.validated", "copilot.quarantined"];
+/**
+ * Metriche che il pannello non mostra come schede a sé.
+ *
+ * `needs_review`, `validated` e `quarantined` sono le parti della ripartizione
+ * disegnata sotto; `sub_documents` è il totale su cui si misurano le quote e
+ * come conteggio isolato non aggiunge nulla.
+ */
+const MODULE_COMPOSITION_KEYS = [
+  "copilot.needs_review",
+  "copilot.validated",
+  "copilot.quarantined",
+  "copilot.sub_documents"
+];
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import type { DocumentUploadRequest } from "./components/document-upload-panel";
 import {
@@ -79,33 +90,36 @@ export class CopilotPageViewModel {
   );
 
   /**
-   * Forma e parametri di ciascuna scheda. Non tutte le metriche rispondono
-   * alla stessa domanda: due sono quote sul totale dei documenti, due sono
-   * conteggi di guasti che quasi sempre valgono zero, una e' una misura su
-   * una scala con la soglia oltre cui il sistema valida da solo.
+   * Forma e ingombro di ciascuna scheda del pannello.
+   *
+   * Otto schede su dodici celle: quattro strette in alto — i due conteggi e i
+   * due verdetti, che si leggono in un colpo d'occhio — e due righe di schede
+   * larghe, dove ci sono un asse dei tempi o una scala da leggere. Il conto
+   * torna a multipli di quattro, cosi' non restano righe spaiate.
    */
-  readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => {
-    const documents = this.store.metricEntry("copilot.documents");
-    const total = typeof documents?.value === "number" ? documents.value : undefined;
-
-    return {
-      "copilot.sub_documents": { kind: "share", outOf: total },
-      "copilot.in_progress": { kind: "share", outOf: total },
-      "copilot.processing_stuck": {
-        kind: "status",
-        okLabel: "Nessuna in ritardo",
-        issueLabel: "Da sbloccare"
-      },
-      "copilot.processing_failed": {
-        kind: "status",
-        okLabel: "Nessun errore",
-        issueLabel: "Da ricaricare"
-      },
-      // La soglia arriva dal contratto: la stabilisce la configurazione del
-      // backend, non questa pagina.
-      "copilot.ocr_confidence": { kind: "gauge" }
-    };
-  });
+  readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => ({
+    "copilot.documents": { kind: "trend" },
+    "copilot.verified": { kind: "share", span: 2, restNoun: "da verificare" },
+    "copilot.ocr_confidence": { kind: "gauge" },
+    "copilot.fields_filled": {
+      kind: "share",
+      span: 2,
+      restTone: "neutral",
+      restNoun: "lasciati vuoti"
+    },
+    "copilot.processing_seconds": { kind: "phases", span: 2 },
+    "copilot.duration": { kind: "distribution", span: 2 },
+    "copilot.processing_failed": {
+      kind: "status",
+      okLabel: "Nessun errore",
+      issueLabel: "da ricaricare"
+    },
+    "copilot.processing_stuck": {
+      kind: "status",
+      okLabel: "Nessuna in ritardo",
+      issueLabel: "da sbloccare"
+    }
+  }));
 
   /**
    * Stati di revisione come partizione dei sotto-documenti.
