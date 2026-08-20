@@ -1,0 +1,110 @@
+/* Il guscio sta in `shared/styles/metric-shell.css`. Qui il solo anello. */
+
+.card {
+  align-content: start;
+}
+
+.label {
+  order: 0;
+}
+
+.figure {
+  display: flex;
+  gap: var(--mvp-space-4);
+  align-items: center;
+}
+
+.ring {
+  width: 92px;
+  height: 92px;
+  flex: none;
+}
+
+.ring circle {
+  fill: none;
+}
+
+/* I toni sono quelli che gli stati dichiarano nel dominio: arancione per cio'
+   che aspetta una mano, teal per cio' che il sistema ha validato da solo,
+   verde per cio' che una persona ha confermato. */
+.ring circle.warning {
+  stroke: var(--mvp-warning-border);
+}
+
+.ring circle.info {
+  stroke: var(--mvp-info-border);
+}
+
+.ring circle.success {
+  stroke: var(--mvp-success-border);
+}
+
+.ring circle.danger {
+  stroke: var(--mvp-danger-border);
+}
+
+.ring circle.neutral {
+  stroke: var(--mvp-border-strong);
+}
+
+.total {
+  fill: var(--mvp-text);
+  font-size: 19px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.legend {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  list-style: none;
+}
+
+.legend li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: var(--mvp-space-2);
+  align-items: center;
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-xs);
+}
+
+.legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legend i.warning {
+  background: var(--mvp-warning-border);
+}
+
+.legend i.info {
+  background: var(--mvp-info-border);
+}
+
+.legend i.success {
+  background: var(--mvp-success-border);
+}
+
+.legend i.danger {
+  background: var(--mvp-danger-border);
+}
+
+.legend i.neutral {
+  background: var(--mvp-border-strong);
+}
+
+.legend b {
+  color: var(--mvp-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.none {
+  margin: 0;
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-sm);
+}

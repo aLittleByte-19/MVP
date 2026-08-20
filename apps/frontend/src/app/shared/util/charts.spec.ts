@@ -1,4 +1,4 @@
-import { dailyBars, densityShape, ringDash, segments, smoothPath, starFills } from "./charts";
+import { dailyBars, densityShape, ringArcs, ringDash, segments, smoothPath, starFills } from "./charts";
 
 describe("dailyBars", () => {
   it("scala le barre sul giorno piu' alto e marca l'ultimo", () => {
@@ -110,5 +110,33 @@ describe("starFills", () => {
 
   it("non riempie nulla a zero", () => {
     expect(starFills(0)).toEqual([0, 0, 0, 0, 0]);
+  });
+});
+
+describe("ringArcs", () => {
+  const parts = [
+    { label: "a", value: 1, tone: "warning" },
+    { label: "b", value: 3, tone: "info" }
+  ];
+
+  it("da' a ciascuna parte la sua fetta e la fa partire dove finisce la precedente", () => {
+    const arcs = ringArcs(parts, 10);
+    const circumference = 2 * Math.PI * 10;
+
+    expect(arcs).toHaveLength(2);
+    expect(Number(arcs[0]!.dash.split(" ")[0])).toBeCloseTo(circumference / 4, 1);
+    expect(arcs[0]!.offset).toBe(0);
+    expect(arcs[1]!.offset).toBeCloseTo(-circumference / 4, 1);
+  });
+
+  it("lascia fuori le parti a zero, che sarebbero archi invisibili con una voce in legenda", () => {
+    const arcs = ringArcs([...parts, { label: "vuota", value: 0 }], 10);
+
+    expect(arcs.map((arc) => arc.label)).toEqual(["a", "b"]);
+  });
+
+  it("non produce nulla quando non c'e' niente da ripartire", () => {
+    expect(ringArcs([], 10)).toEqual([]);
+    expect(ringArcs([{ label: "a", value: 0 }], 10)).toEqual([]);
   });
 });
