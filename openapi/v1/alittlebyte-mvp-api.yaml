@@ -1335,6 +1335,24 @@ components:
           type: [string, "null"]
         employeeId:
           type: [string, "null"]
+        fieldConfidences:
+          description: >
+            Confidenza OCR di ogni campo trascritto, presa dalla riga da cui il
+            campo proviene (ADR 0013). Chiave in snake_case come il campo
+            estratto. Valore null: il campo non e' rintracciabile fra le righe
+            OCR, che e' diverso dall'essere stato letto male. Assente sui
+            documenti elaborati prima dell'introduzione del dettaglio per riga.
+          type: [object, "null"]
+          additionalProperties:
+            type: [number, "null"]
+        lowConfidenceFields:
+          description: >
+            Campi la cui confidenza sta sotto la propria soglia: la soglia
+            generale, o quella dedicata del codice fiscale. La decisione sta qui
+            e non nella SPA perche' le soglie sono conoscenza di dominio.
+          type: array
+          items:
+            type: string
     ErrorEnvelope:
       type: object
       required: [error]
