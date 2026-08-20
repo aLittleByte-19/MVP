@@ -10,7 +10,13 @@ import { capitalizeFirst, formatConfidence, formatDateForDisplay, formatFallback
 import { DOCUMENT_TYPE_OPTIONS, codiceFiscaleValidator } from "../../../shared/util/document-field-validators";
 import { DocumentWorkflowService, type DocumentPreviewStatus } from "../data/document-workflow.service";
 import { DocumentStatusTimelineComponent } from "./document-status-timeline";
-import { FieldOriginComponent, type FieldOrigin, originForReviewStatus } from "./field-origin/field-origin";
+import {
+  EXTRACTED_FIELD_KEYS,
+  FieldOriginComponent,
+  type FieldOrigin,
+  originForField,
+  originForReviewStatus
+} from "./field-origin/field-origin";
 
 interface ReviewFormState {
   employeeName: string;
@@ -154,7 +160,7 @@ const emptySendMessageForm: SendMessageFormState = {
                   <span>Nome e cognome</span>
                   <div class="control">
                     @if (fieldOrigin(document, "employeeName"); as origin) {
-                      <mvp-field-origin [origin]="origin" />
+                      <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'employeeName')" />
                     }
                     <input
                       formControlName="employeeName"
@@ -168,7 +174,7 @@ const emptySendMessageForm: SendMessageFormState = {
                   <span>Azienda</span>
                   <div class="control">
                     @if (fieldOrigin(document, "companyName"); as origin) {
-                      <mvp-field-origin [origin]="origin" />
+                      <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'companyName')" />
                     }
                     <input
                       formControlName="companyName"
@@ -189,7 +195,7 @@ const emptySendMessageForm: SendMessageFormState = {
                   <span>Data documento</span>
                   <div class="control">
                     @if (fieldOrigin(document, "documentDate"); as origin) {
-                      <mvp-field-origin [origin]="origin" />
+                      <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'documentDate')" />
                     }
                     @if (isEditing()) {
                       <input id="document-date-field" type="date" formControlName="documentDate" />
@@ -215,7 +221,7 @@ const emptySendMessageForm: SendMessageFormState = {
                   <span>Tipologia documento</span>
                   <div class="control">
                     @if (fieldOrigin(document, "documentType"); as origin) {
-                      <mvp-field-origin [origin]="origin" />
+                      <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'documentType')" />
                     }
                     @if (isEditing()) {
                       <select id="document-type-field" formControlName="documentType">
@@ -282,7 +288,7 @@ const emptySendMessageForm: SendMessageFormState = {
                   <div class="withAction">
                     <div class="control">
                       @if (fieldOrigin(document, "recipientEmail"); as origin) {
-                        <mvp-field-origin [origin]="origin" />
+                        <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'recipientEmail')" />
                       }
                       <input
                         formControlName="recipientEmail"
@@ -317,7 +323,7 @@ const emptySendMessageForm: SendMessageFormState = {
                   <span>Codice Fiscale</span>
                   <div class="control">
                     @if (fieldOrigin(document, "fiscalCode"); as origin) {
-                      <mvp-field-origin [origin]="origin" />
+                      <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'fiscalCode')" />
                     }
                     <input
                       formControlName="fiscalCode"
@@ -336,7 +342,7 @@ const emptySendMessageForm: SendMessageFormState = {
                   <span>Matricola dipendente</span>
                   <div class="control">
                     @if (fieldOrigin(document, "employeeId"); as origin) {
-                      <mvp-field-origin [origin]="origin" />
+                      <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'employeeId')" />
                     }
                     <input
                       formControlName="employeeId"
@@ -668,7 +674,25 @@ export class SubDocumentListComponent {
       return null;
     }
 
-    return originForReviewStatus(documentItem.reviewStatus);
+    return originForField(documentItem, EXTRACTED_FIELD_KEYS[controlName]);
+  }
+
+  /**
+   * Quanto era leggibile il testo da cui viene il campo, per il suggerimento.
+   * Null quando il documento e' stato elaborato prima del dettaglio per riga,
+   * o quando il valore non e' stato rintracciato fra le righe OCR.
+   */
+  protected fieldConfidence(documentItem: SubDocument, controlName: string): number | null {
+    const keys = EXTRACTED_FIELD_KEYS[controlName];
+    const confidences = documentItem.fieldConfidences;
+
+    if (!keys || !confidences) {
+      return null;
+    }
+
+    const values = keys.map((key) => confidences[key]).filter((value): value is number => typeof value === "number");
+
+    return values.length > 0 ? Math.min(...values) : null;
   }
 
   /** Da dove vengono i campi estratti, per la legenda in cima al pannello. */
