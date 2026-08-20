@@ -14,6 +14,7 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentAiGatewayPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\Support\CodiceFiscale;
+use App\Mvp\Documents\Domain\Support\FieldConfidence;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
 use App\Mvp\Support\Persistence\TransactionManagerPort;
@@ -30,6 +31,31 @@ use Psr\Log\LoggerInterface;
  */
 class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
 {
+    /**
+     * I campi che identificano il documento e il suo destinatario: sono questi
+     * a determinare se l'estrazione regge, non i nove estratti in tutto.
+     *
+     * @var list<string>
+     */
+    private const KEY_FIELDS = ['employee_first_name', 'employee_last_name', 'company_name', 'document_date'];
+
+    /**
+     * Campi che il modello copia dal documento invece di dedurli, e che quindi
+     * si possono ritrovare fra le righe OCR. Restano fuori `document_type` e
+     * `description`, che il modello compone, e `document_date`, che normalizza
+     * e va cercata a parte nelle rese in cui il foglio la scrive.
+     *
+     * @var list<string>
+     */
+    private const TRANSCRIBED_FIELDS = [
+        'employee_first_name',
+        'employee_last_name',
+        'company_name',
+        'recipient_email',
+        'fiscal_code',
+        'employee_id',
+    ];
+
     public function __construct(
         private readonly DocumentRepository $documents,
         private readonly DocumentAiGatewayPort $ai,
@@ -38,6 +64,10 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
         private readonly OcrRangeReader $ocrRange,
         private readonly TransactionManagerPort $tx,
         private readonly int $confidenceThreshold = 80,
+        // Il Capitolato chiede «mapping CF ≥ 99%» come criterio a se' stante,
+        // separato dalla confidenza media OCR: il codice fiscale identifica la
+        // persona, e un carattere letto male lo assegna a un'altra.
+        private readonly int $fiscalCodeConfidenceThreshold = 99,
     ) {}
 
     public function extractAndSaveFields(int $subDocumentId): void
@@ -55,10 +85,11 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
             $aiFields = $this->extractFields($subDocument, $original);
             // I metadati impostati in upload prevalgono sull'estrazione AI.
             $fields = $this->applyManualMetadataOverrides($aiFields, $original);
-            $confidenceScore = $this->computeConfidenceScore($aiFields, $subDocument, $original);
-            $reviewStatus = $this->reviewStatusForConfidence($confidenceScore);
+            $fieldConfidences = $this->fieldConfidences($aiFields, $subDocument, $original);
+            $confidenceScore = $this->computeConfidenceScore($aiFields, $fieldConfidences, $subDocument, $original);
+            $reviewStatus = $this->reviewStatusForConfidence($confidenceScore, $fieldConfidences);
 
-            $this->tx->run(function () use ($subDocumentId, $subDocument, $reviewStatus, $fields, $confidenceScore, $aiFields): void {
+            $this->tx->run(function () use ($subDocumentId, $subDocument, $reviewStatus, $fields, $confidenceScore, $fieldConfidences, $aiFields): void {
                 if ($reviewStatus === ReviewStatus::AutoValidated) {
                     $subDocument->markAutoValidated();
                 } else {
@@ -76,6 +107,7 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
                     ->withFiscalCode($fields['fiscal_code'])
                     ->withEmployeeId($fields['employee_id'])
                     ->withConfidenceScore($confidenceScore)
+                    ->withFieldConfidences($fieldConfidences)
                     ->withAiPayload($aiFields));
             });
 
@@ -109,29 +141,81 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
         }
     }
 
-    private function computeConfidenceScore(array $aiFields, SubDocument $subDocument, OriginalDocument $original): int
+    /**
+     * Confidenza di ogni campo trascritto, letta dalla riga OCR da cui proviene.
+     *
+     * I campi derivati non compaiono: tipologia e descrizione il modello li
+     * compone, non li copia dal foglio, quindi cercarli fra le righe non
+     * direbbe nulla sulla loro affidabilita'.
+     *
+     * @param  array<string, mixed>  $aiFields
+     * @return array<string, float|null>
+     */
+    private function fieldConfidences(array $aiFields, SubDocument $subDocument, OriginalDocument $original): array
+    {
+        $blocks = $this->ocrBlocksForRange($original, $subDocument->startPage, $subDocument->endPage);
+
+        $confidences = [];
+
+        foreach (self::TRANSCRIBED_FIELDS as $field) {
+            $confidences[$field] = FieldConfidence::forValue(
+                isset($aiFields[$field]) ? (string) $aiFields[$field] : null,
+                $blocks,
+            );
+        }
+
+        $confidences['document_date'] = FieldConfidence::forDate(
+            isset($aiFields['document_date']) ? (string) $aiFields['document_date'] : null,
+            $blocks,
+        );
+
+        return $confidences;
+    }
+
+    /**
+     * Punteggio del sotto-documento: la confidenza del suo campo chiave piu'
+     * debole.
+     *
+     * Il minimo e non la media, perche' un documento e' affidabile quanto il
+     * dato meno affidabile fra quelli che lo identificano: se il cognome del
+     * destinatario e' illeggibile non conta che l'azienda sia nitida, il
+     * documento rischia comunque di finire alla persona sbagliata.
+     *
+     * Un campo chiave assente vale zero. Un campo presente ma non rintracciabile
+     * fra le righe ricade sulla media di pagina: e' il caso della data quando il
+     * foglio la scrive in una forma che non riconosciamo, e in mancanza di
+     * meglio la leggibilita' complessiva resta la stima piu' onesta.
+     *
+     * @param  array<string, mixed>  $aiFields
+     * @param  array<string, float|null>  $fieldConfidences
+     */
+    private function computeConfidenceScore(array $aiFields, array $fieldConfidences, SubDocument $subDocument, OriginalDocument $original): int
     {
         $keyFields = array_values(array_diff(
-            ['employee_first_name', 'employee_last_name', 'company_name', 'document_date'],
+            self::KEY_FIELDS,
             $this->manuallyDeclaredKeyFields($original),
         ));
 
-        $ocrConfidence = $this->ocrConfidenceForRange($original, $subDocument->startPage, $subDocument->endPage);
+        $pageConfidence = $this->ocrConfidenceForRange($original, $subDocument->startPage, $subDocument->endPage);
 
         if ($keyFields === []) {
-            return max(0, min(100, (int) round($ocrConfidence)));
+            return max(0, min(100, (int) round($pageConfidence)));
         }
 
-        $found = 0;
+        $weakest = null;
+
         foreach ($keyFields as $key) {
-            if (isset($aiFields[$key]) && trim((string) $aiFields[$key]) !== '') {
-                $found++;
+            if (! isset($aiFields[$key]) || trim((string) $aiFields[$key]) === '') {
+                return 0;
             }
+
+            $confidence = $fieldConfidences[$key] ?? null;
+            $confidence ??= $pageConfidence;
+
+            $weakest = $weakest === null ? $confidence : min($weakest, $confidence);
         }
 
-        $completeness = $found / count($keyFields);
-
-        return max(0, min(100, (int) round($ocrConfidence * $completeness)));
+        return max(0, min(100, (int) round((float) $weakest)));
     }
 
     /**
@@ -179,13 +263,57 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
         return (float) ($original->ocrConfidenceAvg ?? 0.0);
     }
 
-    private function reviewStatusForConfidence(?int $confidenceScore): ReviewStatus
+    /**
+     * Esito della revisione: sopra soglia si valida da solo, salvo il codice
+     * fiscale, che ha una soglia propria e piu' alta.
+     *
+     * La soglia dedicata si applica solo quando un codice fiscale c'e' ed e'
+     * rintracciabile: un documento che non lo porta non deve essere penalizzato
+     * per un dato che non gli compete.
+     *
+     * @param  array<string, float|null>  $fieldConfidences
+     */
+    private function reviewStatusForConfidence(?int $confidenceScore, array $fieldConfidences = []): ReviewStatus
     {
-        if ($confidenceScore !== null && $confidenceScore >= $this->confidenceThreshold) {
-            return ReviewStatus::AutoValidated;
+        if ($confidenceScore === null || $confidenceScore < $this->confidenceThreshold) {
+            return ReviewStatus::NeedsReview;
         }
 
-        return ReviewStatus::NeedsReview;
+        $fiscalCodeConfidence = $fieldConfidences['fiscal_code'] ?? null;
+
+        if ($fiscalCodeConfidence !== null && $fiscalCodeConfidence < $this->fiscalCodeConfidenceThreshold) {
+            return ReviewStatus::NeedsReview;
+        }
+
+        return ReviewStatus::AutoValidated;
+    }
+
+    /**
+     * Righe OCR dell'intervallo di pagine del sotto-documento, con la loro
+     * confidenza.
+     *
+     * @return array<int, array{text: string, confidence: float|null}>
+     */
+    private function ocrBlocksForRange(OriginalDocument $original, int $startPage, int $endPage): array
+    {
+        $blocks = [];
+
+        foreach ($original->ocrPages as $page) {
+            $number = (int) ($page['page'] ?? 0);
+
+            if ($number < $startPage || $number > $endPage) {
+                continue;
+            }
+
+            foreach ($page['blocks'] ?? [] as $block) {
+                $blocks[] = [
+                    'text' => (string) ($block['text'] ?? ''),
+                    'confidence' => isset($block['confidence']) ? (float) $block['confidence'] : null,
+                ];
+            }
+        }
+
+        return $blocks;
     }
 
     /**

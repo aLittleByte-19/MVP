@@ -52,6 +52,9 @@ return [
             'token' => env('AWS_REAL_SESSION_TOKEN'),
         ],
         'mvp_confidence_threshold' => (int) env('MVP_CONFIDENCE_THRESHOLD', 80),
+        // Soglia propria del codice fiscale: il Capitolato chiede
+        // «mapping CF >= 99%» come criterio separato dalla confidenza media OCR.
+        'mvp_fiscal_code_confidence_threshold' => (int) env('MVP_FISCAL_CODE_CONFIDENCE_THRESHOLD', 99),
     ],
 
     'workflow' => [

@@ -90,6 +90,18 @@ final class ExtractedDataChanges
     }
 
     /**
+     * Confidenza OCR di ciascun campo trascritto, per chiave in snake_case.
+     * Null come valore significa campo non rintracciabile fra le righe OCR,
+     * che e' diverso da campo letto male (vedi ADR 0013).
+     *
+     * @param  array<string, float|null>|null  $confidences
+     */
+    public function withFieldConfidences(?array $confidences): self
+    {
+        return $this->with('fieldConfidences', $confidences);
+    }
+
+    /**
      * @param  array<string, mixed>|null  $payload
      */
     public function withAiPayload(?array $payload): self
