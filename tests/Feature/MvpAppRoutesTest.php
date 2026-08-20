@@ -2047,3 +2047,47 @@ test('delete communication endpoint rejects cross tenant access', function () {
 
     expect(Communication::query()->find($communication->id))->not->toBeNull();
 });
+
+test('the document payload carries the per-field confidence and says which fields are doubtful', function () {
+    // La soglia del codice fiscale e' piu' alta di quella generale (ADR 0013):
+    // 92 sta sopra 80 ma sotto 99, quindi e' un campo dubbio anche se il
+    // cognome, con lo stesso valore, non lo sarebbe.
+    config([
+        'services.bedrock.mvp_confidence_threshold' => 80,
+        'services.bedrock.mvp_fiscal_code_confidence_threshold' => 99,
+    ]);
+
+    $subDocument = SubDocument::factory()->create();
+    ExtractedData::factory()->create([
+        'sub_document_id' => $subDocument->id,
+        'confidence_score' => 41,
+        'field_confidences' => [
+            'employee_first_name' => 98.5,
+            'employee_last_name' => 41.2,
+            'company_name' => 92.0,
+            'fiscal_code' => 92.0,
+            'recipient_email' => null,
+        ],
+    ]);
+
+    $document = collect($this->getJson('/api/v1/state')->json('copilot.documents'))->firstWhere('id', 'sub-'.$subDocument->id);
+
+    expect($document['fieldConfidences']['employee_last_name'])->toEqual(41.2)
+        ->and($document['lowConfidenceFields'])->toContain('employee_last_name', 'fiscal_code')
+        ->and($document['lowConfidenceFields'])->not->toContain('company_name')
+        // Un campo non rintracciabile non e' un campo letto male: resta fuori.
+        ->and($document['lowConfidenceFields'])->not->toContain('recipient_email');
+});
+
+test('a document extracted before the per-field detail carries no doubtful fields', function () {
+    $subDocument = SubDocument::factory()->create();
+    ExtractedData::factory()->create([
+        'sub_document_id' => $subDocument->id,
+        'field_confidences' => null,
+    ]);
+
+    $document = collect($this->getJson('/api/v1/state')->json('copilot.documents'))->firstWhere('id', 'sub-'.$subDocument->id);
+
+    expect($document['fieldConfidences'])->toBeNull()
+        ->and($document['lowConfidenceFields'])->toBe([]);
+});

@@ -41,6 +41,7 @@ export * from './savePromptConfigurationRequestTone';
 export * from './savePromptConfigurationResponse';
 export * from './startCommunicationGenerationResponse';
 export * from './subDocument';
+export * from './subDocumentFieldConfidences';
 export * from './subDocumentReviewStatus';
 export * from './subDocumentSendStatus';
 export * from './unauthorizedResponse';

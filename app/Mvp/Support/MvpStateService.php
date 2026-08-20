@@ -740,6 +740,44 @@ class MvpStateService
     }
 
     /**
+     * Campi la cui confidenza sta sotto la propria soglia.
+     *
+     * La decisione sta qui e non nella SPA perche' le soglie sono conoscenza di
+     * dominio, e non sono una sola: il codice fiscale ne ha una piu' alta,
+     * chiesta dal Capitolato (vedi ADR 0013). Un campo senza confidenza nota
+     * non entra nell'elenco: non e' stato rintracciato, il che non e' una prova
+     * che sia stato letto male.
+     *
+     * @param  array<string, float|null>|null  $fieldConfidences
+     * @return list<string>
+     */
+    private function lowConfidenceFields(?array $fieldConfidences): array
+    {
+        if ($fieldConfidences === null) {
+            return [];
+        }
+
+        $threshold = (int) config('services.bedrock.mvp_confidence_threshold', 80);
+        $fiscalCodeThreshold = (int) config('services.bedrock.mvp_fiscal_code_confidence_threshold', 99);
+
+        $low = [];
+
+        foreach ($fieldConfidences as $field => $confidence) {
+            if ($confidence === null) {
+                continue;
+            }
+
+            $applicable = $field === 'fiscal_code' ? $fiscalCodeThreshold : $threshold;
+
+            if ((float) $confidence < $applicable) {
+                $low[] = (string) $field;
+            }
+        }
+
+        return $low;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function document(SubDocument $subDocument): array
@@ -781,6 +819,8 @@ class MvpStateService
             'documentType' => $data?->document_type,
             'description' => $data?->description,
             'confidence' => $confidence,
+            'fieldConfidences' => $data?->field_confidences,
+            'lowConfidenceFields' => $this->lowConfidenceFields($data?->field_confidences),
             'reviewStatus' => $subDocument->review_status->value,
             'reviewStatusLabel' => $subDocument->review_status->label(),
             'sendStatus' => $subDocument->send_status->value,
