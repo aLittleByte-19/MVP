@@ -7,7 +7,7 @@ import { ErrorStateComponent } from "../../shared/components/error-state/error-s
 import { AttentionNoteComponent } from "../../shared/components/attention-note/attention-note";
 import { MetricCardComponent } from "../../shared/components/metric-card/metric-card";
 import { MetricGaugeComponent } from "../../shared/components/metric-gauge/metric-gauge";
-import { MetricShareComponent } from "../../shared/components/metric-share/metric-share";
+import { MetricStarsComponent } from "../../shared/components/metric-stars/metric-stars";
 import { StatusBadgeComponent } from "../../shared/components/status-badge/status-badge";
 import { SectionComponent } from "../../layout/section/section";
 import { formatFallback } from "../../shared/util/formatters";
@@ -32,7 +32,7 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
     ErrorStateComponent,
     MetricCardComponent,
     MetricGaugeComponent,
-    MetricShareComponent,
+    MetricStarsComponent,
     SectionComponent,
     StatusBadgeComponent
   ],
@@ -69,25 +69,14 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
         }
         <div class="priorityGrid">
           @for (priority of vm.priorities(); track priority.key) {
-            @if (priority.outOf !== null) {
-              <mvp-metric-share
-                [label]="priority.label"
-                [value]="priority.value"
-                [total]="priority.outOf"
-                [tone]="priority.tone"
-                [isLoading]="vm.loading()"
-                [context]="priority.context"
-              />
-            } @else {
-              <mvp-metric-card
-                [label]="priority.label"
-                [value]="priority.value"
-                [tone]="priority.tone"
-                [history]="priority.history"
-                [isLoading]="vm.loading()"
-                [context]="priority.context"
-              />
-            }
+            <mvp-metric-card
+              [label]="priority.label"
+              [value]="priority.value"
+              [tone]="priority.tone"
+              [history]="priority.history"
+              [isLoading]="vm.loading()"
+              [context]="priority.context"
+            />
           }
         </div>
       </mvp-section>
@@ -108,12 +97,11 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
               </button>
             </div>
             @if (vm.assistantQuality(); as quality) {
-              <mvp-metric-gauge
+              <mvp-metric-stars
                 [label]="quality.label"
                 [value]="quality.value"
                 [numeric]="quality.numeric"
                 [max]="5"
-                [unit]="quality.unit"
                 [isLoading]="vm.loading()"
                 context="qualità percepita delle bozze"
               />
@@ -133,12 +121,14 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
               </button>
             </div>
             @if (vm.copilotQuality(); as quality) {
-              <mvp-metric-card
+              <mvp-metric-gauge
                 [label]="quality.label"
                 [value]="quality.value"
+                [numeric]="quality.numeric"
                 [unit]="quality.unit"
+                [threshold]="quality.threshold"
                 [isLoading]="vm.loading()"
-                context="campi oltre la soglia di confidenza"
+                context="leggibilità di ciò che arriva"
               />
             }
           </div>

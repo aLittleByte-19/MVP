@@ -32,13 +32,15 @@ mvp-attention-note + .priorityGrid {
   margin-top: var(--mvp-space-3);
 }
 
+/* I due riquadri hanno la stessa altezza e la stessa struttura: titolo con il
+   rimando, poi una misura su una scala. Prima uno portava un quadrante e
+   l'altro un conteggio, e affiancati sembravano due cose diverse messe li'
+   per riempire. */
 .qualityGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--mvp-space-3);
-  /* Ogni riquadro prende l'altezza del proprio contenuto: senza questo, la
-     colonna piu' corta verrebbe stirata fino alla gemella piu' alta. */
-  align-items: start;
+  align-items: stretch;
 }
 
 .qualityItem {
