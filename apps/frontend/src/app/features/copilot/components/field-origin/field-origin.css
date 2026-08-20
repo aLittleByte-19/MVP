@@ -1,19 +1,19 @@
-/* L'indicatore sta dentro la casella, a filo del bordo sinistro, e ne e'
-   separato da un filo verticale: senza, l'icona sembrerebbe il primo carattere
-   del valore. Non intercetta il puntatore, cosi' il clic finisce comunque nel
-   campo. */
+/* L'indicatore sta dentro la casella, a filo del bordo destro, e ne e' separato
+   da un filo verticale: a sinistra rubava l'attacco della lettura, che e' dove
+   comincia il valore. Non intercetta il puntatore, cosi' il clic finisce
+   comunque nel campo. */
 :host {
   position: absolute;
   top: 1px;
+  right: 1px;
   bottom: 1px;
-  left: 1px;
   z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 34px;
-  border-right: 1px solid var(--mvp-border-soft);
-  border-radius: var(--mvp-radius) 0 0 var(--mvp-radius);
+  border-left: 1px solid var(--mvp-border-soft);
+  border-radius: 0 var(--mvp-radius) var(--mvp-radius) 0;
   color: var(--mvp-muted);
   pointer-events: none;
 }
@@ -27,17 +27,17 @@
    Il colore sta sull'icona e sul separatore, non piu' sul fondo del campo:
    tredici caselle colorate erano una macchia, e il valore ci si perdeva. */
 :host(.review) {
-  border-right-color: var(--mvp-warning-border);
+  border-left-color: var(--mvp-warning-border);
   color: var(--mvp-warning);
 }
 
 :host(.auto) {
-  border-right-color: var(--mvp-info-border);
+  border-left-color: var(--mvp-info-border);
   color: var(--mvp-info);
 }
 
 :host(.manual) {
-  border-right-color: var(--mvp-success-border);
+  border-left-color: var(--mvp-success-border);
   color: var(--mvp-success);
 }
 
