@@ -5,9 +5,9 @@ import { LucideCircleHelp, LucideLock, LucidePenLine, LucideSparkles } from "@lu
 export type FieldOrigin = "auto" | "manual" | "review" | "locked";
 
 const LABELS: Record<FieldOrigin, string> = {
-  auto: "Estratto dall'AI e validato in automatico",
-  manual: "Confermato dall'operatore",
-  review: "Estratto dall'AI, da verificare",
+  auto: "Estratto dall'AI con buona confidenza",
+  manual: "Corretto a mano dall'operatore",
+  review: "Estratto dall'AI con confidenza sotto soglia, da revisionare",
   locked: "Dato di sistema, non modificabile"
 };
 

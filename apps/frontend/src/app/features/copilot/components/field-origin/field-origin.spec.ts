@@ -15,9 +15,9 @@ describe("FieldOriginComponent", () => {
     // letto come parte dell'etichetta, "Nome e cognome, estratto dall'AI".
     const host = render("auto");
 
-    expect(host.getAttribute("title")).toBe("Estratto dall'AI e validato in automatico");
+    expect(host.getAttribute("title")).toBe("Estratto dall'AI con buona confidenza");
     expect(host.querySelector(".srOnly")?.textContent?.trim()).toBe(
-      "Estratto dall'AI e validato in automatico"
+      "Estratto dall'AI con buona confidenza"
     );
   });
 

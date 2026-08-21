@@ -14,8 +14,7 @@ import {
   EXTRACTED_FIELD_KEYS,
   FieldOriginComponent,
   type FieldOrigin,
-  originForField,
-  originForReviewStatus
+  originForField
 } from "./field-origin/field-origin";
 
 interface ReviewFormState {
@@ -127,10 +126,9 @@ const emptySendMessageForm: SendMessageFormState = {
             <div class="inspectorHeading">
               <h3 class="eyebrow">Dati estratti dall'OCR</h3>
               <p class="fieldLegend">
-                @if (originFor(document) !== "manual") {
-                  <span class="legendItem"
-                    ><mvp-field-origin [origin]="originFor(document)" />{{ originLabel(document) }}</span
-                  >
+                @if (document.reviewStatus !== "manually_validated") {
+                  <span class="legendItem"><mvp-field-origin origin="auto" />Confidenza alta</span>
+                  <span class="legendItem"><mvp-field-origin origin="review" />Da revisionare</span>
                 }
                 <span class="legendItem"><mvp-field-origin origin="manual" />Corretto a mano</span>
                 <span class="legendItem"><mvp-field-origin origin="locked" />Dato di sistema</span>
@@ -693,23 +691,6 @@ export class SubDocumentListComponent {
     const values = keys.map((key) => confidences[key]).filter((value): value is number => typeof value === "number");
 
     return values.length > 0 ? Math.min(...values) : null;
-  }
-
-  /** Da dove vengono i campi estratti, per la legenda in cima al pannello. */
-  protected originFor(documentItem: SubDocument): FieldOrigin {
-    return originForReviewStatus(documentItem.reviewStatus);
-  }
-
-  /** La stessa cosa a parole, per la legenda in fondo al pannello. */
-  protected originLabel(documentItem: SubDocument): string {
-    switch (documentItem.reviewStatus) {
-      case "manually_validated":
-        return "Confermato dall'operatore";
-      case "auto_validated":
-        return "Estratto e validato in automatico";
-      default:
-        return "Estratto, da verificare";
-    }
   }
 
 
