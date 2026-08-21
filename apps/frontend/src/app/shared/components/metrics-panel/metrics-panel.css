@@ -28,13 +28,16 @@
   grid-column: span 2;
 }
 
+/* Stessa forma dell'avviso di pagina (`mvp-alert`): riquadro intero nel colore
+   dell'accento, non una striscia laterale. Le due segnalazioni compaiono una
+   sopra l'altra quando il servizio non risponde, e disegnarle in due modi
+   diversi le faceva sembrare due fatti diversi. */
 .failed {
   margin: 0;
   padding: var(--mvp-space-4);
-  border: 1px solid var(--mvp-border);
-  border-left: 3px solid var(--mvp-danger);
+  border: 1px solid var(--mvp-accent);
   border-radius: var(--mvp-radius);
-  background: var(--mvp-surface-muted);
+  background: var(--mvp-surface);
   color: var(--mvp-muted);
   font-size: var(--mvp-font-sm);
 }
