@@ -1,0 +1,1 @@
+Scrivi la comunicazione ufficiale sulla chiusura estiva dello stabilimento, con le date di sospensione dell'attivita' e la ripresa. Ricorda che le ferie residue vanno programmate con il responsabile entro la fine del mese precedente.

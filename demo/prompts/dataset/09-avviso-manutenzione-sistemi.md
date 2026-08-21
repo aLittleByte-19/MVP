@@ -1,0 +1,1 @@
+Prepara un avviso tecnico sulla manutenzione programmata dei sistemi gestionali, che nel fine settimana resteranno non disponibili. Indica quali attivita' vanno completate prima e chi contattare in caso di urgenza.

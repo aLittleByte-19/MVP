@@ -1,0 +1,1 @@
+Prepara una comunicazione che annuncia la riorganizzazione dei reparti logistica e spedizioni, che verranno accorpati in un'unica direzione operativa. Spiega che nessuna posizione viene soppressa e che i referenti resteranno gli stessi nella fase di transizione.

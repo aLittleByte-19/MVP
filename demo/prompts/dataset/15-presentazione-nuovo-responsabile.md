@@ -1,0 +1,1 @@
+Scrivi una comunicazione che presenta il nuovo responsabile della direzione tecnica, con un breve accenno al suo percorso e alle aree di cui si occupera'. Chiudi con un invito a rivolgersi a lui per le questioni di competenza.

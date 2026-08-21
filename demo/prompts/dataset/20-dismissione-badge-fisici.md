@@ -1,0 +1,1 @@
+Scrivi una comunicazione sulla dismissione dei badge fisici, sostituiti dall'applicazione aziendale per la timbratura. Indica le date di transizione, come attivare l'applicazione e cosa fare in caso di telefono non compatibile.

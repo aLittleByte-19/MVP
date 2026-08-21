@@ -1,0 +1,1 @@
+Prepara una comunicazione che informa dell'aggiornamento dell'informativa sul trattamento dei dati personali dei dipendenti. Spiega cosa cambia in sintesi e dove consultare il testo completo, con tono istituzionale.

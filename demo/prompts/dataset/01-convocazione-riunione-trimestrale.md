@@ -1,0 +1,1 @@
+Scrivi una comunicazione interna per convocare tutti i responsabili di reparto alla riunione trimestrale di allineamento, che si terra' in sala consiglio. Chiedi di portare i dati di produzione del trimestre e di segnalare in anticipo eventuali punti da mettere all'ordine del giorno.
