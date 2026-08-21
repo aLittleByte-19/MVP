@@ -1156,25 +1156,31 @@ test('the review breakdown carries its own denominator', function () {
         ->and($parts->keys()->all())->not->toContain('In quarantena');
 });
 
-test('the filled fields metric counts the nine extractable fields per sub-document', function () {
+test('the extracted fields metric splits them by their own confidence', function () {
     $subDocument = SubDocument::factory()->create();
     ExtractedData::factory()->create([
         'sub_document_id' => $subDocument->id,
-        'employee_first_name' => 'Mario',
-        'employee_last_name' => 'Rossi',
-        'company_name' => 'Acme Srl',
-        'document_date' => '2026-01-15',
-        'document_type' => 'cedolino',
-        'description' => null,
-        'recipient_email' => null,
-        'fiscal_code' => null,
-        'employee_id' => null,
+        'field_confidences' => [
+            'employee_first_name' => 99.0,
+            'employee_last_name' => 97.5,
+            'company_name' => 62.0,
+            // Il codice fiscale ha una soglia sua, piu' alta: a 90 sta sotto
+            // mentre gli altri campi allo stesso valore starebbero sopra.
+            'fiscal_code' => 90.0,
+            // Senza confidenza nota il campo non e' ne' buono ne' dubbio: resta
+            // fuori dal conteggio.
+            'document_date' => null,
+        ],
     ]);
 
     $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
+    $parts = collect($metrics['copilot.field_confidence']['parts'])->keyBy('label');
 
-    expect($metrics['copilot.fields_filled']['value'])->toBe(5)
-        ->and($metrics['copilot.fields_filled']['outOf'])->toBe(9);
+    expect($metrics['copilot.field_confidence']['value'])->toBe(4)
+        ->and($parts['Confidenza alta']['value'])->toBe(2)
+        ->and($parts['Confidenza alta']['tone'])->toBe('info')
+        ->and($parts['Da revisionare']['value'])->toBe(2)
+        ->and($parts['Da revisionare']['tone'])->toBe('warning');
 });
 
 test('the average duration is broken down into the phases that consumed it', function () {

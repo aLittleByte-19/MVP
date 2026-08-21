@@ -47,23 +47,6 @@ class MvpStateService
     ];
 
     /**
-     * I campi che l'estrazione puo' valorizzare. Sono il denominatore di
-     * "campi compilati": quanta parte della scheda il modello riesce a
-     * riempire da sola.
-     */
-    private const EXTRACTED_FIELDS = [
-        'employee_first_name',
-        'employee_last_name',
-        'company_name',
-        'document_date',
-        'document_type',
-        'description',
-        'recipient_email',
-        'fiscal_code',
-        'employee_id',
-    ];
-
-    /**
      * Passi ammessi per l'asse dei tempi della densita'. Dieci intervalli di
      * uno di questi valori coprono la durata piu' lunga: cosi' le tacche
      * cadono su numeri che si leggono (30s, 60s) invece che su 17,3s.
@@ -449,38 +432,54 @@ class MvpStateService
     }
 
     /**
-     * Quanta parte della scheda il modello riesce a riempire da solo.
+     * Come si dividono i campi estratti fra quelli letti bene e quelli da
+     * rivedere.
      *
-     * Il denominatore sono i nove campi estraibili per ogni sotto-documento,
-     * non i soli quattro principali: un codice fiscale mancante e' un campo che
-     * l'operatore dovra' scrivere a mano, e va contato come tale.
+     * Contava quanta parte della scheda il modello riuscisse a riempire da
+     * solo, ma una casella piena non e' una casella buona: un dato letto al
+     * 40% risultava compilato quanto uno letto al 99, e la scheda diceva che
+     * il lavoro era finito proprio dove l'operatore doveva ancora guardare. Il
+     * metro e' ora la stessa soglia per campo dell'ispettore (ADR 0013), cosi'
+     * la ripartizione in cima e i segni sulle caselle raccontano la stessa
+     * cosa.
+     *
+     * I campi senza confidenza nota restano fuori: non sono stati rintracciati
+     * fra le righe OCR, e questo non li rende ne' buoni ne' dubbi.
      *
      * @return array<string, mixed>
      */
-    private function filledFieldsMetric(string $tenantId, int $subDocumentCount): array
+    private function fieldConfidenceMetric(string $tenantId): array
     {
         $rows = ExtractedData::query()
             ->whereHas('subDocument.originalDocument', fn ($query) => $query->where('tenant_id', $tenantId))
-            ->get(self::EXTRACTED_FIELDS);
+            ->get(['field_confidences']);
 
-        $filled = 0;
+        $known = 0;
+        $low = 0;
 
         foreach ($rows as $row) {
-            foreach (self::EXTRACTED_FIELDS as $field) {
-                $value = $row->getAttribute($field);
+            $confidences = $row->field_confidences;
 
-                if ($value !== null && trim((string) $value) !== '') {
-                    $filled++;
-                }
+            if ($confidences === null) {
+                continue;
             }
+
+            $known += count(array_filter($confidences, fn ($confidence) => $confidence !== null));
+            $low += count($this->lowConfidenceFields($confidences));
         }
 
-        return [
-            'key' => 'copilot.fields_filled',
-            'value' => $filled,
-            'outOf' => $subDocumentCount * count(self::EXTRACTED_FIELDS),
-            'label' => "Campi compilati dall'AI",
-        ];
+        return $this->breakdownMetric(
+            'copilot.field_confidence',
+            'Campi estratti',
+            [
+                'Confidenza alta' => $known - $low,
+                ReviewStatus::NeedsReview->label() => $low,
+            ],
+            [
+                'Confidenza alta' => ReviewStatus::AutoValidated->color(),
+                ReviewStatus::NeedsReview->label() => ReviewStatus::NeedsReview->color(),
+            ],
+        );
     }
 
     /**
@@ -624,7 +623,7 @@ class MvpStateService
                         SendStatus::Pending->label() => SendStatus::Pending->color(),
                     ],
                 ),
-                $this->filledFieldsMetric($actor->tenantId, $subDocumentCount),
+                $this->fieldConfidenceMetric($actor->tenantId),
                 $this->phaseMetric(
                     'copilot.processing_seconds',
                     'Tempo medio di elaborazione',
