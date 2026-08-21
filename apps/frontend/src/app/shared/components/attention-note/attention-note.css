@@ -1,16 +1,17 @@
+/* Il colore dello stato sta nel bordo intero, non in una striscia a sinistra:
+   e' la stessa forma dell'avviso di pagina e delle schede metrica. */
 .note {
   display: flex;
   gap: var(--mvp-space-3);
   align-items: flex-start;
   padding: var(--mvp-space-3) var(--mvp-space-4);
-  border: 1px solid var(--mvp-border);
-  border-left: 3px solid var(--mvp-accent);
+  border: 1px solid var(--mvp-accent);
   border-radius: var(--mvp-radius);
   background: var(--mvp-accent-soft);
 }
 
 .note.alert {
-  border-left-color: var(--mvp-danger);
+  border-color: var(--mvp-danger);
   background: var(--mvp-danger-soft);
 }
 
