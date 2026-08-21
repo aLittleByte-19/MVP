@@ -1,0 +1,1 @@
+Scrivi una comunicazione di benvenuto da inviare ai colleghi per presentare una nuova persona che entra nel reparto amministrazione. Indica il ruolo, da chi dipende e a chi rivolgersi per l'affiancamento nelle prime settimane.

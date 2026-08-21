@@ -1,0 +1,1 @@
+Scrivi una comunicazione che invita il personale operativo al corso obbligatorio di aggiornamento sulla sicurezza sul lavoro. Sottolinea che la partecipazione e' obbligatoria per legge e che le assenze vanno giustificate.

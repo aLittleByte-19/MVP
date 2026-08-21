@@ -1,0 +1,1 @@
+Prepara una comunicazione sull'avvio delle trattative per il rinnovo del contratto integrativo aziendale. Indica chi siede al tavolo, i temi principali e come il personale verra' aggiornato sull'andamento.
