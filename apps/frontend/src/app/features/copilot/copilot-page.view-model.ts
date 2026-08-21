@@ -118,12 +118,7 @@ export class CopilotPageViewModel {
     "copilot.ocr_confidence": { kind: "gauge", span: 2 },
     "copilot.review_breakdown": { kind: "breakdown", span: 2 },
     "copilot.download_breakdown": { kind: "breakdown", span: 2 },
-    "copilot.fields_filled": {
-      kind: "share",
-      span: 2,
-      restTone: "neutral",
-      restNoun: "lasciati vuoti"
-    },
+    "copilot.field_confidence": { kind: "breakdown", span: 2 },
     "copilot.processing_seconds": { kind: "phases", span: 2 },
     "copilot.duration": { kind: "distribution", span: 2 },
     "copilot.processing_failed": {
