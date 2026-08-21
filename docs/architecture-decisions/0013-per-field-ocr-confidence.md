@@ -200,6 +200,13 @@ cercarli fra le righe non direbbe nulla sulla loro affidabilità.
 - `tests/DomainUnit/Documents/FieldConfidenceTest.php` — logica pura.
 - `tests/Feature/DocumentExtractionTest.php` — campo illeggibile in pagina pulita, minimo sui campi
   chiave, dettaglio persistito, soglia del codice fiscale.
+- `app/Mvp/Support/MvpStateService.php` — `lowConfidenceFields()` nel contratto del documento e
+  `fieldConfidenceMetric()`, la ripartizione dei campi estratti fra buona confidenza e da
+  revisionare. Sostituisce «campi compilati dall'AI», che contava le caselle piene senza guardare
+  quanto fossero leggibili.
+- `apps/frontend/src/app/features/copilot/components/field-origin/field-origin.ts` —
+  `originForField()`: il glifo del singolo campo, con ricaduta sullo stato del documento per quelli
+  elaborati prima di questa decisione.
 
 ## Related documents
 

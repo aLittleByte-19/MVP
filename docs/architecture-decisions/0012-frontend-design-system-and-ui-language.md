@@ -74,11 +74,13 @@ offset zero la misura decade.
 - **Pulsante — gerarchia per collocazione.** Le azioni che chiudono il compito stanno in una barra
   a fondo pannello, sempre nello stesso punto; le accessorie restano in linea come collegamenti.
   Sostituisce la gerarchia per solo aspetto, che con sei azioni affiancate non distingueva nulla.
-- **Campo — provenienza del dato.** Colore più **glifo a destra**: `!` per un campo chiave che
-  l'AI non ha estratto, `▪` per un valore dichiarato in caricamento e quindi autoritativo. Legenda
-  una volta sola, collegata ai campi con `aria-describedby`. Il glifo è il secondo segnale
-  *visivo* richiesto da [SC 1.4.1](https://www.w3.org/WAI/WCAG21/Understanding/use-of-color.html):
-  il colore da solo non basta, e il testo per sole tecnologie assistive non sana la mancanza.
+- **Campo — provenienza del dato.** Colore più **glifo dentro la casella, a destra**, staccato dal
+  valore da un filo verticale: scintille per un campo estratto con buona confidenza, punto
+  interrogativo per uno sotto la propria soglia, penna per un campo corretto a mano, lucchetto per
+  un dato di sistema. Una casella vuota non porta glifo: non c'è provenienza da dichiarare. Legenda
+  una volta sola, in cima al pannello. Il glifo è il secondo segnale *visivo* richiesto da
+  [SC 1.4.1](https://www.w3.org/WAI/WCAG21/Understanding/use-of-color.html): il colore da solo non
+  basta, e il testo per sole tecnologie assistive non sana la mancanza.
 - **Badge — due forme per due grandezze.** Rettangolo a contorno per lo stato di **validazione**,
   pallino per lo stato di **scaricamento**, pieno o vuoto. Sono dati diversi e ora si distinguono
   anche per forma, non solo per posizione.
@@ -145,9 +147,12 @@ codice. Le Norme di Progetto non normano il CSS: la convenzione la fissa questo 
   peso variabile o un sottoinsieme statico minimo.
 - Le cifre in tabella dipendono dal supporto di `tnum` in Plex Sans: se il font non lo esponesse, le
   colonne numeriche non si incolonnerebbero e la cosa si vede a occhio nudo.
-- La provenienza dei campi (`▪`) richiede che **il contratto esponga quali campi siano di
-  provenienza manuale** — informazione che il backend conosce (`manuallyDeclaredKeyFields`) ma non
-  pubblica. Finché non lo fa, resta rendibile il solo stato «non estratto».
+- La provenienza dei campi richiedeva che **il contratto esponesse il dato per campo**, e il
+  backend non lo pubblicava: finché è stato così, tredici caselle portavano tutte il segno dello
+  stato del documento. L'ADR 0013 lo ha chiuso — `fieldConfidences` e `lowConfidenceFields` sono nel
+  contratto, e il glifo è ora quello del singolo campo. Resta fuori la provenienza *manuale*
+  persistita (`manuallyDeclaredKeyFields`): la penna segna i campi corretti nella sessione in corso
+  e, dopo il salvataggio, l'intera scheda validata a mano.
 - Estendere il gate a11y a tutte e tre le pagine può far emergere violazioni oggi invisibili: è
   l'adempimento di RVC9-OB, non un'aggiunta facoltativa.
 - La Specifica Tecnica §6.6 si allontana ulteriormente dal codice. Era già disallineata (elenca
@@ -182,6 +187,10 @@ dei Requisiti:
 1. **Il pulsante «Invia» dovrebbe chiamarsi «Scarica»** — non avviene alcun invio nella MVP, ma
    UC-51 nomina il tasto alla lettera. Rinominare lo *stato* seguiva i requisiti (fatto,
    «Scaricato»/«Non scaricato» da UC-37 e UC-40.11); rinominare il *pulsante* li contraddice.
+   *Verificato il 21/08/2026 sui rami della Documentazione*: la revisione del 13/08 ha portato il
+   solo stato a «scaricamento» (UC-36, RF50-OB, RF64-OP), mentre UC-51 continua a dire «clicca il
+   tasto "Invia"» e il Manuale Utente del 19/08 lo documenta con quel nome. Il pulsante resta
+   «Invia» finché non lo cambiano i requisiti.
 2. **La valutazione ripetibile.** UC-25 prescrive che il modulo si disabiliti «per evitare
    valutazioni multiple», e il vincolo è imposto in tre punti: l'entità `Communication::rate()`,
    il contratto, la View. Renderla modificabile è fattibile ma cambia il caso d'uso.
