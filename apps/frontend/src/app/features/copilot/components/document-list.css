@@ -73,16 +73,38 @@
   word-break: keep-all;
 }
 
-/* Le cifre restano nel carattere del testo, con le figure a larghezza fissa:
-   incolonnate come in un monospaziato, ma senza cambiare voce a meta' riga.
-   Al centro della colonna, non a filo del bordo sinistro: accanto all'orario
-   di caricamento, che va a capo, "10:10" e "98%" finivano appaiati e si
-   leggevano come un numero solo. */
+/* Ogni colonna che porta un valore solo — una parola, una data, una cifra, una
+   pastiglia, un comando — sta al centro della propria larghezza, intestazione
+   compresa: allineati a sinistra i valori corti lasciavano a destra un vuoto
+   diverso per colonna, e la pastiglia di stato finiva a filo di bordo mentre
+   la sua intestazione partiva altrove. Il destinatario resta a sinistra:
+   e' un blocco di piu' righe, e un testo che va a capo si legge da un margine
+   fermo. */
+.table th[data-column="type"],
+.table td[data-column="type"],
+.table th[data-column="uploadedAt"],
+.table td[data-column="uploadedAt"],
 .table th[data-column="confidence"],
-.table td[data-column="confidence"] {
+.table td[data-column="confidence"],
+.table th[data-column="review"],
+.table td[data-column="review"],
+.table th[data-column="download"],
+.table td[data-column="download"],
+.table th[data-column="actions"],
+.table td[data-column="actions"] {
   text-align: center;
 }
 
+/* Sotto i 900px la tabella diventa un elenco di schede e ogni cella e' una
+   coppia etichetta/valore incolonnata a sinistra: li' il centro non esiste. */
+@media (max-width: 900px) {
+  .table td {
+    text-align: left;
+  }
+}
+
+/* Le cifre restano nel carattere del testo, con le figure a larghezza fissa:
+   incolonnate come in un monospaziato, ma senza cambiare voce a meta' riga. */
 .figure {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
