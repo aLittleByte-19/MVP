@@ -334,9 +334,11 @@ class MvpStateService
      * Le fasi arrivano da `workflow_tasks`, che tiene inizio e fine di ogni
      * passo; il tenant si filtra sui soggetti, perche' la tabella e' condivisa
      * fra le due pipeline e non porta il tenant per se'. L'ultima voce e'
-     * l'attesa: la differenza fra la durata complessiva e la somma delle fasi,
-     * cioe' il tempo passato in coda fra un passo e l'altro. Senza, la barra
-     * direbbe che la corsa e' finita prima di quanto sia vero.
+     * l'orchestrazione: la differenza fra la durata complessiva e la somma
+     * delle fasi, cioe' il tempo speso fra un passo e l'altro dalla macchina a
+     * stati e dalle code, piu' quello di un'eventuale fase che non registra il
+     * proprio task. Senza, la barra direbbe che l'elaborazione e' finita prima
+     * di quanto sia vero.
      *
      * @param  Builder<OriginalDocument>|Builder<Communication>  $subjects
      * @param  array<string, string>  $phases
@@ -378,7 +380,7 @@ class MvpStateService
         $waiting = round($average - array_sum(array_column($parts, 'value')), 1);
 
         if ($parts !== [] && $waiting > 0) {
-            $parts[] = ['label' => 'Attesa', 'value' => $waiting];
+            $parts[] = ['label' => 'Orchestrazione', 'value' => $waiting];
         }
 
         // Con la ripartizione il totale resta in secondi anche oltre il minuto
