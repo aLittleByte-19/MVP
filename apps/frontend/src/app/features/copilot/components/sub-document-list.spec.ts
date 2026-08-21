@@ -57,9 +57,7 @@ interface TestableSubDocumentList {
   documentDateDisplay(document: SubDocument): string;
   saveReview(): void;
   canPrepareMessage(documentItem: SubDocument): boolean;
-  originFor(documentItem: SubDocument): "auto" | "manual" | "review" | "locked";
   fieldOrigin(documentItem: SubDocument, controlName: string): "auto" | "manual" | "review" | "locked" | null;
-  originLabel(documentItem: SubDocument): string;
   readonly copiedEmail: Signal<boolean>;
   copyRecipientEmail(email: string): void;
 }
@@ -348,27 +346,47 @@ describe("SubDocumentListComponent", () => {
     expect(teardown).toHaveBeenCalledTimes(1);
   });
 
-  it("mette dentro la casella un'icona che dice da dove viene il dato", () => {
+  /**
+   * Il `beforeEach` svuota il template per provare la classe senza montare
+   * l'intero pannello; la legenda pero' vive solo li', quindi questi due casi
+   * ripartono da un TestBed senza quella sostituzione.
+   */
+  function renderLegend(document: SubDocument): string {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [{ provide: DocumentWorkflowService, useValue: { previewStatus } }]
+    });
+
+    const fixture = TestBed.createComponent(SubDocumentListComponent);
+    fixture.componentRef.setInput("documentItem", document);
+    fixture.componentRef.setInput("isDeleting", false);
+    fixture.componentRef.setInput("isSavingReview", false);
+    fixture.detectChanges();
+
+    return fixture.nativeElement.querySelector(".fieldLegend").textContent as string;
+  }
+
+  it("elenca in cima tutti i segni che possono comparire sulle caselle", () => {
     // SC 1.4.1: teal, verde e ambra dicono la provenienza, e la stessa cosa
     // deve arrivare a chi quei colori non li distingue — qui con la forma
-    // dell'icona e con il testo che l'accompagna.
-    const { component } = render();
+    // dell'icona e con il testo che l'accompagna. La provenienza e' per campo,
+    // quindi nello stesso documento convivono il segno della buona confidenza e
+    // quello del dato da rivedere: la legenda li nomina entrambi invece di
+    // dichiarare lo stato complessivo della scheda.
+    const legend = renderLegend(subDocument({ reviewStatus: "needs_review" }));
 
-    expect(component.originFor(subDocument({ reviewStatus: "manually_validated" }))).toBe("manual");
-    expect(component.originFor(subDocument({ reviewStatus: "auto_validated" }))).toBe("auto");
-    expect(component.originFor(subDocument({ reviewStatus: "needs_review" }))).toBe("review");
-    expect(component.originFor(subDocument({ reviewStatus: "quarantined" }))).toBe("review");
+    expect(legend).toContain("Confidenza alta");
+    expect(legend).toContain("Da revisionare");
+    expect(legend).toContain("Corretto a mano");
+    expect(legend).toContain("Dato di sistema");
   });
 
-  it("spiega a parole, nella legenda, che cosa segnala l'icona", () => {
-    const { component } = render();
+  it("sulla scheda confermata a mano tace i segni dell'AI, che non compaiono", () => {
+    const legend = renderLegend(subDocument({ reviewStatus: "manually_validated" }));
 
-    expect(component.originLabel(subDocument({ reviewStatus: "auto_validated" }))).toBe(
-      "Estratto e validato in automatico"
-    );
-    expect(component.originLabel(subDocument({ reviewStatus: "manually_validated" }))).toBe(
-      "Confermato dall'operatore"
-    );
+    expect(legend).not.toContain("Confidenza alta");
+    expect(legend).not.toContain("Da revisionare");
+    expect(legend).toContain("Corretto a mano");
   });
 
   it("non dichiara alcuna provenienza su un campo vuoto", () => {
