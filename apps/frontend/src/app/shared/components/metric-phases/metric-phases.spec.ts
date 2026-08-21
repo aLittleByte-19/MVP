@@ -17,7 +17,7 @@ describe("MetricPhasesComponent", () => {
   const parts = [
     { label: "OCR", value: 28 },
     { label: "Estrazione", value: 15 },
-    { label: "Attesa", value: 4 }
+    { label: "Orchestrazione", value: 4 }
   ];
 
   it("ripartisce il totale fra le fasi in proporzione", () => {
@@ -36,7 +36,7 @@ describe("MetricPhasesComponent", () => {
     expect(host.querySelector(".legend")?.textContent).toContain("OCR");
     expect(host.querySelector(".legend")?.textContent).toContain("28s");
     expect(host.querySelector(".bar")?.getAttribute("aria-label")).toBe(
-      "Tempo medio: OCR 28s, Estrazione 15s, Attesa 4s"
+      "Tempo medio: OCR 28s, Estrazione 15s, Orchestrazione 4s"
     );
   });
 

@@ -11,7 +11,8 @@ export interface MetricPart {
  * Scheda di un tempo medio, ripartito fra le fasi che lo consumano.
  *
  * "Quarantasette secondi" e' un numero su cui non si puo' agire; "ventotto di
- * OCR, quindici di estrazione, quattro di attesa" dice dove intervenire. La
+ * OCR, quindici di estrazione, quattro di orchestrazione" dice dove
+ * intervenire. La
  * barra e la legenda sono la stessa informazione in due forme — la proporzione
  * e i secondi — perche' a colpo d'occhio serve la prima e per decidere la
  * seconda.

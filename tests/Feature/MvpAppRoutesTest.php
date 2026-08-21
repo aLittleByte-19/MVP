@@ -1184,8 +1184,9 @@ test('the extracted fields metric splits them by their own confidence', function
 });
 
 test('the average duration is broken down into the phases that consumed it', function () {
-    // L'ultima voce e' l'attesa: la differenza fra la durata complessiva e la
-    // somma delle fasi, cioe' il tempo passato in coda fra un passo e l'altro.
+    // L'ultima voce e' l'orchestrazione: la differenza fra la durata
+    // complessiva e la somma delle fasi, cioe' il tempo speso fra un passo e
+    // l'altro dalla macchina a stati e dalle code.
     $document = OriginalDocument::factory()->completed()->create([
         'workflow_started_at' => now()->subSeconds(100),
         'workflow_completed_at' => now(),
@@ -1211,7 +1212,7 @@ test('the average duration is broken down into the phases that consumed it', fun
         // toEqual e non toBe: un decimale tondo torna dal JSON come intero.
         ->and($parts['OCR'])->toEqual(60)
         ->and($parts['Estrazione'])->toEqual(30)
-        ->and($parts['Attesa'])->toEqual(10);
+        ->and($parts['Orchestrazione'])->toEqual(10);
 });
 
 test('the duration distribution splits the runs into ten intervals', function () {
