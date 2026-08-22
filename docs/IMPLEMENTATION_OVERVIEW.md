@@ -436,6 +436,12 @@ nulla lo dicesse.
 
 ### 6.6.2 Dettaglio del sotto-documento (implementato)
 
+Lo **scaricamento del messaggio pretende la conferma umana**: `SendMessageService::export()`
+rifiuta un sotto-documento che non sia `manually_validated` (422 `review_not_confirmed`), e la SPA
+tiene spento il comando prima di allora. La validazione automatica dice che il testo era
+leggibile, non che il documento sia della persona a cui verrà consegnato. L'anteprima invece resta
+consultabile: serve proprio a decidere se confermare.
+
 Il pannello dei dati estratti espone, oltre ai campi correggibili, l'email del destinatario
 (UC-39.12) con un comando per copiarla negli appunti, e la data/ora di caricamento del documento
 originale (UC-39.15). Quest'ultima non è un campo estratto: `MvpStateService` la deriva da

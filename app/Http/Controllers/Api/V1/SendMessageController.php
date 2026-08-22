@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Concerns\ResolvesActor;
 use App\Http\Requests\UpdateSendMessageRequest;
 use App\Models\SubDocument;
 use App\Mvp\Documents\Domain\Exceptions\SendMessageAttachmentUnavailableException;
+use App\Mvp\Documents\Domain\Exceptions\SendMessageNotConfirmedException;
 use App\Mvp\Documents\Domain\Ports\Inbound\SendMessageUseCase;
 use App\Mvp\Support\MvpStateService;
 use Illuminate\Http\JsonResponse;
@@ -28,6 +29,13 @@ class SendMessageController
 
         try {
             $rendered = $sendMessage->preview($subDocument->id, $actor);
+        } catch (SendMessageNotConfirmedException $exception) {
+            return response()->json([
+                'error' => [
+                    'code' => 'review_not_confirmed',
+                    'message' => $exception->getMessage(),
+                ],
+            ], 422);
         } catch (SendMessageAttachmentUnavailableException $exception) {
             return $this->attachmentUnavailable($exception);
         }
@@ -45,6 +53,13 @@ class SendMessageController
 
         try {
             $rendered = $sendMessage->export($subDocument->id, $actor);
+        } catch (SendMessageNotConfirmedException $exception) {
+            return response()->json([
+                'error' => [
+                    'code' => 'review_not_confirmed',
+                    'message' => $exception->getMessage(),
+                ],
+            ], 422);
         } catch (SendMessageAttachmentUnavailableException $exception) {
             return $this->attachmentUnavailable($exception);
         }
