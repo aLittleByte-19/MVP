@@ -196,6 +196,12 @@ dei Requisiti:
    il contratto, la View. Renderla modificabile è fattibile ma cambia il caso d'uso.
 3. **Quale stato di revisione sblocca lo scaricamento**: se `auto_validated` basti — il documento
    che il sistema ha già ritenuto affidabile — o se serva comunque la conferma umana.
+   *Deciso il 22/08/2026: serve la conferma umana.* Il comando resta spento su un documento
+   validato in automatico, perché la soglia dice che il testo era leggibile, non che il documento
+   sia della persona a cui verrà consegnato. Il vincolo è nella View
+   (`SubDocumentListComponent::canPrepareMessage`), non nel dominio: l'API di esportazione non
+   controlla lo stato di revisione, e chi la chiama direttamente può ancora scaricare. Se la
+   conferma umana è un requisito e non una guida, va imposta anche in `SendMessageService`.
 4. **Quali dati mostrare nella Overview.** Il criterio adottato in precedenza è scritto nel
    ViewModel: «le tre metriche su cui si agisce, non un riassunto di tutte», per non ripetere i
    conteggi che vivono nelle pagine dei moduli. Va riesaminato sapendo qual era il criterio.

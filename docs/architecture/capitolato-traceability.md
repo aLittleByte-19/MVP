@@ -248,7 +248,7 @@ l'applicazione mantiene responsabilità su validazione, stato e tracciabilità.
 A generazione completata, titolo, corpo e copertina vengono impaginati nel documento finale, con
 anteprima ed esportazione in PDF
 ([`app/Mvp/Communications/Adapters/Outbound/Pdf/DompdfCommunicationPdfRenderer.php`](../../app/Mvp/Communications/Adapters/Outbound/Pdf/DompdfCommunicationPdfRenderer.php)).
-Ogni pagina porta il marcatore `Creato da AI Assistant`: la provenienza AI del contenuto resta
+Ogni pagina porta il marcatore `Creato da AI Assistant`, in filigrana e nel piè di pagina: la provenienza AI del contenuto resta
 leggibile anche quando il PDF esce dall'applicativo e circola per conto proprio, che è il momento in
 cui l'informazione andrebbe altrimenti persa.
 
