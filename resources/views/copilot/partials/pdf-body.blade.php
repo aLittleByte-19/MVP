@@ -1,25 +1,39 @@
 {{--
     Il corpo del documento, diviso in paragrafi sulle righe vuote.
 
-    Un blocco le cui righe cominciano tutte col segno di elenco diventa un
-    elenco vero: il testo che arriva qui e' testo semplice, senza Markdown, e
-    il punto elenco e' l'unica struttura che puo' portare.
+    Le righe che cominciano col segno di elenco diventano un elenco vero, anche
+    quando il modello le separa una dall'altra con una riga vuota: sono voci di
+    una stessa lista, e rese come paragrafi distinti si allontanavano fra loro
+    come se non avessero niente in comune.
 --}}
-<div class="body">
-    @foreach (preg_split('/\n{2,}/', trim((string) $body)) as $block)
-        @php
-            $lines = preg_split('/\n/', trim($block));
-            $bulleted = array_filter($lines, static fn ($line) => str_starts_with(trim($line), '•'));
-        @endphp
+@php
+    $blocks = [];
 
-        @if (count($bulleted) === count($lines))
+    foreach (preg_split('/\n{2,}/', trim((string) $body)) as $block) {
+        $lines = array_map('trim', preg_split('/\n/', trim($block)));
+        $isList = $lines !== [] && count(array_filter($lines, static fn ($line) => str_starts_with($line, '•'))) === count($lines);
+        $last = array_key_last($blocks);
+
+        if ($isList && $last !== null && $blocks[$last]['list']) {
+            $blocks[$last]['lines'] = array_merge($blocks[$last]['lines'], $lines);
+
+            continue;
+        }
+
+        $blocks[] = ['list' => $isList, 'lines' => $lines, 'text' => $block];
+    }
+@endphp
+
+<div class="body">
+    @foreach ($blocks as $block)
+        @if ($block['list'])
             <ul>
-                @foreach ($lines as $line)
-                    <li>{{ trim($line) }}</li>
+                @foreach ($block['lines'] as $line)
+                    <li>{{ $line }}</li>
                 @endforeach
             </ul>
         @else
-            <p>{{ $block }}</p>
+            <p>{{ $block['text'] }}</p>
         @endif
     @endforeach
 </div>
