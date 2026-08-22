@@ -47,7 +47,7 @@ Incluso:
 - riutilizzo di un preset salvato, che precompila il form senza avviare una nuova generazione;
   non applicabile a una bozza già salvata, per cui restano modifica e rigenerazione diretta;
 - valutazione 1-5 stelle con commento qualitativo opzionale, una sola per generazione;
-- anteprima del documento finale impaginato, con marcatore di trasparenza "Creato da AI Assistant";
+- anteprima del documento finale impaginato, con marcatore di trasparenza "Creato da AI Assistant" su ogni pagina, in filigrana e nel piè di pagina;
 - esportazione del documento finale in PDF, con lo stesso marcatore di trasparenza;
 - metriche operative (contenuti generati, bozze, stato della generazione e delle copertine,
   valutazioni ricevute, media stelle);
@@ -97,10 +97,10 @@ Incluso:
 - messaggio di invio precompilato (destinatario, oggetto, testo) calcolato dai dati estratti, con
   anteprima ed esportazione PDF (UC-48/48.1/48.2/48.3) e correzione manuale dei tre campi;
 - filtri dello storico documenti applicati lato API, con scoping sul tenant: ricerca per
-  nome/cognome/azienda (UC-35), stato di invio (UC-36), soglia di confidenza sopra o sotto un
-  valore (UC-37), mese e anno del documento (UC-38);
+  nome/cognome/azienda (UC-35), stato di scaricamento (UC-36), soglia di confidenza sopra o sotto
+  un valore (UC-37), mese e anno del documento (UC-38), con paginazione a dieci righe;
 - stato `failed` esplicito quando split o estrazione non riescono;
-- metriche operative su documenti elaborati, soglie di confidenza e stato di invio;
+- metriche operative su documenti elaborati, confidenza dei campi estratti, tempi delle fasi e stato di scaricamento;
 - classificazione e metadati manuali in fase di upload: tipologia, mese, anno e azienda
   impostati dal consulente restano autoritativi e non vengono sovrascritti dall'AI;
 - visualizzazione dell'email destinatario e della data/ora di caricamento nel dettaglio
