@@ -33,7 +33,7 @@ const SCROLL_END_TOLERANCE = 2;
     <div class="shell">
       <aside class="sidebar" aria-label="Navigazione applicativa">
         <div class="brand">
-          <img src="alittlebyte-logo.png" alt="Alittlebyte" />
+          <img src="eggon-logo.png" alt="Eggon" />
         </div>
         <nav class="nav">
           @for (group of navGroups; track group.title) {
