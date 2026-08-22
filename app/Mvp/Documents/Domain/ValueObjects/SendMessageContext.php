@@ -19,6 +19,9 @@ final class SendMessageContext
         public readonly ?string $sendSubjectOverride,
         public readonly ?string $sendBodyOverride,
         public readonly string $originalFilename,
+        /** Periodo dichiarato al caricamento (UC-32), autoritativo sull'estrazione. */
+        public readonly ?int $referenceMonth,
+        public readonly ?int $referenceYear,
         public readonly string $sendStatus,
     ) {}
 }
