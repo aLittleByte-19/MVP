@@ -299,8 +299,8 @@ class BedrockService
              ."Argomento: {$userPrompt}\n"
              // Ne' il PDF ne' l'anteprima interpretano Markdown: un asterisco
              // arrivato fin li' si legge come un asterisco.
-             ."Scrivi il corpo in testo semplice: niente Markdown, niente cancelletti, asterischi, "
-             ."trattini di elenco, trattini bassi o backtick. Separa i paragrafi con una riga vuota "
+             .'Scrivi il corpo in testo semplice: niente Markdown, niente cancelletti, asterischi, '
+             .'trattini di elenco, trattini bassi o backtick. Separa i paragrafi con una riga vuota '
              ."e apri con il segno • ogni voce di un eventuale elenco. Non ripetere il titolo nel corpo.\n"
              // Chiedere paragrafi e' chiedere ritorni a capo, e dentro una
              // stringa JSON un ritorno a capo vero rompe il documento.
