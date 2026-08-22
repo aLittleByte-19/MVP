@@ -2,6 +2,7 @@
 
 namespace App\Mvp\Documents\Application\UseCases;
 
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Events\SubDocumentExtractedDataCorrected;
 use App\Mvp\Documents\Domain\Events\SubDocumentManuallyValidated;
 use App\Mvp\Documents\Domain\Exceptions\MissingExtractedDataException;
@@ -28,7 +29,12 @@ class ReviewDocumentService implements ReviewDocumentUseCase
 
         if ($markAsValidated) {
             $subDocument->markManuallyValidated();
-        } else {
+        } elseif ($subDocument->reviewStatus() !== ReviewStatus::ManuallyValidated) {
+            // Una correzione riporta in revisione cio' che aveva validato il
+            // sistema, non cio' che aveva confermato una persona: quei dati
+            // sono appena passati un'altra volta sotto i suoi occhi, e
+            // declassarli le avrebbe chiesto di confermare due volte la stessa
+            // scheda.
             $subDocument->markNeedsReview();
         }
 
