@@ -6,6 +6,8 @@
     @include('copilot.partials.pdf-styles')
 </head>
 <body>
+    @include('copilot.partials.pdf-watermark', ['watermark' => 'Creato da AI Assistant'])
+
     <p class="eyebrow">Comunicazione AI Assistant</p>
     <h1>{{ $title }}</h1>
     <div class="rule"></div>

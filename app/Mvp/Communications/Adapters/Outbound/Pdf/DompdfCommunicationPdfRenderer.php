@@ -6,7 +6,6 @@ use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationPdfRendererPort;
 use App\Mvp\Communications\Domain\ValueObjects\CommunicationPdfContext;
 use App\Mvp\Support\PdfFooterStamper;
-use App\Mvp\Support\PdfWatermarkStamper;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Contracts\Filesystem\Filesystem;
@@ -24,21 +23,19 @@ use Throwable;
  */
 class DompdfCommunicationPdfRenderer implements CommunicationPdfRendererPort
 {
-    /** Il marcatore di trasparenza, in filigrana e nel piede di pagina. */
+    /**
+     * Il marcatore di trasparenza: la filigrana la disegna il template, dietro
+     * il testo, e il piede di pagina ne ripete la dicitura.
+     */
     private const ORIGIN = 'AI Assistant';
-
-    private const WATERMARK_TEXT = 'Creato da AI Assistant';
 
     /**
      * Va incrementata a ogni modifica del template Blade, del watermark o del
      * pie' di pagina: entra nel fingerprint e invalida i PDF gia' materializzati.
      */
-    private const RENDER_VERSION = 3;
+    private const RENDER_VERSION = 5;
 
-    public function __construct(
-        private readonly PdfFooterStamper $footerStamper,
-        private readonly PdfWatermarkStamper $watermarkStamper,
-    ) {}
+    public function __construct(private readonly PdfFooterStamper $footerStamper) {}
 
     public function fingerprint(CommunicationPdfContext $context): string
     {
@@ -132,7 +129,6 @@ class DompdfCommunicationPdfRenderer implements CommunicationPdfRendererPort
         $dompdf->setPaper('a4', 'portrait');
         $dompdf->render();
 
-        $this->watermarkStamper->stamp($dompdf, self::WATERMARK_TEXT);
         $this->footerStamper->stamp($dompdf, self::ORIGIN);
 
         return $dompdf->output();
