@@ -73,6 +73,11 @@ export interface DensityShape {
  *
  * Il tracciato passa da Catmull-Rom a Bezier: e' l'interpolazione che tiene la
  * curva dentro i punti misurati senza le oscillazioni di una spline naturale.
+ * «Dentro» vale per i punti, non per le tangenti: fra un intervallo vuoto e un
+ * picco la curva scavalca comunque il valore massimo, e con il picco appoggiato
+ * al bordo superiore usciva dal riquadro e si vedeva tagliata. Per questo il
+ * massimo si ferma un poco sotto il bordo e il tracciato resta comunque
+ * limitato all'altezza disponibile.
  */
 export function densityShape(
   buckets: readonly DensityBucket[],
@@ -87,9 +92,12 @@ export function densityShape(
   const step = buckets[0]!.upTo;
   const span = buckets[buckets.length - 1]!.upTo;
   const peak = Math.max(...buckets.map((bucket) => bucket.count), 1);
+  // Aria sopra il picco: e' lo spazio in cui la curva puo' scavalcarlo senza
+  // finire fuori dal riquadro.
+  const headroom = height * 0.18;
 
   const x = (seconds: number): number => (seconds / span) * width;
-  const y = (count: number): number => height - (count / peak) * (height - 2);
+  const y = (count: number): number => height - (count / peak) * (height - headroom);
 
   const points: [number, number][] = [
     [0, height],
@@ -103,7 +111,9 @@ export function densityShape(
     return { x: round(x(seconds)), label: Math.round(seconds) };
   });
 
-  return { line: smoothPath(points), area: `${smoothPath(points)} L${round(width)},${round(height)} Z`, ticks };
+  const line = smoothPath(points, { min: 0, max: height });
+
+  return { line, area: `${line} L${round(width)},${round(height)} Z`, ticks };
 }
 
 /**
@@ -111,10 +121,18 @@ export function densityShape(
  * cubiche). Le tangenti sono un sesto della distanza fra i due punti vicini:
  * e' il fattore che riproduce la spline uniforme.
  */
-export function smoothPath(points: readonly [number, number][]): string {
+export function smoothPath(
+  points: readonly [number, number][],
+  verticalBounds?: { readonly min: number; readonly max: number }
+): string {
   if (points.length === 0) {
     return "";
   }
+
+  // Le tangenti possono spingere il tracciato oltre i punti che collega: dove
+  // c'e' un riquadro da rispettare si tengono dentro i suoi bordi.
+  const bound = (value: number): number =>
+    verticalBounds ? Math.min(verticalBounds.max, Math.max(verticalBounds.min, value)) : value;
 
   const segments = [`M${round(points[0]![0])},${round(points[0]![1])}`];
 
@@ -126,9 +144,9 @@ export function smoothPath(points: readonly [number, number][]): string {
 
     const control1: [number, number] = [
       start[0] + (end[0] - previous[0]) / 6,
-      start[1] + (end[1] - previous[1]) / 6
+      bound(start[1] + (end[1] - previous[1]) / 6)
     ];
-    const control2: [number, number] = [end[0] - (next[0] - start[0]) / 6, end[1] - (next[1] - start[1]) / 6];
+    const control2: [number, number] = [end[0] - (next[0] - start[0]) / 6, bound(end[1] - (next[1] - start[1]) / 6)];
 
     segments.push(
       `C${round(control1[0])},${round(control1[1])} ${round(control2[0])},${round(control2[1])} ${round(end[0])},${round(end[1])}`
