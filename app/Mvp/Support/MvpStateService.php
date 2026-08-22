@@ -14,6 +14,7 @@ use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Enums\SendStatus;
+use App\Mvp\Documents\Domain\Support\SendMessageDraft;
 use App\Mvp\Support\Identity\Actor;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -841,62 +842,36 @@ class MvpStateService
     }
 
     /**
-     * Compone destinatario/oggetto/testo del messaggio di invio precompilato
-     * (UC-48 e derivati) dai dati gia' estratti: nessuna generazione AI,
-     * calcolato al volo a ogni richiesta a meno che l'operatore non abbia
-     * corretto uno dei campi, nel qual caso vince l'override persistito su
-     * `sub_documents`. Duplica volutamente la stessa logica di
-     * `SendMessageService::compose()` nel dominio Documents: qui opera su un
-     * model Eloquent gia' caricato (MvpStateService resta infrastruttura di
-     * lettura condivisa, fuori dal perimetro esagonale, vedi ADR 0010), la'
-     * su un value object di dominio — condividerla accoppierebbe due livelli
-     * architetturali diversi per risparmiare una manciata di righe.
+     * L'anteprima del messaggio precompilato, con le stesse regole che ne
+     * stampano il PDF: la bozza vive in {@see SendMessageDraft}, nel dominio.
      *
      * @return array{recipient: string, subject: string, body: string}
      */
     private function composeSendMessage(SubDocument $subDocument, ?ExtractedData $data): array
     {
         $employeeName = trim(($data?->employee_first_name ?? '').' '.($data?->employee_last_name ?? ''));
-        $documentType = $data?->document_type;
-        $companyName = $data?->company_name;
         $documentDate = $data?->document_date?->format('d/m/Y');
+        $original = $subDocument->originalDocument;
 
         return [
             'recipient' => $subDocument->send_recipient_override
-                ?: ($employeeName !== '' ? $employeeName : 'Destinatario non disponibile'),
+                ?: SendMessageDraft::recipient($employeeName),
             'subject' => $subDocument->send_subject_override
-                ?: ($documentType ? "Invio documento — {$documentType}" : 'Invio documento'),
+                ?: SendMessageDraft::subject(
+                    $data?->document_type,
+                    $data?->company_name,
+                    $documentDate,
+                    $original?->manual_reference_month,
+                    $original?->manual_reference_year,
+                ),
             'body' => $subDocument->send_body_override
-                ?: $this->composeSendMessageBody($employeeName, $documentType, $companyName, $documentDate, $data?->description),
+                ?: SendMessageDraft::body(
+                    $employeeName,
+                    $data?->document_type,
+                    $data?->company_name,
+                    $documentDate,
+                    $data?->description,
+                ),
         ];
-    }
-
-    private function composeSendMessageBody(string $employeeName, ?string $documentType, ?string $companyName, ?string $documentDate, ?string $description): string
-    {
-        $greeting = $employeeName !== '' ? "Gentile {$employeeName}," : 'Gentile destinatario,';
-        $documentLabel = $documentType ?: 'documento';
-        $reference = "in allegato trova il documento \"{$documentLabel}\"";
-
-        if ($companyName) {
-            $reference .= " relativo a {$companyName}";
-        }
-
-        if ($documentDate) {
-            $reference .= " del {$documentDate}";
-        }
-
-        $reference .= '.';
-
-        $lines = [$greeting, '', $reference];
-
-        if ($description) {
-            $lines[] = '';
-            $lines[] = $description;
-        }
-
-        $lines[] = '';
-        $lines[] = 'Cordiali saluti.';
-
-        return implode("\n", $lines);
     }
 }

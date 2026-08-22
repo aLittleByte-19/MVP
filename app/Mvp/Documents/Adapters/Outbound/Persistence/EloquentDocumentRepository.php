@@ -148,6 +148,8 @@ class EloquentDocumentRepository implements DocumentRepository
             sendSubjectOverride: $subDocument->send_subject_override,
             sendBodyOverride: $subDocument->send_body_override,
             originalFilename: $subDocument->originalDocument?->original_filename ?: 'documento.pdf',
+            referenceMonth: $subDocument->originalDocument?->manual_reference_month,
+            referenceYear: $subDocument->originalDocument?->manual_reference_year,
             sendStatus: $subDocument->send_status->value,
         );
     }
