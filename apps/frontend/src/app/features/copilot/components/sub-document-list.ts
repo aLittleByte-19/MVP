@@ -627,11 +627,14 @@ export class SubDocumentListComponent {
   }
 
   /**
-   * Il messaggio si prepara solo su un documento i cui dati sono stati
-   * stabiliti come corretti, dal sistema o dall'operatore. Prima non c'era
-   * alcuna condizione: il comando restava attivo anche su un sotto-documento in
-   * quarantena, cioe' uno la cui estrazione il sistema stesso dichiara
-   * inaffidabile, e produceva un messaggio su dati che nessuno aveva verificato.
+   * Il messaggio si prepara solo su un documento che una persona ha confermato.
+   *
+   * Bastava la validazione automatica, e su un'estrazione limpida il comando
+   * era attivo senza che nessuno avesse letto la scheda. Ma quel messaggio
+   * porta il nome di un dipendente su un documento che gli verra' consegnato:
+   * la soglia dice che il testo era leggibile, non che il documento sia il suo.
+   * Chiude la questione aperta 3 dell'ADR 0012 dalla parte della conferma
+   * umana, che e' la sola a costare un secondo e a valere una firma.
    */
   /**
    * Contrassegno del campo estratto, a destra dell'etichetta.
@@ -695,10 +698,7 @@ export class SubDocumentListComponent {
 
 
   protected canPrepareMessage(documentItem: SubDocument): boolean {
-    return (
-      documentItem.reviewStatus === "auto_validated" ||
-      documentItem.reviewStatus === "manually_validated"
-    );
+    return documentItem.reviewStatus === "manually_validated";
   }
 
   protected isPredefinedDocumentType(value: string): boolean {

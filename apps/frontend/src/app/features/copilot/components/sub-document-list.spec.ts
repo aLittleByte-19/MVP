@@ -315,19 +315,17 @@ describe("SubDocumentListComponent", () => {
     expect(component.copiedEmail()).toBe(false);
   });
 
-  it("non lascia preparare il messaggio finche' i dati non sono stabiliti come corretti", () => {
-    // Prima il comando non aveva alcuna condizione: restava attivo anche su un
-    // documento in quarantena, cioe' su dati che il sistema stesso dichiara
-    // inaffidabili.
+  it("non lascia preparare il messaggio finche' una persona non ha confermato i dati", () => {
+    // La validazione automatica dice che il testo era leggibile, non che il
+    // documento sia della persona a cui si sta per consegnarlo: il messaggio
+    // aspetta la conferma umana.
     const { component } = render(subDocument());
 
-    for (const reviewStatus of ["needs_review", "quarantined"] as const) {
+    for (const reviewStatus of ["needs_review", "quarantined", "auto_validated"] as const) {
       expect(component.canPrepareMessage(subDocument({ reviewStatus }))).toBe(false);
     }
 
-    for (const reviewStatus of ["auto_validated", "manually_validated"] as const) {
-      expect(component.canPrepareMessage(subDocument({ reviewStatus }))).toBe(true);
-    }
+    expect(component.canPrepareMessage(subDocument({ reviewStatus: "manually_validated" }))).toBe(true);
   });
 
   it("annulla la sottoscrizione alla preview quando il componente viene distrutto", () => {
