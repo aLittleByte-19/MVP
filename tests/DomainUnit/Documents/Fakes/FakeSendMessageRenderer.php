@@ -7,8 +7,12 @@ use App\Mvp\Documents\Domain\ValueObjects\SendMessageComposition;
 
 final class FakeSendMessageRenderer implements SendMessageRendererPort
 {
-    public function renderPdf(SendMessageComposition $composition): string
+    public ?string $lastAttachment = null;
+
+    public function renderPdf(SendMessageComposition $composition, ?string $attachmentPdf = null): string
     {
-        return 'pdf-bytes-'.$composition->subject;
+        $this->lastAttachment = $attachmentPdf;
+
+        return 'pdf-bytes-'.$composition->subject.($attachmentPdf !== null ? '+'.$attachmentPdf : '');
     }
 }

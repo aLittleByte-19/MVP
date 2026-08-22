@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Concerns\AuthorizesDocuments;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesActor;
 use App\Http\Requests\UpdateSendMessageRequest;
 use App\Models\SubDocument;
+use App\Mvp\Documents\Domain\Exceptions\SendMessageAttachmentUnavailableException;
 use App\Mvp\Documents\Domain\Ports\Inbound\SendMessageUseCase;
 use App\Mvp\Support\MvpStateService;
 use Illuminate\Http\JsonResponse;
@@ -20,12 +21,16 @@ class SendMessageController
 {
     use AuthorizesDocuments, ResolvesActor;
 
-    public function sendPreview(Request $request, SubDocument $subDocument, SendMessageUseCase $sendMessage): Response
+    public function sendPreview(Request $request, SubDocument $subDocument, SendMessageUseCase $sendMessage): Response|JsonResponse
     {
         $actor = $this->actor($request);
         $this->authorizeSubDocument($subDocument, $actor);
 
-        $rendered = $sendMessage->preview($subDocument->id, $actor);
+        try {
+            $rendered = $sendMessage->preview($subDocument->id, $actor);
+        } catch (SendMessageAttachmentUnavailableException $exception) {
+            return $this->attachmentUnavailable($exception);
+        }
 
         return response($rendered->pdf, 200, [
             'Content-Type' => 'application/pdf',
@@ -33,12 +38,16 @@ class SendMessageController
         ]);
     }
 
-    public function sendExport(Request $request, SubDocument $subDocument, SendMessageUseCase $sendMessage): Response
+    public function sendExport(Request $request, SubDocument $subDocument, SendMessageUseCase $sendMessage): Response|JsonResponse
     {
         $actor = $this->actor($request);
         $this->authorizeSubDocument($subDocument, $actor);
 
-        $rendered = $sendMessage->export($subDocument->id, $actor);
+        try {
+            $rendered = $sendMessage->export($subDocument->id, $actor);
+        } catch (SendMessageAttachmentUnavailableException $exception) {
+            return $this->attachmentUnavailable($exception);
+        }
 
         return response($rendered->pdf, 200, [
             'Content-Type' => 'application/pdf',
@@ -63,5 +72,15 @@ class SendMessageController
             'document' => $state->document($subDocument->fresh()),
             'state' => $state->forActor($actor),
         ]);
+    }
+
+    private function attachmentUnavailable(SendMessageAttachmentUnavailableException $exception): JsonResponse
+    {
+        return response()->json([
+            'error' => [
+                'code' => 'attachment_unavailable',
+                'message' => $exception->getMessage(),
+            ],
+        ], 404);
     }
 }
