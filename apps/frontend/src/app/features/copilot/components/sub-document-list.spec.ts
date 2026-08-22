@@ -135,7 +135,10 @@ describe("SubDocumentListComponent", () => {
     expect(component.documentTypeOptions().filter((value) => value === "cedolino")).toHaveLength(1);
   });
 
-  it("annulla le modifiche e ripristina entrambi i form", () => {
+  it("annulla le modifiche e ripristina entrambi i form, senza chiudere il messaggio", () => {
+    // Il pannello del messaggio resta aperto: ogni salvataggio ripassa di qui
+    // con la scheda aggiornata, e chiuderlo lo faceva sparire sotto le mani di
+    // chi aveva appena confermato il testo.
     const document = subDocument();
     const { component } = render(document);
     component.isEditing.set(true);
@@ -149,9 +152,18 @@ describe("SubDocumentListComponent", () => {
     expect(component.form.get("employeeName")?.value).toBe("Mario Rossi");
     expect(component.sendForm.get("subject")?.value).toBe("Cedolino");
     expect(component.isEditing()).toBe(false);
-    expect(component.isSendOpen()).toBe(false);
+    expect(component.isSendOpen()).toBe(true);
     expect(component.isSendEditing()).toBe(false);
     expect(component.form.untouched).toBe(true);
+  });
+
+  it("chiude il messaggio quando si passa a un altro documento", () => {
+    const { component } = render(subDocument());
+    component.isSendOpen.set(true);
+
+    component.resetForm(subDocument({ id: "sub-2" }));
+
+    expect(component.isSendOpen()).toBe(false);
   });
 
   it("annulla soltanto la modifica del messaggio di invio", () => {

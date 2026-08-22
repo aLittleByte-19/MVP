@@ -382,11 +382,11 @@ const emptySendMessageForm: SendMessageFormState = {
                   <button
                     mvpButton
                     type="button"
-                    [disabled]="isSavingReview()"
+                    [disabled]="isSavingReview() || document.reviewStatus === 'manually_validated'"
                     (click)="markReviewed.emit(document.id)"
                   >
                     <svg lucideCheckCircle2 aria-hidden="true"></svg>
-                    Conferma dati correnti
+                    {{ document.reviewStatus === "manually_validated" ? "Dati confermati" : "Conferma dati correnti" }}
                   </button>
                   <button
                     mvpButton
@@ -525,6 +525,9 @@ export class SubDocumentListComponent {
   });
   protected readonly isEditing = signal(false);
   protected readonly isSendOpen = signal(false);
+
+  /** Il documento che i moduli stanno mostrando, per distinguere un cambio di scheda da un aggiornamento. */
+  private shownDocumentId: string | null = null;
   protected readonly isSendEditing = signal(false);
   protected readonly copiedEmail = signal(false);
   protected readonly previewStatus = signal<DocumentPreviewStatus>("idle");
@@ -705,13 +708,27 @@ export class SubDocumentListComponent {
     return (DOCUMENT_TYPE_OPTIONS as readonly string[]).includes(value);
   }
 
+  /**
+   * Riporta i due moduli sui dati del documento.
+   *
+   * Il pannello del messaggio si chiude solo passando a un altro documento:
+   * ogni salvataggio fa arrivare la scheda aggiornata e quindi ripassa di qui,
+   * e chiudendo sempre il pannello spariva sotto le mani di chi aveva appena
+   * confermato il testo.
+   */
   protected resetForm(document: SubDocument | null): void {
+    const changedDocument = (document?.id ?? null) !== this.shownDocumentId;
+    this.shownDocumentId = document?.id ?? null;
+
     this.form.setValue(toReviewForm(document));
     this.form.markAsUntouched();
     this.isEditing.set(false);
     this.sendForm.setValue(toSendMessageForm(document));
-    this.isSendOpen.set(false);
     this.isSendEditing.set(false);
+
+    if (changedDocument) {
+      this.isSendOpen.set(false);
+    }
   }
 
   protected cancelSendMessageEdit(document: SubDocument): void {
