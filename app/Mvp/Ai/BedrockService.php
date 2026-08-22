@@ -225,11 +225,67 @@ class BedrockService
 
         $decoded = json_decode($cleanJson, true);
 
+        // Seconda occasione: il modello scrive spesso i ritorni a capo dei
+        // paragrafi cosi' come sono, e dentro una stringa JSON quelli sono
+        // caratteri di controllo che invalidano l'intero documento. Il testo
+        // che portano e' buono: si ripara la forma, non il contenuto.
+        if (! is_array($decoded)) {
+            $decoded = json_decode($this->escapeControlCharactersInStrings($cleanJson), true);
+        }
+
         if (! is_array($decoded)) {
             throw new InvalidAiOutputException($operation, ['la risposta del modello non è JSON decodificabile']);
         }
 
         return $decoded;
+    }
+
+    /**
+     * Scrive come sequenze di escape i ritorni a capo e le tabulazioni rimasti
+     * dentro le stringhe di un JSON.
+     *
+     * La scansione e' byte per byte: in UTF-8 nessun byte di un carattere
+     * multibyte coincide con la virgoletta, la barra rovesciata o un carattere
+     * di controllo ASCII, quindi non c'e' modo di spezzare una lettera accentata
+     * a meta'.
+     */
+    private function escapeControlCharactersInStrings(string $json): string
+    {
+        $repaired = '';
+        $inString = false;
+        $escaped = false;
+
+        foreach (str_split($json) as $char) {
+            if ($escaped) {
+                $repaired .= $char;
+                $escaped = false;
+
+                continue;
+            }
+
+            if ($char === '\\') {
+                $repaired .= $char;
+                $escaped = true;
+
+                continue;
+            }
+
+            if ($char === '"') {
+                $inString = ! $inString;
+                $repaired .= $char;
+
+                continue;
+            }
+
+            $repaired .= $inString ? match ($char) {
+                "\n" => '\\n',
+                "\r" => '',
+                "\t" => '\\t',
+                default => $char,
+            } : $char;
+        }
+
+        return $repaired;
     }
 
     /**
@@ -241,6 +297,14 @@ class BedrockService
     {
         return "Agisci come un assistente HR. Genera una comunicazione con tono '{$tone}' e stile '{$style}'.\n"
              ."Argomento: {$userPrompt}\n"
+             // Ne' il PDF ne' l'anteprima interpretano Markdown: un asterisco
+             // arrivato fin li' si legge come un asterisco.
+             ."Scrivi il corpo in testo semplice: niente Markdown, niente cancelletti, asterischi, "
+             ."trattini di elenco, trattini bassi o backtick. Separa i paragrafi con una riga vuota "
+             ."e apri con il segno • ogni voce di un eventuale elenco. Non ripetere il titolo nel corpo.\n"
+             // Chiedere paragrafi e' chiedere ritorni a capo, e dentro una
+             // stringa JSON un ritorno a capo vero rompe il documento.
+             ."Nel JSON i ritorni a capo vanno scritti come \\n dentro le stringhe, mai andando a capo davvero.\n"
              .'Produci anche "imagePrompt": la descrizione in inglese, massimo 60 parole, dell\'immagine di copertina '
              .'coerente con il contenuto che hai generato. Descrivi soggetto, composizione, atmosfera e palette. '
              ."Non includere testo leggibile, loghi, filigrane, volti riconoscibili o dati personali.\n"
