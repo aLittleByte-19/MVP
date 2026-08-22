@@ -2,9 +2,8 @@ import type { Signal, WritableSignal } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import type { FormGroup } from "@angular/forms";
 import type { SafeResourceUrl } from "@angular/platform-browser";
-import { Observable, of } from "rxjs";
 import type { SubDocument, UpdateExtractedDataRequest, UpdateSendMessageRequest } from "../../../../api/generated/model";
-import { DocumentWorkflowService, type DocumentPreviewStatus } from "../data/document-workflow.service";
+import type { DocumentPreviewStatus } from "../data/document-workflow.service";
 import { SubDocumentListComponent } from "./sub-document-list";
 
 function subDocument(overrides: Partial<SubDocument> = {}): SubDocument {
@@ -46,7 +45,7 @@ interface TestableSubDocumentList {
   readonly isEditing: WritableSignal<boolean>;
   readonly isSendOpen: WritableSignal<boolean>;
   readonly isSendEditing: WritableSignal<boolean>;
-  readonly previewStatus: WritableSignal<DocumentPreviewStatus>;
+  readonly previewStatus: Signal<DocumentPreviewStatus>;
   readonly previewSrc: Signal<SafeResourceUrl | null>;
   fieldError(name: "recipientEmail" | "fiscalCode"): string | null;
   isPredefinedDocumentType(value: string): boolean;
@@ -63,19 +62,14 @@ interface TestableSubDocumentList {
 }
 
 describe("SubDocumentListComponent", () => {
-  let previewStatus: jest.Mock;
-
   beforeEach(() => {
-    previewStatus = jest.fn(() => of<DocumentPreviewStatus>("available"));
-    TestBed.configureTestingModule({
-      providers: [{ provide: DocumentWorkflowService, useValue: { previewStatus } }]
-    });
     TestBed.overrideComponent(SubDocumentListComponent, { set: { template: "", imports: [] } });
   });
 
-  function render(document: SubDocument | null = null) {
+  function render(document: SubDocument | null = null, previewStatus: DocumentPreviewStatus = "idle") {
     const fixture = TestBed.createComponent(SubDocumentListComponent);
     fixture.componentRef.setInput("documentItem", document);
+    fixture.componentRef.setInput("previewStatus", previewStatus);
     fixture.componentRef.setInput("isDeleting", false);
     fixture.componentRef.setInput("isSavingReview", false);
     fixture.detectChanges();
@@ -86,7 +80,7 @@ describe("SubDocumentListComponent", () => {
     };
   }
 
-  it("inizializza i form vuoti senza richiedere una preview", () => {
+  it("inizializza i form vuoti senza documento", () => {
     const { component } = render();
 
     expect(component.form.getRawValue()).toEqual({
@@ -104,12 +98,11 @@ describe("SubDocumentListComponent", () => {
     expect(component.sendForm.getRawValue()).toEqual({ recipient: "", subject: "", body: "" });
     expect(component.previewStatus()).toBe("idle");
     expect(component.previewSrc()).toBeNull();
-    expect(previewStatus).not.toHaveBeenCalled();
   });
 
-  it("carica dati, preview e tipologia personalizzata del documento", () => {
+  it("carica dati e tipologia personalizzata del documento, mostrando lo stato di anteprima ricevuto", () => {
     const document = subDocument({ documentType: "certificazione speciale" });
-    const { component } = render(document);
+    const { component } = render(document, "available");
 
     expect(component.form.getRawValue()).toMatchObject({
       employeeName: "Mario Rossi",
@@ -124,7 +117,6 @@ describe("SubDocumentListComponent", () => {
     expect(component.documentTypeOptions()[0]).toBe("certificazione speciale");
     expect(component.previewSrc()).not.toBeNull();
     expect(component.previewStatus()).toBe("available");
-    expect(previewStatus).toHaveBeenCalledWith(document.previewUrl);
   });
 
   it("mantiene una sola copia delle tipologie predefinite", () => {
@@ -340,22 +332,6 @@ describe("SubDocumentListComponent", () => {
     expect(component.canPrepareMessage(subDocument({ reviewStatus: "manually_validated" }))).toBe(true);
   });
 
-  it("annulla la sottoscrizione alla preview quando il componente viene distrutto", () => {
-    const teardown = jest.fn();
-    previewStatus.mockReturnValue(
-      new Observable<DocumentPreviewStatus>((subscriber) => {
-        subscriber.next("loading");
-        return teardown;
-      })
-    );
-    const { fixture, component } = render(subDocument());
-
-    expect(component.previewStatus()).toBe("loading");
-    fixture.destroy();
-
-    expect(teardown).toHaveBeenCalledTimes(1);
-  });
-
   /**
    * Il `beforeEach` svuota il template per provare la classe senza montare
    * l'intero pannello; la legenda pero' vive solo li', quindi questi due casi
@@ -363,12 +339,10 @@ describe("SubDocumentListComponent", () => {
    */
   function renderLegend(document: SubDocument): string {
     TestBed.resetTestingModule();
-    TestBed.configureTestingModule({
-      providers: [{ provide: DocumentWorkflowService, useValue: { previewStatus } }]
-    });
 
     const fixture = TestBed.createComponent(SubDocumentListComponent);
     fixture.componentRef.setInput("documentItem", document);
+    fixture.componentRef.setInput("previewStatus", "idle");
     fixture.componentRef.setInput("isDeleting", false);
     fixture.componentRef.setInput("isSavingReview", false);
     fixture.detectChanges();

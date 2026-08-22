@@ -1,4 +1,4 @@
-import { type Signal, computed } from "@angular/core";
+import { type Signal, type WritableSignal, computed, signal } from "@angular/core";
 import type { Router } from "@angular/router";
 import type { Metric, MvpState } from "../../../api/generated/model";
 import type { MvpView } from "../../core/navigation/app-views";
@@ -41,10 +41,11 @@ export interface PriorityMetric {
  * — le dipendenze arrivano dal costruttore, non da `inject()`, quindi la
  * classe è istanziabile con `new` e testabile senza `TestBed`.
  * `OverviewPage` (la View) resta l'unico punto accoppiato ad Angular e al
- * DOM: si procura le dipendenze con `inject()`, costruisce questa istanza
- * e le passa `scrollToElement` (vedi `shared/util/scroll.ts`) come
- * funzione, cosicché il ViewModel possa *chiedere* uno scroll dopo la
- * navigazione senza *eseguirlo* direttamente.
+ * DOM: si procura le dipendenze con `inject()` e costruisce questa istanza.
+ * Il ViewModel non chiama mai la View: uno scroll richiesto dopo la
+ * navigazione scrive `pendingScrollTarget`, un `effect()` nella View lo
+ * legge e chiama `scrollToElement` (vedi `shared/util/scroll.ts`), poi lo
+ * azzera.
  *
  * `error`, `loading` e `reload()` sono pass-through sullo store: il template
  * legge solo `vm.*`, come già fanno Copilot e Assistant (ADR 0011). Prima
@@ -93,14 +94,22 @@ export class OverviewPageViewModel {
     return typeof entry?.value === "number" ? entry.value : 0;
   });
 
+  /**
+   * Uno scroll richiesto dal ViewModel: non un comando alla View, un fatto
+   * osservabile. La View lo consuma nel proprio `effect()` e lo azzera
+   * (`.set(null)`) subito dopo averlo eseguito — se non azzerasse, la stessa
+   * destinazione richiesta due volte di fila non ritriggerebbe l'`effect()`,
+   * che riscontra solo cambi di valore.
+   */
+  readonly pendingScrollTarget: WritableSignal<string | null> = signal(null);
+
   constructor(
     private readonly store: MvpStateStore,
-    private readonly router: Router,
-    private readonly scrollTo: (elementId: string) => void
+    private readonly router: Router
   ) {}
 
   navigate(view: MvpView, targetId: string): void {
-    void this.router.navigate([view]).then(() => this.scrollTo(targetId));
+    void this.router.navigate([view]).then(() => this.pendingScrollTarget.set(targetId));
   }
 
   reload(): void {

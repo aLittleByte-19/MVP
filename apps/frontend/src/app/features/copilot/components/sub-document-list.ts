@@ -8,7 +8,7 @@ import { EmptyStateComponent } from "../../../shared/components/empty-state/empt
 import { SectionComponent } from "../../../layout/section/section";
 import { capitalizeFirst, formatConfidence, formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
 import { DOCUMENT_TYPE_OPTIONS, codiceFiscaleValidator } from "../../../shared/util/document-field-validators";
-import { DocumentWorkflowService, type DocumentPreviewStatus } from "../data/document-workflow.service";
+import type { DocumentPreviewStatus } from "../data/document-workflow.service";
 import { DocumentStatusTimelineComponent } from "./document-status-timeline";
 import {
   EXTRACTED_FIELD_KEYS,
@@ -501,6 +501,7 @@ const emptySendMessageForm: SendMessageFormState = {
 })
 export class SubDocumentListComponent {
   readonly documentItem = input<SubDocument | null>(null);
+  readonly previewStatus = input.required<DocumentPreviewStatus>();
   readonly isDeleting = input.required<boolean>();
   readonly isSavingReview = input.required<boolean>();
   readonly reviewError = input<string | null>(null);
@@ -530,7 +531,6 @@ export class SubDocumentListComponent {
   private shownDocumentId: string | null = null;
   protected readonly isSendEditing = signal(false);
   protected readonly copiedEmail = signal(false);
-  protected readonly previewStatus = signal<DocumentPreviewStatus>("idle");
   // L'URL dell'anteprima e' una risorsa same-origin generata dal backend; va
   // marcato come SafeResourceUrl, altrimenti Angular blocca il binding su
   // <iframe [src]> ("unsafe value in a resource URL context") e l'anteprima
@@ -557,24 +557,15 @@ export class SubDocumentListComponent {
     body: new FormControl("", { nonNullable: true })
   });
 
-  private readonly workflow = inject(DocumentWorkflowService);
   private readonly sanitizer = inject(DomSanitizer);
 
   constructor() {
-    effect((onCleanup) => {
-      const document = this.documentItem();
-      this.resetForm(document);
-
-      if (!document?.previewUrl) {
-        this.previewStatus.set("idle");
-        return;
-      }
-
-      const subscription = this.workflow
-        .previewStatus(document.previewUrl)
-        .subscribe((status) => this.previewStatus.set(status));
-
-      onCleanup(() => subscription.unsubscribe());
+    // La raggiungibilità dell'anteprima è una fetch, non presentazione: vive
+    // in CopilotPageViewModel.loadPreviewStatus() e arriva qui come input
+    // (`previewStatus`), cosicché questo componente resti "dumb" — riceve
+    // stato, non lo produce interrogando un servizio per conto proprio.
+    effect(() => {
+      this.resetForm(this.documentItem());
     });
 
     // Evidenzia il campo segnalato dal backend (UC-55/UC-69) invece di un

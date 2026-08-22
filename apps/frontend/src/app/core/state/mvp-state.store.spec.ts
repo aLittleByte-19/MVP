@@ -1,5 +1,5 @@
 import { Injector } from "@angular/core";
-import { defer, of, throwError } from "rxjs";
+import { Subject, defer, of, throwError } from "rxjs";
 import { AlittlebyteMVPAPIService } from "../../../api/generated/mvp-api";
 import { MvpStateStore } from "./mvp-state.store";
 import type { MvpState, SubDocument } from "../../../api/generated/model";
@@ -97,6 +97,19 @@ describe("MvpStateStore", () => {
     expect(subscriptions).toBe(2);
     expect(store.loading()).toBe(false);
     expect(store.error()).toBeNull();
+  });
+
+  it("ignora un reload mentre una richiesta e' gia' in volo", () => {
+    // Un doppio click su "Riprova" non deve avviare due GET /state in parallelo.
+    const inFlight = new Subject<MvpState>();
+    getMvpState.mockReturnValue(inFlight);
+
+    store.reload();
+    store.reload();
+    inFlight.next(stateWith([], []));
+
+    expect(getMvpState).toHaveBeenCalledTimes(1);
+    expect(store.loading()).toBe(false);
   });
 
   it("espone un messaggio e termina il caricamento dopo due errori", () => {

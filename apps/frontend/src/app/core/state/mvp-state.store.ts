@@ -65,8 +65,19 @@ export class MvpStateStore {
     this.reload();
   }
 
-  /** Ricarica lo stato applicando una sola retry per errori temporanei. */
+  /**
+   * Ricarica lo stato applicando una sola retry per errori temporanei.
+   *
+   * Ignora una chiamata mentre una richiesta e' gia' in volo (es. un doppio
+   * click su "Riprova"): senza questa guardia partirebbero due `GET /state`
+   * in parallelo, l'ultima risposta vincerebbe comunque ma la richiesta in
+   * piu' sarebbe sprecata — la stessa guardia che `loadOnce()` applica gia'.
+   */
   reload(): void {
+    if (this._loading()) {
+      return;
+    }
+
     this._loading.set(true);
     this._error.set(null);
 

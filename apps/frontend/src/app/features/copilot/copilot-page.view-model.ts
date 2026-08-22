@@ -6,7 +6,16 @@ import type {
   UpdateSendMessageRequest
 } from "../../../api/generated/model";
 import { extractFieldErrors, getApiErrorMessage } from "../../core/errors/api-error";
+import { MvpStateStore } from "../../core/state/mvp-state.store";
 import type { MetricPresentation } from "../../shared/components/metrics-panel/metrics-panel";
+import type { DocumentUploadRequest } from "./components/document-upload-panel";
+import {
+  DocumentWorkflowService,
+  type DocumentFilters,
+  type DocumentPage,
+  type DocumentPreviewStatus,
+  type DocumentUploadPhase
+} from "./data/document-workflow.service";
 
 /**
  * Metriche che il pannello non mostra come schede a sé.
@@ -22,14 +31,6 @@ const HIDDEN_KEYS = [
   "copilot.quarantined",
   "copilot.sub_documents"
 ];
-import { MvpStateStore } from "../../core/state/mvp-state.store";
-import type { DocumentUploadRequest } from "./components/document-upload-panel";
-import {
-  DocumentWorkflowService,
-  type DocumentFilters,
-  type DocumentPage,
-  type DocumentUploadPhase
-} from "./data/document-workflow.service";
 
 /**
  * Righe per pagina dello storico. Dieci: la tabella resta leggibile senza
@@ -54,9 +55,11 @@ const DOCUMENTS_PER_PAGE = 10;
  * sullo store condiviso, non `store.*` direttamente.
  *
  * `effect()`/`takeUntilDestroyed()` restano nella View perché richiedono un
- * injection context che questa classe non ha per costruzione, ma l'effect si
- * limita a leggere i segnali sorgente e chiamare `reload()`: la chiamata di
- * ricerca vera e propria vive qui, come per ogni altra azione del VM.
+ * injection context che questa classe non ha per costruzione, ma gli effect
+ * si limitano a leggere i segnali sorgente e chiamare `reload()`/
+ * `loadPreviewStatus()`: la chiamata vera e propria — inclusa la fetch di
+ * anteprima, che altrimenti finirebbe in un componente figlio — vive qui,
+ * come per ogni altra azione del VM.
  */
 export class CopilotPageViewModel {
   readonly selectedDocumentId: WritableSignal<string | null> = signal(null);
@@ -67,6 +70,16 @@ export class CopilotPageViewModel {
     return documents.find((documentItem) => documentItem.id === selectedId) ?? documents[0] ?? null;
   });
   readonly selectedDocumentIdForList: Signal<string | null> = computed(() => this.selectedDocument()?.id ?? null);
+
+  /**
+   * Raggiungibilità dell'anteprima del documento selezionato: verifica il
+   * content-type prima che il dettaglio monti l'iframe (l'endpoint può
+   * rispondere col PDF, 404 se assente o 503 se lo storage non è
+   * raggiungibile). Segue la stessa selezione, non un elenco a parte:
+   * `loadPreviewStatus()` la richiede di nuovo a ogni cambio di
+   * `selectedDocument`, come `reload()` per lo storico.
+   */
+  readonly previewStatus: WritableSignal<DocumentPreviewStatus> = signal("idle");
   readonly isUploading = signal(false);
   readonly uploadStatus = signal("Nessun caricamento in corso.");
   readonly uploadPhase: WritableSignal<DocumentUploadPhase | null> = signal(null);
@@ -134,6 +147,7 @@ export class CopilotPageViewModel {
   }));
 
   private searchSubscription: Subscription | null = null;
+  private previewSubscription: Subscription | null = null;
 
   constructor(
     private readonly workflow: DocumentWorkflowService,
@@ -174,6 +188,26 @@ export class CopilotPageViewModel {
   }
 
   /**
+   * Richiede di nuovo la raggiungibilità dell'anteprima: stessa forma di
+   * `reload()`, sul documento selezionato invece che sullo storico. Annulla
+   * la richiesta precedente ancora in volo, così una risposta tardiva su un
+   * documento ormai deselezionato non sovrascrive lo stato di quello corrente.
+   */
+  loadPreviewStatus(previewUrl: string | null): void {
+    this.previewSubscription?.unsubscribe();
+
+    if (previewUrl === null) {
+      this.previewStatus.set("idle");
+      return;
+    }
+
+    // Il primo evento emesso e' gia' "loading" (vedi DocumentWorkflowService.previewStatus).
+    this.previewSubscription = this.workflow
+      .previewStatus(previewUrl)
+      .subscribe((status) => this.previewStatus.set(status));
+  }
+
+  /**
    * Ricarica lo stato condiviso, che è ciò che il pulsante "Riprova"
    * dell'errore di pagina deve rifare. Distinto da `reload()`, che rilegge il
    * storico documenti: confonderli lascerebbe lo stato globale in errore
@@ -192,6 +226,7 @@ export class CopilotPageViewModel {
    */
   destroy(): void {
     this.searchSubscription?.unsubscribe();
+    this.previewSubscription?.unsubscribe();
   }
 
   private setFilteredDocuments(page: DocumentPage): void {

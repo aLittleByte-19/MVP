@@ -42,10 +42,7 @@ describe("OverviewPageViewModel", () => {
     metricEntry = jest.fn((key: string) => entries[key] ?? null);
   });
 
-  function createViewModel(
-    scrollTo: jest.Mock = jest.fn(),
-    lookup: jest.Mock = metricEntry
-  ): OverviewPageViewModel {
+  function createViewModel(lookup: jest.Mock = metricEntry): OverviewPageViewModel {
     const store = {
       metricEntry: lookup,
       history: () => [],
@@ -53,7 +50,7 @@ describe("OverviewPageViewModel", () => {
       loading: () => false
     } as unknown as MvpStateStore;
     const router = { navigate } as unknown as Router;
-    return new OverviewPageViewModel(store, router, scrollTo);
+    return new OverviewPageViewModel(store, router);
   }
 
   it("espone solo le tre metriche su cui si agisce", () => {
@@ -70,7 +67,7 @@ describe("OverviewPageViewModel", () => {
 
   it("lascia il valore a null finché lo stato non è caricato", () => {
     // Uno zero durante il caricamento verrebbe letto come conteggio reale.
-    const vm = createViewModel(jest.fn(), jest.fn(() => null));
+    const vm = createViewModel(jest.fn(() => null));
 
     expect(vm.priorities().every((priority) => priority.value === null)).toBe(true);
     expect(vm.priorities().every((priority) => priority.context === null)).toBe(true);
@@ -112,17 +109,17 @@ describe("OverviewPageViewModel", () => {
 
   it("conta i sotto-documenti in quarantena, per decidere se segnalarli", () => {
     expect(createViewModel().quarantined()).toBe(2);
-    expect(createViewModel(jest.fn(), jest.fn(() => null)).quarantined()).toBe(0);
+    expect(createViewModel(jest.fn(() => null)).quarantined()).toBe(0);
   });
 
-  it("naviga e delega lo scroll alla View dopo la navigazione", async () => {
-    const scrollTo = jest.fn();
-    const vm = createViewModel(scrollTo);
+  it("naviga e chiede lo scroll dopo la navigazione, senza chiamare la View", async () => {
+    const vm = createViewModel();
 
+    expect(vm.pendingScrollTarget()).toBeNull();
     vm.navigate("assistant", "assistant-compose");
     await Promise.resolve();
 
     expect(navigate).toHaveBeenCalledWith(["assistant"]);
-    expect(scrollTo).toHaveBeenCalledWith("assistant-compose");
+    expect(vm.pendingScrollTarget()).toBe("assistant-compose");
   });
 });

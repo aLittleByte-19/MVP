@@ -46,7 +46,8 @@ describe("CopilotPage", () => {
       deleteSubDocument: jest.fn(),
       markReviewed: jest.fn(),
       saveExtractedData: jest.fn(),
-      saveSendMessage: jest.fn()
+      saveSendMessage: jest.fn(),
+      previewStatus: jest.fn(() => of("idle"))
     };
     TestBed.configureTestingModule({
       providers: [
@@ -87,6 +88,17 @@ describe("CopilotPage", () => {
 
     expect(fixture.componentInstance["vm"].filteredDocuments()).toEqual([first, second]);
     expect(fixture.nativeElement.textContent).toContain("2 record");
+  });
+
+  it("richiede tramite l'effect lo stato di anteprima del documento selezionato", () => {
+    const selected: SubDocument = { ...subDocument("sub-1"), previewUrl: "/api/v1/documents/sub-1/preview" };
+    workflow["searchDocuments"].mockReturnValue(of({ items: [selected], total: 1, page: 1, perPage: 10 }));
+    workflow["previewStatus"].mockReturnValue(of("available"));
+    const fixture = TestBed.createComponent(CopilotPage);
+    fixture.detectChanges();
+
+    expect(workflow["previewStatus"]).toHaveBeenCalledWith("/api/v1/documents/sub-1/preview");
+    expect(fixture.componentInstance["vm"].previewStatus()).toBe("available");
   });
 
   it("propaga l'errore di ricerca dell'effect al ViewModel", () => {

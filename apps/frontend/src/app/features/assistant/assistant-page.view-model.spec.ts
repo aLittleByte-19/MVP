@@ -46,7 +46,6 @@ describe("AssistantPageViewModel", () => {
   let promptConfigurations: ReturnType<typeof signal<PromptConfiguration[]>>;
   let error: ReturnType<typeof signal<string | null>>;
   let assistant: Record<string, jest.Mock>;
-  let scrollTo: jest.Mock;
 
   beforeEach(() => {
     history = signal<Communication[]>([]);
@@ -68,12 +67,11 @@ describe("AssistantPageViewModel", () => {
       favorite: jest.fn(),
       unfavorite: jest.fn()
     };
-    scrollTo = jest.fn();
   });
 
   function createViewModel(): AssistantPageViewModel {
     const store = { history, promptConfigurations, error } as unknown as MvpStateStore;
-    return new AssistantPageViewModel(assistant as unknown as AssistantService, store, scrollTo);
+    return new AssistantPageViewModel(assistant as unknown as AssistantService, store);
   }
 
   function setDraft(vm: AssistantPageViewModel, overrides: Partial<GeneratedDraft> = {}): GeneratedDraft {
@@ -269,7 +267,7 @@ describe("AssistantPageViewModel", () => {
     expect(vm.isRating()).toBe(false);
   });
 
-  it("seleziona una bozza e azzera l'errore rating", () => {
+  it("seleziona una bozza, azzera l'errore rating e chiede lo scroll senza chiamare la View", () => {
     const vm = createViewModel();
     vm.rateError.set("errore precedente");
 
@@ -277,7 +275,7 @@ describe("AssistantPageViewModel", () => {
 
     expect(vm.selectedDraftId()).toBe(12);
     expect(vm.rateError()).toBeNull();
-    expect(scrollTo).toHaveBeenCalledWith("assistant-review");
+    expect(vm.pendingScrollTarget()).toBe("assistant-review");
   });
 
   it("carica e rimuove la copertina aggiornando sempre lo stato busy", () => {

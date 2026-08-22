@@ -20,14 +20,16 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
 /**
  * View dell'AI Assistant: nessuna logica di business qui, solo collante
  * col template e procacciamento delle dipendenze via `inject()` per
- * costruire {@link AssistantPageViewModel} — incluso `scrollToElement`,
- * l'unica operazione DOM richiesta dal ViewModel, che qui resta un'unità
- * separata (`shared/util/scroll.ts`) invece di un metodo del ViewModel.
- * Il template legge solo `vm.*`, mai `store.*` direttamente. Le uniche
- * eccezioni sono `effect()`/`takeUntilDestroyed()` nel costruttore, che
- * richiedono un injection context che il ViewModel (Presentation Model)
- * non ha per costruzione — l'effect si limita a leggere i segnali sorgente
- * e chiamare `vm.reload()`, che possiede la vera chiamata di ricerca.
+ * costruire {@link AssistantPageViewModel}. Il template legge solo `vm.*`,
+ * mai `store.*` direttamente. Le uniche eccezioni sono gli `effect()`/
+ * `takeUntilDestroyed()` nel costruttore, che richiedono un injection
+ * context che il ViewModel (Presentation Model) non ha per costruzione:
+ * uno legge i segnali sorgente e chiama `vm.reload()`, che possiede la
+ * vera chiamata di ricerca; l'altro legge `vm.pendingScrollTarget()` e,
+ * quando non è nullo, esegue lo scroll con `scrollToElement` (l'unica
+ * operazione DOM richiesta dal ViewModel, che resta un'unità separata in
+ * `shared/util/scroll.ts`) e azzera il segnale — il ViewModel *chiede* lo
+ * scroll, non lo esegue né chiama mai la View direttamente.
  */
 @Component({
   selector: "mvp-assistant-page",
@@ -214,7 +216,7 @@ export class AssistantPage {
   protected readonly vm: AssistantPageViewModel;
 
   constructor() {
-    this.vm = new AssistantPageViewModel(inject(AssistantService), this.store, scrollToElement);
+    this.vm = new AssistantPageViewModel(inject(AssistantService), this.store);
 
     this.filterForm.valueChanges
       .pipe(
@@ -239,6 +241,18 @@ export class AssistantPage {
       this.store.history();
       this.vm.activeFilters();
       this.vm.reload();
+    });
+
+    // Altra eccezione documentata: il ViewModel non chiama mai la View,
+    // quindi lo scroll richiesto passa da un segnale osservato, non da un
+    // riferimento alla View.
+    effect(() => {
+      const target = this.vm.pendingScrollTarget();
+
+      if (target !== null) {
+        scrollToElement(target);
+        this.vm.pendingScrollTarget.set(null);
+      }
     });
 
     inject(DestroyRef).onDestroy(() => this.vm.destroy());

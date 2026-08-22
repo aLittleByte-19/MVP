@@ -33,12 +33,14 @@ import { AssistantService, type CommunicationFilters } from "./data/assistant.se
  * testabile senza avviare Angular, non "zero import da `@angular/core`".
  *
  * `AssistantPage` (la View) resta l'unico punto accoppiato ad Angular e al
- * DOM: si procura le dipendenze con `inject()`, costruisce questa istanza
- * e le passa `scrollToElement` — l'unica operazione che deve toccare
- * `document`/`window` (vedi `shared/util/scroll.ts`) — come funzione,
- * cosicché il ViewModel possa *chiedere* uno scroll senza *eseguirlo*. Il
- * template legge solo `vm.*` — anche `error`/`loading`, pass-through sullo
- * store condiviso, non `store.*` direttamente.
+ * DOM: si procura le dipendenze con `inject()` e costruisce questa istanza.
+ * Il ViewModel non chiama mai la View: uno scroll richiesto scrive
+ * `pendingScrollTarget`, un `effect()` nella View lo legge e chiama
+ * `scrollToElement` (vedi `shared/util/scroll.ts`), poi lo azzera — lo
+ * stesso schema di comunicazione unidirezionale (segnale osservato, mai
+ * un riferimento alla View) di ogni altro stato esposto qui. Il template
+ * legge solo `vm.*` — anche `error`/`loading`, pass-through sullo store
+ * condiviso, non `store.*` direttamente.
  *
  * `effect()`/`takeUntilDestroyed()` restano nella View perché richiedono un
  * injection context che questa classe non ha per costruzione, ma l'effect si
@@ -98,6 +100,15 @@ export class AssistantPageViewModel {
     });
   });
   readonly togglingFavoriteId: WritableSignal<number | null> = signal(null);
+
+  /**
+   * Uno scroll richiesto dal ViewModel: non un comando alla View, un fatto
+   * osservabile. La View lo consuma nel proprio `effect()` e lo azzera
+   * (`.set(null)`) subito dopo averlo eseguito — se non azzerasse, la stessa
+   * destinazione richiesta due volte di fila non ritriggerebbe l'`effect()`,
+   * che riscontra solo cambi di valore.
+   */
+  readonly pendingScrollTarget: WritableSignal<string | null> = signal(null);
 
   readonly previewDraft: Signal<GeneratedDraft | null> = computed(() => {
     const selectedId = this.selectedDraftId();
@@ -190,8 +201,7 @@ export class AssistantPageViewModel {
 
   constructor(
     private readonly assistant: AssistantService,
-    private readonly store: MvpStateStore,
-    private readonly scrollTo: (elementId: string) => void
+    private readonly store: MvpStateStore
   ) {}
 
   setActiveFilters(filters: CommunicationFilters): void {
@@ -310,7 +320,7 @@ export class AssistantPageViewModel {
   selectDraft(communicationId: number): void {
     this.selectedDraftId.set(communicationId);
     this.rateError.set(null);
-    this.scrollTo("assistant-review");
+    this.pendingScrollTarget.set("assistant-review");
   }
 
   uploadCover(file: File): void {
@@ -397,7 +407,7 @@ export class AssistantPageViewModel {
           this.status.set(response.message);
           this.selectedDraftId.set(null);
           this.latestDraft.set(null);
-          this.scrollTo("assistant-compose");
+          this.pendingScrollTarget.set("assistant-compose");
         },
         error: (error: unknown) => {
           this.status.set(getApiErrorMessage(error, "Eliminazione bozza non disponibile."));
@@ -455,7 +465,7 @@ export class AssistantPageViewModel {
       tone: configuration.tone as GenerateCommunicationRequestTone,
       style: configuration.style as GenerateCommunicationRequestStyle
     });
-    this.scrollTo("assistant-compose");
+    this.pendingScrollTarget.set("assistant-compose");
   }
 
   deleteConfiguration(configurationId: number): void {
@@ -535,7 +545,7 @@ export class AssistantPageViewModel {
         status: "draft",
         coverStatus: "processing"
       });
-      this.scrollTo("assistant-review");
+      this.pendingScrollTarget.set("assistant-review");
     }
 
     if (progress.cover) {

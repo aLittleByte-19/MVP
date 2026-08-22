@@ -1,7 +1,5 @@
 import { TestBed } from "@angular/core/testing";
-import { of } from "rxjs";
 import type { SubDocument } from "../../../../api/generated/model";
-import { DocumentWorkflowService } from "../data/document-workflow.service";
 import { SubDocumentListComponent } from "./sub-document-list";
 
 /**
@@ -37,14 +35,9 @@ describe("ancora dello scorrimento del dettaglio", () => {
   }
 
   it("sta sulla sezione interna, che genera un box, non sull'host", () => {
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: DocumentWorkflowService, useValue: { previewStatus: () => of("unavailable") } }
-      ]
-    });
-
     const fixture = TestBed.createComponent(SubDocumentListComponent);
     fixture.componentRef.setInput("documentItem", documento());
+    fixture.componentRef.setInput("previewStatus", "unavailable");
     fixture.componentRef.setInput("isDeleting", false);
     fixture.componentRef.setInput("isSavingReview", false);
     fixture.detectChanges();

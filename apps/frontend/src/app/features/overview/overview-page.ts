@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from "@angular/core";
+import { ChangeDetectionStrategy, Component, effect, inject } from "@angular/core";
 import { Router } from "@angular/router";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { ButtonComponent } from "../../shared/components/button/button";
@@ -17,10 +17,14 @@ import { OverviewPageViewModel } from "./overview-page.view-model";
 /**
  * View della Overview: nessuna logica di business qui, solo collante col
  * template e procacciamento delle dipendenze via `inject()` per costruire
- * {@link OverviewPageViewModel} — incluso `scrollToElement`, l'unica
- * operazione DOM richiesta dal ViewModel dopo la navigazione. Il template
- * legge esclusivamente `vm.*`: errore, caricamento e ricarica sono
- * pass-through esposti dal ViewModel, come in Copilot e Assistant (ADR 0011).
+ * {@link OverviewPageViewModel}. Il template legge esclusivamente `vm.*`:
+ * errore, caricamento e ricarica sono pass-through esposti dal ViewModel,
+ * come in Copilot e Assistant (ADR 0011). Unica eccezione: l'`effect()` nel
+ * costruttore, che richiede un injection context che il ViewModel non ha
+ * per costruzione — legge `vm.pendingScrollTarget()` e, quando non è
+ * nullo, esegue lo scroll con `scrollToElement` (l'unica operazione DOM
+ * richiesta dal ViewModel) e azzera il segnale. Il ViewModel *chiede* lo
+ * scroll dopo la navigazione, non lo esegue né chiama mai la View.
  */
 @Component({
   selector: "mvp-overview-page",
@@ -180,6 +184,15 @@ export class OverviewPage {
   protected readonly vm: OverviewPageViewModel;
 
   constructor() {
-    this.vm = new OverviewPageViewModel(this.store, inject(Router), scrollToElement);
+    this.vm = new OverviewPageViewModel(this.store, inject(Router));
+
+    effect(() => {
+      const target = this.vm.pendingScrollTarget();
+
+      if (target !== null) {
+        scrollToElement(target);
+        this.vm.pendingScrollTarget.set(null);
+      }
+    });
   }
 }

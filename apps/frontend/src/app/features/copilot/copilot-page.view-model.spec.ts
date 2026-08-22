@@ -44,7 +44,8 @@ describe("CopilotPageViewModel", () => {
       deleteSubDocument: jest.fn(),
       markReviewed: jest.fn(),
       saveExtractedData: jest.fn(),
-      saveSendMessage: jest.fn()
+      saveSendMessage: jest.fn(),
+      previewStatus: jest.fn(() => of("available"))
     };
   });
 
@@ -240,6 +241,54 @@ describe("CopilotPageViewModel", () => {
     vm.saveSendMessage({ documentId: "sub-7", payload });
     expect(vm.sendMessageError()).toBe("messaggio fallito");
     expect(vm.isSavingSendMessage()).toBe(false);
+  });
+
+  describe("anteprima del documento selezionato", () => {
+    it("resta idle e non chiama il servizio quando non c'e' un url di anteprima", () => {
+      const vm = createViewModel();
+
+      vm.loadPreviewStatus(null);
+
+      expect(vm.previewStatus()).toBe("idle");
+      expect(workflow["previewStatus"]).not.toHaveBeenCalled();
+    });
+
+    it("richiede la raggiungibilita' dell'anteprima e la espone", () => {
+      workflow["previewStatus"].mockReturnValue(of("unreachable"));
+      const vm = createViewModel();
+
+      vm.loadPreviewStatus("/api/v1/documents/1/preview");
+
+      expect(workflow["previewStatus"]).toHaveBeenCalledWith("/api/v1/documents/1/preview");
+      expect(vm.previewStatus()).toBe("unreachable");
+    });
+
+    it("cambiare documento annulla la richiesta precedente ancora in volo", () => {
+      const stale = new Subject<string>();
+      workflow["previewStatus"].mockReturnValueOnce(stale).mockReturnValueOnce(of("available"));
+      const vm = createViewModel();
+
+      vm.loadPreviewStatus("/preview/1");
+      vm.loadPreviewStatus("/preview/2");
+      stale.next("unavailable");
+
+      expect(vm.previewStatus()).toBe("available");
+    });
+
+    it("destroy annulla la sottoscrizione alla preview ancora in volo", () => {
+      const inFlight = new Subject<string>();
+      workflow["previewStatus"].mockReturnValue(inFlight);
+      const vm = createViewModel();
+
+      vm.loadPreviewStatus("/preview/1");
+      inFlight.next("loading");
+      expect(vm.previewStatus()).toBe("loading");
+
+      vm.destroy();
+      inFlight.next("available");
+
+      expect(vm.previewStatus()).toBe("loading");
+    });
   });
 
   describe("paginazione dello storico", () => {

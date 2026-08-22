@@ -36,10 +36,12 @@ const MONTHS = [
  * collante col template e procacciamento delle dipendenze via `inject()`
  * per costruire {@link CopilotPageViewModel} (Presentation Model, Fowler).
  * Il template legge solo `vm.*`, mai `store.*` direttamente. Le uniche
- * eccezioni sono `effect()`/`takeUntilDestroyed()` nel costruttore, che
+ * eccezioni sono gli `effect()`/`takeUntilDestroyed()` nel costruttore, che
  * richiedono un injection context che il ViewModel (classe pura) non ha
- * per costruzione — l'effect si limita a leggere i segnali sorgente e
- * chiamare `vm.reload()`, che possiede la vera chiamata di ricerca.
+ * per costruzione — ciascuno si limita a leggere i segnali sorgente e
+ * chiamare `vm.reload()`/`vm.loadPreviewStatus()`, che possiedono la vera
+ * logica (anche `mvp-sub-document-list`, sotto, resta un componente
+ * "dumb": riceve `previewStatus` come input, non lo produce).
  */
 @Component({
   selector: "mvp-copilot-page",
@@ -138,6 +140,7 @@ const MONTHS = [
 
       <mvp-sub-document-list
         [documentItem]="vm.selectedDocument()"
+        [previewStatus]="vm.previewStatus()"
         [isDeleting]="vm.isDeleting()"
         [isSavingReview]="vm.isSavingReview()"
         [reviewError]="vm.reviewError()"
@@ -236,10 +239,22 @@ export class CopilotPage {
     // Eccezione documentata: l'effect() richiede un injection context che
     // CopilotPageViewModel (classe pura) non ha per costruzione — legge solo
     // i segnali sorgente, la chiamata di ricerca vera vive in vm.reload().
+    //
+    // Non legge `vm.currentPage()` di proposito: `vm.goToPage()` chiama
+    // `reload()` da se', e se questo effect osservasse anche la pagina la
+    // rilettura partirebbe due volte a ogni cambio pagina. Chi tocca
+    // paginazione o filtri deve tenere a mente questo accoppiamento implicito.
     effect(() => {
       this.store.documents();
       this.vm.activeFilters();
       this.vm.reload();
+    });
+
+    // Stessa eccezione documentata sopra: la fetch vera vive in
+    // vm.loadPreviewStatus(), qui si legge solo il documento selezionato.
+    effect(() => {
+      const document = this.vm.selectedDocument();
+      this.vm.loadPreviewStatus(document?.previewUrl ?? null);
     });
 
     inject(DestroyRef).onDestroy(() => this.vm.destroy());
