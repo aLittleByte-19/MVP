@@ -211,6 +211,7 @@
   background: var(--mvp-surface-muted);
 }
 
+
 .lockedField input,
 .lockedField textarea {
   border-color: var(--mvp-border-soft);

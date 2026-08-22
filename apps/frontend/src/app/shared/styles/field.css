@@ -93,3 +93,15 @@
   border-color: var(--mvp-danger);
   background: var(--mvp-danger-soft);
 }
+
+/* Fuori dalla modifica il cursore lampeggiante non compare.
+   `readonly` lascia il campo attivabile col clic, e il cursore che appariva
+   era una promessa di scrittura dentro una casella che non accetta un
+   carattere. Il testo resta selezionabile e copiabile, che e' quanto si puo'
+   fare li' dentro. Vale in tutti i moduli: la bozza dell'Assistant e
+   l'ispettore del Co-Pilot hanno la stessa modalita' di sola lettura. */
+.field input[readonly],
+.field textarea[readonly] {
+  caret-color: transparent;
+  cursor: default;
+}
