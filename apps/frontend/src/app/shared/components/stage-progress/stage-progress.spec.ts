@@ -115,6 +115,47 @@ describe("StageProgressComponent", () => {
     }
   });
 
+  it("riparte da zero quando comincia una nuova corsa", () => {
+    // Fra una generazione e la successiva la tappa non torna a null: il
+    // cronometro proseguiva dalla corsa prima, e la bozza appena chiesta si
+    // presentava «in corso da 2 min».
+    jest.useFakeTimers().setSystemTime(new Date("2026-08-18T10:00:00Z"));
+
+    try {
+      const fixture = renderFixture({ currentId: "processing" });
+      jest.advanceTimersByTime(150_000);
+      fixture.detectChanges();
+
+      fixture.componentRef.setInput("currentId", "completed");
+      fixture.detectChanges();
+
+      // Nuova generazione: si torna alla prima tappa.
+      fixture.componentRef.setInput("currentId", "queued");
+      fixture.detectChanges();
+
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain("In corso da 0 s");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("riparte anche quando la corsa nuova comincia dalla tappa a cui si era fermata", () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-08-18T10:00:00Z"));
+
+    try {
+      const fixture = renderFixture({ currentId: "completed" });
+      jest.advanceTimersByTime(90_000);
+      fixture.detectChanges();
+
+      fixture.componentRef.setInput("currentId", "processing");
+      fixture.detectChanges();
+
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain("In corso da 0 s");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it("non mostra alcun tempo finche' la pipeline non e' partita", () => {
     expect(render({ currentId: null }).textContent).not.toContain("In corso da");
   });

@@ -79,8 +79,18 @@ export class StageProgressComponent {
     return `${minutes} min ${String(seconds % 60).padStart(2, "0")} s`;
   });
 
-  /** Istante di partenza della corsa in corso; azzerato quando finisce. */
+  /** Istante di partenza della corsa in corso. */
   private startedAt: number | null = null;
+
+  /**
+   * Come stava la corsa al giro precedente, per accorgersi che ne e' cominciata
+   * un'altra. Il solo `currentId` non basta: fra una generazione e la
+   * successiva non torna a `null`, e il cronometro proseguiva dalla corsa
+   * prima, dichiarando «in corso da 2 min» su una partita un secondo fa.
+   */
+  private lastIndex = -1;
+
+  private wasFinished = false;
 
   constructor() {
     effect((onCleanup) => {
@@ -90,11 +100,22 @@ export class StageProgressComponent {
 
       if (currentIndex === -1) {
         this.startedAt = null;
+        this.lastIndex = -1;
+        this.wasFinished = false;
         this.elapsedSeconds.set(null);
         return;
       }
 
+      // Si riparte quando l'avanzamento torna indietro, o quando riprende dopo
+      // essersi fermato: in entrambi i casi quella che si misura e' una corsa
+      // nuova, e il tempo riparte da zero.
+      if (currentIndex < this.lastIndex || (this.wasFinished && ! finished)) {
+        this.startedAt = null;
+      }
+
       this.startedAt ??= Date.now();
+      this.lastIndex = currentIndex;
+      this.wasFinished = finished;
 
       const tick = () => this.elapsedSeconds.set(Math.floor((Date.now() - (this.startedAt ?? 0)) / 1000));
       tick();
