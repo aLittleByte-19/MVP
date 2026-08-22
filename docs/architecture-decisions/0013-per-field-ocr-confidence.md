@@ -1,6 +1,6 @@
 # ADR 0013: Confidenza per campo invece che media di pagina
 
-Status: Proposed
+Status: Accepted, implemented
 Date: 2026-08-20
 
 ## Context
