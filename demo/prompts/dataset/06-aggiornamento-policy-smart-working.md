@@ -1,0 +1,1 @@
+Prepara una comunicazione che aggiorna la policy sul lavoro da remoto: due giorni a settimana concordati con il responsabile, con presenza obbligatoria nei giorni di riunione di reparto. Spiega come inoltrare la richiesta.

@@ -85,7 +85,7 @@ ORDER BY count(*) DESC;
 
 ## Final PDF
 
-`DompdfCommunicationPdfRenderer` (behind the `CommunicationPdfRendererPort`, orchestrated by `ExportCommunicationService`) lays out title, body and cover into the A4 document served by both `preview` and `export`. Every page carries the `Creato da AI Assistant` transparency marker and the NEXUM footer with page numbers, stamped through the dompdf canvas API because dompdf does not render CSS3 margin boxes.
+`DompdfCommunicationPdfRenderer` (behind the `CommunicationPdfRendererPort`, orchestrated by `ExportCommunicationService`) lays out title, body and cover into the A4 document served by both `preview` and `export`. Every page carries the `Creato da AI Assistant` transparency marker, both as a diagonal watermark and in the NEXUM footer (brand on the left, the marker in the middle, page numbers on the right), stamped through the dompdf canvas API because dompdf does not render CSS3 margin boxes.
 
 Rendering is the most expensive operation in the API and its result is deterministic, so the PDF is **materialized once** on the storage disk and re-read afterwards:
 

@@ -34,7 +34,7 @@ describe("GeneratedCommunicationPreviewComponent", () => {
     const fixture = render();
 
     expect(fixture.componentInstance["bodyLength"]()).toBe(0);
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain("La bozza generata apparira qui.");
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain("La bozza generata compare qui.");
   });
 
   it("riconosce copertina, attesa, scarto e disponibilita anteprima", () => {
@@ -57,7 +57,7 @@ describe("GeneratedCommunicationPreviewComponent", () => {
   });
 
   it.each([
-    [draft({ coverImageUrl: "/cover.png", coverStatus: "ready" }), "img.preview-image"],
+    [draft({ coverImageUrl: "/cover.png", coverStatus: "ready" }), "img.previewImage"],
     [draft({ coverStatus: "processing" }), "mvp-empty-state"],
     [draft({ coverStatus: "failed", coverError: "Cover non disponibile" }), ".warning"]
   ])("rende lo stato della copertina", (current, selector) => {

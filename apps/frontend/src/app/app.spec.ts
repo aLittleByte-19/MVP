@@ -14,7 +14,6 @@ describe("AppComponent", () => {
   beforeEach(() => {
     navigate = jest.fn(() => Promise.resolve(true));
     loadOnce = jest.fn();
-    Object.defineProperty(window, "IntersectionObserver", { configurable: true, value: undefined });
     TestBed.configureTestingModule({
       providers: [
         { provide: Router, useValue: { url: "/assistant?draft=7", events, navigate } },
@@ -84,5 +83,76 @@ describe("AppComponent", () => {
     expect(topbar.scrollIntoView).toHaveBeenCalled();
     animation.mockRestore();
     topbar.remove();
+  });
+
+  it("evidenzia la sezione raggiunta e l'ultima quando lo scroll e' esaurito", () => {
+    // Il caso che l'IntersectionObserver non copriva: le sezioni finali non
+    // risalgono mai alla banda di attivazione, perche' il documento finisce
+    // prima, e restavano senza evidenziazione.
+    const fixture = TestBed.createComponent(AppComponent);
+    const tops: Record<string, number> = {
+      "assistant-compose": -900,
+      "assistant-review": -400,
+      "assistant-history": 60,
+      "assistant-metrics": 700
+    };
+    const elements = Object.entries(tops).map(([id, top]) => {
+      const element = document.createElement("div");
+      element.id = id;
+      element.getBoundingClientRect = (() => ({ top })) as never;
+      document.body.appendChild(element);
+      return element;
+    });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 });
+    Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 3000 });
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 1000 });
+
+    fixture.componentInstance["updateActiveChild"]();
+    expect(fixture.componentInstance["activeChildId"]()).toBe("assistant-history");
+
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 2200 });
+    fixture.componentInstance["updateActiveChild"]();
+
+    expect(fixture.componentInstance["activeChildId"]()).toBe("assistant-metrics");
+
+    for (const element of elements) {
+      element.remove();
+    }
+  });
+
+  it("da' un indirizzo reale a ogni voce di navigazione", () => {
+    // Le voci sono collegamenti: senza href non sarebbero apribili in una
+    // nuova scheda ne' annunciate come tali.
+    const fixture = TestBed.createComponent(AppComponent);
+
+    expect(fixture.componentInstance["linkTo"]("copilot")).toBe("/copilot");
+    expect(fixture.componentInstance["linkTo"]("copilot", "copilot-metrics")).toBe(
+      "/copilot#copilot-metrics"
+    );
+  });
+
+  it("gestisce il click semplice nella SPA e lascia al browser quello con modificatori", () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const plain = { button: 0, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, preventDefault: jest.fn() };
+
+    fixture.componentInstance["onNavigate"](plain as unknown as MouseEvent, "copilot");
+
+    expect(plain.preventDefault).toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith(["copilot"]);
+
+    navigate.mockClear();
+
+    for (const modifier of ["ctrlKey", "metaKey", "shiftKey", "altKey"]) {
+      const modified = { ...plain, [modifier]: true, preventDefault: jest.fn() };
+      fixture.componentInstance["onNavigate"](modified as unknown as MouseEvent, "copilot");
+      expect(modified.preventDefault).not.toHaveBeenCalled();
+    }
+
+    // Tasto centrale: apre in una nuova scheda, non deve essere intercettato.
+    const middle = { ...plain, button: 1, preventDefault: jest.fn() };
+    fixture.componentInstance["onNavigate"](middle as unknown as MouseEvent, "copilot");
+
+    expect(middle.preventDefault).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
   });
 });

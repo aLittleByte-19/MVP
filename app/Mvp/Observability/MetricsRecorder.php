@@ -3,6 +3,7 @@
 namespace App\Mvp\Observability;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class MetricsRecorder
@@ -81,9 +82,58 @@ class MetricsRecorder
             $normalizedLabels[$normalizedKey] = $this->normalizeLabelValue((string) $value);
         }
 
+        $this->assertCatalogued($metric, $normalizedLabels);
+
         $this->withMetricsFile(function (array $metrics) use ($metric, $normalizedLabels, $amount): array {
             return $this->increment($metrics, $metric, $normalizedLabels, $amount);
         });
+    }
+
+    /**
+     * Verifica che la metrica sia dichiarata in DomainMetricCatalog con lo
+     * stesso insieme di label.
+     *
+     * Serve a impedire alla radice la classe di difetto piu' insidiosa vista
+     * finora: stepfunctions_executions_failed_total veniva emessa da alcuni
+     * punti con `state_machine` e da un altro con `reason`, quindi le query
+     * che filtravano per state_machine non vedevano mai i fallimenti da task.
+     * Nessun controllo lo intercettava, perche' Prometheus accetta serie con
+     * label diverse sotto lo stesso nome.
+     *
+     * In locale e nei test e' un'eccezione: la suite Feature esercita gia'
+     * ogni listener, quindi un disallineamento fallisce in CI il giorno in cui
+     * viene introdotto. In esercizio degrada a warning e la metrica viene
+     * comunque registrata — un problema di strumentazione non deve mai
+     * abbattere il percorso di business.
+     *
+     * @param  array<string, string>  $labels
+     */
+    private function assertCatalogued(string $metric, array $labels): void
+    {
+        $catalogue = DomainMetricCatalog::recordableLabelNames();
+        $labelNames = array_keys($labels);
+        sort($labelNames);
+
+        $declared = $catalogue[$metric] ?? null;
+
+        if ($declared !== null && $declared === $labelNames) {
+            return;
+        }
+
+        $message = $declared === null
+            ? "Metrica di dominio non dichiarata in DomainMetricCatalog: {$metric}."
+            : sprintf(
+                'Label non conformi per %s: attese [%s], ricevute [%s].',
+                $metric,
+                implode(', ', $declared),
+                implode(', ', $labelNames),
+            );
+
+        if (app()->environment('local', 'testing')) {
+            throw new \InvalidArgumentException($message);
+        }
+
+        Log::warning($message, ['metric' => $metric, 'labels' => $labelNames]);
     }
 
     /**

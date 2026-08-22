@@ -1,14 +1,69 @@
+/* Sette colonne su un contenitore che al minimo del layout con barra laterale
+   vale circa 790px: la spaziatura orizzontale delle celle scende a un passo,
+   che su sette colonne sono 56px restituiti al contenuto. Quella verticale
+   resta, e' li' che si legge la riga. */
+.tableWrapper {
+  --mvp-cell-pad-x: var(--mvp-space-2);
+}
+
+/* Le larghezze appartengono a questa tabella, non al foglio condiviso: con
+   `table-layout: fixed` una colonna senza regola resterebbe a zero, quindi
+   sommano a 100%. Sono calibrate sul contenitore piu' stretto in cui la
+   tabella resta tale — circa 750px, il guscio con la barra laterale appena
+   sopra i 1100px — e su cio' che in ogni colonna non si puo' comprimere: la
+   parola dell'intestazione (spezzabile solo al punto di sillabazione), la
+   pastiglia di stato, la data che non si spezza, il comando che non va a capo.
+   Sotto quella misura le intestazioni si rompevano in mezzo alla parola e il
+   comando sfondava la tabella a destra. */
+.table th[data-column="recipient"],
+.table td[data-column="recipient"] {
+  width: 18%;
+}
+
+.table th[data-column="type"],
+.table td[data-column="type"] {
+  width: 12.5%;
+}
+
+.table th[data-column="uploadedAt"],
+.table td[data-column="uploadedAt"] {
+  width: 12%;
+}
+
+.table th[data-column="confidence"],
+.table td[data-column="confidence"] {
+  width: 12%;
+}
+
+.table th[data-column="review"],
+.table td[data-column="review"] {
+  width: 17%;
+}
+
+.table th[data-column="download"],
+.table td[data-column="download"] {
+  width: 14%;
+}
+
+.table th[data-column="actions"],
+.table td[data-column="actions"] {
+  width: 14.5%;
+}
+
 .recipient {
   display: grid;
-  gap: var(--mvp-space-1);
+  gap: 2px;
 }
 
 .recipient small {
   color: var(--mvp-muted);
 }
 
-.date {
-  white-space: nowrap;
+/* Il documento di partenza: nome del file e data che porta scritta sopra. Sta
+   sotto al destinatario perche' serve a riconoscere l'originale, non a
+   confrontare righe fra loro — per quello ci sono le colonne. */
+.origin {
+  font-size: var(--mvp-font-xs);
 }
 
 /* Data e ora di caricamento (UC-39.15): data e orario restano interi, ma
@@ -18,9 +73,46 @@
   word-break: keep-all;
 }
 
+/* Ogni colonna che porta un valore solo — una parola, una data, una cifra, una
+   pastiglia, un comando — sta al centro della propria larghezza, intestazione
+   compresa: allineati a sinistra i valori corti lasciavano a destra un vuoto
+   diverso per colonna, e la pastiglia di stato finiva a filo di bordo mentre
+   la sua intestazione partiva altrove. Il destinatario resta a sinistra:
+   e' un blocco di piu' righe, e un testo che va a capo si legge da un margine
+   fermo. */
+.table th[data-column="type"],
+.table td[data-column="type"],
+.table th[data-column="uploadedAt"],
+.table td[data-column="uploadedAt"],
+.table th[data-column="confidence"],
+.table td[data-column="confidence"],
+.table th[data-column="review"],
+.table td[data-column="review"],
+.table th[data-column="download"],
+.table td[data-column="download"],
+.table th[data-column="actions"],
+.table td[data-column="actions"] {
+  text-align: center;
+}
+
+/* Sotto i 900px la tabella diventa un elenco di schede e ogni cella e' una
+   coppia etichetta/valore incolonnata a sinistra: li' il centro non esiste. */
+@media (max-width: 900px) {
+  .table td {
+    text-align: left;
+  }
+}
+
+/* Le cifre restano nel carattere del testo, con le figure a larghezza fissa:
+   incolonnate come in un monospaziato, ma senza cambiare voce a meta' riga. */
+.figure {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
 .action {
-  min-height: 34px;
-  padding: 0 var(--mvp-space-3);
+  min-height: var(--mvp-control-h-compact);
+  padding: 0 var(--mvp-space-2);
   /* L'etichetta resta su una riga: la cella eredita overflow-wrap anywhere,
      che altrimenti spezzerebbe la parola dentro il pulsante. */
   white-space: nowrap;
@@ -28,4 +120,31 @@
 
 :host {
   display: contents;
+}
+
+/* Navigazione fra le pagine dello storico, ripetuta sopra e sotto la tabella:
+   con dieci righe la coppia resta vicina, ma sopra serve a chi arriva dai
+   filtri e sotto a chi ha appena finito di leggere l'elenco. */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--mvp-space-2);
+  padding: var(--mvp-space-2) 0;
+}
+
+.pager[data-position="top"] {
+  border-bottom: 1px solid var(--mvp-border-soft);
+  margin-bottom: var(--mvp-space-2);
+}
+
+.pager[data-position="bottom"] {
+  border-top: 1px solid var(--mvp-border-soft);
+  margin-top: var(--mvp-space-2);
+}
+
+.pagerLabel {
+  font-size: 0.85rem;
+  color: var(--mvp-muted);
+  font-variant-numeric: tabular-nums;
 }

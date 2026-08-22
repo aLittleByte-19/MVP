@@ -1,22 +1,33 @@
-.card {
-  display: grid;
-  gap: 6px;
-  padding: var(--mvp-space-4);
-  border: 1px solid var(--mvp-border-soft);
-  border-radius: var(--mvp-radius);
-  background: var(--mvp-surface-muted);
+/* Il guscio sta in `shared/styles/metric-shell.css`, condiviso con le altre
+   schede. Qui resta la sola parte che distingue l'andamento: i sette giorni. */
+
+.chart {
+  display: block;
+  width: 100%;
+  height: 46px;
 }
 
-.value {
-  color: var(--mvp-primary-deep);
-  font-size: 1.28rem;
-  font-weight: 800;
+.chart rect {
+  fill: var(--mvp-border-strong);
 }
 
-.label {
-  color: var(--mvp-muted);
+/* Oggi: l'unica barra che porta il colore, cosi' si trova senza contare. */
+.chart rect.today {
+  fill: var(--mvp-primary);
 }
 
-:host {
-  display: contents;
+.card.ok .chart rect.today {
+  fill: var(--mvp-success);
+}
+
+.card.watch .chart rect.today {
+  fill: var(--mvp-accent);
+}
+
+.card.alert .chart rect.today {
+  fill: var(--mvp-danger);
+}
+
+.skeleton.chart {
+  height: 46px;
 }

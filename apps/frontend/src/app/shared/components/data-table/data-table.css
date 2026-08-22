@@ -1,5 +1,14 @@
+/* `overflow: hidden` tagliava a destra tutto cio' che non entrava: con
+   `table-layout: fixed` una cella incomprimibile — un pulsante che non va a
+   capo, una data che non si spezza — allarga comunque la tabella oltre il
+   contenitore, e quello che sporgeva spariva invece di essere raggiungibile.
+   Le larghezze vanno calibrate perche' non succeda; qui resta la rete. */
 .tableWrapper {
-  overflow: hidden;
+  /* Spaziatura orizzontale delle celle: la sceglie chi usa la tabella, perche'
+     dipende da quante colonne deve reggere. */
+  --mvp-cell-pad-x: var(--mvp-space-3);
+
+  overflow-x: auto;
   border: 1px solid var(--mvp-border-soft);
   border-radius: var(--mvp-radius);
   background: var(--mvp-surface);
@@ -13,7 +22,7 @@
 
 .table th,
 .table td {
-  padding: var(--mvp-space-3);
+  padding: var(--mvp-space-3) var(--mvp-cell-pad-x);
   border-bottom: 1px solid var(--mvp-border-soft);
   text-align: left;
   vertical-align: middle;
@@ -21,11 +30,17 @@
   word-break: normal;
 }
 
+/* L'intestazione non si spezza in mezzo alla parola: "CONFIDENZ/A" non e' una
+   riga andata a capo, e' una parola rotta. Con `break-word` la parola intera
+   resta la misura minima della colonna, quindi le larghezze qui sotto vanno
+   calibrate perche' ci stia. */
 .table th {
+  overflow-wrap: break-word;
   background: var(--mvp-surface-soft);
   color: var(--mvp-muted);
-  font-size: var(--mvp-font-xs);
-  font-weight: 800;
+  font-size: var(--mvp-label-a-size);
+  font-weight: var(--mvp-label-a-weight);
+  letter-spacing: var(--mvp-label-a-tracking);
   text-transform: uppercase;
 }
 
@@ -33,71 +48,30 @@
   border-bottom: 0;
 }
 
-/* Le larghezze sommano a 100%: con table-layout fixed una colonna senza
-   regola resterebbe a zero, mandando il contenuto sopra quelle adiacenti. */
-.table th[data-column="recipient"],
-.table td[data-column="recipient"] {
-  width: 14%;
-}
-
-.table th[data-column="document"],
-.table td[data-column="document"] {
-  width: 13%;
-}
-
-.table th[data-column="file"],
-.table td[data-column="file"] {
-  width: 11%;
-}
-
-.table th[data-column="date"],
-.table td[data-column="date"] {
-  width: 9%;
-}
-
-.table th[data-column="uploadedAt"],
-.table td[data-column="uploadedAt"] {
-  width: 11%;
-}
-
-.table th[data-column="confidence"],
-.table td[data-column="confidence"] {
-  width: 6%;
-}
-
-.table th[data-column="status"],
-.table td[data-column="status"] {
-  width: 16%;
-}
-
-.table th[data-column="send-status"],
-.table td[data-column="send-status"] {
-  width: 8%;
-}
-
-.table th[data-column="actions"],
-.table td[data-column="actions"] {
-  width: 12%;
-}
+/* Le larghezze delle colonne stanno nel foglio di chi la usa: sono un fatto
+   della singola tabella, non di tutte. Erano qui, calibrate sulle nove colonne
+   del Co-Pilot, e la tabella a tre colonne della Overview ne trovava una sola
+   applicabile — le altre due si spartivano lo spazio residuo per il
+   comportamento di default di `table-layout: fixed`. Funzionava per caso. */
 
 .table td[data-column="actions"] {
   text-align: center;
 }
 
-/* Optional left status strip (mirrors mockup .document-row::before). */
+/* Striscia di stato a sinistra della riga. */
 .table tbody tr[data-tone="needs-review"] td:first-child {
-  box-shadow: inset 4px 0 0 #d99a3f;
+  box-shadow: inset 4px 0 0 var(--mvp-warning-border);
 }
 
 .table tbody tr[data-tone="confirmed"] td:first-child {
-  box-shadow: inset 4px 0 0 #6bb58a;
+  box-shadow: inset 4px 0 0 var(--mvp-success-border);
 }
 
 .table tbody tr[data-tone="sent"] td:first-child {
   box-shadow: inset 4px 0 0 var(--mvp-border-strong);
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .table,
   .table thead,
   .table tbody,
@@ -143,8 +117,9 @@
   .table td::before {
     content: attr(data-label);
     color: var(--mvp-muted);
-    font-size: var(--mvp-font-xs);
-    font-weight: 800;
+    font-size: var(--mvp-label-a-size);
+    font-weight: var(--mvp-label-a-weight);
+    letter-spacing: var(--mvp-label-a-tracking);
     text-transform: uppercase;
   }
 

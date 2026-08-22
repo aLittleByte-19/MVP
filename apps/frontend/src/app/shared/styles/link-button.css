@@ -1,0 +1,33 @@
+/**
+ * Il collegamento che si comporta da azione (ADR 0012): apre l'anteprima o
+ * scarica il file. Resta un `<a>` — ha un indirizzo e va apribile in una nuova
+ * scheda — ma nella barra delle azioni deve pesare quanto un pulsante.
+ *
+ * L'altezza viene dal token dei controlli: a 38px stava sotto i 44px con cui
+ * SC 2.5.8 misura comodo un bersaglio, e accanto a un pulsante si vedeva.
+ */
+
+.previewLink,
+.downloadLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--mvp-control-h);
+  padding: 0 var(--mvp-space-3);
+  border-radius: var(--mvp-radius);
+  background: var(--mvp-surface-soft);
+  color: var(--mvp-primary-deep);
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
+.previewLink:hover,
+.downloadLink:hover {
+  box-shadow: var(--mvp-shadow);
+}
+
+.downloadLink {
+  background: var(--mvp-primary);
+  color: var(--mvp-surface);
+}

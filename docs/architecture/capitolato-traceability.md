@@ -248,7 +248,7 @@ l'applicazione mantiene responsabilità su validazione, stato e tracciabilità.
 A generazione completata, titolo, corpo e copertina vengono impaginati nel documento finale, con
 anteprima ed esportazione in PDF
 ([`app/Mvp/Communications/Adapters/Outbound/Pdf/DompdfCommunicationPdfRenderer.php`](../../app/Mvp/Communications/Adapters/Outbound/Pdf/DompdfCommunicationPdfRenderer.php)).
-Ogni pagina porta il marcatore `Creato da AI Assistant`: la provenienza AI del contenuto resta
+Ogni pagina porta il marcatore `Creato da AI Assistant`, in filigrana e nel piè di pagina: la provenienza AI del contenuto resta
 leggibile anche quando il PDF esce dall'applicativo e circola per conto proprio, che è il momento in
 cui l'informazione andrebbe altrimenti persa.
 
@@ -285,6 +285,13 @@ umana quando l'affidabilità è bassa: la base per garantire qualità su documen
 La soglia di confidenza adottata è allineata al criterio di accettazione:
 > «AI Co-Pilot: confidenza media OCR ≥ 90%, mapping CF ≥ 99%.»
 > Fonte: Capitolato C5, sezione «Criteri di Accettazione»
+
+Nota sui due numeri, che misurano cose diverse. «Confidenza media OCR ≥ 90%» è la media che la
+dashboard espone e che si legge sull'insieme dei documenti. «Mapping CF ≥ 99%» è invece un
+obiettivo di **accuratezza sulla popolazione** — quanti codici fiscali risultano mappati
+correttamente — e non una soglia di confidenza da applicare al singolo documento: il codice fiscale
+ha sì una soglia propria e più alta della generale (ADR 0013), ma tarata su quanto l'OCR dichiara
+davvero su quel campo, non sul 99% del criterio.
 
 Nota: come per §11, lo specifico servizio (Bedrock/Textract) è scelta interna alla MVP; il
 Capitolato prescrive la funzione OCR ma non il vendor.

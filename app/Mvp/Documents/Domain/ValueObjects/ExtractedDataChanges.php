@@ -59,6 +59,21 @@ final class ExtractedDataChanges
         return $this->with('documentDate', $value);
     }
 
+    public function withRecipientEmail(?string $value): self
+    {
+        return $this->with('recipientEmail', $value);
+    }
+
+    public function withFiscalCode(?string $value): self
+    {
+        return $this->with('fiscalCode', $value);
+    }
+
+    public function withEmployeeId(?string $value): self
+    {
+        return $this->with('employeeId', $value);
+    }
+
     public function withDocumentType(?string $value): self
     {
         return $this->with('documentType', $value);
@@ -72,6 +87,18 @@ final class ExtractedDataChanges
     public function withConfidenceScore(?int $value): self
     {
         return $this->with('confidenceScore', $value);
+    }
+
+    /**
+     * Confidenza OCR di ciascun campo trascritto, per chiave in snake_case.
+     * Null come valore significa campo non rintracciabile fra le righe OCR,
+     * che e' diverso da campo letto male (vedi ADR 0013).
+     *
+     * @param  array<string, float|null>|null  $confidences
+     */
+    public function withFieldConfidences(?array $confidences): self
+    {
+        return $this->with('fieldConfidences', $confidences);
     }
 
     /**

@@ -1,0 +1,69 @@
+/* Il guscio sta in `shared/styles/metric-shell.css`. Qui la sola scala. */
+
+.scale {
+  display: grid;
+  gap: var(--mvp-space-1);
+}
+
+.track {
+  position: relative;
+  display: block;
+  height: 8px;
+  border-radius: var(--mvp-radius-pill);
+  background: var(--mvp-surface-soft);
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--mvp-primary);
+}
+
+.card.ok .fill {
+  background: var(--mvp-success);
+}
+
+.card.watch .fill {
+  background: var(--mvp-accent);
+}
+
+.card.alert .fill {
+  background: var(--mvp-danger);
+}
+
+/* La tacca della soglia sporge sopra e sotto la traccia: dentro si
+   confonderebbe con il riempimento proprio dove i due si incontrano. */
+.tick {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  border-radius: var(--mvp-radius-pill);
+  background: var(--mvp-text);
+  transform: translateX(-1px);
+}
+
+.bounds {
+  display: flex;
+  justify-content: space-between;
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* La soglia sta sopra la traccia, incolonnata sulla tacca: sotto finiva addosso
+   all'estremo destro appena superava i due terzi della scala. */
+.thresholdRow {
+  position: relative;
+  height: 14px;
+  font-size: 0.7rem;
+}
+
+.thresholdLabel {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  color: var(--mvp-text);
+  font-weight: 700;
+}

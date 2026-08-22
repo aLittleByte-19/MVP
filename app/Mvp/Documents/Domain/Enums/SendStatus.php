@@ -10,8 +10,8 @@ enum SendStatus: string
     public function label(): string
     {
         return match ($this) {
-            self::Pending => 'Da inviare',
-            self::Sent => 'Inviato',
+            self::Pending => 'Non scaricato',
+            self::Sent => 'Scaricato',
         };
     }
 

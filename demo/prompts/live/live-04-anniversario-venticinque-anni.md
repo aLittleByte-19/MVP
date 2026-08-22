@@ -1,0 +1,1 @@
+Scrivi una comunicazione celebrativa per i venticinque anni di attivita' dell'azienda, rivolta a tutti i dipendenti, con un ringraziamento a chi c'e' da piu' tempo e un accenno alla storia dell'impresa.

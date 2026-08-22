@@ -47,7 +47,7 @@ Incluso:
 - riutilizzo di un preset salvato, che precompila il form senza avviare una nuova generazione;
   non applicabile a una bozza già salvata, per cui restano modifica e rigenerazione diretta;
 - valutazione 1-5 stelle con commento qualitativo opzionale, una sola per generazione;
-- anteprima del documento finale impaginato, con marcatore di trasparenza "Creato da AI Assistant";
+- anteprima del documento finale impaginato, con marcatore di trasparenza "Creato da AI Assistant" su ogni pagina, in filigrana e nel piè di pagina;
 - esportazione del documento finale in PDF, con lo stesso marcatore di trasparenza;
 - metriche operative (contenuti generati, bozze, stato della generazione e delle copertine,
   valutazioni ricevute, media stelle);
@@ -79,9 +79,11 @@ Incluso:
   documento, sempre almeno un destinatario);
 - estrazione dei campi principali tramite Bedrock sul testo OCR (nome/cognome, azienda, data,
   tipologia, descrizione);
-- confidenza calcolata oggettivamente come leggibilità OCR (Textract) ponderata sulla completezza
-  dei campi chiave, non come auto-valutazione del modello; misura la sola estrazione automatica
-  (UC-39.10), quindi i campi dichiarati in fase di caricamento restano fuori dal calcolo;
+- confidenza calcolata oggettivamente sulla leggibilità OCR (Textract), non come auto-valutazione
+  del modello; ogni campo prende la confidenza della riga da cui proviene e il punteggio del
+  sotto-documento è quella del campo chiave più debole, con una soglia propria e più alta per il
+  codice fiscale (ADR 0013); misura la sola estrazione automatica (UC-39.10), quindi i campi
+  dichiarati in fase di caricamento restano fuori dal calcolo;
 - persistenza di documento originale, sotto-documenti e dati estratti;
 - dettaglio documento affiancato (anteprima a sinistra, dati estratti a destra);
 - correzione manuale dei campi estratti e validazione manuale (human-in-the-loop), con errori di
@@ -95,10 +97,10 @@ Incluso:
 - messaggio di invio precompilato (destinatario, oggetto, testo) calcolato dai dati estratti, con
   anteprima ed esportazione PDF (UC-48/48.1/48.2/48.3) e correzione manuale dei tre campi;
 - filtri dello storico documenti applicati lato API, con scoping sul tenant: ricerca per
-  nome/cognome/azienda (UC-35), stato di invio (UC-36), soglia di confidenza sopra o sotto un
-  valore (UC-37), mese e anno del documento (UC-38);
+  nome/cognome/azienda (UC-35), stato di scaricamento (UC-36), soglia di confidenza sopra o sotto
+  un valore (UC-37), mese e anno del documento (UC-38), con paginazione a dieci righe;
 - stato `failed` esplicito quando split o estrazione non riescono;
-- metriche operative su documenti elaborati, soglie di confidenza e stato di invio;
+- metriche operative su documenti elaborati, confidenza dei campi estratti, tempi delle fasi e stato di scaricamento;
 - classificazione e metadati manuali in fase di upload: tipologia, mese, anno e azienda
   impostati dal consulente restano autoritativi e non vengono sovrascritti dall'AI;
 - visualizzazione dell'email destinatario e della data/ora di caricamento nel dettaglio
@@ -106,7 +108,7 @@ Incluso:
 
 Fuori scope MVP:
 
-- invio dei documenti e relativo "stato invio" (`Inviato`/`Non inviato`): la colonna `sub_documents.send_status` e l'identità SES Terraform esistono ma non c'è codice di invio;
+- invio dei documenti: la colonna `sub_documents.send_status` e l'identità SES Terraform esistono ma non c'è codice di invio. Il campo resta come **stato di scaricamento** del messaggio precompilato (`Scaricato`/`Non scaricato`, UC-36/UC-39.11): i valori `pending`/`sent` dell'enum non cambiano, cambia solo cosa dichiarano;
 - estrazione AI automatica dell'email destinatario (campo `recipient_email` esposto in sola lettura nel pannello dati estratti, ma non popolato dalla pipeline OCR/Bedrock) e dei campi codice fiscale e matricola dipendente;
 - classificazione manuale iniziale in upload;
 - metriche e dashboard sugli invii.

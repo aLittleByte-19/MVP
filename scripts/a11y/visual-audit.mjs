@@ -138,7 +138,7 @@ try {
       }
 
       for (const view of views) {
-        await page.getByRole('button', { name: view.navLabel, exact: true }).first().click();
+        await page.getByRole('link', { name: view.navLabel, exact: true }).first().click();
         await page.waitForTimeout(600);
 
         const label = `${view.id} ${viewport.name} ${theme}`;

@@ -96,9 +96,26 @@ test('a completed job assembles the text and averages the confidence per page', 
         // I blocchi che non sono LINE restano fuori dal testo.
         ->and($result['text'])->toBe("Cedolino marzo\nMario Rossi\nCedolino aprile")
         ->and($result['confidenceAvg'])->toBe(80.0)
+        // Accanto alla media resta la confidenza di ogni riga: e' cio' da cui
+        // si attribuisce a ciascun campo la leggibilita' del testo che lo porta.
         ->and($result['pages'])->toBe([
-            ['page' => 1, 'text' => "Cedolino marzo\nMario Rossi", 'confidenceAvg' => 85.0],
-            ['page' => 2, 'text' => 'Cedolino aprile', 'confidenceAvg' => 70.0],
+            [
+                'page' => 1,
+                'text' => "Cedolino marzo\nMario Rossi",
+                'confidenceAvg' => 85.0,
+                'blocks' => [
+                    ['text' => 'Cedolino marzo', 'confidence' => 90.0],
+                    ['text' => 'Mario Rossi', 'confidence' => 80.0],
+                ],
+            ],
+            [
+                'page' => 2,
+                'text' => 'Cedolino aprile',
+                'confidenceAvg' => 70.0,
+                'blocks' => [
+                    ['text' => 'Cedolino aprile', 'confidence' => 70.0],
+                ],
+            ],
         ]);
 });
 

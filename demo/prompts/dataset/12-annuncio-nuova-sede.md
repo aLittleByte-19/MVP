@@ -1,0 +1,1 @@
+Prepara una comunicazione che annuncia l'apertura della nuova sede operativa e il trasferimento di parte degli uffici. Spiega quali funzioni si spostano, quando, e che sara' organizzata una visita per il personale coinvolto.

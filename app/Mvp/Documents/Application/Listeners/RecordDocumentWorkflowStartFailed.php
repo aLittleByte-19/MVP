@@ -24,6 +24,7 @@ class RecordDocumentWorkflowStartFailed
             tenantId: $event->tenantId,
         );
         $this->metrics->recordDomainCounter('stepfunctions_executions_failed_total', [
+            'reason' => 'start_failure',
             'state_machine' => $event->stateMachineShortName,
         ]);
     }

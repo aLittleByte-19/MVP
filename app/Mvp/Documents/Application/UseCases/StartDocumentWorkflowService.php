@@ -10,8 +10,8 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
+use App\Mvp\Workflow\Support\StateMachineName;
 use App\Mvp\Workflow\Support\WorkflowContext;
-use Illuminate\Support\Str;
 use Psr\Clock\ClockInterface;
 
 /**
@@ -97,7 +97,7 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
                 $document->tenantId,
                 $executionArn,
                 $stateMachineArn,
-                $this->shortName($stateMachineArn),
+                StateMachineName::fromArn($stateMachineArn),
                 $taskQueueUrl,
             ));
         } catch (\Throwable $e) {
@@ -107,7 +107,7 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
                 $documentId,
                 $document->tenantId,
                 $e->getMessage(),
-                $this->shortName($stateMachineArn),
+                StateMachineName::fromArn($stateMachineArn),
             ));
 
             // WorkflowEnginePort traduce gia' gli errori AWS in un RuntimeException
@@ -124,10 +124,5 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
     private function documentKey(string $filePath): string
     {
         return $this->documentKeyPrefix === '' ? $filePath : $this->documentKeyPrefix.'/'.$filePath;
-    }
-
-    private function shortName(string $arn): string
-    {
-        return Str::of($arn)->afterLast(':')->toString() ?: 'unknown';
     }
 }

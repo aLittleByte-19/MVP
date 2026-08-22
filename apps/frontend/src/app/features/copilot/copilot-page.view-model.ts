@@ -6,13 +6,36 @@ import type {
   UpdateSendMessageRequest
 } from "../../../api/generated/model";
 import { extractFieldErrors, getApiErrorMessage } from "../../core/errors/api-error";
+import type { MetricPresentation } from "../../shared/components/metrics-panel/metrics-panel";
+
+/**
+ * Metriche che il pannello non mostra come schede a sé.
+ *
+ * `needs_review`, `validated` e `quarantined` sono le parti della ripartizione
+ * disegnata dalla scheda degli esiti, e come priorità vivono nella Overview;
+ * `sub_documents` è il totale su cui si misurano le quote e come conteggio
+ * isolato non aggiunge nulla.
+ */
+const HIDDEN_KEYS = [
+  "copilot.needs_review",
+  "copilot.validated",
+  "copilot.quarantined",
+  "copilot.sub_documents"
+];
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import type { DocumentUploadRequest } from "./components/document-upload-panel";
 import {
   DocumentWorkflowService,
   type DocumentFilters,
+  type DocumentPage,
   type DocumentUploadPhase
 } from "./data/document-workflow.service";
+
+/**
+ * Righe per pagina dello storico. Dieci: la tabella resta leggibile senza
+ * scorrere, e il dettaglio del documento sotto resta raggiungibile.
+ */
+const DOCUMENTS_PER_PAGE = 10;
 
 /**
  * ViewModel (Presentation Model, Fowler) del Co-Pilot documentale: non tocca
@@ -59,9 +82,56 @@ export class CopilotPageViewModel {
   readonly filteredDocuments: WritableSignal<SubDocument[]> = signal([]);
   readonly documentsError: WritableSignal<string | null> = signal(null);
 
+  /**
+   * Paginazione dello storico. Prima esisteva solo lato backend, che rispondeva
+   * con i primi quaranta risultati mentre la vista ne scartava il totale: oltre
+   * il quarantesimo i documenti sparivano senza che nulla lo segnalasse.
+   */
+  readonly currentPage: WritableSignal<number> = signal(1);
+  readonly totalDocuments: WritableSignal<number> = signal(0);
+  readonly pageSize = DOCUMENTS_PER_PAGE;
+  readonly totalPages: Signal<number> = computed(() =>
+    Math.max(1, Math.ceil(this.totalDocuments() / this.pageSize))
+  );
+  readonly hasPreviousPage: Signal<boolean> = computed(() => this.currentPage() > 1);
+  readonly hasNextPage: Signal<boolean> = computed(() => this.currentPage() < this.totalPages());
+
   readonly error: Signal<string | null> = computed(() => this.store.error());
   readonly loading: Signal<boolean> = computed(() => this.store.loading());
-  readonly metrics = computed(() => this.store.copilotMetrics());
+  /** Le metriche descrittive del modulo, meno quelle che il pannello non mostra. */
+  readonly metrics = computed(() =>
+    this.store
+      .copilotMetrics()
+      .filter((metric) => !HIDDEN_KEYS.includes(metric.key))
+  );
+
+  /**
+   * Forma e ingombro di ciascuna scheda del pannello.
+   *
+   * Sedici celle su quattro righe: sette schede larghe a coppie e, a chiudere
+   * l'ultima riga, i due verdetti stretti. Le larghe sono quelle che portano
+   * un asse o una legenda da leggere; un verdetto di tre parole non ne ha
+   * bisogno.
+   */
+  readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => ({
+    "copilot.documents": { kind: "trend", span: 2 },
+    "copilot.ocr_confidence": { kind: "gauge", span: 2 },
+    "copilot.review_breakdown": { kind: "breakdown", span: 2 },
+    "copilot.download_breakdown": { kind: "breakdown", span: 2 },
+    "copilot.field_confidence": { kind: "breakdown", span: 2 },
+    "copilot.processing_seconds": { kind: "phases", span: 2 },
+    "copilot.duration": { kind: "distribution", span: 2 },
+    "copilot.processing_failed": {
+      kind: "status",
+      okLabel: "Nessun errore",
+      issueLabel: "da ricaricare"
+    },
+    "copilot.processing_stuck": {
+      kind: "status",
+      okLabel: "Nessuna in ritardo",
+      issueLabel: "da sbloccare"
+    }
+  }));
 
   private searchSubscription: Subscription | null = null;
 
@@ -72,6 +142,19 @@ export class CopilotPageViewModel {
 
   setActiveFilters(filters: DocumentFilters): void {
     this.activeFilters.set(filters);
+    // Cambiare filtro rimescola i risultati: restare alla pagina cinque di un
+    // elenco che ora ne ha due mostrerebbe una tabella vuota senza spiegazione.
+    this.currentPage.set(1);
+  }
+
+  /** Va alla pagina indicata, entro i limiti dell'elenco corrente. */
+  goToPage(page: number): void {
+    const target = Math.min(Math.max(1, page), this.totalPages());
+
+    if (target !== this.currentPage()) {
+      this.currentPage.set(target);
+      this.reload();
+    }
   }
 
   /**
@@ -82,10 +165,22 @@ export class CopilotPageViewModel {
    */
   reload(): void {
     this.searchSubscription?.unsubscribe();
-    this.searchSubscription = this.workflow.searchDocuments(this.activeFilters()).subscribe({
-      next: (documents) => this.setFilteredDocuments(documents),
-      error: (error: unknown) => this.handleDocumentsError(error)
-    });
+    this.searchSubscription = this.workflow
+      .searchDocuments(this.activeFilters(), this.currentPage(), this.pageSize)
+      .subscribe({
+        next: (page) => this.setFilteredDocuments(page),
+        error: (error: unknown) => this.handleDocumentsError(error)
+      });
+  }
+
+  /**
+   * Ricarica lo stato condiviso, che è ciò che il pulsante "Riprova"
+   * dell'errore di pagina deve rifare. Distinto da `reload()`, che rilegge il
+   * storico documenti: confonderli lascerebbe lo stato globale in errore
+   * pur avendo ricaricato l'elenco.
+   */
+  reloadState(): void {
+    this.store.reload();
   }
 
   /**
@@ -99,9 +194,16 @@ export class CopilotPageViewModel {
     this.searchSubscription?.unsubscribe();
   }
 
-  private setFilteredDocuments(documents: SubDocument[]): void {
-    this.filteredDocuments.set(documents);
+  private setFilteredDocuments(page: DocumentPage): void {
+    this.filteredDocuments.set(page.items);
+    this.totalDocuments.set(page.total);
     this.documentsError.set(null);
+
+    // L'ultima pagina puo' svuotarsi mentre la si guarda, per esempio dopo
+    // un'eliminazione: si torna a quella prima invece di mostrare il vuoto.
+    if (page.items.length === 0 && this.currentPage() > 1) {
+      this.goToPage(this.currentPage() - 1);
+    }
   }
 
   private handleDocumentsError(error: unknown): void {

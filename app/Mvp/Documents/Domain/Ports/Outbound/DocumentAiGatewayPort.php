@@ -20,7 +20,7 @@ interface DocumentAiGatewayPort
     /**
      * Estrae i campi di un destinatario dal testo OCR del suo intervallo di pagine.
      *
-     * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}
+     * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, recipient_email: ?string, fiscal_code: ?string, employee_id: ?string, confidence_score: ?int}
      */
     public function extractFields(string $ocrText): array;
 

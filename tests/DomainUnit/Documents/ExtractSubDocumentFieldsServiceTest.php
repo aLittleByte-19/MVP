@@ -62,6 +62,65 @@ test('extractAndSaveFields saves the AI fields and dispatches SubDocumentFieldsE
         ->and($documents->findSubDocument(10)->reviewStatus())->toBe(ReviewStatus::AutoValidated);
 });
 
+test('extractAndSaveFields saves the recipient identifiers read from the document', function () {
+    // Codice fiscale, email e matricola erano campi solo manuali: il modello
+    // non li chiedeva affatto, e l'operatore li ritrovava vuoti anche quando
+    // stavano scritti nel cedolino.
+    $documents = new InMemoryDocumentRepository;
+    $documents->seedOriginal(1, ['ocr_confidence_avg' => 95.0, 'ocr_text' => '[Pagina 1]\nMario Rossi']);
+    $documents->seedSubDocument(10, 1, ['start_page' => 1, 'end_page' => 1]);
+    $ai = new FakeDocumentAiGateway;
+    $ai->willReturnFields([
+        'employee_first_name' => 'Mario',
+        'employee_last_name' => 'Rossi',
+        'company_name' => 'Acme Srl',
+        'document_date' => '2026-01-15',
+        'document_type' => 'cedolino',
+        'description' => null,
+        'recipient_email' => 'Mario.Rossi@Acme.it',
+        'fiscal_code' => 'rssmra85m12h501w',
+        'employee_id' => 'EMP-1042',
+        'confidence_score' => null,
+    ]);
+
+    extractSubDocumentFieldsService($documents, $ai, new RecordingDocumentEventDispatcher)->extractAndSaveFields(10);
+
+    $extracted = $documents->extractedDataFor(10);
+
+    expect($extracted['recipient_email'])->toBe('mario.rossi@acme.it')
+        ->and($extracted['fiscal_code'])->toBe('RSSMRA85M12H501W')
+        ->and($extracted['employee_id'])->toBe('EMP-1042');
+});
+
+test('extractAndSaveFields drops identifiers that do not hold up to their own format', function () {
+    // Un codice fiscale dalla forma sbagliata non e' un'estrazione imprecisa:
+    // e' un dato falso, indistinguibile da uno letto davvero. Meglio il campo
+    // vuoto, che resta compilabile a mano.
+    $documents = new InMemoryDocumentRepository;
+    $documents->seedOriginal(1, ['ocr_confidence_avg' => 95.0, 'ocr_text' => '[Pagina 1]\nMario Rossi']);
+    $documents->seedSubDocument(10, 1, ['start_page' => 1, 'end_page' => 1]);
+    $ai = new FakeDocumentAiGateway;
+    $ai->willReturnFields([
+        'employee_first_name' => 'Mario',
+        'employee_last_name' => 'Rossi',
+        'company_name' => 'Acme Srl',
+        'document_date' => '2026-01-15',
+        'document_type' => 'cedolino',
+        'description' => null,
+        'recipient_email' => 'mario.rossi(at)acme.it',
+        'fiscal_code' => 'RSSMRA85M12H501A',
+        'employee_id' => null,
+        'confidence_score' => null,
+    ]);
+
+    extractSubDocumentFieldsService($documents, $ai, new RecordingDocumentEventDispatcher)->extractAndSaveFields(10);
+
+    $extracted = $documents->extractedDataFor(10);
+
+    expect($extracted['recipient_email'])->toBeNull()
+        ->and($extracted['fiscal_code'])->toBeNull();
+});
+
 test('extractAndSaveFields quarantines the sub-document and dispatches AiOutputRejected on invalid AI output', function () {
     $documents = new InMemoryDocumentRepository;
     $documents->seedOriginal(1, ['ocr_confidence_avg' => 95.0, 'ocr_text' => '[Pagina 1]\nMario Rossi']);

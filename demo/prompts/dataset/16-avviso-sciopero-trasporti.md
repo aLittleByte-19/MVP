@@ -1,0 +1,1 @@
+Scrivi un avviso sullo sciopero del trasporto pubblico previsto per la prossima settimana, con le indicazioni per chi ha difficolta' a raggiungere la sede: flessibilita' in ingresso e possibilita' di lavoro da remoto per la giornata.

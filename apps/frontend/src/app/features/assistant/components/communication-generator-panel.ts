@@ -34,22 +34,23 @@ import type {
   template: `
     <mvp-section class="form" id="assistant-compose" title="Crea una bozza">
       <p class="note">
-        Inserisci cosa comunicare e pochi parametri editoriali. Genera la bozza e rivedi titolo e testo nell'anteprima.
+        Il prompt descrive cosa comunicare; tono e stile guidano la resa. La bozza generata resta modificabile
+        nell'anteprima.
       </p>
       <form [formGroup]="form" (ngSubmit)="submit()">
         <mvp-textarea-field
           label="Prompt"
           [rows]="6"
-          placeholder="Descrivi la comunicazione interna da generare."
+          placeholder="Oggetto della comunicazione interna"
           [control]="form.controls.prompt"
         />
         <div class="fieldRow">
           <mvp-select-field label="Tono" [options]="tones" [control]="form.controls.tone" />
           <mvp-select-field label="Stile" [options]="styles" [control]="form.controls.style" />
         </div>
-        <button mvpButton type="submit" [disabled]="isGenerating()">
+        <button mvpButton type="submit" [disabled]="isGenerating()" [busy]="isGenerating()">
           <svg lucideSend aria-hidden="true"></svg>
-          <span>{{ isGenerating() ? "Generazione" : "Genera bozza" }}</span>
+          <span>Genera bozza</span>
         </button>
       </form>
       @if (phase() !== null && phase() !== "idle") {
@@ -57,14 +58,14 @@ import type {
       }
       <p class="status" aria-live="polite">{{ status() }}</p>
 
-      <div class="config-actions">
+      <div class="configActions">
         @if (isConfiguringName()) {
           <label class="field configName">
             <span>Nome configurazione (opzionale)</span>
             <input
               type="text"
               [formControl]="configNameControl"
-              placeholder="Lascia vuoto per un nome automatico"
+              placeholder="Nome automatico se lasciato vuoto"
               maxlength="150"
             />
           </label>
@@ -77,7 +78,7 @@ import type {
             [disabled]="isSavingConfiguration() || form.controls.prompt.invalid"
             (click)="confirmSaveConfiguration()"
           >
-            {{ isSavingConfiguration() ? "Salvataggio…" : "Conferma salvataggio" }}
+            Conferma salvataggio
           </button>
           <button
             mvpButton
@@ -102,7 +103,11 @@ import type {
       </div>
     </mvp-section>
   `,
-  styleUrl: "./communication-generator-panel.css"
+  styleUrls: [
+    "../../../shared/styles/field.css",
+    "../../../shared/styles/notice.css",
+    "./communication-generator-panel.css"
+  ]
 })
 export class CommunicationGeneratorPanelComponent {
   readonly isGenerating = input.required<boolean>();

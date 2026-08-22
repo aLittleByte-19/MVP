@@ -3,7 +3,7 @@ import { Subject, of, throwError } from "rxjs";
 import type { SubDocument, UpdateExtractedDataRequest, UpdateSendMessageRequest } from "../../../api/generated/model";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { CopilotPageViewModel } from "./copilot-page.view-model";
-import type { DocumentWorkflowService } from "./data/document-workflow.service";
+import type { DocumentPage, DocumentWorkflowService } from "./data/document-workflow.service";
 
 function subDocument(id: string): SubDocument {
   return {
@@ -39,7 +39,7 @@ describe("CopilotPageViewModel", () => {
     loading = signal(false);
     copilotMetrics = signal<unknown[]>([]);
     workflow = {
-      searchDocuments: jest.fn(() => of([])),
+      searchDocuments: jest.fn(() => of({ items: [], total: 0, page: 1, perPage: 10 })),
       upload: jest.fn(),
       deleteSubDocument: jest.fn(),
       markReviewed: jest.fn(),
@@ -69,13 +69,13 @@ describe("CopilotPageViewModel", () => {
   it("reload cerca con i filtri attivi e popola la lista filtrata", () => {
     const first = subDocument("sub-1");
     const second = subDocument("sub-2");
-    workflow["searchDocuments"].mockReturnValue(of([first, second]));
+    workflow["searchDocuments"].mockReturnValue(of({ items: [first, second], total: 2, page: 1, perPage: 10 }));
     const vm = createViewModel();
     vm.setActiveFilters({ search: "rossi" });
 
     vm.reload();
 
-    expect(workflow["searchDocuments"]).toHaveBeenCalledWith({ search: "rossi" });
+    expect(workflow["searchDocuments"]).toHaveBeenCalledWith({ search: "rossi" }, 1, 10);
     expect(vm.selectedDocument()).toBe(first);
     expect(vm.selectedDocumentIdForList()).toBe("sub-1");
 
@@ -87,14 +87,16 @@ describe("CopilotPageViewModel", () => {
   });
 
   it("reload annulla la ricerca precedente ancora in volo: una risposta tardiva non sovrascrive quella nuova", () => {
-    const stale = new Subject<SubDocument[]>();
+    const stale = new Subject<DocumentPage>();
     const fresh = subDocument("sub-fresh");
-    workflow["searchDocuments"].mockReturnValueOnce(stale).mockReturnValueOnce(of([fresh]));
+    workflow["searchDocuments"]
+      .mockReturnValueOnce(stale)
+      .mockReturnValueOnce(of({ items: [fresh], total: 1, page: 1, perPage: 10 }));
     const vm = createViewModel();
 
     vm.reload();
     vm.reload();
-    stale.next([subDocument("sub-stale")]);
+    stale.next({ items: [subDocument("sub-stale")], total: 1, page: 1, perPage: 10 });
 
     expect(vm.filteredDocuments()).toEqual([fresh]);
   });
@@ -238,5 +240,70 @@ describe("CopilotPageViewModel", () => {
     vm.saveSendMessage({ documentId: "sub-7", payload });
     expect(vm.sendMessageError()).toBe("messaggio fallito");
     expect(vm.isSavingSendMessage()).toBe(false);
+  });
+
+  describe("paginazione dello storico", () => {
+    function page(items: SubDocument[], total: number, pageNumber = 1): DocumentPage {
+      return { items, total, page: pageNumber, perPage: 10 };
+    }
+
+    it("conta le pagine sul totale del backend, non sulle righe ricevute", () => {
+      // La vista riceve dieci righe ma l'elenco ne ha quarantadue: senza il
+      // totale i documenti oltre la prima pagina sparivano in silenzio.
+      workflow["searchDocuments"].mockReturnValue(of(page([subDocument("sub-1")], 42)));
+      const vm = createViewModel();
+
+      vm.reload();
+
+      expect(vm.totalPages()).toBe(5);
+      expect(vm.hasNextPage()).toBe(true);
+      expect(vm.hasPreviousPage()).toBe(false);
+    });
+
+    it("chiede al backend la pagina scelta", () => {
+      workflow["searchDocuments"].mockReturnValue(of(page([subDocument("sub-1")], 42)));
+      const vm = createViewModel();
+      vm.reload();
+
+      vm.goToPage(3);
+
+      expect(workflow["searchDocuments"]).toHaveBeenLastCalledWith({}, 3, 10);
+      expect(vm.currentPage()).toBe(3);
+    });
+
+    it("non esce dai limiti dell'elenco", () => {
+      workflow["searchDocuments"].mockReturnValue(of(page([subDocument("sub-1")], 12)));
+      const vm = createViewModel();
+      vm.reload();
+
+      vm.goToPage(99);
+      expect(vm.currentPage()).toBe(2);
+
+      vm.goToPage(-1);
+      expect(vm.currentPage()).toBe(1);
+    });
+
+    it("cambiare filtro riporta alla prima pagina", () => {
+      // Restare alla pagina cinque di un elenco che ora ne ha due mostrerebbe
+      // una tabella vuota senza spiegazione.
+      workflow["searchDocuments"].mockReturnValue(of(page([subDocument("sub-1")], 100)));
+      const vm = createViewModel();
+      vm.reload();
+      vm.goToPage(4);
+
+      vm.setActiveFilters({ search: "rossi" });
+
+      expect(vm.currentPage()).toBe(1);
+    });
+
+    it("un elenco vuoto senza totale non promette pagine che non esistono", () => {
+      workflow["searchDocuments"].mockReturnValue(of(page([], 0)));
+      const vm = createViewModel();
+
+      vm.reload();
+
+      expect(vm.totalPages()).toBe(1);
+      expect(vm.hasNextPage()).toBe(false);
+    });
   });
 });

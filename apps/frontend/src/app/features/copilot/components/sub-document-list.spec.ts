@@ -24,7 +24,7 @@ function subDocument(overrides: Partial<SubDocument> = {}): SubDocument {
     reviewStatus: "auto_validated",
     reviewStatusLabel: "Validato automaticamente",
     sendStatus: "pending",
-    sendStatusLabel: "Da inviare",
+    sendStatusLabel: "Non scaricato",
     previewUrl: "/api/v1/documents/1/preview",
     sendRecipient: "paghe@example.test",
     sendSubject: "Cedolino",
@@ -56,6 +56,8 @@ interface TestableSubDocumentList {
   confidenceDisplay(document: SubDocument): string;
   documentDateDisplay(document: SubDocument): string;
   saveReview(): void;
+  canPrepareMessage(documentItem: SubDocument): boolean;
+  fieldOrigin(documentItem: SubDocument, controlName: string): "auto" | "manual" | "review" | "locked" | null;
   readonly copiedEmail: Signal<boolean>;
   copyRecipientEmail(email: string): void;
 }
@@ -133,7 +135,10 @@ describe("SubDocumentListComponent", () => {
     expect(component.documentTypeOptions().filter((value) => value === "cedolino")).toHaveLength(1);
   });
 
-  it("annulla le modifiche e ripristina entrambi i form", () => {
+  it("annulla le modifiche e ripristina entrambi i form, senza chiudere il messaggio", () => {
+    // Il pannello del messaggio resta aperto: ogni salvataggio ripassa di qui
+    // con la scheda aggiornata, e chiuderlo lo faceva sparire sotto le mani di
+    // chi aveva appena confermato il testo.
     const document = subDocument();
     const { component } = render(document);
     component.isEditing.set(true);
@@ -147,9 +152,18 @@ describe("SubDocumentListComponent", () => {
     expect(component.form.get("employeeName")?.value).toBe("Mario Rossi");
     expect(component.sendForm.get("subject")?.value).toBe("Cedolino");
     expect(component.isEditing()).toBe(false);
-    expect(component.isSendOpen()).toBe(false);
+    expect(component.isSendOpen()).toBe(true);
     expect(component.isSendEditing()).toBe(false);
     expect(component.form.untouched).toBe(true);
+  });
+
+  it("chiude il messaggio quando si passa a un altro documento", () => {
+    const { component } = render(subDocument());
+    component.isSendOpen.set(true);
+
+    component.resetForm(subDocument({ id: "sub-2" }));
+
+    expect(component.isSendOpen()).toBe(false);
   });
 
   it("annulla soltanto la modifica del messaggio di invio", () => {
@@ -313,6 +327,19 @@ describe("SubDocumentListComponent", () => {
     expect(component.copiedEmail()).toBe(false);
   });
 
+  it("non lascia preparare il messaggio finche' una persona non ha confermato i dati", () => {
+    // La validazione automatica dice che il testo era leggibile, non che il
+    // documento sia della persona a cui si sta per consegnarlo: il messaggio
+    // aspetta la conferma umana.
+    const { component } = render(subDocument());
+
+    for (const reviewStatus of ["needs_review", "quarantined", "auto_validated"] as const) {
+      expect(component.canPrepareMessage(subDocument({ reviewStatus }))).toBe(false);
+    }
+
+    expect(component.canPrepareMessage(subDocument({ reviewStatus: "manually_validated" }))).toBe(true);
+  });
+
   it("annulla la sottoscrizione alla preview quando il componente viene distrutto", () => {
     const teardown = jest.fn();
     previewStatus.mockReturnValue(
@@ -327,5 +354,71 @@ describe("SubDocumentListComponent", () => {
     fixture.destroy();
 
     expect(teardown).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Il `beforeEach` svuota il template per provare la classe senza montare
+   * l'intero pannello; la legenda pero' vive solo li', quindi questi due casi
+   * ripartono da un TestBed senza quella sostituzione.
+   */
+  function renderLegend(document: SubDocument): string {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [{ provide: DocumentWorkflowService, useValue: { previewStatus } }]
+    });
+
+    const fixture = TestBed.createComponent(SubDocumentListComponent);
+    fixture.componentRef.setInput("documentItem", document);
+    fixture.componentRef.setInput("isDeleting", false);
+    fixture.componentRef.setInput("isSavingReview", false);
+    fixture.detectChanges();
+
+    return fixture.nativeElement.querySelector(".fieldLegend").textContent as string;
+  }
+
+  it("elenca in cima tutti i segni che possono comparire sulle caselle", () => {
+    // SC 1.4.1: teal, verde e ambra dicono la provenienza, e la stessa cosa
+    // deve arrivare a chi quei colori non li distingue — qui con la forma
+    // dell'icona e con il testo che l'accompagna. La provenienza e' per campo,
+    // quindi nello stesso documento convivono il segno della buona confidenza e
+    // quello del dato da rivedere: la legenda li nomina entrambi invece di
+    // dichiarare lo stato complessivo della scheda.
+    const legend = renderLegend(subDocument({ reviewStatus: "needs_review" }));
+
+    expect(legend).toContain("Confidenza alta");
+    expect(legend).toContain("Da revisionare");
+    expect(legend).toContain("Corretto a mano");
+    expect(legend).toContain("Dato di sistema");
+  });
+
+  it("sulla scheda confermata a mano tace i segni dell'AI, che non compaiono", () => {
+    const legend = renderLegend(subDocument({ reviewStatus: "manually_validated" }));
+
+    expect(legend).not.toContain("Confidenza alta");
+    expect(legend).not.toContain("Da revisionare");
+    expect(legend).toContain("Corretto a mano");
+  });
+
+  it("non dichiara alcuna provenienza su un campo vuoto", () => {
+    // Le scintille su una casella vuota affermavano che l'AI avesse estratto
+    // un nulla: i tre identificativi sono spesso assenti dal documento.
+    const document = subDocument({ reviewStatus: "auto_validated", fiscalCode: null, employeeId: null });
+    const { component } = render(document);
+
+    expect(component.fieldOrigin(document, "employeeName")).toBe("auto");
+    expect(component.fieldOrigin(document, "fiscalCode")).toBeNull();
+    expect(component.fieldOrigin(document, "employeeId")).toBeNull();
+  });
+
+  it("marca come manuale il campo appena corretto, prima ancora del salvataggio", () => {
+    const document = subDocument({ reviewStatus: "auto_validated" });
+    const { component } = render(document);
+
+    component.form.get("companyName")?.setValue("Acme Srl corretta");
+    component.form.get("companyName")?.markAsDirty();
+
+    expect(component.fieldOrigin(document, "companyName")).toBe("manual");
+    // Gli altri campi non seguono: la correzione riguarda quello toccato.
+    expect(component.fieldOrigin(document, "employeeName")).toBe("auto");
   });
 });

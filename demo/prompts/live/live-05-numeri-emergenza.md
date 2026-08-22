@@ -1,0 +1,1 @@
+Prepara una comunicazione breve e puramente informativa con l'aggiornamento dei numeri interni di emergenza e dei referenti per il primo soccorso in ciascun edificio. Nessun fronzolo, solo le informazioni.

@@ -10,6 +10,8 @@ import type {
 } from "../../../api/generated/model";
 import { getApiErrorMessage } from "../../core/errors/api-error";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
+import type { CompositionSlice } from "../../shared/components/metric-composition/metric-composition";
+import type { MetricPresentation } from "../../shared/components/metrics-panel/metrics-panel";
 import type {
   CommunicationDraftForm,
   CommunicationGenerationPhase,
@@ -114,6 +116,75 @@ export class AssistantPageViewModel {
   readonly historyError: WritableSignal<string | null> = signal(null);
 
   readonly error: Signal<string | null> = computed(() => this.store.error());
+  readonly loading: Signal<boolean> = computed(() => this.store.loading());
+
+  /**
+   * Metriche descrittive del modulo. `assistant.drafts` è escluso: le bozze da
+   * valutare sono una priorità e vivono nella Overview, qui sono la parte "in
+   * bozza" della ripartizione sottostante.
+   */
+  readonly metrics = computed(() =>
+    this.store.assistantMetrics().filter((metric) => metric.key !== "assistant.drafts")
+  );
+
+  /**
+   * Forma e ingombro di ciascuna scheda: quattro strette in alto, poi le due
+   * righe larghe dove c'è un grafico da leggere. Dodici celle in tutto, così
+   * la griglia non lascia righe spaiate.
+   */
+  readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => ({
+    "assistant.total": { kind: "trend" },
+    "assistant.rated": {
+      kind: "share",
+      span: 2,
+      restTone: "neutral",
+      restNoun: "senza voto"
+    },
+    "assistant.rating_average": { kind: "stars", span: 2, max: 5 },
+    "assistant.generation_seconds": { kind: "phases", span: 2 },
+    "assistant.duration": { kind: "distribution", span: 2, subject: "generazioni" },
+    "assistant.generation_failed": {
+      kind: "status",
+      okLabel: "Nessun errore",
+      issueLabel: "da rigenerare"
+    },
+    "assistant.generation_stuck": {
+      kind: "status",
+      okLabel: "Nessuna in ritardo",
+      issueLabel: "da sbloccare"
+    },
+    // La copertina non generata non ferma nulla: il PDF esce comunque, senza
+    // immagine. E' un avviso, non un guasto.
+    "assistant.covers_failed": {
+      kind: "status",
+      issueTone: "warning",
+      okLabel: "Tutte generate",
+      issueLabel: "PDF senza immagine"
+    }
+  }));
+
+  /**
+   * Composizione dello stato delle bozze: è la decisione presa su ciascuna,
+   * un'informazione che oggi non compare da nessuna parte nell'interfaccia.
+   */
+  readonly draftComposition = computed<CompositionSlice[]>(() => {
+    const metrics = this.store.assistantMetrics();
+    const valueOf = (key: string): number => {
+      const found = metrics.find((metric) => metric.key === key);
+
+      return typeof found?.value === "number" ? found.value : 0;
+    };
+
+    const total = valueOf("assistant.total");
+    const drafts = valueOf("assistant.drafts");
+
+    return [
+      { label: "In bozza", value: drafts },
+      // Il backend espone il totale e le bozze: le altre sono le comunicazioni
+      // su cui una decisione è già stata presa.
+      { label: "Decise", value: Math.max(0, total - drafts) }
+    ];
+  });
 
   private searchSubscription: Subscription | null = null;
 
@@ -139,6 +210,16 @@ export class AssistantPageViewModel {
       next: (communications) => this.setFilteredCommunications(communications),
       error: (error: unknown) => this.handleHistoryError(error)
     });
+  }
+
+  /**
+   * Ricarica lo stato condiviso, che è ciò che il pulsante "Riprova"
+   * dell'errore di pagina deve rifare. Distinto da `reload()`, che rilegge il
+   * storico comunicazioni: confonderli lascerebbe lo stato globale in errore
+   * pur avendo ricaricato l'elenco.
+   */
+  reloadState(): void {
+    this.store.reload();
   }
 
   /**

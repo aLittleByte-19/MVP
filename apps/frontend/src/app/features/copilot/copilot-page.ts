@@ -8,6 +8,7 @@ import { ButtonComponent } from "../../shared/components/button/button";
 import { ErrorStateComponent } from "../../shared/components/error-state/error-state";
 import { MetricsPanelComponent } from "../../shared/components/metrics-panel/metrics-panel";
 import { SectionComponent } from "../../layout/section/section";
+import { scrollToElement } from "../../shared/util/scroll";
 import { DocumentWorkflowService } from "./data/document-workflow.service";
 import { createDocumentFilterForm, toDocumentFilters } from "./data/document-filters";
 import { DocumentListComponent } from "./components/document-list";
@@ -56,7 +57,7 @@ const MONTHS = [
   template: `
     <section class="view" aria-label="AI Co-Pilot per i CdL">
       @if (vm.error(); as error) {
-        <mvp-error-state [message]="error" [canRetry]="true" (retry)="store.reload()" />
+        <mvp-error-state [message]="error" [canRetry]="true" (retry)="vm.reloadState()" />
       }
 
       <mvp-document-upload-panel
@@ -73,17 +74,17 @@ const MONTHS = [
           <mvp-error-state [message]="error" />
         }
 
-        <form class="filters" [formGroup]="filterForm" aria-label="Filtra storico documenti">
+        <div class="filters" role="search" [formGroup]="filterForm" aria-label="Filtra storico documenti">
           <label class="field" for="filter-search">
             <span>Nome, cognome o azienda</span>
-            <input id="filter-search" type="text" formControlName="search" placeholder="Cerca nello storico..." />
+            <input id="filter-search" type="text" formControlName="search" placeholder="Cerca nello storico" />
           </label>
           <label class="field" for="filter-send-status">
-            <span>Stato invio</span>
+            <span>Stato scaricamento</span>
             <select id="filter-send-status" formControlName="sendStatus">
               <option value="">Tutti</option>
-              <option [value]="sendStatuses.sent">Inviato</option>
-              <option [value]="sendStatuses.pending">Non inviato</option>
+              <option [value]="sendStatuses.sent">Scaricato</option>
+              <option [value]="sendStatuses.pending">Non scaricato</option>
             </select>
           </label>
           <label class="field" for="filter-confidence-criterion">
@@ -118,7 +119,7 @@ const MONTHS = [
             <input id="filter-year" type="number" formControlName="year" placeholder="es. 2026" />
           </label>
           <button mvpButton variant="secondary" type="button" (click)="resetFilters()">Azzera filtri</button>
-        </form>
+        </div>
 
         <mvp-document-list
           [documents]="vm.filteredDocuments()"
@@ -128,7 +129,10 @@ const MONTHS = [
               ? 'Nessun documento corrisponde ai filtri selezionati.'
               : 'I documenti caricati compariranno qui.'
           "
-          (selectDocument)="vm.selectDocument($event)"
+          [page]="vm.currentPage()"
+          [totalPages]="vm.totalPages()"
+          (selectDocument)="selectDocument($event)"
+          (goToPage)="vm.goToPage($event)"
         />
       </mvp-section>
 
@@ -147,11 +151,17 @@ const MONTHS = [
       />
 
       <mvp-section id="copilot-metrics" title="Qualità e performance OCR">
-        <mvp-metrics-panel [isLoading]="vm.loading()" [metrics]="vm.metrics()" />
+        <mvp-metrics-panel
+          [isLoading]="vm.loading()"
+          [hasError]="!!vm.error()"
+          [metrics]="vm.metrics()"
+          [presentation]="vm.metricsPresentation()"
+          ariaLabel="Metriche del Co-Pilot documentale"
+        />
       </mvp-section>
     </section>
   `,
-  styleUrls: ["../overview/overview-page.css"],
+  styleUrls: ["../../shared/styles/page.css", "../../shared/styles/field.css"],
   styles: [
     `
     .filters {
@@ -233,6 +243,26 @@ export class CopilotPage {
     });
 
     inject(DestroyRef).onDestroy(() => this.vm.destroy());
+  }
+
+  /**
+   * Apre il dettaglio e ci porta la pagina.
+   *
+   * Lo scorrimento sta qui e non nel ViewModel: la View e' l'unica responsabile
+   * della resa visiva (ADR 0011), e il dettaglio sta sotto lo storico, che con
+   * dieci righe e i filtri sopra puo' restare tutto fuori dallo schermo.
+   *
+   * L'ancora e' sulla `mvp-section` dentro il pannello, non sull'host di
+   * `mvp-sub-document-list`: quell'host ha `display: contents`, quindi non
+   * genera alcun box e `scrollIntoView` non ha nulla verso cui scorrere. La
+   * sezione invece e' una griglia e porta gia' il proprio `scroll-margin-top`.
+   */
+  protected selectDocument(documentId: string | null): void {
+    this.vm.selectDocument(documentId);
+
+    if (documentId) {
+      scrollToElement("copilot-document-detail");
+    }
   }
 
   protected resetFilters(): void {

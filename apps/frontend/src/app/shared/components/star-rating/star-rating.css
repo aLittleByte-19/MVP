@@ -1,0 +1,75 @@
+.rating {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mvp-space-3);
+  align-items: center;
+}
+
+.stars {
+  display: flex;
+  gap: var(--mvp-space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+
+/* Il bersaglio e' l'etichetta, non la stella: SC 2.5.8 misura l'area che si
+   puo' toccare, e a disegno nudo sarebbero 26px. */
+.stars label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--mvp-control-h);
+  height: var(--mvp-control-h);
+  border-radius: var(--mvp-radius);
+  cursor: pointer;
+}
+
+/* `disabled` sta sulle radio e non sul fieldset: la proprieta' IDL riflette
+   solo l'attributo proprio dell'elemento, quindi un controllo disabilitato per
+   eredita' non risulterebbe tale a chi lo interroga. */
+.stars input:disabled + label {
+  cursor: default;
+}
+
+/* Il contorno c'e' sempre: e' cio' che rende leggibile una stella vuota, e da
+   solo supera il 3:1 che SC 1.4.11 chiede a una grafica che porta
+   informazione. Il pieno si aggiunge, non sostituisce. */
+.stars svg {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: var(--mvp-muted);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.stars .filled svg {
+  fill: var(--mvp-accent);
+  stroke: var(--mvp-warning);
+}
+
+/* L'anello di focus segue la radio nascosta, che non ha ingombro: si sposta
+   sull'etichetta, che e' l'elemento che si vede. */
+.stars input:focus-visible + label {
+  outline: 3px solid var(--mvp-focus);
+  outline-offset: 2px;
+}
+
+.score {
+  color: var(--mvp-text);
+  font-size: var(--mvp-font-lg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.score .pending {
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-sm);
+  font-weight: 600;
+}
+
+:host {
+  display: contents;
+}

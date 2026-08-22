@@ -5,6 +5,7 @@
  * Versioned JSON contract consumed by the Angular SPA.
  * OpenAPI spec version: 1.0.0
  */
+import type { SubDocumentFieldConfidences } from './subDocumentFieldConfidences';
 import type { SubDocumentReviewStatus } from './subDocumentReviewStatus';
 import type { SubDocumentSendStatus } from './subDocumentSendStatus';
 
@@ -52,4 +53,11 @@ export interface SubDocument {
   fiscalCode?: string | null;
   /** @nullable */
   employeeId?: string | null;
+  /**
+     * Confidenza OCR di ogni campo trascritto, presa dalla riga da cui il campo proviene (ADR 0013). Chiave in snake_case come il campo estratto. Valore null: il campo non e' rintracciabile fra le righe OCR, che e' diverso dall'essere stato letto male. Assente sui documenti elaborati prima dell'introduzione del dettaglio per riga.
+     * @nullable
+     */
+  fieldConfidences?: SubDocumentFieldConfidences;
+  /** Campi la cui confidenza sta sotto la propria soglia: la soglia generale, o quella dedicata del codice fiscale. La decisione sta qui e non nella SPA perche' le soglie sono conoscenza di dominio. */
+  lowConfidenceFields?: string[];
 }

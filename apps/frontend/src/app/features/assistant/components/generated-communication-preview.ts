@@ -13,7 +13,7 @@ import { EmptyStateComponent } from "../../../shared/components/empty-state/empt
 import { StatusBadgeComponent } from "../../../shared/components/status-badge/status-badge";
 import { ButtonComponent } from "../../../shared/components/button/button";
 import { SectionComponent } from "../../../layout/section/section";
-import { StarRating } from "../../../components/star-rating/star-rating";
+import { StarRating } from "../../../shared/components/star-rating/star-rating";
 import type { UpdateCommunicationRequest } from "../../../../api/generated/model";
 import {
   RATING_COMMENT_MAX_LENGTH,
@@ -42,7 +42,7 @@ import {
         <article class="draft">
           @if (hasCover(currentDraft)) {
             <img
-              class="preview-image"
+              class="previewImage"
               [src]="currentDraft.coverImageUrl"
               [alt]="'Immagine di copertina della bozza: ' + currentDraft.title"
             />
@@ -57,10 +57,10 @@ import {
           }
 
           @if (!isDiscarded(currentDraft)) {
-            <div class="cover-actions">
+            <div class="coverActions">
               <input
                 #coverInput
-                class="cover-input"
+                class="coverInput"
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
                 [disabled]="isUpdatingCover()"
@@ -83,7 +83,7 @@ import {
           @if (saveError()) {
             <p class="errorNote">{{ saveError() }}</p>
           }
-          <form [formGroup]="form" [class.isEditing]="isEditing()" (ngSubmit)="save(currentDraft.id)">
+          <form id="draftForm" [formGroup]="form" [class.isEditing]="isEditing()" (ngSubmit)="save(currentDraft.id)">
             <label class="field">
               <span>Titolo</span>
               <input [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" formControlName="title" />
@@ -97,28 +97,11 @@ import {
                 formControlName="body"
               ></textarea>
             </label>
-            <div class="review-actions">
-              @if (isEditing()) {
-                <button mvpButton variant="secondary" type="button" [disabled]="isSaving()" (click)="cancelEdit(currentDraft)">
-                  <svg lucideX aria-hidden="true"></svg>
-                  Annulla
-                </button>
-                <button mvpButton type="submit" [disabled]="isSaving() || form.invalid">
-                  <svg lucideSave aria-hidden="true"></svg>
-                  {{ isSaving() ? "Salvataggio" : "Salva" }}
-                </button>
-              } @else if (!isDiscarded(currentDraft)) {
-                <button mvpButton variant="secondary" type="button" (click)="startEdit(currentDraft)">
-                  <svg lucidePencil aria-hidden="true"></svg>
-                  Modifica
-                </button>
-              }
-            </div>
           </form>
           @if (isReadyForPreview(currentDraft)) {
-            <div class="preview-block">
-              <span class="preview-label">Documento finale</span>
-              <div class="preview-actions">
+            <div class="previewBlock">
+              <h3 class="previewLabel">Documento finale</h3>
+              <div class="previewActions">
                 <a class="previewLink" [href]="currentDraft.previewUrl" target="_blank" rel="noreferrer">
                   Apri anteprima
                 </a>
@@ -127,57 +110,62 @@ import {
             </div>
           }
 
-          <div class="rating-section">
-            <span class="rating-label">Valuta questa bozza</span>
+          <div class="ratingSection">
+            <h3 class="ratingLabel">Valuta questa bozza</h3>
+            @if (!hasRated()) {
+              <p class="ratingNote">La valutazione si assegna una volta sola.</p>
+            }
             <mvp-star-rating
               [rating]="displayRating()"
               [disabled]="hasRated() || isRating()"
+              [label]="hasRated() ? 'Punteggio assegnato' : 'Assegna un punteggio da 1 a 5 stelle'"
               (rated)="onStarsSelected($event)"
             ></mvp-star-rating>
 
             @if (!hasRated()) {
-              <label class="field comment-field">
+              <label class="field commentField">
                 <span>Commento qualitativo (opzionale)</span>
                 <textarea
                   rows="3"
                   [formControl]="commentControl"
-                  placeholder="Aggiungi un commento alla valutazione"
+                  placeholder="Commento alla valutazione"
                 ></textarea>
-                <span class="comment-meta" [class.isInvalid]="commentTooLong()">
+                <span class="commentMeta" [class.isInvalid]="commentTooLong()">
                   {{ commentLength() }} / {{ commentMaxLength }}
                 </span>
               </label>
 
               @if (commentTooLong()) {
-                <p class="rating-error" role="alert">
+                <p class="ratingError" role="alert">
                   Il commento supera la lunghezza massima consentita ({{ commentMaxLength }} caratteri).
                 </p>
               }
 
               @if (localError(); as error) {
-                <p class="rating-error" role="alert">{{ error }}</p>
+                <p class="ratingError" role="alert">{{ error }}</p>
               }
 
               @if (rateError(); as error) {
-                <p class="rating-error" role="alert">{{ error }}</p>
+                <p class="ratingError" role="alert">{{ error }}</p>
               }
 
               <button
                 mvpButton
                 type="button"
                 [disabled]="isRating() || !selectedRating() || commentTooLong()"
+                [busy]="isRating()"
                 (click)="submitRating()"
               >
-                {{ isRating() ? "Invio in corso…" : "Invia valutazione" }}
+                Invia valutazione
               </button>
             } @else {
               @if (currentDraft.ratingComment) {
-                <p class="saved-comment">
+                <p class="savedComment">
                   <span>Commento</span>
                   {{ currentDraft.ratingComment }}
                 </p>
               }
-              <p class="rating-success">Valutazione registrata con successo.</p>
+              <p class="ratingSuccess">Valutazione registrata con successo.</p>
             }
           </div>
 
@@ -185,16 +173,33 @@ import {
             <mvp-status-badge>{{ currentDraft.status }}</mvp-status-badge>
             <span>Creato da AI Assistant{{ isEditing() ? "" : " · anteprima in sola lettura" }}</span>
           </div>
-          <div class="review-actions">
-            @if (!isDiscarded(currentDraft)) {
+          <div class="actionBar">
+            @if (isEditing()) {
+              <button mvpButton variant="secondary" type="button" [disabled]="isSaving()" (click)="cancelEdit(currentDraft)">
+                <svg lucideX aria-hidden="true"></svg>
+                Annulla
+              </button>
+              <!-- Il comando sta fuori dal form: l'attributo form lo lega
+                   comunque al suo invio, e la barra resta una sola invece di
+                   due divise dai metadati della bozza. -->
+              <button mvpButton type="submit" form="draftForm" [disabled]="isSaving() || form.invalid" [busy]="isSaving()">
+                <svg lucideSave aria-hidden="true"></svg>
+                Salva
+              </button>
+            } @else if (!isDiscarded(currentDraft)) {
+              <button mvpButton variant="secondary" type="button" (click)="startEdit(currentDraft)">
+                <svg lucidePencil aria-hidden="true"></svg>
+                Modifica
+              </button>
               @if (!isApproved(currentDraft)) {
                 <button
                   mvpButton
                   type="button"
                   [disabled]="isGenerating() || isDiscarding() || isSavingToHistory()"
+                  [busy]="isSavingToHistory()"
                   (click)="saveToHistory.emit()"
                 >
-                  {{ isSavingToHistory() ? "Salvataggio in corso…" : "Salva nello storico" }}
+                  Salva nello storico
                 </button>
               }
               <button
@@ -206,11 +211,9 @@ import {
               >
                 Rigenera bozza
               </button>
-            }
-            @if (!isDiscarded(currentDraft)) {
               @if (isConfirmingDiscard()) {
                 <p class="warning" role="status">
-                  Sei sicuro di voler scartare questa bozza? Non sarà più modificabile né rigenerabile.
+                  Una bozza scartata non è più modificabile né rigenerabile.
                 </p>
                 <button mvpButton type="button" [disabled]="isDiscarding()" (click)="discard.emit()">
                   Conferma eliminazione
@@ -239,11 +242,16 @@ import {
           </div>
         </article>
       } @else {
-        <mvp-empty-state>La bozza generata apparira qui.</mvp-empty-state>
+        <mvp-empty-state>La bozza generata compare qui.</mvp-empty-state>
       }
     </mvp-section>
   `,
-  styleUrl: "./generated-communication-preview.css"
+  styleUrls: [
+    "../../../shared/styles/field.css",
+    "../../../shared/styles/notice.css",
+    "../../../shared/styles/link-button.css",
+    "./generated-communication-preview.css"
+  ]
 })
 export class GeneratedCommunicationPreviewComponent {
   readonly draft = input<GeneratedDraft | null>(null);

@@ -49,7 +49,7 @@ flowchart TD
 docker compose exec app php artisan mvp:dlq:list --queue=documents
 ```
 
-The command reads up to 10 messages from the DLQ with `VisibilityTimeout=0`, prints a preview, and records `mvp_dlq_messages_total`.
+The command reads up to 10 messages from the DLQ with `VisibilityTimeout=0` and prints a preview. It is a diagnostic tool and records no metric: queue depth is measured by `DlqDepthProbe`, which reads `ApproximateNumberOfMessages` on every scrape.
 
 ## Recovery Procedure
 
@@ -69,7 +69,8 @@ The MVP implements diagnostic DLQ inspection and idempotent task records. Automa
 | --- | --- |
 | `mvp_sqs_messages_received_total` | Worker received task messages. |
 | `mvp_sqs_messages_failed_total` | Worker task failures. |
-| `mvp_dlq_messages_total{queue}` | Messages seen during DLQ inspection, per pipeline. |
+| `mvp_dlq_messages{queue}` | Messages currently held in the DLQ, per pipeline, read from SQS on every scrape. Absent when the probe fails. |
+| `mvp_dlq_probe_up{queue}` | 1 when the depth could be read, 0 otherwise. `DLQNotEmpty` is only trustworthy while this is 1. |
 | `mvp_document_stuck_processing_total` | Documents beyond processing timeout. |
 | `mvp_communication_stuck_processing_total` | Communications beyond generation timeout. |
 | `mvp_stepfunctions_executions_started_total` | Workflow starts. |
