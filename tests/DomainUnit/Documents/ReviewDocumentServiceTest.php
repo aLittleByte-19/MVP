@@ -45,6 +45,22 @@ test('updateExtractedData marks the sub-document as needing review when not vali
         ->and($documents->findSubDocument(10)->reviewStatus())->toBe(ReviewStatus::NeedsReview);
 });
 
+test('una correzione non declassa la scheda che una persona aveva gia\' confermato', function () {
+    // Il dato e' appena ripassato sotto i suoi occhi: chiedere di confermare
+    // due volte la stessa scheda, e tenere spento il download nel frattempo,
+    // sarebbe un giro a vuoto.
+    $documents = new InMemoryDocumentRepository;
+    $documents->seedOriginal(1);
+    $documents->seedSubDocument(10, 1, ['review_status' => 'manually_validated']);
+    $events = new RecordingDocumentEventDispatcher;
+
+    $status = (new ReviewDocumentService($documents, $events))
+        ->updateExtractedData(10, ['company_name' => 'Corretta Srl'], markAsValidated: false, actor: fakeReviewActor());
+
+    expect($status)->toBe('manually_validated')
+        ->and($documents->findSubDocument(10)->reviewStatus())->toBe(ReviewStatus::ManuallyValidated);
+});
+
 test('markReviewed refuses a sub-document without extracted data', function () {
     $documents = new InMemoryDocumentRepository;
     $documents->seedOriginal(1);
