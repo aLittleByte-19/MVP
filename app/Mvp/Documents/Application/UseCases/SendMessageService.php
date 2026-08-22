@@ -6,11 +6,14 @@ use App\Mvp\Documents\Domain\Enums\SendStatus;
 use App\Mvp\Documents\Domain\Events\SendMessageExported;
 use App\Mvp\Documents\Domain\Events\SendMessageOverridesCorrected;
 use App\Mvp\Documents\Domain\Exceptions\DocumentNotAuthorizedException;
+use App\Mvp\Documents\Domain\Exceptions\SendMessageAttachmentUnavailableException;
 use App\Mvp\Documents\Domain\Ports\Inbound\SendMessageUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
+use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
 use App\Mvp\Documents\Domain\Ports\Outbound\SendMessageRendererPort;
 use App\Mvp\Documents\Domain\ValueObjects\RenderedSendMessage;
+use App\Mvp\Documents\Domain\Support\SendMessageDraft;
 use App\Mvp\Documents\Domain\ValueObjects\SendMessageComposition;
 use App\Mvp\Documents\Domain\ValueObjects\SendMessageContext;
 use App\Mvp\Documents\Domain\ValueObjects\SubDocumentChanges;
@@ -27,15 +30,23 @@ class SendMessageService implements SendMessageUseCase
     public function __construct(
         private readonly DocumentRepository $documents,
         private readonly SendMessageRendererPort $renderer,
+        private readonly DocumentStoragePort $storage,
         private readonly DocumentEventDispatcherPort $events,
     ) {}
 
     public function preview(int $subDocumentId, Actor $actor): RenderedSendMessage
     {
         $this->assertActorOwnsSubDocument($subDocumentId, $actor);
+        $subDocument = $this->documents->findSubDocument($subDocumentId);
         $composition = $this->compose($this->documents->findSendMessageContext($subDocumentId));
 
-        return new RenderedSendMessage($this->renderer->renderPdf($composition), $this->filename($composition, $subDocumentId));
+        // L'anteprima mostra il file che si otterrebbe scaricando, documento in
+        // coda compreso: guardarne solo la prima pagina non direbbe se cio' che
+        // parte e' quello giusto.
+        return new RenderedSendMessage(
+            $this->renderer->renderPdf($composition, $this->attachment($subDocument->filePath)),
+            $this->filename($composition, $subDocumentId),
+        );
     }
 
     public function export(int $subDocumentId, Actor $actor): RenderedSendMessage
@@ -43,6 +54,11 @@ class SendMessageService implements SendMessageUseCase
         $this->assertActorOwnsSubDocument($subDocumentId, $actor);
         $subDocument = $this->documents->findSubDocument($subDocumentId);
         $composition = $this->compose($this->documents->findSendMessageContext($subDocumentId));
+
+        // Il documento si legge prima di marcare l'invio: senza il file da
+        // accodare l'esportazione non parte, e uno stato passato a «Scaricato»
+        // per un download mai avvenuto non si riporta indietro.
+        $attachment = $this->attachment($subDocument->filePath);
 
         // Il recapito avviene fuori dalla piattaforma: il download del PDF e'
         // l'ultimo evento osservabile, quindi e' quello che marca l'invio.
@@ -53,7 +69,10 @@ class SendMessageService implements SendMessageUseCase
             $this->events->dispatch(new SendMessageExported($subDocumentId, $actor));
         }
 
-        return new RenderedSendMessage($this->renderer->renderPdf($composition), $this->filename($composition, $subDocumentId));
+        return new RenderedSendMessage(
+            $this->renderer->renderPdf($composition, $attachment),
+            $this->filename($composition, $subDocumentId),
+        );
     }
 
     public function updateOverrides(int $subDocumentId, array $overrides, Actor $actor): void
@@ -80,6 +99,16 @@ class SendMessageService implements SendMessageUseCase
         $this->events->dispatch(new SendMessageOverridesCorrected($subDocumentId, $actor, array_keys($overrides)));
     }
 
+    /** I byte del documento da accodare, o l'errore se lo storage non ce l'ha. */
+    private function attachment(string $filePath): string
+    {
+        if (! $this->storage->exists($filePath)) {
+            throw new SendMessageAttachmentUnavailableException;
+        }
+
+        return $this->storage->read($filePath);
+    }
+
     private function assertActorOwnsSubDocument(int $subDocumentId, Actor $actor): void
     {
         $subDocument = $this->documents->findSubDocument($subDocumentId);
@@ -95,43 +124,24 @@ class SendMessageService implements SendMessageUseCase
         $employeeName = trim(($context->employeeFirstName ?? '').' '.($context->employeeLastName ?? ''));
 
         return new SendMessageComposition(
-            recipient: $context->sendRecipientOverride
-                ?: ($employeeName !== '' ? $employeeName : 'Destinatario non disponibile'),
-            subject: $context->sendSubjectOverride
-                ?: ($context->documentType ? "Invio documento — {$context->documentType}" : 'Invio documento'),
-            body: $context->sendBodyOverride
-                ?: $this->composeBody($employeeName, $context->documentType, $context->companyName, $context->documentDateDisplay, $context->description),
+            recipient: $context->sendRecipientOverride ?: SendMessageDraft::recipient($employeeName),
+            subject: $context->sendSubjectOverride ?: SendMessageDraft::subject(
+                $context->documentType,
+                $context->companyName,
+                $context->documentDateDisplay,
+                $context->referenceMonth,
+                $context->referenceYear,
+            ),
+            body: $context->sendBodyOverride ?: SendMessageDraft::body(
+                $employeeName,
+                $context->documentType,
+                $context->companyName,
+                $context->documentDateDisplay,
+                $context->description,
+            ),
+            companyName: $context->companyName,
             attachmentFilename: $context->originalFilename,
         );
-    }
-
-    private function composeBody(string $employeeName, ?string $documentType, ?string $companyName, ?string $documentDate, ?string $description): string
-    {
-        $greeting = $employeeName !== '' ? "Gentile {$employeeName}," : 'Gentile destinatario,';
-        $documentLabel = $documentType ?: 'documento';
-        $reference = "in allegato trova il documento \"{$documentLabel}\"";
-
-        if ($companyName) {
-            $reference .= " relativo a {$companyName}";
-        }
-
-        if ($documentDate) {
-            $reference .= " del {$documentDate}";
-        }
-
-        $reference .= '.';
-
-        $lines = [$greeting, '', $reference];
-
-        if ($description) {
-            $lines[] = '';
-            $lines[] = $description;
-        }
-
-        $lines[] = '';
-        $lines[] = 'Cordiali saluti.';
-
-        return implode("\n", $lines);
     }
 
     private function filename(SendMessageComposition $composition, int $subDocumentId): string

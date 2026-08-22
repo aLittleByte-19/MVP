@@ -32,6 +32,23 @@ function mvpPdfUpload(string $filename = 'cedolino.pdf'): UploadedFile
     return UploadedFile::fake()->createWithContent($filename, $pdf->Output('S'));
 }
 
+/**
+ * Mette sullo storage il PDF del sotto-documento. L'esportazione lo accoda al
+ * messaggio, quindi senza file non parte: e' un PDF vero perche' a unirlo e'
+ * Fpdi, che un file finto non lo importa.
+ */
+function mvpStoreSubDocumentFile(SubDocument $subDocument): void
+{
+    Storage::fake('s3');
+
+    $pdf = new Fpdi;
+    $pdf->AddPage();
+    $pdf->SetFont('Arial', '', 12);
+    $pdf->Cell(0, 10, 'Documento del destinatario');
+
+    Storage::disk('s3')->put($subDocument->file_path, $pdf->Output('S'));
+}
+
 function mvpAssertWellFormedPdf(string $bytes): void
 {
     $path = tempnam(sys_get_temp_dir(), 'mvp-pdf-test-');
@@ -832,6 +849,7 @@ test('send message fields are composed from extracted data', function () {
         'employee_last_name' => 'Rossi',
         'company_name' => 'Acme S.r.l.',
         'document_type' => 'Cedolino',
+        'document_date' => '2026-06-30',
     ]);
 
     $response = $this->getJson('/api/v1/state');
@@ -839,7 +857,7 @@ test('send message fields are composed from extracted data', function () {
     $document = collect($response->json('copilot.documents'))->firstWhere('id', 'sub-'.$subDocument->id);
 
     expect($document['sendRecipient'])->toBe('Mario Rossi')
-        ->and($document['sendSubject'])->toBe('Invio documento — Cedolino')
+        ->and($document['sendSubject'])->toBe('Cedolino del 30/06/2026')
         ->and($document['sendBody'])->toContain('Gentile Mario Rossi,')
         ->and($document['sendBody'])->toContain('Acme S.r.l.');
 });
@@ -852,7 +870,7 @@ test('send message fields fall back gracefully without extracted data', function
     $document = collect($response->json('copilot.documents'))->firstWhere('id', 'sub-'.$subDocument->id);
 
     expect($document['sendRecipient'])->toBe('Destinatario non disponibile')
-        ->and($document['sendSubject'])->toBe('Invio documento');
+        ->and($document['sendSubject'])->toBe('Documento in allegato');
 });
 
 test('operator can correct the send message recipient, subject and body', function () {
@@ -930,6 +948,7 @@ test('send message correction validates field lengths', function () {
 test('operator can preview and export the precompiled send message', function () {
     $subDocument = SubDocument::factory()->create();
     ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
+    mvpStoreSubDocumentFile($subDocument);
 
     $preview = $this->get("/api/v1/documents/{$subDocument->id}/send-preview");
     $preview->assertOk()->assertHeader('Content-Type', 'application/pdf');
@@ -1407,6 +1426,7 @@ test('the document index rejects out-of-range filters', function () {
 test('downloading the send message marks the sub-document as sent', function () {
     $subDocument = SubDocument::factory()->pending()->create();
     ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
+    mvpStoreSubDocumentFile($subDocument);
 
     expect($subDocument->send_status)->toBe(SendStatus::Pending);
 
@@ -1420,6 +1440,7 @@ test('previewing the send message does not mark the sub-document as sent', funct
     // Guardare non e' recapitare: solo il download vale come invio.
     $subDocument = SubDocument::factory()->pending()->create();
     ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
+    mvpStoreSubDocumentFile($subDocument);
 
     $this->get("/api/v1/documents/{$subDocument->id}/send-preview")->assertOk();
 
@@ -1429,6 +1450,7 @@ test('previewing the send message does not mark the sub-document as sent', funct
 test('a second download does not duplicate the send transition', function () {
     $subDocument = SubDocument::factory()->pending()->create();
     ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
+    mvpStoreSubDocumentFile($subDocument);
 
     $this->get("/api/v1/documents/{$subDocument->id}/send-export")->assertOk();
     $this->get("/api/v1/documents/{$subDocument->id}/send-export")->assertOk();
@@ -2097,4 +2119,50 @@ test('a document extracted before the per-field detail carries no doubtful field
 
     expect($document['fieldConfidences'])->toBeNull()
         ->and($document['lowConfidenceFields'])->toBe([]);
+});
+
+test('the exported message carries the document itself, not just its name', function () {
+    $subDocument = SubDocument::factory()->pending()->create();
+    ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
+    mvpStoreSubDocumentFile($subDocument);
+
+    $export = $this->get("/api/v1/documents/{$subDocument->id}/send-export");
+
+    $path = tempnam(sys_get_temp_dir(), 'mvp-export-');
+    file_put_contents($path, $export->getContent());
+    $pdf = new Fpdi;
+    $pageCount = $pdf->setSourceFile($path);
+    @unlink($path);
+
+    // Il messaggio e' una pagina, il documento almeno un'altra.
+    expect($pageCount)->toBeGreaterThanOrEqual(2);
+});
+
+test('the export refuses to promise an attachment the storage does not have', function () {
+    Storage::fake('s3');
+    $subDocument = SubDocument::factory()->pending()->create();
+    ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
+
+    $this->get("/api/v1/documents/{$subDocument->id}/send-export")
+        ->assertNotFound()
+        ->assertJsonPath('error.code', 'attachment_unavailable');
+
+    expect($subDocument->refresh()->send_status)->toBe(SendStatus::Pending);
+});
+
+test('the preview shows the same pages the download would give', function () {
+    $subDocument = SubDocument::factory()->pending()->create();
+    ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
+    mvpStoreSubDocumentFile($subDocument);
+
+    $preview = $this->get("/api/v1/documents/{$subDocument->id}/send-preview");
+
+    $path = tempnam(sys_get_temp_dir(), 'mvp-preview-');
+    file_put_contents($path, $preview->getContent());
+    $pdf = new Fpdi;
+    $pageCount = $pdf->setSourceFile($path);
+    @unlink($path);
+
+    expect($pageCount)->toBeGreaterThanOrEqual(2)
+        ->and($subDocument->refresh()->send_status)->toBe(SendStatus::Pending);
 });
