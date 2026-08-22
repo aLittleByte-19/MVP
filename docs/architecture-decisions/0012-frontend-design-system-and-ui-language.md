@@ -1,6 +1,6 @@
 # ADR 0012: Sistema visivo e linguaggio dell'interfaccia della SPA
 
-Status: Proposed
+Status: Accepted, implemented
 Date: 2026-08-18
 
 ## Context
@@ -84,7 +84,17 @@ offset zero la misura decade.
 - **Badge — due forme per due grandezze.** Rettangolo a contorno per lo stato di **validazione**,
   pallino per lo stato di **scaricamento**, pieno o vuoto. Sono dati diversi e ora si distinguono
   anche per forma, non solo per posizione.
-- **Vuoto, caricamento, errore.** Trattamenti invariati.
+- **Scheda metrica — una forma per tipo di dato.** Non un solo componente col numero grande, ma
+  otto: conteggio con barre giornaliere, quota, misura su scala con soglia, verdetto, ripartizione
+  ad anello, tempo diviso per fase, densità come curva continua, media in stelle frazionarie. La
+  forma la sceglie il tipo di dato che la scheda porta, e le schede stanno a mosaico su una griglia
+  di quattro colonne: quelle con un asse o una legenda da leggere ne occupano due. Il tono di stato
+  è il **bordo** della scheda, non una striscia laterale, che ripetuta su una fila di schede faceva
+  una teoria di bandiere.
+- **Vuoto, caricamento, errore.** Trattamenti invariati nella sostanza. Le segnalazioni a blocco
+  (avviso di pagina, nota di attenzione, metriche non disponibili) portano il colore dello stato
+  sul **riquadro intero**: erano tre disegni diversi per la stessa cosa, e comparivano una sopra
+  l'altra.
 - **Segnalazione.** Nell'intestazione della sezione che la riguarda, resa col rettangolo: è uno
   stato di validazione, quindi deve avere la forma degli altri.
 - **Valutazione.** Stelle in **SVG** (non il carattere `★`, che ogni sistema disegna a modo suo),
@@ -229,6 +239,14 @@ Già applicato (branch `refactor/ui_ux`, precede l'approvazione di questo ADR):
 - `apps/frontend/src/styles/tokens.css` — bordi di stato (`--mvp-*-border`, `--mvp-primary-soft`)
   al posto di `#f0bf98`, `#c9e5d3`, `#d99a3f`, `#6bb58a`; via i tre token senza consumatori.
 - Cinque soglie responsive ridotte alle tre dichiarate (640, 900, 1100).
+- `apps/frontend/src/app/shared/components/metric-*/`, `shared/util/charts.ts` — le otto forme
+  della scheda metrica e la geometria dei loro grafici, tenuta fuori dai componenti perché è
+  aritmetica e si prova senza montare nulla.
+- `apps/frontend/src/app/features/copilot/components/field-origin/` — il glifo di provenienza del
+  singolo campo, con le soglie per campo dell'[ADR 0013](0013-per-field-ocr-confidence.md).
+- `apps/frontend/src/app/shared/styles/field.css` — fuori dalla modifica il cursore non compare
+  nelle caselle in sola lettura: `readonly` le lascia attivabili col clic, e il cursore prometteva
+  una scrittura che il campo non accetta.
 - `apps/frontend/src/app/features/copilot/components/document-list.*` — storico a sette colonne, con
   il documento di partenza nella prima cella; le larghezze stanno nel foglio di chi le usa.
 - `apps/frontend/src/app/shared/components/status-dot/` — pallino per lo stato di scaricamento,
