@@ -946,7 +946,7 @@ test('send message correction validates field lengths', function () {
 });
 
 test('operator can preview and export the precompiled send message', function () {
-    $subDocument = SubDocument::factory()->create();
+    $subDocument = SubDocument::factory()->confirmed()->create();
     ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
     mvpStoreSubDocumentFile($subDocument);
 
@@ -1424,7 +1424,7 @@ test('the document index rejects out-of-range filters', function () {
 });
 
 test('downloading the send message marks the sub-document as sent', function () {
-    $subDocument = SubDocument::factory()->pending()->create();
+    $subDocument = SubDocument::factory()->pending()->confirmed()->create();
     ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
     mvpStoreSubDocumentFile($subDocument);
 
@@ -1448,7 +1448,7 @@ test('previewing the send message does not mark the sub-document as sent', funct
 });
 
 test('a second download does not duplicate the send transition', function () {
-    $subDocument = SubDocument::factory()->pending()->create();
+    $subDocument = SubDocument::factory()->pending()->confirmed()->create();
     ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
     mvpStoreSubDocumentFile($subDocument);
 
@@ -2122,7 +2122,7 @@ test('a document extracted before the per-field detail carries no doubtful field
 });
 
 test('the exported message carries the document itself, not just its name', function () {
-    $subDocument = SubDocument::factory()->pending()->create();
+    $subDocument = SubDocument::factory()->pending()->confirmed()->create();
     ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
     mvpStoreSubDocumentFile($subDocument);
 
@@ -2140,7 +2140,7 @@ test('the exported message carries the document itself, not just its name', func
 
 test('the export refuses to promise an attachment the storage does not have', function () {
     Storage::fake('s3');
-    $subDocument = SubDocument::factory()->pending()->create();
+    $subDocument = SubDocument::factory()->pending()->confirmed()->create();
     ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
 
     $this->get("/api/v1/documents/{$subDocument->id}/send-export")
@@ -2165,4 +2165,18 @@ test('the preview shows the same pages the download would give', function () {
 
     expect($pageCount)->toBeGreaterThanOrEqual(2)
         ->and($subDocument->refresh()->send_status)->toBe(SendStatus::Pending);
+});
+
+test('the export is refused until a person has confirmed the extracted data', function () {
+    // Il pannello tiene spento il comando, ma l'API si puo' chiamare anche
+    // senza passare di li': il vincolo vive nel caso d'uso.
+    $subDocument = SubDocument::factory()->pending()->create(['review_status' => ReviewStatus::AutoValidated]);
+    ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
+    mvpStoreSubDocumentFile($subDocument);
+
+    $this->get("/api/v1/documents/{$subDocument->id}/send-export")
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'review_not_confirmed');
+
+    expect($subDocument->refresh()->send_status)->toBe(SendStatus::Pending);
 });

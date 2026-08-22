@@ -5,6 +5,7 @@ use App\Mvp\Documents\Domain\Events\SendMessageExported;
 use App\Mvp\Documents\Domain\Events\SendMessageOverridesCorrected;
 use App\Mvp\Documents\Domain\Exceptions\DocumentNotAuthorizedException;
 use App\Mvp\Documents\Domain\Exceptions\SendMessageAttachmentUnavailableException;
+use App\Mvp\Documents\Domain\Exceptions\SendMessageNotConfirmedException;
 use App\Mvp\Support\Identity\Actor;
 use Tests\DomainUnit\Documents\Fakes\FakeDocumentStorage;
 use Tests\DomainUnit\Documents\Fakes\FakeSendMessageRenderer;
@@ -51,7 +52,7 @@ test('preview composes the message from extracted data without changing send sta
 test('export marks the message sent once, and dispatches SendMessageExported only the first time', function () {
     $documents = new InMemoryDocumentRepository;
     $documents->seedOriginal(1);
-    $documents->seedSubDocument(10, 1, ['send_status' => 'pending']);
+    $documents->seedSubDocument(10, 1, ['send_status' => 'pending', 'review_status' => 'manually_validated']);
     $events = new RecordingDocumentEventDispatcher;
     $service = new SendMessageService($documents, new FakeSendMessageRenderer, fakeSendMessageStorage(), $events);
 
@@ -69,7 +70,7 @@ test('export marks the message sent once, and dispatches SendMessageExported onl
 test('export refuses a sub-document that belongs to another tenant', function () {
     $documents = new InMemoryDocumentRepository;
     $documents->seedOriginal(1);
-    $documents->seedSubDocument(10, 1, ['send_status' => 'pending']);
+    $documents->seedSubDocument(10, 1, ['send_status' => 'pending', 'review_status' => 'manually_validated']);
     $events = new RecordingDocumentEventDispatcher;
     $intruder = new Actor('user-2', 'other@example.test', 'Other', 'altro-tenant', ['mvp-operator']);
 
@@ -93,7 +94,7 @@ test('updateOverrides persists the provided fields and dispatches SendMessageOve
 test('export accoda al messaggio il documento del destinatario', function () {
     $documents = new InMemoryDocumentRepository;
     $documents->seedOriginal(1);
-    $documents->seedSubDocument(10, 1, ['document_type' => 'cedolino paga', 'send_status' => 'pending']);
+    $documents->seedSubDocument(10, 1, ['document_type' => 'cedolino paga', 'send_status' => 'pending', 'review_status' => 'manually_validated']);
     $renderer = new FakeSendMessageRenderer;
 
     (new SendMessageService($documents, $renderer, fakeSendMessageStorage(), new RecordingDocumentEventDispatcher))
@@ -107,7 +108,7 @@ test('export si ferma quando il documento da allegare non e\' sullo storage', fu
     // stato di scaricamento non deve muoversi: e' una transizione a senso unico.
     $documents = new InMemoryDocumentRepository;
     $documents->seedOriginal(1);
-    $documents->seedSubDocument(10, 1, ['send_status' => 'pending']);
+    $documents->seedSubDocument(10, 1, ['send_status' => 'pending', 'review_status' => 'manually_validated']);
     $events = new RecordingDocumentEventDispatcher;
 
     $export = fn () => (new SendMessageService($documents, new FakeSendMessageRenderer, new FakeDocumentStorage, $events))
@@ -121,11 +122,39 @@ test('export si ferma quando il documento da allegare non e\' sullo storage', fu
 test('l\'oggetto nomina il documento e il periodo dichiarato al caricamento', function () {
     $documents = new InMemoryDocumentRepository;
     $documents->seedOriginal(1, ['manual_reference_month' => 6, 'manual_reference_year' => 2026]);
-    $documents->seedSubDocument(10, 1, ['document_type' => 'cedolino paga', 'send_status' => 'pending']);
+    $documents->seedSubDocument(10, 1, ['document_type' => 'cedolino paga', 'send_status' => 'pending', 'review_status' => 'manually_validated']);
     $renderer = new FakeSendMessageRenderer;
 
     $rendered = (new SendMessageService($documents, $renderer, fakeSendMessageStorage(), new RecordingDocumentEventDispatcher))
         ->preview(10, fakeSendMessageActor());
 
     expect($rendered->pdf)->toContain('Cedolino paga di giugno 2026');
+});
+
+test('export si ferma finche\' una persona non ha confermato i dati', function () {
+    // La validazione automatica non basta: il download consegna il documento a
+    // una persona, e prima qualcuno deve aver guardato la scheda.
+    $documents = new InMemoryDocumentRepository;
+    $documents->seedOriginal(1);
+    $documents->seedSubDocument(10, 1, ['send_status' => 'pending', 'review_status' => 'auto_validated']);
+    $events = new RecordingDocumentEventDispatcher;
+
+    $export = fn () => (new SendMessageService($documents, new FakeSendMessageRenderer, fakeSendMessageStorage(), $events))
+        ->export(10, fakeSendMessageActor());
+
+    expect($export)->toThrow(SendMessageNotConfirmedException::class)
+        ->and($documents->findSubDocument(10)->sendStatus()->value)->toBe('pending')
+        ->and($events->events())->toBeEmpty();
+});
+
+test('l\'anteprima resta consultabile prima della conferma', function () {
+    // Guardare il messaggio e' proprio il modo di decidere se confermare.
+    $documents = new InMemoryDocumentRepository;
+    $documents->seedOriginal(1);
+    $documents->seedSubDocument(10, 1, ['send_status' => 'pending', 'review_status' => 'needs_review']);
+
+    $rendered = (new SendMessageService($documents, new FakeSendMessageRenderer, fakeSendMessageStorage(), new RecordingDocumentEventDispatcher))
+        ->preview(10, fakeSendMessageActor());
+
+    expect($rendered->pdf)->not->toBeEmpty();
 });

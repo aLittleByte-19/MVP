@@ -2,11 +2,13 @@
 
 namespace App\Mvp\Documents\Application\UseCases;
 
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Enums\SendStatus;
 use App\Mvp\Documents\Domain\Events\SendMessageExported;
 use App\Mvp\Documents\Domain\Events\SendMessageOverridesCorrected;
 use App\Mvp\Documents\Domain\Exceptions\DocumentNotAuthorizedException;
 use App\Mvp\Documents\Domain\Exceptions\SendMessageAttachmentUnavailableException;
+use App\Mvp\Documents\Domain\Exceptions\SendMessageNotConfirmedException;
 use App\Mvp\Documents\Domain\Ports\Inbound\SendMessageUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
@@ -53,6 +55,15 @@ class SendMessageService implements SendMessageUseCase
     {
         $this->assertActorOwnsSubDocument($subDocumentId, $actor);
         $subDocument = $this->documents->findSubDocument($subDocumentId);
+
+        // Il download e' il momento in cui il documento esce dal sistema: prima
+        // di allora i dati estratti devono essere passati sotto gli occhi di
+        // una persona. Il pannello tiene spento il comando, ma l'API si puo'
+        // chiamare anche senza il pannello.
+        if ($subDocument->reviewStatus() !== ReviewStatus::ManuallyValidated) {
+            throw new SendMessageNotConfirmedException;
+        }
+
         $composition = $this->compose($this->documents->findSendMessageContext($subDocumentId));
 
         // Il documento si legge prima di marcare l'invio: senza il file da
