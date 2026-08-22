@@ -88,6 +88,24 @@
         font-size: 10.5px;
     }
 
+    /* Filigrana: grande, molto chiara, lettere spaziate, in diagonale come
+       sui documenti ufficiali. Il colore e' quello delle superfici tenui del
+       design system: si legge quando la si cerca e sparisce sotto il testo. */
+    .watermark {
+        position: fixed;
+        top: 42%;
+        left: -10%;
+        width: 120%;
+        z-index: -1;
+        transform: rotate(-45deg);
+        color: #e4edf5;
+        font-size: 44px;
+        font-weight: bold;
+        letter-spacing: 5px;
+        text-align: center;
+        text-transform: uppercase;
+    }
+
     .coverWrap { margin: 0 0 24px; text-align: center; }
     .cover { max-width: 100%; max-height: 250px; }
 </style>

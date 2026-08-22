@@ -5,7 +5,6 @@ namespace App\Mvp\Documents\Adapters\Outbound\Pdf;
 use App\Mvp\Documents\Domain\Ports\Outbound\SendMessageRendererPort;
 use App\Mvp\Documents\Domain\ValueObjects\SendMessageComposition;
 use App\Mvp\Support\PdfFooterStamper;
-use App\Mvp\Support\PdfWatermarkStamper;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use setasign\Fpdi\Fpdi;
@@ -29,10 +28,7 @@ class DompdfSendMessageRenderer implements SendMessageRendererPort
      */
     private const ORIGIN = 'Co-Pilot CdL';
 
-    public function __construct(
-        private readonly PdfFooterStamper $footerStamper,
-        private readonly PdfWatermarkStamper $watermarkStamper,
-    ) {}
+    public function __construct(private readonly PdfFooterStamper $footerStamper) {}
 
     public function renderPdf(SendMessageComposition $composition, ?string $attachmentPdf = null): string
     {
@@ -71,11 +67,6 @@ class DompdfSendMessageRenderer implements SendMessageRendererPort
         ])->render());
         $dompdf->setPaper('a4', 'portrait');
         $dompdf->render();
-
-        // La filigrana sta sulle pagine del messaggio, non su quelle del
-        // documento accodato: quello e' il foglio originale del destinatario e
-        // non si sovrastampa.
-        $this->watermarkStamper->stamp($dompdf, 'Creato da '.self::ORIGIN);
 
         // Il messaggio e' una pagina sola per costruzione: il totale del file
         // finale e' quella piu' le pagine del documento accodato.

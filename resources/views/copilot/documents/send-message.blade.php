@@ -6,6 +6,8 @@
     @include('copilot.partials.pdf-styles')
 </head>
 <body>
+    @include('copilot.partials.pdf-watermark', ['watermark' => 'Creato da Co-Pilot CdL'])
+
     <p class="eyebrow">Comunicazione Copilot CdL</p>
     <h1>{{ $subject }}</h1>
     <div class="rule"></div>
