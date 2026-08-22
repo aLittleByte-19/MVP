@@ -280,9 +280,9 @@ describe("DocumentWorkflowService", () => {
   });
 
   describe("searchDocuments", () => {
-    it("inoltra tutti i criteri al backend e restituisce i soli elementi", () => {
+    it("inoltra tutti i criteri e la pagina al backend, e restituisce anche il totale", () => {
       const items = [{ id: "sub-1" }];
-      api.listMvpDocuments.mockReturnValue(of({ items }));
+      api.listMvpDocuments.mockReturnValue(of({ items, total: 42, page: 2, perPage: 10 }));
       const filters = {
         search: "Rossi",
         sendStatus: "sent" as const,
@@ -293,16 +293,18 @@ describe("DocumentWorkflowService", () => {
       };
 
       let received: unknown;
-      service.searchDocuments(filters).subscribe((result) => (received = result));
+      service.searchDocuments(filters, 2, 10).subscribe((result) => (received = result));
 
-      expect(api.listMvpDocuments).toHaveBeenCalledWith(filters);
-      expect(received).toBe(items);
+      expect(api.listMvpDocuments).toHaveBeenCalledWith({ ...filters, page: 2, perPage: 10 });
+      // Il totale serve alla vista per sapere quante pagine esistono: prima
+      // veniva scartato, e oltre la prima pagina i documenti sparivano.
+      expect(received).toEqual({ items, total: 42, page: 2, perPage: 10 });
     });
 
     it("chiede comunque la lista quando non ci sono filtri", () => {
-      api.listMvpDocuments.mockReturnValue(of({ items: [] }));
+      api.listMvpDocuments.mockReturnValue(of({ items: [], total: 0, page: 1, perPage: 10 }));
 
-      service.searchDocuments({}).subscribe();
+      service.searchDocuments({}, 1, 10).subscribe();
 
       expect(api.listMvpDocuments).toHaveBeenCalledWith({
         search: undefined,
@@ -310,8 +312,19 @@ describe("DocumentWorkflowService", () => {
         confidenceThreshold: undefined,
         confidenceCriterion: undefined,
         month: undefined,
-        year: undefined
+        year: undefined,
+        page: 1,
+        perPage: 10
       });
+    });
+
+    it("ripiega sui valori chiesti quando la risposta non porta la paginazione", () => {
+      api.listMvpDocuments.mockReturnValue(of({ items: [{ id: "sub-1" }] }));
+
+      let received: unknown;
+      service.searchDocuments({}, 1, 10).subscribe((result) => (received = result));
+
+      expect(received).toEqual({ items: [{ id: "sub-1" }], total: 1, page: 1, perPage: 10 });
     });
   });
 

@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from "@angular/core";
 import { retry } from "rxjs";
 import { AlittlebyteMVPAPIService } from "../../../api/generated/mvp-api";
-import type { MvpState, SubDocument } from "../../../api/generated/model";
+import type { Metric, MvpState, SubDocument } from "../../../api/generated/model";
 import { getApiErrorMessage } from "../errors/api-error";
 
 /**
@@ -36,9 +36,24 @@ export class MvpStateStore {
    * documents 40) e darebbero numeri sbagliati appena i dati crescono.
    */
   metric(key: string): number {
-    const found = [...this.assistantMetrics(), ...this.copilotMetrics()].find((entry) => entry.key === key);
+    const found = this.metricEntry(key);
 
     return typeof found?.value === "number" ? found.value : 0;
+  }
+
+  /**
+   * Metrica completa per chiave, oppure `null` finche' lo stato non e' stato
+   * caricato o se la chiave non esiste.
+   *
+   * Distinto da `metric()`, che collassa l'assenza su `0`: una scheda che
+   * mostra `0` durante il caricamento afferma un dato che non ha ancora, ed e'
+   * esattamente cio' che i KPI della Overview facevano. Serve anche a leggere
+   * `history`, che il conteggio da solo non porta.
+   */
+  metricEntry(key: string): Metric | null {
+    return (
+      [...this.assistantMetrics(), ...this.copilotMetrics()].find((entry) => entry.key === key) ?? null
+    );
   }
 
   /** Carica lo stato al primo montaggio; ritenta se il primo tentativo e' fallito. */

@@ -8,6 +8,7 @@ final class SendMessageComposition
         public readonly string $recipient,
         public readonly string $subject,
         public readonly string $body,
+        public readonly ?string $companyName,
         public readonly string $attachmentFilename,
     ) {}
 }

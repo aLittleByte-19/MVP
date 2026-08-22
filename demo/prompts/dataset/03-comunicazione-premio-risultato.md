@@ -1,0 +1,1 @@
+Scrivi una comunicazione che informa i dipendenti dell'erogazione del premio di risultato collegato agli obiettivi di produttivita' raggiunti. Precisa che l'importo comparira' nel cedolino del mese successivo e che i criteri di calcolo sono consultabili presso l'ufficio del personale.

@@ -15,7 +15,7 @@ function subDocument(overrides: Partial<SubDocument> = {}): SubDocument {
     reviewStatus: "auto_validated",
     reviewStatusLabel: "Validato automaticamente",
     sendStatus: "pending",
-    sendStatusLabel: "Da inviare",
+    sendStatusLabel: "Non scaricato",
     previewLines: [],
     ...overrides
   };
@@ -79,15 +79,69 @@ describe("DocumentListComponent", () => {
     expect(element.textContent).toContain("cedolino");
   });
 
-  it("mostra le etichette di stato che arrivano dal backend", () => {
+  it("abbrevia la validazione nella colonna e tiene l'etichetta del backend per lo scaricamento", () => {
+    // "Validato automaticamente" e' una frase: dentro una colonna larga un
+    // sesto di tabella andava a capo in mezzo alla parola, e sotto
+    // l'intestazione "Validazione" la sola qualificazione dice gia' tutto.
     const element = render({
       documents: [
-        subDocument({ reviewStatusLabel: "In quarantena", sendStatusLabel: "Inviato" })
+        subDocument({
+          reviewStatus: "manually_validated",
+          reviewStatusLabel: "Validato manualmente",
+          sendStatusLabel: "Scaricato"
+        })
       ]
     }).nativeElement as HTMLElement;
 
+    expect(element.textContent).toContain("Manuale");
+    expect(element.textContent).not.toContain("Validato manualmente");
+    expect(element.textContent).toContain("Scaricato");
+  });
+
+  it("ripiega sull'etichetta del backend quando lo stato non arriva", () => {
+    const element = render({
+      documents: [subDocument({ reviewStatus: undefined, reviewStatusLabel: "In quarantena" })]
+    }).nativeElement as HTMLElement;
+
     expect(element.textContent).toContain("In quarantena");
-    expect(element.textContent).toContain("Inviato");
+  });
+
+  it("tiene nelle colonne i dati dell'analisi e nella prima cella il documento di partenza", () => {
+    // La riga si legge come un documento in lavorazione, non come un elenco di
+    // nove campi alla pari: azienda, nome del file e data del documento
+    // stanno sotto al destinatario.
+    const element = render({ documents: [subDocument()] }).nativeElement as HTMLElement;
+    const columns = [...element.querySelectorAll("thead th")].map((th) =>
+      th.getAttribute("data-column")
+    );
+
+    expect(columns).toEqual([
+      "recipient",
+      "type",
+      "uploadedAt",
+      "confidence",
+      "review",
+      "download",
+      "actions"
+    ]);
+
+    const recipient = element.querySelector('td[data-column="recipient"]');
+
+    expect(recipient?.textContent).toContain("Acme SpA");
+    expect(recipient?.textContent).toContain("cedolini.pdf");
+  });
+
+  it("distingue lo stato di scaricamento da quello di validazione", () => {
+    // Due domande diverse, due forme diverse: rettangolo per la revisione,
+    // pallino pieno o vuoto per il download.
+    const element = render({
+      documents: [subDocument({ sendStatus: "sent", sendStatusLabel: "Scaricato" })]
+    }).nativeElement as HTMLElement;
+
+    expect(element.querySelector('td[data-column="review"] .badge')).not.toBeNull();
+    expect(element.querySelector('td[data-column="download"] .indicator')?.classList).toContain(
+      "done"
+    );
   });
 
   it("evidenzia il documento selezionato", () => {

@@ -1,0 +1,29 @@
+/**
+ * Le due segnalazioni in linea (ADR 0012).
+ *
+ * `.warning` era ricopiata in quattro fogli e `.errorNote` in due, sempre
+ * identiche. Non sono l'`attention-note`, che e' un blocco di pagina: queste
+ * stanno dentro un modulo, accanto al controllo a cui si riferiscono.
+ */
+
+.warning,
+.errorNote {
+  margin: 0;
+  padding: var(--mvp-space-2) var(--mvp-space-3);
+  border: 1px solid var(--mvp-warning-border);
+  border-radius: var(--mvp-radius);
+  background: var(--mvp-warning-soft);
+  font-size: var(--mvp-font-sm);
+}
+
+/* Un vincolo si legge insieme al modulo: colore del testo corrente, e' il
+   riquadro a distinguerlo. */
+.warning {
+  color: var(--mvp-text);
+}
+
+/* Un errore va cercato con l'occhio: il testo prende il colore dello stato. */
+.errorNote {
+  color: var(--mvp-warning);
+  font-weight: 700;
+}

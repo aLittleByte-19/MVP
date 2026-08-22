@@ -8,7 +8,7 @@
 
 ## 1. Executive summary tecnico
 
-L'applicativo è una MVP di **pipeline documentale HR assistita da AI** composta da due moduli funzionali: un **AI Assistant** che genera comunicazioni aziendali a partire da un prompt (tono e stile vincolati), e un **Co-Pilot CdL** che riceve PDF di qualsiasi tipologia, ne riconosce tipo e destinatari (sempre almeno uno) dal testo OCR tramite LLM, li separa in sotto-documenti per destinatario, ne estrae campi strutturati e ne traccia lo stato di lavorazione con una confidenza calcolata su leggibilità OCR e completezza dei campi lasciati al modello.
+L'applicativo è una MVP di **pipeline documentale HR assistita da AI** composta da due moduli funzionali: un **AI Assistant** che genera comunicazioni aziendali a partire da un prompt (tono e stile vincolati), e un **Co-Pilot CdL** che riceve PDF di qualsiasi tipologia, ne riconosce tipo e destinatari (sempre almeno uno) dal testo OCR tramite LLM, li separa in sotto-documenti per destinatario, ne estrae campi strutturati e ne traccia lo stato di lavorazione con una confidenza attribuita **campo per campo** — quella della riga OCR da cui il campo proviene — di cui il punteggio del sotto-documento è il minimo sui campi chiave (ADR 0013).
 
 Il backend è **Laravel 12 / PHP 8.4** con PostgreSQL e Redis; il frontend è una **SPA Angular + TypeScript** servita di default tramite **Traefik → emulatore CDN locale (Nginx) → S3 LocalStack**, con Nginx applicativo come proxy per `/api/`, `/health` e `/ready`. Entrambi i flussi AI sono asincroni: due **state machine AWS Step Functions** (emulate in LocalStack) orchestrano i task via **SQS con callback task token**, ciascuna con la propria coda e il proprio worker Laravel dedicato. Le integrazioni AI usano **AWS Bedrock** (classificazione/split ed estrazione campi sul testo OCR e generazione del testo delle comunicazioni via Converse, copertine via `invokeModel` su un modello immagini in una region propria) e **AWS Textract** per l'OCR che alimenta la pipeline documentale (necessario per l'analisi, attivabile solo con S3 reale). La configurazione runtime arriva da **SSM Parameter Store + Secrets Manager**, caricata prima del boot di Laravel.
 
@@ -131,7 +131,7 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 ### Angular + TypeScript (frontend)
 
 **Dove**: `apps/frontend/package.json`, `apps/frontend/angular.json`, `apps/frontend/src/app/`.
-**Ruolo**: SPA a tre viste (`overview`, `assistant`, `copilot`) con Angular Router, shell operativa, pannelli per generazione comunicazioni, upload documenti, storici, revisione e metriche.
+**Ruolo**: SPA a tre viste (`overview`, `assistant`, `copilot`) con Angular Router, shell operativa, pannelli per generazione comunicazioni, upload documenti, storici, revisione e metriche. Il linguaggio visivo — token, primitivi condivisi, glifi di stato, forme delle schede metrica — è quello dell'[ADR 0012](architecture-decisions/0012-frontend-design-system-and-ui-language.md); i ViewModel puri e il client SSE quello dell'[ADR 0011](architecture-decisions/0011-frontend-presentation-model-and-sse-client.md).
 **Motivazione**: allineamento al Capitolato, build statica production-like, deep link top-level e client API generato per HttpClient.
 **Valutazione**: stato condiviso via store Angular a signal (`MvpStateStore`), servizi feature per mutazioni e SSE, stati loading/error/empty espliciti, dark mode via token CSS (`src/styles/tokens.css`, `data-mvp-theme` + `prefers-color-scheme`), request/correlation id propagati con interceptor. La build di produzione disabilita l'inline critical CSS per restare compatibile con CSP severa.
 
@@ -167,14 +167,14 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 ### AWS Bedrock (LLM)
 
 **Dove**: `app/Mvp/Ai/BedrockService.php` (due client `BedrockRuntimeClient` costruiti in `AppServiceProvider` con timeout 300s: uno per i modelli testo, uno per quelli immagine, che sono serviti in region diverse), config in `config/services.php` (`model_id`, `image_model_id`, `region`, `image_region`, `endpoint`, credenziali AWS reali opzionali; default `amazon.nova-lite-v1:0` e `stability.sd3-5-large-v1:0` da `docker-compose.yml`).
-**Ruolo**: quattro operazioni (`generateCommunication()` (JSON `{title, body, imagePrompt}` da prompt+tono+stile: lo stesso modello scrive anche la direzione visiva della copertina, avendo davanti il testo appena generato), `generateCommunicationImageWithMeta()` (copertina via `invokeModel`, con payload derivato dalla famiglia del modello configurato) Stability SD3/Core, Stability XL, Nova Canvas), `splitDocument()` (segmenti per destinatario dal testo OCR), `extractFields()` (campi strutturati dal testo OCR; la confidenza effettiva è calcolata a valle su leggibilità OCR e completezza dei soli campi lasciati al modello). Le operazioni testuali usano Converse, la generazione immagini `invokeModel`.
+**Ruolo**: quattro operazioni (`generateCommunication()` (JSON `{title, body, imagePrompt}` da prompt+tono+stile: lo stesso modello scrive anche la direzione visiva della copertina, avendo davanti il testo appena generato), `generateCommunicationImageWithMeta()` (copertina via `invokeModel`, con payload derivato dalla famiglia del modello configurato) Stability SD3/Core, Stability XL, Nova Canvas), `splitDocument()` (segmenti per destinatario dal testo OCR), `extractFields()` (campi strutturati dal testo OCR; la confidenza effettiva è calcolata a valle riconducendo ogni campo alla riga OCR da cui proviene, e il punteggio del sotto-documento è il minimo sui campi chiave — ADR 0013). Le operazioni testuali usano Converse, la generazione immagini `invokeModel`.
 **Valutazione**: ogni risposta è trattata come input non attendibile; parsing difensivo (estrazione JSON da fence markdown con fallback regex) seguito da validazione contro JSON Schema in `AiOutputValidator` (`resources/schemas/ai/`) più le regole semantiche che uno schema non esprime; errori AWS mappati su `AiServiceException` → 502 con messaggio user-friendly, metriche di fallimento dedicate (`BedrockFailureRateHigh` alert). Sugli errori immagine la classificazione distingue i casi permanenti (accesso negato, modello non attivo, credenziali) da quelli ritentabili, evitando tentativi certi di fallire.
 **Gap**: nessuna mitigazione esplicita di prompt injection veicolata dal contenuto del PDF; nessun circuit breaker (solo retry SDK).
 
 ### AWS Textract (OCR, opzionale)
 
 **Dove**: `app/Mvp/Documents/Adapters/Outbound/Ocr/TextractOcrAdapter.php`, flag `TEXTRACT_ENABLED` (`config/services.php`).
-**Ruolo**: OCR asincrono (`startDocumentTextDetection` + polling con timeout configurabile), confidence media, testo salvato su `original_documents.ocr_text` e per pagina su `original_documents.ocr_pages` (usato da split ed estrazione).
+**Ruolo**: OCR asincrono (`startDocumentTextDetection` + polling con timeout configurabile), confidence media, testo salvato su `original_documents.ocr_text` e per pagina su `original_documents.ocr_pages` (usato da split ed estrazione). Ogni pagina porta anche l'elenco `blocks` — testo e confidenza di ciascuna riga — da cui si attribuisce la confidenza ai singoli campi (ADR 0013).
 **Dettaglio rilevante**: guard architetturale in `StartDocumentWorkflowService::start()`; se Textract è abilitato ma il disco documenti non è `real_s3`, il workflow rifiuta di partire con errore esplicito (Textract reale non può leggere il bucket LocalStack). È un esempio concreto di fail-fast su configurazioni incoerenti.
 **Stato**: implementato ma **disabilitato di default** (`TEXTRACT_ENABLED=false`); con flag off il task ritorna `enabled=false` e la pipeline prosegue.
 
@@ -204,13 +204,13 @@ Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l
 
 **Dove**: `docker/otel-collector/config.yml`, `docker/prometheus/{prometheus.yml,rules/}`, `docker/tempo/`, `docker/loki/`, `docker/alloy/config.alloy`, `docker/grafana/{provisioning,dashboards}/`, `docker/alertmanager/`.
 **Ruolo e flusso**: il collector è l'**unico punto di raccolta**; riceve OTLP (gRPC/HTTP) da app e worker, scrappa `/internal/metrics` via nginx e le metriche Traefik `:9100`, e re-espone tutto su `:9464` dove Prometheus fa un solo scrape. Trace → Tempo (OTLP), log applicativi → Loki (ingestion OTLP nativa di Loki 3.x); Alloy raccoglie i log dei container (filtrati per label compose project) e li spedisce a Loki. Grafana ha datasource provisioned da file (Prometheus/Tempo/Loki, non editabili) e 6 dashboard versionate: `api-golden-signals`, `document-pipeline`, `communication-pipeline`, `ai-ocr-quality`, `queues-and-dlq`, `logs-and-errors`.
-**Alerting**: 10 regole in 4 file (`docker/prometheus/rules/`): `WorkerDown`, `DocumentStuckInProcessing`, `StepFunctionExecutionFailed`, `TextractFailureRateHigh`, `BedrockFailureRateHigh`, `TargetDown`, `APIHighErrorRate`, `APIHighLatencyP95`, `QueueBacklogHigh`, `DLQNotEmpty`; ognuna rimanda a un runbook in `docs/runbooks/`.
+**Alerting**: 16 regole in 5 file (`docker/prometheus/rules/`): `WorkerDown`, `DocumentStuckInProcessing`, `StepFunctionExecutionFailed`, `TextractFailureRateHigh`, `BedrockFailureRateHigh`, `TargetDown`, `APIHighErrorRate`, `APIHighLatencyP95`, `QueueBacklogHigh`, `DLQNotEmpty`, `DlqProbeDown`, `CommunicationPipelineTaskFailed`, `CommunicationStuckInProcessing`, `CommunicationCoverGenerationDegraded`, `CommunicationCoverStorageFailing`, `CommunicationDLQNotEmpty`; ognuna rimanda a un runbook in `docs/runbooks/`.
 **Motivazione**: copre i [quattro golden signal SRE](https://sre.google/sre-book/monitoring-distributed-systems/) (latency, traffic, errors, saturation) più le metriche di dominio della pipeline.
 **Valutazione**: architettura corretta (un solo collettore, processori `memory_limiter`+`batch`, config validate in CI con `promtool` e `otelcol validate` via `make observability-config`). Gap: niente retention/SLO formalizzati; Alertmanager senza receiver reali (routing demo).
 
 ### Metriche applicative custom
 
-**Dove**: `app/Mvp/Observability/MetricsRecorder.php` + `PrometheusExporter.php`, endpoint `/internal/metrics`, volume compose `observability-metrics` condiviso tra `app` e `queue`.
+**Dove**: `app/Mvp/Observability/MetricsRecorder.php` + `PrometheusExporter.php` + `DomainMetricCatalog.php` + `DlqDepthProbe.php`, endpoint `/internal/metrics`, volume compose `observability-metrics` condiviso tra `app`, `queue` e `queue-communications`.
 **Ruolo**: counter e histogram HTTP (bucket espliciti 5ms→10s) e counter di dominio (`textract_jobs_*`, `stepfunctions_executions_*`, `sqs_messages_*`) persistiti su JSON con file locking; il volume condiviso fa sì che le metriche registrate dal worker raggiungano l'exporter scrappato via nginx.
 
 Le due sorgenti sono distinte e non vanno confuse: `MetricsRecorder` accumula **counter di eventi**
@@ -286,7 +286,7 @@ sequenceDiagram
 6. `communication.generate_cover` passa `image_prompt` al modello immagini, scrive il risultato sul disco copertine (`MVP_COMMUNICATION_COVER_DISK`, l'S3 emulato per default) sotto `communications/covers/` e valorizza `cover_status=ready`. Senza direzione visiva dal modello si usa un soggetto corporate generico. Se il modello non è configurato, nega l'accesso o filtra il contenuto, il task registra `cover_status=failed` con `cover_error` e **chiude comunque con successo**.
 7. `communication.finalize` porta `generation_status=completed`, chiude una copertina rimasta pendente e registra `communication_workflow_completed_total`.
 8. Frontend: `AssistantService` popola la bozza per gradi (evento `text`, poi `cover`) e sul `done` rimpiazza lo store con lo stato autorevole.
-9. A generazione completata, `DompdfCommunicationPdfRenderer` (dietro la porta `CommunicationPdfRendererPort`, orchestrata da `ExportCommunicationUseCase`) impagina titolo, corpo e copertina nel PDF finale servito da `GET /communications/{communication}/preview` (inline) e `GET .../export` (attachment), entrambi con throttle 30/min. Ogni pagina porta il marcatore di trasparenza `Creato da AI Assistant` e il piè di pagina NEXUM con numerazione, stampati via canvas dompdf perché i margin-box CSS3 non sono renderizzati. Le due rotte rispondono **422** se la comunicazione non è `completed` o è stata scartata.
+9. A generazione completata, `DompdfCommunicationPdfRenderer` (dietro la porta `CommunicationPdfRendererPort`, orchestrata da `ExportCommunicationUseCase`) impagina titolo, corpo e copertina nel PDF finale servito da `GET /communications/{communication}/preview` (inline) e `GET .../export` (attachment), entrambi con throttle 30/min. Ogni pagina porta la filigrana diagonale `Creato da AI Assistant` e il piè di pagina NEXUM (marchio a sinistra, la stessa dicitura al centro, numerazione a destra), stampati via canvas dompdf perché i margin-box CSS3 non sono renderizzati. Le parole sono quelle del Capitolato (UC-5) e del glossario dell'Analisi dei Requisiti. Le due rotte rispondono **422** se la comunicazione non è `completed` o è stata scartata.
 10. Il PDF è deterministico a parità di contenuto, quindi viene materializzato una volta sul disco (`MVP_COMMUNICATION_PDF_DISK`) sotto `communications/exports/{id}/{fingerprint}.pdf`, dove il fingerprint è l'impronta di titolo, corpo e stato/path/MIME della copertina. L'invalidazione è implicita (cambia il contenuto, cambia l'impronta, nasce un oggetto nuovo) e lo stesso valore fa da `ETag`, così un reload risponde **304** senza toccare né dompdf né lo storage. La cache è best-effort: un disco irraggiungibile fa rigenerare e viene segnalato, non produce un 5xx. Le modifiche al template non entrano nell'impronta: le copre `RENDER_VERSION`, da incrementare nello stesso commit che cambia il layout.
 
 **Test**: `MvpAppRoutesTest` (accettazione 202, pipeline completa, copertina degradata, fallimento testo, correlation id negli audit, PDF materializzato e riusato, 304 su ETag, invalidazione al cambio copertina, degrado con disco assente), `CommunicationCoverStorageTest` equivalenti sulle rotte cover, `BedrockServiceTest` (parsing testo e immagini), `OpenApiContractTest`.
@@ -369,7 +369,7 @@ e la stessa forma di risposta `{items, total, page, perPage}`:
 | Endpoint | Controller | Filtri |
 |---|---|---|
 | `GET /api/v1/communications` | `CommunicationController::index` (`ListCommunicationsRequest`) | parola chiave sul prompt, tono, stile, giorno di creazione (UC-15..UC-18). Mostra solo le bozze salvate esplicitamente nello storico (stato `approved`, UC-9): draft e scartate non compaiono |
-| `GET /api/v1/documents` | `DocumentController::index` (`ListDocumentsRequest`) | nome/cognome/azienda, stato di invio, soglia di confidenza sopra o sotto, mese e anno (UC-35..UC-38) |
+| `GET /api/v1/documents` | `DocumentController::index` (`ListDocumentsRequest`) | nome/cognome/azienda, stato di scaricamento, soglia di confidenza sopra o sotto, mese e anno (UC-35..UC-38) |
 
 Gli elementi hanno la stessa forma degli oggetti esposti nello stato: la SPA non conosce due
 rappresentazioni dello stesso dato.
@@ -426,17 +426,33 @@ L'identità SES in Terraform resta scaffolding documentato: non c'è né va aggi
 
 `GET /api/v1/documents` (`DocumentController::index`, validato da `ListDocumentsRequest`) restituisce
 i sotto-documenti del solo tenant chiamante, con filtri per nome/cognome/azienda (UC-35), stato di
-invio (UC-36), soglia di confidenza sopra o sotto un valore (UC-37) e mese/anno del documento
+scaricamento (UC-36), soglia di confidenza sopra o sotto un valore (UC-37) e mese/anno del documento
 (UC-38), più paginazione. Gli elementi hanno la stessa forma di `state.copilot.documents`: la SPA
 non conosce due rappresentazioni dello stesso oggetto.
 
+La SPA chiede **dieci righe per pagina** e mostra la navigazione sopra e sotto la tabella. Prima
+leggeva la sola finestra dello stato: oltre la quarantesima riga i documenti sparivano senza che
+nulla lo dicesse.
+
 ### 6.6.2 Dettaglio del sotto-documento (implementato)
+
+Lo **scaricamento del messaggio pretende la conferma umana**: `SendMessageService::export()`
+rifiuta un sotto-documento che non sia `manually_validated` (422 `review_not_confirmed`), e la SPA
+tiene spento il comando prima di allora. La validazione automatica dice che il testo era
+leggibile, non che il documento sia della persona a cui verrà consegnato. L'anteprima invece resta
+consultabile: serve proprio a decidere se confermare.
 
 Il pannello dei dati estratti espone, oltre ai campi correggibili, l'email del destinatario
 (UC-39.12) con un comando per copiarla negli appunti, e la data/ora di caricamento del documento
 originale (UC-39.15). Quest'ultima non è un campo estratto: `MvpStateService` la deriva da
 `original_documents.created_at` e la serializza già formattata per la lettura, quindi il frontend
 la mostra così com'è invece di riformattarla.
+
+Ogni casella dichiara **da dove viene il proprio valore**: il contratto porta `fieldConfidences` e
+`lowConfidenceFields`, e il glifo dentro il campo distingue l'estrazione con buona confidenza da
+quella sotto la propria soglia, la correzione manuale e il dato di sistema non modificabile
+(ADR 0012 per il linguaggio visivo, ADR 0013 per la misura). Una casella vuota non porta glifo: non
+c'è provenienza da dichiarare.
 
 ### 6.7 OCR Textract (implementato, disabilitato di default)
 
@@ -453,7 +469,7 @@ Sette tabelle di dominio (`database/migrations/`):
 | `communications` | indici su `status`, `generation_status`, `cover_status`, `workflow_execution_arn`, `(tenant_id, is_favorite)`; CHECK su tutti e tre gli stati | `status` è la decisione dell'operatore, `generation_status` il ciclo della pipeline, `cover_status` l'esito della copertina; colonne workflow (arn, started/completed/failed_at, failure_reason), `image_prompt` con la direzione visiva prodotta dal modello testuale, cover (`cover_image_path` sul disco copertine, mime, size, source) e `is_favorite` per il contrassegno di preferita (UC-21/UC-22) |
 | `original_documents` | `(tenant_id, processing_status)`, `workflow_execution_arn`, `textract_job_id` | colonne workflow (arn, started/completed/failed_at, failure_reason), OCR (job id, testo, confidence), `s3_bucket/s3_key`; i metadati dichiarati in upload (`manual_document_type`, `manual_company_name`, `manual_reference_month`, `manual_reference_year`, UC-32) restano distinti dall'estrazione AI e non vengono sovrascritti |
 | `sub_documents` | FK cascade su original, indici su FK e `send_status` | range pagine; `send_status` = avvenuto **scaricamento** del PDF (vedi §6.6), override manuali del messaggio di invio |
-| `extracted_data` | FK **unique** cascade su sub_document | 1:1 con sotto-documento; confidence 0-100; campi destinatario `recipient_email`, `fiscal_code`, `employee_id` correggibili a mano |
+| `extracted_data` | FK **unique** cascade su sub_document | 1:1 con sotto-documento; confidence 0-100; `field_confidences` (JSON, confidenza per campo — ADR 0013); campi destinatario `recipient_email`, `fiscal_code`, `employee_id` estratti dal modello e correggibili a mano |
 | `audit_events` | `(tenant_id, event_type)`, `(resource_type, resource_id)`, `created_at` | append-only (nessun `updated_at`), metadata JSON |
 | `workflow_tasks` | `task_token_hash` char(64) **unique**; `(subject_type, subject_id, task_type)`, `(status, task_type)` | tabella unica delle due pipeline, soggetto polimorfico (`original_document`/`communication`), input/output payload JSON, stati pending→running→succeeded/skipped/failed |
 | `prompt_configurations` | `(tenant_id, name)` | preset di prompt riutilizzabili (UC-19): nome, testo, tono, stile; nessun vincolo UNIQUE sul nome, la de-duplicazione ("Senza nome (N)") è solo applicativa (`PromptConfigurationService::resolveName()`) |

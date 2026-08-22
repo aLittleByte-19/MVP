@@ -1,11 +1,6 @@
-import { getDocumentStatus, getReviewStatusTone, getSendStatusTone } from "./status";
+import { getReviewStatusShortLabel, getReviewStatusTone } from "./status";
 
 describe("status utilities", () => {
-  it("marks errored documents as warning and clean documents as success", () => {
-    expect(getDocumentStatus("OCR incompleto")).toBe("warning");
-    expect(getDocumentStatus(null)).toBe("success");
-  });
-
   it("maps review states to visual tones used by badges", () => {
     expect(getReviewStatusTone("quarantined")).toBe("danger");
     expect(getReviewStatusTone("needs_review")).toBe("warning");
@@ -14,8 +9,16 @@ describe("status utilities", () => {
     expect(getReviewStatusTone("unknown")).toBe("neutral");
   });
 
-  it("maps send status to visual tones used by badges", () => {
-    expect(getSendStatusTone("sent")).toBe("success");
-    expect(getSendStatusTone("pending")).toBe("warning");
+  it("abbrevia lo stato di revisione per le colonne strette", () => {
+    // Sotto l'intestazione "Validazione" la sola qualificazione basta: la
+    // frase intera del backend resta dov'e' leggibile per esteso.
+    expect(getReviewStatusShortLabel("auto_validated", "Validato automaticamente")).toBe("Automatica");
+    expect(getReviewStatusShortLabel("manually_validated", "Validato manualmente")).toBe("Manuale");
+    expect(getReviewStatusShortLabel("needs_review", "Da revisionare")).toBe("Da verificare");
+    expect(getReviewStatusShortLabel("quarantined", "In quarantena")).toBe("Quarantena");
+  });
+
+  it("davanti a uno stato ignoto tiene l'etichetta che arriva dal backend", () => {
+    expect(getReviewStatusShortLabel(undefined, "Sconosciuto")).toBe("Sconosciuto");
   });
 });

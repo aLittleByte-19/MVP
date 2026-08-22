@@ -109,10 +109,10 @@ test('internal metrics endpoint exposes application and http telemetry', functio
 test('metrics endpoint exposes send status and rating gauges', function () {
     $this->get('/internal/metrics')
         ->assertOk()
-        ->assertSee('mvp_sub_documents_send_total', false)
+        ->assertSee('mvp_sub_documents_send', false)
         ->assertSee('send_status="pending"', false)
         ->assertSee('send_status="sent"', false)
-        ->assertSee('mvp_communications_rated_total', false)
+        ->assertSee('mvp_communications_rated', false)
         ->assertSee('mvp_communication_rating_average', false);
 });
 

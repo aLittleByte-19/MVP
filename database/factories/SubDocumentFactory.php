@@ -41,4 +41,10 @@ class SubDocumentFactory extends Factory
     {
         return $this->state(['send_status' => SendStatus::Sent]);
     }
+
+    /** Dati confermati da una persona: e' la condizione che sblocca il download. */
+    public function confirmed(): static
+    {
+        return $this->state(['review_status' => ReviewStatus::ManuallyValidated]);
+    }
 }

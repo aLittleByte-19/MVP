@@ -6,10 +6,16 @@ import type { SubDocument, UpdateExtractedDataRequest, UpdateSendMessageRequest 
 import { ButtonComponent } from "../../../shared/components/button/button";
 import { EmptyStateComponent } from "../../../shared/components/empty-state/empty-state";
 import { SectionComponent } from "../../../layout/section/section";
-import { capitalizeFirst, formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
+import { capitalizeFirst, formatConfidence, formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
 import { DOCUMENT_TYPE_OPTIONS, codiceFiscaleValidator } from "../../../shared/util/document-field-validators";
 import { DocumentWorkflowService, type DocumentPreviewStatus } from "../data/document-workflow.service";
 import { DocumentStatusTimelineComponent } from "./document-status-timeline";
+import {
+  EXTRACTED_FIELD_KEYS,
+  FieldOriginComponent,
+  type FieldOrigin,
+  originForField
+} from "./field-origin/field-origin";
 
 interface ReviewFormState {
   employeeName: string;
@@ -56,6 +62,7 @@ const emptySendMessageForm: SendMessageFormState = {
     ButtonComponent,
     DocumentStatusTimelineComponent,
     EmptyStateComponent,
+    FieldOriginComponent,
     LucideCheckCircle2,
     LucideCopy,
     LucidePencil,
@@ -67,7 +74,7 @@ const emptySendMessageForm: SendMessageFormState = {
   ],
   template: `
     @if (documentItem(); as document) {
-      <mvp-section [title]="document.title || 'Verifica documento'">
+      <mvp-section id="copilot-document-detail" [title]="document.title || 'Verifica documento'">
         <button
           actions
           mvpButton
@@ -84,7 +91,7 @@ const emptySendMessageForm: SendMessageFormState = {
 
         <div class="detailGrid">
           <article class="preview">
-            <p class="eyebrow">Anteprima documento</p>
+            <h3 class="eyebrow">Anteprima documento</h3>
             <div class="previewFrame">
               <strong>{{ formatFallback(document.file, "Documento") }}</strong>
               @if (previewStatus() === "available" && previewSrc(); as src) {
@@ -117,11 +124,15 @@ const emptySendMessageForm: SendMessageFormState = {
 
           <article class="extracted">
             <div class="inspectorHeading">
-              <p class="eyebrow">Dati estratti dall'OCR</p>
-              <div class="fieldLegend" aria-label="Legenda campi">
-                <span><i class="editableDot"></i>Modificabile</span>
-                <span><i class="lockedDot"></i>Sola lettura</span>
-              </div>
+              <h3 class="eyebrow">Dati estratti dall'OCR</h3>
+              <p class="fieldLegend">
+                @if (document.reviewStatus !== "manually_validated") {
+                  <span class="legendItem"><mvp-field-origin origin="auto" />Confidenza alta</span>
+                  <span class="legendItem"><mvp-field-origin origin="review" />Da revisionare</span>
+                }
+                <span class="legendItem"><mvp-field-origin origin="manual" />Corretto a mano</span>
+                <span class="legendItem"><mvp-field-origin origin="locked" />Dato di sistema</span>
+              </p>
             </div>
             @if (document.error) {
               <p class="errorNote">{{ document.error }}</p>
@@ -130,74 +141,162 @@ const emptySendMessageForm: SendMessageFormState = {
               <p class="errorNote">{{ reviewError() }}</p>
             }
 
-            <form
+            <!-- Non e' un <form>: il pannello non si invia. Per quasi tutto il
+                 tempo e' in sola lettura, e un form senza comando di invio e'
+                 una promessa che l'elemento non mantiene. Il salvataggio e'
+                 un comando esplicito. -->
+            <div
               [formGroup]="form"
               class="inspectorForm"
               [class.isEditing]="isEditing()"
-              [class.confidenceLow]="document.confidence !== null && document.confidence !== undefined && document.confidence < 80"
+              [class.confidenceLow]="document.reviewStatus === 'needs_review'"
               [class.statusAuto]="document.reviewStatus === 'auto_validated'"
               [class.statusManual]="document.reviewStatus === 'manually_validated'"
-              (ngSubmit)="saveReview()"
             >
               <div class="inspectorGrid">
                 <label class="field editableField">
                   <span>Nome e cognome</span>
-                  <input formControlName="employeeName" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
+                  <div class="control">
+                    @if (fieldOrigin(document, "employeeName"); as origin) {
+                      <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'employeeName')" />
+                    }
+                    <input
+                      formControlName="employeeName"
+                      [readOnly]="!isEditing()"
+                      [attr.aria-readonly]="!isEditing()"
+                      [attr.tabindex]="isEditing() ? null : -1"
+                    />
+                  </div>
                 </label>
                 <label class="field editableField">
                   <span>Azienda</span>
-                  <input formControlName="companyName" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
+                  <div class="control">
+                    @if (fieldOrigin(document, "companyName"); as origin) {
+                      <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'companyName')" />
+                    }
+                    <input
+                      formControlName="companyName"
+                      [readOnly]="!isEditing()"
+                      [attr.aria-readonly]="!isEditing()"
+                      [attr.tabindex]="isEditing() ? null : -1"
+                    />
+                  </div>
                 </label>
                 <label class="field lockedField">
                   <span>Nome file</span>
-                  <input [value]="formatFallback(document.file)" readOnly disabled tabindex="-1" />
+                  <div class="control">
+                    <mvp-field-origin origin="locked" />
+                    <input [value]="formatFallback(document.file)" readOnly disabled tabindex="-1" />
+                  </div>
                 </label>
                 <label class="field editableField" for="document-date-field">
                   <span>Data documento</span>
-                  @if (isEditing()) {
-                    <input id="document-date-field" type="date" formControlName="documentDate" />
-                  } @else {
-                    <input id="document-date-field" [value]="documentDateDisplay(document)" readOnly aria-readonly="true" />
-                  }
+                  <div class="control">
+                    @if (fieldOrigin(document, "documentDate"); as origin) {
+                      <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'documentDate')" />
+                    }
+                    @if (isEditing()) {
+                      <input id="document-date-field" type="date" formControlName="documentDate" />
+                    } @else {
+                      <input
+                        id="document-date-field"
+                        [value]="documentDateDisplay(document)"
+                        readOnly
+                        aria-readonly="true"
+                        tabindex="-1"
+                      />
+                    }
+                  </div>
                 </label>
                 <label class="field lockedField">
                   <span>Numero pagine</span>
-                  <input [value]="formatFallback(document.pages)" readOnly disabled tabindex="-1" />
+                  <div class="control">
+                    <mvp-field-origin origin="locked" />
+                    <input [value]="formatFallback(document.pages)" readOnly disabled tabindex="-1" />
+                  </div>
                 </label>
                 <label class="field editableField" for="document-type-field">
                   <span>Tipologia documento</span>
-                  @if (isEditing()) {
-                    <select id="document-type-field" formControlName="documentType">
-                      <option value="">Seleziona...</option>
-                      @for (option of documentTypeOptions(); track option) {
-                        <option [value]="option">
-                          {{ isPredefinedDocumentType(option) ? capitalizeFirst(option) : option }}
-                        </option>
-                      }
-                    </select>
-                  } @else {
-                    <input
-                      id="document-type-field"
-                      [value]="formatFallback(document.documentType)"
-                      readOnly
-                      disabled
-                      tabindex="-1"
-                    />
-                  }
+                  <div class="control">
+                    @if (fieldOrigin(document, "documentType"); as origin) {
+                      <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'documentType')" />
+                    }
+                    @if (isEditing()) {
+                      <select id="document-type-field" formControlName="documentType">
+                        <option value="">Nessuna tipologia</option>
+                        @for (option of documentTypeOptions(); track option) {
+                          <option [value]="option">
+                            {{ isPredefinedDocumentType(option) ? capitalizeFirst(option) : option }}
+                          </option>
+                        }
+                      </select>
+                    } @else {
+                      <input
+                        id="document-type-field"
+                        [value]="formatFallback(document.documentType)"
+                        readOnly
+                        disabled
+                        tabindex="-1"
+                      />
+                    }
+                  </div>
                 </label>
                 <label class="field lockedField">
                   <span>Confidenza</span>
-                  <input [value]="confidenceDisplay(document)" readOnly disabled tabindex="-1" />
+                  <div class="control">
+                    <mvp-field-origin origin="locked" />
+                    <input [value]="confidenceDisplay(document)" readOnly disabled tabindex="-1" />
+                  </div>
                 </label>
                 <label class="field lockedField">
                   <span>Stato revisione</span>
-                  <input [value]="document.reviewStatusLabel" readOnly disabled tabindex="-1" />
+                  <div class="control">
+                    <mvp-field-origin origin="locked" />
+                    <input [value]="document.reviewStatusLabel" readOnly disabled tabindex="-1" />
+                  </div>
                 </label>
                 <label class="field lockedField">
+                  <span>Data e ora di caricamento</span>
+                  <div class="control">
+                    <mvp-field-origin origin="locked" />
+                    <input [value]="formatFallback(document.uploadedAt)" readOnly disabled tabindex="-1" />
+                  </div>
+                </label>
+                <label class="field editableField formFull">
+                  <span>Descrizione</span>
+                  <div class="control">
+                    @if (fieldOrigin(document, "description"); as origin) {
+                      <mvp-field-origin class="tall" [origin]="origin" />
+                    }
+                    <textarea
+                      rows="3"
+                      formControlName="description"
+                      [readOnly]="!isEditing()"
+                      [attr.aria-readonly]="!isEditing()"
+                      [attr.tabindex]="isEditing() ? null : -1"
+                    ></textarea>
+                  </div>
+                </label>
+                <!-- Un campo solo: l'email compariva due volte, una in sola
+                     lettura con il comando di copia e una modificabile, sullo
+                     stesso valore. Il comando resta, accanto al campo che si
+                     puo' anche correggere. -->
+                <label class="field editableField">
                   <span>Email destinatario</span>
-                  <div class="fieldWithAction">
-                    <input [value]="formatFallback(document.recipientEmail)" readOnly disabled tabindex="-1" />
-                    @if (document.recipientEmail) {
+                  <div class="withAction">
+                    <div class="control">
+                      @if (fieldOrigin(document, "recipientEmail"); as origin) {
+                        <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'recipientEmail')" />
+                      }
+                      <input
+                        formControlName="recipientEmail"
+                        [readOnly]="!isEditing()"
+                        [attr.aria-readonly]="!isEditing()"
+                        [attr.tabindex]="isEditing() ? null : -1"
+                        [class.invalid]="fieldError('recipientEmail')"
+                      />
+                    </div>
+                    @if (document.recipientEmail && !isEditing()) {
                       <button
                         mvpButton
                         variant="icon"
@@ -210,44 +309,28 @@ const emptySendMessageForm: SendMessageFormState = {
                       </button>
                     }
                   </div>
-                  @if (copiedEmail()) {
-                    <small class="copyFeedback">Email copiata negli appunti.</small>
-                  }
-                </label>
-                <label class="field lockedField">
-                  <span>Data e ora di caricamento</span>
-                  <input [value]="formatFallback(document.uploadedAt)" readOnly disabled tabindex="-1" />
-                </label>
-                <label class="field editableField formFull">
-                  <span>Descrizione</span>
-                  <textarea
-                    rows="3"
-                    formControlName="description"
-                    [readOnly]="!isEditing()"
-                    [attr.aria-readonly]="!isEditing()"
-                  ></textarea>
-                </label>
-                <label class="field editableField">
-                  <span>Email destinatario</span>
-                  <input
-                    formControlName="recipientEmail"
-                    [readOnly]="!isEditing()"
-                    [attr.aria-readonly]="!isEditing()"
-                    [class.invalid]="fieldError('recipientEmail')"
-                  />
                   @if (fieldError("recipientEmail"); as message) {
                     <span class="fieldError">{{ message }}</span>
+                  }
+                  @if (copiedEmail()) {
+                    <small class="copyFeedback">Email copiata negli appunti.</small>
                   }
                 </label>
 
                 <label class="field editableField">
                   <span>Codice Fiscale</span>
-                  <input
-                    formControlName="fiscalCode"
-                    [readOnly]="!isEditing()"
-                    [attr.aria-readonly]="!isEditing()"
-                    [class.invalid]="fieldError('fiscalCode')"
-                  />
+                  <div class="control">
+                    @if (fieldOrigin(document, "fiscalCode"); as origin) {
+                      <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'fiscalCode')" />
+                    }
+                    <input
+                      formControlName="fiscalCode"
+                      [readOnly]="!isEditing()"
+                      [attr.aria-readonly]="!isEditing()"
+                      [attr.tabindex]="isEditing() ? null : -1"
+                      [class.invalid]="fieldError('fiscalCode')"
+                    />
+                  </div>
                   @if (fieldError("fiscalCode"); as message) {
                     <span class="fieldError">{{ message }}</span>
                   }
@@ -255,11 +338,21 @@ const emptySendMessageForm: SendMessageFormState = {
 
                 <label class="field editableField">
                   <span>Matricola dipendente</span>
-                  <input formControlName="employeeId" [readOnly]="!isEditing()" [attr.aria-readonly]="!isEditing()" />
+                  <div class="control">
+                    @if (fieldOrigin(document, "employeeId"); as origin) {
+                      <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'employeeId')" />
+                    }
+                    <input
+                      formControlName="employeeId"
+                      [readOnly]="!isEditing()"
+                      [attr.aria-readonly]="!isEditing()"
+                      [attr.tabindex]="isEditing() ? null : -1"
+                    />
+                  </div>
                 </label>
               </div>
 
-              <div class="reviewActions">
+              <div class="actionBar">
                 @if (isEditing()) {
                   <button
                     mvpButton
@@ -271,9 +364,9 @@ const emptySendMessageForm: SendMessageFormState = {
                     <svg lucideX aria-hidden="true"></svg>
                     Annulla
                   </button>
-                  <button mvpButton type="submit" [disabled]="isSavingReview()">
+                  <button mvpButton type="button" [disabled]="isSavingReview()" [busy]="isSavingReview()" (click)="saveReview()">
                     <svg lucideSave aria-hidden="true"></svg>
-                    {{ isSavingReview() ? "Salvataggio" : "Salva" }}
+                    Salva
                   </button>
                 } @else {
                   <button
@@ -289,28 +382,36 @@ const emptySendMessageForm: SendMessageFormState = {
                   <button
                     mvpButton
                     type="button"
-                    [disabled]="isSavingReview()"
+                    [disabled]="isSavingReview() || document.reviewStatus === 'manually_validated'"
                     (click)="markReviewed.emit(document.id)"
                   >
                     <svg lucideCheckCircle2 aria-hidden="true"></svg>
-                    Conferma dati correnti
+                    {{ document.reviewStatus === "manually_validated" ? "Dati confermati" : "Conferma dati correnti" }}
                   </button>
-                  <button mvpButton variant="secondary" type="button" (click)="isSendOpen.set(true)">
+                  <button
+                    mvpButton
+                    variant="secondary"
+                    type="button"
+                    [disabled]="!canPrepareMessage(document)"
+                    (click)="isSendOpen.set(true)"
+                  >
                     Invia
                   </button>
+                  @if (!canPrepareMessage(document)) {
+                    <span class="actionHint">Conferma i dati per preparare il messaggio.</span>
+                  }
                 }
               </div>
-            </form>
+            </div>
 
             @if (isSendOpen()) {
-              <form
+              <div
                 [formGroup]="sendForm"
                 class="sendSection"
                 [class.isEditing]="isSendEditing()"
-                (ngSubmit)="saveSendMessage(document)"
               >
                 <div class="inspectorHeading">
-                  <p class="eyebrow">Messaggio di invio</p>
+                  <h3 class="eyebrow">Messaggio precompilato</h3>
                   <button mvpButton variant="icon" type="button" aria-label="Chiudi" (click)="isSendOpen.set(false)">
                     <svg lucideX aria-hidden="true"></svg>
                   </button>
@@ -324,6 +425,7 @@ const emptySendMessageForm: SendMessageFormState = {
                     formControlName="recipient"
                     [readOnly]="!isSendEditing()"
                     [attr.aria-readonly]="!isSendEditing()"
+                    [attr.tabindex]="isSendEditing() ? null : -1"
                   />
                 </label>
                 <label class="field editableField">
@@ -332,6 +434,7 @@ const emptySendMessageForm: SendMessageFormState = {
                     formControlName="subject"
                     [readOnly]="!isSendEditing()"
                     [attr.aria-readonly]="!isSendEditing()"
+                    [attr.tabindex]="isSendEditing() ? null : -1"
                   />
                 </label>
                 <label class="field editableField">
@@ -341,6 +444,7 @@ const emptySendMessageForm: SendMessageFormState = {
                     formControlName="body"
                     [readOnly]="!isSendEditing()"
                     [attr.aria-readonly]="!isSendEditing()"
+                    [attr.tabindex]="isSendEditing() ? null : -1"
                   ></textarea>
                 </label>
                 <div class="previewActions">
@@ -355,7 +459,14 @@ const emptySendMessageForm: SendMessageFormState = {
                       <svg lucideX aria-hidden="true"></svg>
                       Annulla
                     </button>
-                    <button mvpButton variant="secondary" type="submit" [disabled]="isSavingSendMessage()">
+                    <button
+                      mvpButton
+                      variant="secondary"
+                      type="button"
+                      [disabled]="isSavingSendMessage()"
+                      [busy]="isSavingSendMessage()"
+                      (click)="saveSendMessage(document)"
+                    >
                       <svg lucideSave aria-hidden="true"></svg>
                       Salva
                     </button>
@@ -370,7 +481,7 @@ const emptySendMessageForm: SendMessageFormState = {
                     <a class="previewLink downloadLink" [href]="document.sendExportUrl">Scarica PDF</a>
                   }
                 </div>
-              </form>
+              </div>
             }
           </article>
         </div>
@@ -381,7 +492,12 @@ const emptySendMessageForm: SendMessageFormState = {
       </mvp-section>
     }
   `,
-  styleUrl: "./sub-document-list.css"
+  styleUrls: [
+    "../../../shared/styles/field.css",
+    "../../../shared/styles/notice.css",
+    "../../../shared/styles/link-button.css",
+    "./sub-document-list.css"
+  ]
 })
 export class SubDocumentListComponent {
   readonly documentItem = input<SubDocument | null>(null);
@@ -409,6 +525,9 @@ export class SubDocumentListComponent {
   });
   protected readonly isEditing = signal(false);
   protected readonly isSendOpen = signal(false);
+
+  /** Il documento che i moduli stanno mostrando, per distinguere un cambio di scheda da un aggiornamento. */
+  private shownDocumentId: string | null = null;
   protected readonly isSendEditing = signal(false);
   protected readonly copiedEmail = signal(false);
   protected readonly previewStatus = signal<DocumentPreviewStatus>("idle");
@@ -510,17 +629,106 @@ export class SubDocumentListComponent {
     return null;
   }
 
+  /**
+   * Il messaggio si prepara solo su un documento che una persona ha confermato.
+   *
+   * Bastava la validazione automatica, e su un'estrazione limpida il comando
+   * era attivo senza che nessuno avesse letto la scheda. Ma quel messaggio
+   * porta il nome di un dipendente su un documento che gli verra' consegnato:
+   * la soglia dice che il testo era leggibile, non che il documento sia il suo.
+   * Chiude la questione aperta 3 dell'ADR 0012 dalla parte della conferma
+   * umana, che e' la sola a costare un secondo e a valere una firma.
+   */
+  /**
+   * Contrassegno del campo estratto, a destra dell'etichetta.
+   *
+   * L'evidenziazione dei campi passa dal colore — azzurro, verde o ambra a
+   * seconda di come il dato e' stato stabilito — e SC 1.4.1 chiede che quella
+   * stessa informazione arrivi anche per altra via. Il glifo e' quello che
+   * l'etichetta di stato usa gia' per lo stesso tono, cosi' la riga della
+   * tabella e la scheda parlano la stessa lingua. Resta `aria-hidden`: chi
+   * legge con uno screen reader ha il campo "Stato revisione" e la sola
+   * lettura marcata su ogni controllo.
+   */
+  /**
+   * Da dove viene il dato di un singolo campo.
+   *
+   * Tre casi distinti, che prima collassavano tutti sullo stato del
+   * sotto-documento:
+   *
+   * - il campo e' stato toccato in questa sessione (`dirty`): il valore lo ha
+   *   scritto l'operatore, e lo dice la penna anche prima del salvataggio;
+   * - il campo e' vuoto: non c'e' alcuna provenienza da dichiarare, e le
+   *   scintille su una casella vuota affermavano che l'AI avesse estratto un
+   *   nulla;
+   * - altrimenti vale lo stato del sotto-documento, che e' quanto il contratto
+   *   sa dire (questione aperta 2 dell'ADR 0012: non c'e' una provenienza per
+   *   campo persistita).
+   */
+  protected fieldOrigin(documentItem: SubDocument, controlName: string): FieldOrigin | null {
+    const control = this.form.get(controlName);
+
+    if (control?.dirty) {
+      return "manual";
+    }
+
+    const value = control?.value;
+
+    if (value === null || value === undefined || String(value).trim() === "") {
+      return null;
+    }
+
+    return originForField(documentItem, EXTRACTED_FIELD_KEYS[controlName]);
+  }
+
+  /**
+   * Quanto era leggibile il testo da cui viene il campo, per il suggerimento.
+   * Null quando il documento e' stato elaborato prima del dettaglio per riga,
+   * o quando il valore non e' stato rintracciato fra le righe OCR.
+   */
+  protected fieldConfidence(documentItem: SubDocument, controlName: string): number | null {
+    const keys = EXTRACTED_FIELD_KEYS[controlName];
+    const confidences = documentItem.fieldConfidences;
+
+    if (!keys || !confidences) {
+      return null;
+    }
+
+    const values = keys.map((key) => confidences[key]).filter((value): value is number => typeof value === "number");
+
+    return values.length > 0 ? Math.min(...values) : null;
+  }
+
+
+  protected canPrepareMessage(documentItem: SubDocument): boolean {
+    return documentItem.reviewStatus === "manually_validated";
+  }
+
   protected isPredefinedDocumentType(value: string): boolean {
     return (DOCUMENT_TYPE_OPTIONS as readonly string[]).includes(value);
   }
 
+  /**
+   * Riporta i due moduli sui dati del documento.
+   *
+   * Il pannello del messaggio si chiude solo passando a un altro documento:
+   * ogni salvataggio fa arrivare la scheda aggiornata e quindi ripassa di qui,
+   * e chiudendo sempre il pannello spariva sotto le mani di chi aveva appena
+   * confermato il testo.
+   */
   protected resetForm(document: SubDocument | null): void {
+    const changedDocument = (document?.id ?? null) !== this.shownDocumentId;
+    this.shownDocumentId = document?.id ?? null;
+
     this.form.setValue(toReviewForm(document));
     this.form.markAsUntouched();
     this.isEditing.set(false);
     this.sendForm.setValue(toSendMessageForm(document));
-    this.isSendOpen.set(false);
     this.isSendEditing.set(false);
+
+    if (changedDocument) {
+      this.isSendOpen.set(false);
+    }
   }
 
   protected cancelSendMessageEdit(document: SubDocument): void {
@@ -542,7 +750,7 @@ export class SubDocumentListComponent {
   }
 
   protected confidenceDisplay(document: SubDocument): string {
-    return document.confidence != null ? `${document.confidence}%` : "Da verificare";
+    return formatConfidence(document.confidence);
   }
 
   protected documentDateDisplay(document: SubDocument): string {

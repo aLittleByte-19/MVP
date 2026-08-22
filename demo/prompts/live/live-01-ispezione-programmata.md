@@ -1,0 +1,1 @@
+Scrivi una comunicazione formale che informa i responsabili di reparto di un'ispezione programmata dell'ente di controllo, con le indicazioni su documentazione da tenere disponibile e comportamento da adottare. Tono istituzionale e asciutto.

@@ -1,0 +1,1 @@
+Prepara una comunicazione che informa della campagna di vaccinazione antinfluenzale offerta dall'azienda, su base volontaria e in orario di lavoro. Indica come prenotarsi e chiarisci che l'adesione non e' obbligatoria.

@@ -11,14 +11,6 @@
   margin: 0;
 }
 
-.eyebrow {
-  margin-bottom: var(--mvp-space-1);
-  color: var(--mvp-primary-deep);
-  font-size: var(--mvp-font-xs);
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
 .header h1 {
   font-size: var(--mvp-font-xl);
 }

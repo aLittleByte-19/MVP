@@ -1,10 +1,12 @@
 import { TestBed } from "@angular/core/testing";
-import { GenerationProgressComponent } from "./generation-progress";
 import type { CommunicationGenerationPhase } from "../assistant.model";
+import { GenerationProgressComponent } from "./generation-progress";
 
 /**
- * L'adattatore fra le fasi della generazione e la barra condivisa. Le fasi
- * arrivano dagli eventi dello stream SSE dell'AI Assistant.
+ * L'adattatore fra le fasi della generazione e l'avanzamento per tappe. Le
+ * fasi arrivano dagli eventi dello stream SSE dell'AI Assistant: qui si
+ * verifica solo che ciascuna cada sulla tappa giusta, non una percentuale —
+ * quelle erano una scala fissa che non misurava alcun avanzamento reale.
  */
 describe("GenerationProgressComponent", () => {
   function render(phase: CommunicationGenerationPhase | "idle" | null): HTMLElement {
@@ -12,44 +14,69 @@ describe("GenerationProgressComponent", () => {
     fixture.componentRef.setInput("phase", phase);
     fixture.detectChanges();
 
-    return fixture.nativeElement.querySelector("[role=progressbar]") as HTMLElement;
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  function currentStage(host: HTMLElement): string | null {
+    return host.querySelector("li.current .name")?.textContent?.trim() ?? null;
   }
 
   it.each([
-    ["queued", "25"],
-    ["generating-text", "55"],
-    ["generating-cover", "85"],
-    ["still_running", "90"],
-    ["completed", "100"],
-    ["failed", "100"]
-  ] as [CommunicationGenerationPhase, string][])("porta la fase %s al %s per cento", (phase, expected) => {
-    expect(render(phase).getAttribute("aria-valuenow")).toBe(expected);
+    ["queued", "In coda"],
+    ["generating-text", "Testo"],
+    ["generating-cover", "Copertina"]
+  ] as [CommunicationGenerationPhase, string][])("colloca la fase %s sulla tappa %s", (phase, expected) => {
+    expect(currentStage(render(phase))).toBe(expected);
   });
 
   it.each([[null], ["idle"]] as [CommunicationGenerationPhase | "idle" | null][])(
-    "resta a zero quando non c'e' generazione in corso (%s)",
+    "non evidenzia alcuna tappa quando non c'e' generazione in corso (%s)",
     (phase) => {
-      const bar = render(phase);
+      const host = render(phase);
 
-      expect(bar.getAttribute("aria-valuenow")).toBe("0");
-      expect(bar.classList.contains("isActive")).toBe(false);
+      expect(host.querySelector("li.current")).toBeNull();
+      expect(host.querySelectorAll("li.pending")).toHaveLength(4);
     }
   );
 
-  it("la copertura mancante non invalida una bozza gia' leggibile", () => {
-    // Il testo arriva prima dell'immagine: a "generating-cover" la bozza c'e'
-    // gia', e infatti la barra e' quasi piena (ADR 0009).
-    expect(Number(render("generating-cover").getAttribute("aria-valuenow"))).toBeGreaterThan(
-      Number(render("generating-text").getAttribute("aria-valuenow"))
-    );
+  it("resta sulla copertina quando la generazione tarda, segnalandolo", () => {
+    // `still_running` non e' una tappa: la pipeline e' ferma dov'era, da piu'
+    // tempo del previsto.
+    const host = render("still_running");
+
+    expect(currentStage(host)).toBe("Copertina");
+    expect(host.textContent).toContain("più del previsto");
   });
 
   it("distingue la generazione fallita da quella conclusa", () => {
-    expect(render("failed").classList.contains("isError")).toBe(true);
-    expect(render("completed").classList.contains("isDone")).toBe(true);
+    const failed = render("failed");
+
+    expect(failed.querySelector("li.failed .name")?.textContent?.trim()).toBe("Copertina");
+    expect(failed.querySelector("li.current")).toBeNull();
+
+    // A generazione conclusa nessuna tappa resta in corso: l'ultima e'
+    // completata, non un passo ancora aperto.
+    const completed = render("completed");
+
+    expect(completed.querySelector("li.failed")).toBeNull();
+    expect(currentStage(completed)).toBeNull();
+    expect(completed.querySelector("li:last-child")?.className).toBe("done");
+  });
+
+  it("la copertina mancante non invalida una bozza gia' leggibile", () => {
+    // Il testo precede la copertina: a quel punto la bozza e' consultabile,
+    // quindi la tappa del testo resta completata anche se la copertina fallisce.
+    const host = render("failed");
+    const done = Array.from(host.querySelectorAll("li.done .name")).map((node) =>
+      node.textContent?.trim()
+    );
+
+    expect(done).toEqual(["In coda", "Testo"]);
   });
 
   it("annuncia di quale avanzamento si tratta", () => {
-    expect(render("queued").getAttribute("aria-label")).toBe("Avanzamento generazione della bozza");
+    expect(render("queued").querySelector("ol")?.getAttribute("aria-label")).toBe(
+      "Avanzamento generazione della bozza"
+    );
   });
 });

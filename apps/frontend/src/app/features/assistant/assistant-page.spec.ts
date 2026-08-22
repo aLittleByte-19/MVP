@@ -67,7 +67,17 @@ describe("AssistantPage", () => {
     };
     TestBed.configureTestingModule({
       providers: [
-        { provide: MvpStateStore, useValue: { history, error, promptConfigurations } },
+        {
+          provide: MvpStateStore,
+          useValue: {
+            history,
+            error,
+            promptConfigurations,
+            loading: signal(false),
+            assistantMetrics: signal([]),
+            metricEntry: () => null
+          }
+        },
         { provide: AssistantService, useValue: assistant }
       ]
     });

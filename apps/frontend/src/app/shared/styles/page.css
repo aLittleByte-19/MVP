@@ -1,0 +1,18 @@
+/**
+ * Contenitore di una vista (ADR 0012).
+ *
+ * Copilot e Assistant importavano `../overview/overview-page.css` — 123 righe —
+ * per ottenere queste sette: nessuna delle altre classi di quel foglio era
+ * usata da loro. La stessa `.view` era per giunta ridefinita, e inutilizzata,
+ * in `app.css`.
+ */
+
+.view {
+  display: grid;
+  gap: var(--mvp-space-5);
+}
+
+/* La pagina non ha larghezza propria: la impagina il guscio. */
+:host {
+  display: contents;
+}

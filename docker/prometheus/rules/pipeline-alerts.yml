@@ -13,7 +13,7 @@ groups:
           runbook: "https://github.com/aLittleByte-19/MVP/blob/main/docs/runbooks/observability.md"
 
       - alert: DocumentStuckInProcessing
-        expr: mvp_document_stuck_processing_total > 0
+        expr: mvp_documents_stuck_processing > 0
         for: 10m
         labels:
           severity: warning

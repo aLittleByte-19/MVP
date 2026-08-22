@@ -53,7 +53,7 @@ class AiOutputValidator
     }
 
     /**
-     * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, confidence_score: ?int}
+     * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, recipient_email: ?string, fiscal_code: ?string, employee_id: ?string, confidence_score: ?int}
      *
      * @throws InvalidAiOutputException
      */
@@ -83,6 +83,13 @@ class AiOutputValidator
             'document_date' => $string('document_date'),
             'document_type' => $string('document_type'),
             'description' => $string('description'),
+            // Identificativi del destinatario. Qui si normalizza soltanto la
+            // forma: se il valore sia plausibile — checksum del codice
+            // fiscale, sintassi dell'indirizzo — lo decide il caso d'uso, che
+            // e' dove vive la conoscenza del dominio documentale.
+            'recipient_email' => $string('recipient_email'),
+            'fiscal_code' => $string('fiscal_code'),
+            'employee_id' => $string('employee_id'),
             'confidence_score' => isset($decoded['confidence_score']) && is_int($decoded['confidence_score'])
                 ? $decoded['confidence_score']
                 : null,

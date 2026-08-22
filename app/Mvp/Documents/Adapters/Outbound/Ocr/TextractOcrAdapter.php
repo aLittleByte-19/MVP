@@ -87,7 +87,7 @@ class TextractOcrAdapter implements OcrGatewayPort
     }
 
     /**
-     * @return array{text: string, pages: array<int, array{page: int, text: string, confidenceAvg: float|null}>, confidenceAvg: ?float}
+     * @return array{text: string, pages: array<int, array{page: int, text: string, confidenceAvg: float|null, blocks: array<int, array{text: string, confidence: float|null}>}>, confidenceAvg: ?float}
      */
     private function pollTextDetection(string $jobId, float $startedAt): array
     {
@@ -97,7 +97,7 @@ class TextractOcrAdapter implements OcrGatewayPort
         $lines = [];
         $confidences = [];
 
-        /** @var array<int, array{lines: array<int, string>, confidences: array<int, float>}> $pageBuckets */
+        /** @var array<int, array{lines: array<int, string>, confidences: array<int, float>, blocks: array<int, array{text: string, confidence: float|null}>}> $pageBuckets */
         $pageBuckets = [];
 
         while (true) {
@@ -133,12 +133,22 @@ class TextractOcrAdapter implements OcrGatewayPort
 
                 $text = (string) ($block['Text'] ?? '');
                 $page = max(1, (int) ($block['Page'] ?? 1));
+                $confidence = isset($block['Confidence']) ? (float) $block['Confidence'] : null;
 
                 $lines[] = $text;
                 $pageBuckets[$page]['lines'][] = $text;
 
-                if (isset($block['Confidence'])) {
-                    $confidence = (float) $block['Confidence'];
+                // La confidenza della singola riga viene conservata, non solo
+                // sommata nella media: e' cio' che permette di attribuire a
+                // ciascun campo estratto la leggibilita' del testo da cui
+                // proviene, invece della leggibilita' media della pagina
+                // (ADR 0013).
+                $pageBuckets[$page]['blocks'][] = [
+                    'text' => $text,
+                    'confidence' => $confidence,
+                ];
+
+                if ($confidence !== null) {
                     $confidences[] = $confidence;
                     $pageBuckets[$page]['confidences'][] = $confidence;
                 }
@@ -160,6 +170,7 @@ class TextractOcrAdapter implements OcrGatewayPort
                 'page' => $page,
                 'text' => trim(implode("\n", array_filter($bucket['lines'] ?? []))),
                 'confidenceAvg' => $pageConfidences === [] ? null : array_sum($pageConfidences) / count($pageConfidences),
+                'blocks' => $bucket['blocks'] ?? [],
             ];
         }
 

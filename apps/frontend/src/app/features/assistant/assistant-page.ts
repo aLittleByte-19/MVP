@@ -1,17 +1,17 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
-import { LucideStar, LucideTrash2 } from "@lucide/angular";
 import { debounceTime, distinctUntilChanged } from "rxjs";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { ButtonComponent } from "../../shared/components/button/button";
-import { EmptyStateComponent } from "../../shared/components/empty-state/empty-state";
 import { ErrorStateComponent } from "../../shared/components/error-state/error-state";
 import { SectionComponent } from "../../layout/section/section";
-import { StatusBadgeComponent } from "../../shared/components/status-badge/status-badge";
-import { formatDateForDisplay, formatFallback } from "../../shared/util/formatters";
+import { MetricCompositionComponent } from "../../shared/components/metric-composition/metric-composition";
+import { MetricsPanelComponent } from "../../shared/components/metrics-panel/metrics-panel";
 import { scrollToElement } from "../../shared/util/scroll";
 import { CommunicationGeneratorPanelComponent } from "./components/communication-generator-panel";
+import { CommunicationHistoryListComponent } from "./components/communication-history-list";
+import { PromptConfigurationListComponent } from "./components/prompt-configuration-list";
 import { GeneratedCommunicationPreviewComponent } from "./components/generated-communication-preview";
 import { communicationStyles, communicationTones } from "./assistant.model";
 import { AssistantService } from "./data/assistant.service";
@@ -35,19 +35,19 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
   imports: [
     ButtonComponent,
     CommunicationGeneratorPanelComponent,
-    EmptyStateComponent,
+    CommunicationHistoryListComponent,
     ErrorStateComponent,
     GeneratedCommunicationPreviewComponent,
-    LucideStar,
-    LucideTrash2,
+    MetricCompositionComponent,
+    MetricsPanelComponent,
+    PromptConfigurationListComponent,
     ReactiveFormsModule,
-    SectionComponent,
-    StatusBadgeComponent
+    SectionComponent
   ],
   template: `
     <section class="view" aria-label="AI Assistant Generativo">
       @if (vm.error(); as error) {
-        <mvp-error-state [message]="error" [canRetry]="true" (retry)="store.reload()" />
+        <mvp-error-state [message]="error" [canRetry]="true" (retry)="vm.reloadState()" />
       }
 
       <mvp-communication-generator-panel
@@ -87,10 +87,10 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
 
         <span actions>{{ vm.filteredCommunications().length }} record</span>
 
-        <form class="filters" [formGroup]="filterForm" aria-label="Filtra storico comunicazioni">
+        <div class="filters" role="search" [formGroup]="filterForm" aria-label="Filtra storico comunicazioni">
           <label class="field" for="filter-keyword">
             <span>Parola chiave</span>
-            <input id="filter-keyword" type="text" formControlName="keyword" placeholder="Cerca nel prompt..." />
+            <input id="filter-keyword" type="text" formControlName="keyword" placeholder="Cerca nel prompt" />
           </label>
           <label class="field" for="filter-tone">
             <span>Tono</span>
@@ -115,186 +115,51 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
             <input id="filter-date" type="date" formControlName="date" />
           </label>
           <button mvpButton variant="secondary" type="button" (click)="resetFilters()">Azzera filtri</button>
-        </form>
+        </div>
 
-        @if (vm.filteredPromptConfigurations().length) {
-          <div class="saved-configs">
-            <span class="saved-configs-label">Configurazioni salvate</span>
-            @for (configuration of vm.filteredPromptConfigurations(); track configuration.id) {
-              <div class="saved-config">
-                <div class="saved-config-header">
-                  <span>
-                    {{ configuration.name }}
-                    <span class="saved-config-date">{{ formatDateForDisplay(configuration.createdAt) }}</span>
-                  </span>
-                  <div class="saved-config-actions">
-                    <button mvpButton variant="secondary" type="button" (click)="vm.useConfiguration(configuration)">
-                      Usa
-                    </button>
-                    @if (vm.confirmingConfigDeleteId() !== configuration.id) {
-                      <button
-                        mvpButton
-                        variant="icon"
-                        type="button"
-                        aria-label="Elimina configurazione salvata"
-                        [disabled]="vm.isDeletingConfig()"
-                        (click)="vm.confirmingConfigDeleteId.set(configuration.id)"
-                      >
-                        <svg lucideTrash2 aria-hidden="true"></svg>
-                      </button>
-                    }
-                  </div>
-                </div>
-                @if (vm.confirmingConfigDeleteId() === configuration.id) {
-                  <div class="cardConfirm">
-                    <p class="warning" role="status">Eliminare definitivamente questa configurazione salvata?</p>
-                    <div class="cardActions">
-                      <button
-                        mvpButton
-                        type="button"
-                        [disabled]="vm.isDeletingConfig()"
-                        (click)="vm.deleteConfiguration(configuration.id)"
-                      >
-                        Conferma eliminazione
-                      </button>
-                      <button
-                        mvpButton
-                        type="button"
-                        variant="secondary"
-                        [disabled]="vm.isDeletingConfig()"
-                        (click)="vm.confirmingConfigDeleteId.set(null)"
-                      >
-                        Annulla
-                      </button>
-                    </div>
-                  </div>
-                }
-              </div>
-            }
-          </div>
-        }
+        <mvp-prompt-configuration-list
+          [configurations]="vm.filteredPromptConfigurations()"
+          [confirmingDeleteId]="vm.confirmingConfigDeleteId()"
+          [isDeleting]="vm.isDeletingConfig()"
+          (useRequested)="vm.useConfiguration($event)"
+          (confirmDeleteRequested)="vm.confirmingConfigDeleteId.set($event)"
+          (deleteRequested)="vm.deleteConfiguration($event)"
+        />
 
-        @if (vm.filteredCommunications().length) {
-          @for (communication of vm.filteredCommunications(); track communication.id) {
-            <div class="card" [class.isSelected]="communication.id === vm.selectedDraftId()">
-              <button
-                type="button"
-                class="cardSelect"
-                [attr.aria-pressed]="communication.id === vm.selectedDraftId()"
-                (click)="vm.selectDraft(communication.id)"
-              >
-                <mvp-status-badge>{{ communication.status }}</mvp-status-badge>
-                <span class="title">{{ communication.title }}</span>
-              </button>
-              <div class="cardFooter">
-                <p>{{ formatFallback(communication.createdAt) }}</p>
-                <button
-                  mvpButton
-                  variant="icon"
-                  type="button"
-                  class="favoriteToggle"
-                  [class.isFavorite]="communication.isFavorite"
-                  [attr.aria-pressed]="communication.isFavorite"
-                  [attr.aria-label]="
-                    communication.isFavorite ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'
-                  "
-                  [disabled]="vm.togglingFavoriteId() === communication.id"
-                  (click)="vm.toggleFavorite(communication)"
-                >
-                  <svg lucideStar aria-hidden="true"></svg>
-                </button>
-                @if (vm.confirmingDeleteId() !== communication.id) {
-                  <button
-                    mvpButton
-                    variant="icon"
-                    type="button"
-                    aria-label="Elimina dallo storico"
-                    [disabled]="vm.isDeletingHistoryItem()"
-                    (click)="vm.confirmingDeleteId.set(communication.id)"
-                  >
-                    <svg lucideTrash2 aria-hidden="true"></svg>
-                  </button>
-                }
-              </div>
-              @if (vm.confirmingDeleteId() === communication.id) {
-                <div class="cardConfirm">
-                  <p class="warning" role="status">Eliminare definitivamente questo elemento dallo storico?</p>
-                  <div class="cardActions">
-                    <button
-                      mvpButton
-                      type="button"
-                      [disabled]="vm.isDeletingHistoryItem()"
-                      (click)="vm.deleteHistoryItem(communication.id)"
-                    >
-                      Conferma eliminazione
-                    </button>
-                    <button
-                      mvpButton
-                      type="button"
-                      variant="secondary"
-                      [disabled]="vm.isDeletingHistoryItem()"
-                      (click)="vm.confirmingDeleteId.set(null)"
-                    >
-                      Annulla
-                    </button>
-                  </div>
-                </div>
-              }
-            </div>
-          }
-        } @else if (vm.hasActiveFilters()) {
-          <mvp-empty-state>Nessuna comunicazione corrisponde ai filtri selezionati.</mvp-empty-state>
-        } @else {
-          <mvp-empty-state>Le bozze generate compariranno qui.</mvp-empty-state>
-        }
+        <mvp-communication-history-list
+          [communications]="vm.filteredCommunications()"
+          [selectedId]="vm.selectedDraftId()"
+          [confirmingDeleteId]="vm.confirmingDeleteId()"
+          [isDeleting]="vm.isDeletingHistoryItem()"
+          [togglingFavoriteId]="vm.togglingFavoriteId()"
+          [hasActiveFilters]="vm.hasActiveFilters()"
+          (selected)="vm.selectDraft($event)"
+          (favoriteToggled)="vm.toggleFavorite($event)"
+          (confirmDeleteRequested)="vm.confirmingDeleteId.set($event)"
+          (deleteRequested)="vm.deleteHistoryItem($event)"
+        />
+      </mvp-section>
+
+      <mvp-section id="assistant-metrics" title="Qualità della generazione">
+        <mvp-metrics-panel
+          [isLoading]="vm.loading()"
+          [hasError]="!!vm.error()"
+          [metrics]="vm.metrics()"
+          [presentation]="vm.metricsPresentation()"
+          ariaLabel="Metriche dell'AI Assistant"
+        />
+        <h3>Esito delle bozze</h3>
+        <mvp-metric-composition
+          [parts]="vm.draftComposition()"
+          subject="comunicazioni"
+          emptyLabel="Nessuna comunicazione ancora generata."
+        />
       </mvp-section>
     </section>
   `,
-  styleUrls: ["./components/communication-status-card.css", "../overview/overview-page.css"],
+  styleUrls: ["../../shared/styles/page.css", "../../shared/styles/field.css"],
   styles: [
     `
-    .saved-configs {
-      display: grid;
-      gap: var(--mvp-space-2);
-      margin-bottom: var(--mvp-space-4);
-    }
-
-    .saved-configs-label {
-      color: var(--mvp-muted);
-      font-size: var(--mvp-font-sm);
-      font-weight: 800;
-    }
-
-    .saved-config {
-      display: grid;
-      gap: var(--mvp-space-2);
-      padding: var(--mvp-space-2) var(--mvp-space-3);
-      border: 1px solid var(--mvp-border);
-      border-radius: var(--mvp-radius);
-      background: var(--mvp-surface-muted);
-    }
-
-    .saved-config-header {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--mvp-space-3);
-    }
-
-    .saved-config-actions {
-      display: flex;
-      align-items: center;
-      gap: var(--mvp-space-2);
-    }
-
-    .saved-config-date {
-      margin-left: var(--mvp-space-2);
-      color: var(--mvp-muted);
-      font-size: var(--mvp-font-sm);
-      font-weight: 400;
-    }
-
     .filters {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
@@ -338,8 +203,6 @@ export class AssistantPage {
   protected readonly store = inject(MvpStateStore);
   protected readonly tones = communicationTones;
   protected readonly styles = communicationStyles;
-  protected readonly formatFallback = formatFallback;
-  protected readonly formatDateForDisplay = formatDateForDisplay;
 
   protected readonly filterForm = new FormGroup({
     keyword: new FormControl("", { nonNullable: true }),

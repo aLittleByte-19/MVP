@@ -1,0 +1,62 @@
+/* L'indicatore sta dentro la casella, a filo del bordo destro, e ne e' separato
+   da un filo verticale: a sinistra rubava l'attacco della lettura, che e' dove
+   comincia il valore. Non intercetta il puntatore, cosi' il clic finisce
+   comunque nel campo. */
+:host {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  border-left: 1px solid var(--mvp-border-soft);
+  border-radius: 0 var(--mvp-radius) var(--mvp-radius) 0;
+  color: var(--mvp-muted);
+  pointer-events: none;
+}
+
+/* Il tracciato delle scintille non e' simmetrico dentro il suo riquadro: un
+   filo di spostamento lo riporta al centro ottico della colonna. */
+:host svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+:host(.auto) svg {
+  transform: translateX(-0.5px);
+}
+
+/* I tre stati del dato estratto: sotto soglia, sopra soglia, confermato a mano.
+   Il colore sta sull'icona e sul separatore, non piu' sul fondo del campo:
+   tredici caselle colorate erano una macchia, e il valore ci si perdeva. */
+:host(.review) {
+  border-left-color: var(--mvp-warning-border);
+  color: var(--mvp-warning);
+}
+
+:host(.auto) {
+  border-left-color: var(--mvp-info-border);
+  color: var(--mvp-info);
+}
+
+:host(.manual) {
+  border-left-color: var(--mvp-success-border);
+  color: var(--mvp-success);
+}
+
+/* Un valore di sistema: il piu' silenzioso dei quattro. */
+:host(.locked) {
+  color: var(--mvp-muted);
+}
+
+/* Nella textarea il filo scende per tutta l'altezza — fermarlo a meta' faceva
+   sembrare la casella tagliata — mentre l'icona resta in alto, all'altezza
+   della prima riga, dove comincia il testo. */
+:host(.tall) {
+  align-items: flex-start;
+  padding-top: 13px;
+}

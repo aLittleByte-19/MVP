@@ -17,24 +17,95 @@
   --mvp-success: #276b4a;
   --mvp-success-soft: #edf8f2;
   --mvp-danger: #a33a3a;
-  --mvp-focus: #f28a52;
-  --mvp-overlay-locked: rgba(245, 248, 251, 0.72);
+  --mvp-danger-soft: #fff0f0;
+
+  /* Bordi di stato. La coppia `--mvp-X` + `--mvp-X-soft` copriva testo e fondo
+     ma non il contorno, e i componenti se lo scrivevano a mano: #f0bf98 e
+     #c9e5d3 nell'ispettore, #d99a3f e #6bb58a nella tabella. Essendo letterali
+     restavano identici in tema scuro, dove finivano su fondi a cui non
+     appartengono. Sono tinte, non separatori: stanno sopra il 3:1 che SC 1.4.11
+     chiede a un contorno che porta informazione. */
+  --mvp-primary-border: #7fa9c8;
+  --mvp-primary-soft: #e9f1f8;
+  /* Teal della validazione automatica. Serviva un terzo colore: il primario
+     dice "questa e' l'applicazione" — pulsanti, voce attiva, collegamenti — e
+     usarlo anche per uno stato lo confondeva con la cromia di base, lasciando
+     leggibili come stato solo l'arancione e il verde. Il teal non appartiene a
+     nessun altro ruolo, e sta fra i due: sopra soglia ma senza mano umana. */
+  --mvp-info: #116b7a;
+  --mvp-info-soft: #e3f2f6;
+  --mvp-info-border: #5faabb;
+  --mvp-warning-border: #d9a273;
+  --mvp-success-border: #7fbc9c;
+  --mvp-danger-border: #d79a9a;
   --mvp-shadow: 0 10px 28px rgba(38, 82, 120, 0.08);
+
+  /* Colore del focus (ADR 0012). Non e' l'accento: l'arancione stava a
+     luminanza 0.377 e contro le superfici chiare misurava 2.2-2.5, sotto il 3:1
+     che SC 2.4.13 richiede all'indicatore rispetto a cio' che copre. Poiche'
+     l'anello e' staccato di 2px dal controllo, le adiacenze reali sono le sole
+     superfici della paletta: esiste quindi una finestra di luminanza (0.193 -
+     0.300) in cui un colore unico passa su tutte, in entrambi i temi. Questo
+     valore sta a 0.236 e misura 3.40 - 4.74, quindi non serve un override
+     nel blocco scuro. */
+  --mvp-focus: #098faa;
+
   --mvp-radius: 8px;
+  --mvp-radius-sm: 4px;
+  --mvp-radius-pill: 999px;
   --mvp-sidebar-width: 260px;
+
   --mvp-space-1: 4px;
   --mvp-space-2: 8px;
   --mvp-space-3: 12px;
   --mvp-space-4: 16px;
   --mvp-space-5: 20px;
   --mvp-space-6: 24px;
-  --mvp-space-8: 32px;
+
+  /* Altezza dei controlli. Valevano 34, 36, 38, 40 e 42px a seconda del file:
+     due valori bastano, ed entrambi restano sopra i 24px minimi di SC 2.5.8.
+     `comfy` e' la misura comoda citata dalla stessa scheda; `compact` vale dove
+     si scandisce un elenco, non dove si scrive. */
+  --mvp-control-h: 44px;
+  --mvp-control-h-compact: 34px;
+
   --mvp-font-xs: 0.78rem;
   --mvp-font-sm: 0.9rem;
-  --mvp-font-md: 1rem;
   --mvp-font-lg: 1.25rem;
   --mvp-font-xl: 1.55rem;
+
+  /* Due ruoli distinti per le etichette (ADR 0012). `A` marca una categoria
+     breve — occhiello di pagina, etichetta di indicatore — e resta maiuscola;
+     `B` etichetta un campo, dove la stringa puo' essere lunga ("Data e ora di
+     caricamento") e il maiuscolo diventa un blocco. */
+  --mvp-label-a-size: 0.72rem;
+  --mvp-label-a-weight: 700;
+  --mvp-label-a-tracking: 0.07em;
+  --mvp-label-b-size: 0.82rem;
+  --mvp-label-b-weight: 600;
+
+  --mvp-line-tight: 1.35;
+  --mvp-line-body: 1.5;
+
+  /* Scala categorica per le composizioni (barre segmentate): tonalita' del
+     primario, non colori di stato — una ripartizione non esprime un giudizio,
+     quindi verde e rosso qui direbbero qualcosa che il dato non dice. */
+  --mvp-series-1: #2f678f;
+  --mvp-series-2: #5c94b8;
+  --mvp-series-3: #8fbcd6;
+  --mvp-series-4: #c2d9e8;
+  --mvp-series-5: #e3eef5;
 }
+
+/* Soglie responsive. Le custom property non valgono nelle condizioni di media
+   query e `@custom-media` e' ancora una bozza, quindi i valori restano
+   letterali: questa tabella e' l'unico posto in cui sono dichiarati, e le
+   media query dei componenti devono usare solo questi tre.
+     640px  una colonna, controlli impilati
+     900px  griglie di form e filtri a colonna singola
+     1100px il guscio perde la barra laterale
+   Dove il componente vive in contenitori di larghezza diversa (scheda metrica,
+   badge, avanzamento) si usa una container query invece di una soglia. */
 
 [data-mvp-theme="dark"] {
   --mvp-surface-page: #0f1720;
@@ -55,6 +126,19 @@
   --mvp-success: #9fd7b7;
   --mvp-success-soft: #193528;
   --mvp-danger: #ff9e9e;
-  --mvp-overlay-locked: rgba(15, 23, 32, 0.62);
+  --mvp-danger-soft: #3b2222;
+  --mvp-primary-border: #47708f;
+  --mvp-primary-soft: #1e3243;
+  --mvp-info: #8ad3e3;
+  --mvp-info-soft: #14323c;
+  --mvp-info-border: #44899b;
+  --mvp-warning-border: #7d5c34;
+  --mvp-success-border: #3f6c54;
+  --mvp-danger-border: #7c4646;
   --mvp-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+  --mvp-series-1: #79add3;
+  --mvp-series-2: #5b8db4;
+  --mvp-series-3: #446f92;
+  --mvp-series-4: #33556f;
+  --mvp-series-5: #263f52;
 }

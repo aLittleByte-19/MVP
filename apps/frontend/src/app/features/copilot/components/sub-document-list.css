@@ -16,14 +16,6 @@
   background: var(--mvp-surface-muted);
 }
 
-.eyebrow {
-  margin: 0;
-  color: var(--mvp-primary-deep);
-  font-size: var(--mvp-font-xs);
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
 .previewFrame {
   display: grid;
   gap: var(--mvp-space-2);
@@ -49,41 +41,14 @@
 
 .previewFrame strong {
   color: var(--mvp-text);
-  line-height: 1.35;
+  line-height: var(--mvp-line-tight);
   overflow-wrap: anywhere;
 }
 
 .previewFrame span {
   color: var(--mvp-muted);
-  line-height: 1.45;
+  line-height: var(--mvp-line-body);
   overflow-wrap: anywhere;
-}
-
-.previewLink {
-  margin-top: var(--mvp-space-1);
-  min-height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  justify-self: stretch;
-  padding: 8px 12px;
-  border-radius: var(--mvp-radius);
-  background: var(--mvp-surface-soft);
-  color: var(--mvp-primary-deep);
-  font-weight: 700;
-  text-align: center;
-  text-decoration: none;
-}
-
-.previewLink:hover,
-.previewLink:focus-visible {
-  box-shadow: 0 8px 18px rgba(47, 103, 143, 0.14);
-}
-
-.downloadLink {
-  background: var(--mvp-primary);
-  color: #ffffff;
 }
 
 .previewLines {
@@ -100,7 +65,7 @@
   padding: 5px 0 5px 16px;
   color: var(--mvp-muted);
   font-size: var(--mvp-font-xs);
-  line-height: 1.45;
+  line-height: var(--mvp-line-body);
   overflow-wrap: anywhere;
 }
 
@@ -111,58 +76,98 @@
   top: 11px;
   width: 5px;
   height: 5px;
-  border-radius: 999px;
+  border-radius: var(--mvp-radius-pill);
   background: var(--mvp-primary);
   opacity: 0.55;
 }
 
-.errorNote {
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px solid #f0bf98;
-  border-radius: var(--mvp-radius);
-  background: var(--mvp-warning-soft);
-  color: var(--mvp-warning);
-  font-weight: 700;
-}
-
+/* Con tre voci la legenda non ci sta accanto al titolo su un pannello stretto:
+   va a capo tutta intera invece di spezzare il titolo a meta'. */
 .inspectorHeading {
   display: flex;
-  align-items: start;
+  flex-wrap: wrap;
+  align-items: baseline;
   justify-content: space-between;
-  gap: var(--mvp-space-3);
+  gap: var(--mvp-space-2) var(--mvp-space-3);
 }
 
+.inspectorHeading .eyebrow {
+  white-space: nowrap;
+}
+
+/* La legenda sta in cima, accanto al titolo: i simboli vanno letti prima dei
+   campi, non dopo averli attraversati tutti. */
 .fieldLegend {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--mvp-space-2);
+  gap: var(--mvp-space-2) var(--mvp-space-5);
+  margin: 0;
   color: var(--mvp-muted);
   font-size: var(--mvp-font-xs);
-  font-weight: 700;
+  font-weight: 600;
 }
 
-.fieldLegend span {
+.legendItem {
+  position: relative;
   display: inline-flex;
+  gap: var(--mvp-space-2);
   align-items: center;
-  gap: 6px;
+  padding-left: 24px;
+  min-height: 18px;
 }
 
-.editableDot,
-.lockedDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
+/* Nella legenda l'indicatore non e' dentro una casella: perde il separatore e
+   si affianca al testo. */
+.legendItem mvp-field-origin {
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  left: 0;
+  width: 18px;
+  border-left: 0;
+  transform: translateY(-50%);
 }
 
-.editableDot {
-  background: var(--mvp-success);
-  box-shadow: 0 0 0 3px var(--mvp-success-soft);
+/* Il contenitore del valore: l'indicatore ci sta dentro in posizione assoluta,
+   e il controllo gli lascia spazio a sinistra. */
+.control {
+  position: relative;
+  display: grid;
 }
 
-.lockedDot {
-  background: var(--mvp-border-strong);
-  box-shadow: 0 0 0 3px var(--mvp-surface-soft);
+.control input,
+.control select,
+.control textarea {
+  padding-right: 44px;
+}
+
+/* La freccia della select e' disegnata dal browser a filo del bordo destro,
+   dove ora sta l'indicatore: sovrapposte diventavano un groviglio. Sostituita
+   con la stessa forma, messa prima del separatore. */
+.control select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--mvp-muted) 50%),
+    linear-gradient(135deg, var(--mvp-muted) 50%, transparent 50%);
+  background-position: right 52px top calc(50% - 2px), right 47px top calc(50% - 2px);
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* Il comando di copia sta fuori dalla casella, non dentro: l'indicatore di
+   provenienza occupa gia' il bordo destro, e sovrapposti diventavano un
+   groviglio di due icone. */
+.withAction {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--mvp-space-2);
+  align-items: center;
+}
+
+.field > span {
+  display: flex;
+  gap: var(--mvp-space-2);
+  align-items: baseline;
+  justify-content: space-between;
 }
 
 .inspectorForm {
@@ -176,70 +181,36 @@
   gap: var(--mvp-space-3);
 }
 
-/* align-content start: le celle della griglia sono alte quanto la piu' alta
-   della riga, e senza questo vincolo il campo affiancato a uno in errore si
-   stirerebbe per riempire lo spazio, disallineando le caselle. */
-.field {
-  display: grid;
-  align-content: start;
-  gap: var(--mvp-space-1);
-  color: var(--mvp-text);
-  font-weight: 700;
-}
+/* Il campo base sta in `shared/styles/field.css`. Qui restano solo gli stati:
+   da chi viene il valore, e se e' modificabile adesso. */
 
-.field span {
-  color: var(--mvp-muted);
-  font-size: var(--mvp-font-xs);
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
+/* Il testo di un dato estratto pesa piu' di quello che si digita: si legge in
+   diagonale insieme agli altri dodici. */
 .field input,
-.field textarea {
-  width: 100%;
-  min-height: 40px;
-  padding: 9px 11px;
-  border: 1px solid var(--mvp-border-soft);
-  border-radius: var(--mvp-radius);
-  background: var(--mvp-surface);
-  color: var(--mvp-text);
-  -webkit-text-fill-color: var(--mvp-text);
+.field textarea,
+.field select {
   font-weight: 700;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
+  line-height: var(--mvp-line-tight);
 }
 
 .field textarea {
   min-height: 94px;
-  resize: vertical;
 }
 
+.field input,
+.field textarea {
+  -webkit-text-fill-color: var(--mvp-text);
+}
+
+/* Fuori dalla modifica il campo e' un dato, non una casella spenta: fondo
+   appena piu' quieto e nessun colore di stato, che ora vive nell'indicatore a
+   sinistra. */
 .editableField input[readonly],
 .editableField textarea[readonly] {
   border-color: var(--mvp-border-soft);
   background: var(--mvp-surface-muted);
 }
 
-.confidenceLow .editableField input[readonly],
-.confidenceLow .editableField textarea[readonly] {
-  border-color: #f0bf98;
-  background: var(--mvp-warning-soft);
-}
-
-/* Validato automaticamente (alta confidenza): campi in azzurro. */
-.statusAuto .editableField input[readonly],
-.statusAuto .editableField textarea[readonly] {
-  border-color: var(--mvp-primary);
-  background: rgba(121, 173, 211, 0.16);
-}
-
-/* Validato/corretto manualmente: campi in verde. Ultima regola a pari
-   specificita': la conferma umana prevale anche su una confidenza bassa. */
-.statusManual .editableField input[readonly],
-.statusManual .editableField textarea[readonly] {
-  border-color: #c9e5d3;
-  background: var(--mvp-success-soft);
-}
 
 .lockedField input,
 .lockedField textarea {
@@ -257,35 +228,22 @@
   -webkit-text-fill-color: var(--mvp-text);
 }
 
-.isEditing .editableField input:focus,
-.isEditing .editableField textarea:focus {
-  border-color: var(--mvp-primary);
-  outline: 3px solid rgba(111, 166, 207, 0.22);
-}
-
+/* Un campo che non passa la validazione va segnalato mentre lo si corregge,
+   cioe' proprio quando `.isEditing .editableField` e `.statusManual ...` sono
+   attive: la specificita' deve superare le loro tre classi, altrimenti
+   l'errore resta invisibile. */
 .field input.invalid,
-.field select.invalid {
-  border-color: #f0bf98;
-  background: var(--mvp-warning-soft);
+.field textarea.invalid,
+.field select.invalid,
+.isEditing .editableField input.invalid,
+.isEditing .editableField textarea.invalid {
+  border-color: var(--mvp-danger-border);
+  background: var(--mvp-danger-soft);
 }
 
-/* Piu' specifico di ".field span": a parita' di peso quella regola vincerebbe
-   e imporrebbe al messaggio lo stile dell'etichetta, cioe' maiuscolo, 800 e
-   colore muted, rendendolo indistinguibile da un titolo di campo. */
-.field .fieldError {
-  color: var(--mvp-warning);
-  font-size: var(--mvp-font-sm);
-  font-weight: 600;
-  text-transform: none;
-}
-
-.field select {
-  width: 100%;
-  padding: 9px 11px;
-  border: 1px solid var(--mvp-border-soft);
-  border-radius: var(--mvp-radius);
-  background: var(--mvp-surface);
-  color: var(--mvp-text);
+.copyFeedback {
+  color: var(--mvp-success);
+  font-size: var(--mvp-font-xs);
   font-weight: 700;
 }
 
@@ -293,28 +251,11 @@
   grid-column: 1 / -1;
 }
 
-.fieldWithAction {
-  display: flex;
-  align-items: center;
-  gap: var(--mvp-space-2);
-}
-
-.fieldWithAction input {
-  flex: 1;
-}
-
 .copyButton {
   flex-shrink: 0;
 }
 
-.copyFeedback {
-  color: var(--mvp-success);
-  font-size: var(--mvp-font-xs);
-  font-weight: 700;
-  text-transform: none;
-}
-
-.reviewActions {
+.actionBar {
   display: flex;
   flex-wrap: wrap;
   gap: var(--mvp-space-2);
@@ -322,6 +263,15 @@
   margin-top: var(--mvp-space-1);
   padding-top: var(--mvp-space-3);
   border-top: 1px solid var(--mvp-border-soft);
+}
+
+/* Il motivo sta a sinistra delle azioni: un comando inattivo senza
+   spiegazione lascia l'operatore senza sapere cosa lo sblocca. */
+.actionHint {
+  margin-right: auto;
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-sm);
+  font-weight: 400;
 }
 
 .sendSection {
@@ -338,7 +288,7 @@
   gap: var(--mvp-space-2);
 }
 
-@media (max-width: 760px) {
+@media (max-width: 900px) {
   .detailGrid,
   .inspectorGrid {
     grid-template-columns: 1fr;
@@ -348,7 +298,7 @@
     display: grid;
   }
 
-  .reviewActions {
+  .actionBar {
     justify-content: stretch;
   }
 }

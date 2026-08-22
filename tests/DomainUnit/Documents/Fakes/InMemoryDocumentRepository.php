@@ -136,6 +136,9 @@ final class InMemoryDocumentRepository implements DocumentRepository
     public function findSendMessageContext(int $subDocumentId): SendMessageContext
     {
         $row = $this->subDocuments[$subDocumentId] ?? throw new \RuntimeException("SubDocument {$subDocumentId} non seminato nel fake repository.");
+        // Il periodo di riferimento sta sul documento originale, non sul
+        // sotto-documento: e' dichiarato una volta per l'intero caricamento.
+        $original = $this->originals[$row['original_document_id']] ?? [];
 
         return new SendMessageContext(
             employeeFirstName: $row['employee_first_name'] ?? null,
@@ -148,6 +151,8 @@ final class InMemoryDocumentRepository implements DocumentRepository
             sendSubjectOverride: $row['send_subject_override'] ?? null,
             sendBodyOverride: $row['send_body_override'] ?? null,
             originalFilename: $row['original_filename'] ?? 'documento.pdf',
+            referenceMonth: $original['manual_reference_month'] ?? null,
+            referenceYear: $original['manual_reference_year'] ?? null,
             sendStatus: $row['send_status'] ?? 'pending',
         );
     }

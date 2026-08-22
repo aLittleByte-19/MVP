@@ -23,13 +23,17 @@ use Throwable;
  */
 class DompdfCommunicationPdfRenderer implements CommunicationPdfRendererPort
 {
-    private const WATERMARK_TEXT = 'Creato da AI Assistant';
+    /**
+     * Il marcatore di trasparenza: la filigrana la disegna il template, dietro
+     * il testo, e il piede di pagina ne ripete la dicitura.
+     */
+    private const ORIGIN = 'AI Assistant';
 
     /**
      * Va incrementata a ogni modifica del template Blade, del watermark o del
      * pie' di pagina: entra nel fingerprint e invalida i PDF gia' materializzati.
      */
-    private const RENDER_VERSION = 1;
+    private const RENDER_VERSION = 5;
 
     public function __construct(private readonly PdfFooterStamper $footerStamper) {}
 
@@ -125,25 +129,9 @@ class DompdfCommunicationPdfRenderer implements CommunicationPdfRendererPort
         $dompdf->setPaper('a4', 'portrait');
         $dompdf->render();
 
-        $this->stampWatermark($dompdf);
-        $this->footerStamper->stamp($dompdf);
+        $this->footerStamper->stamp($dompdf, self::ORIGIN);
 
         return $dompdf->output();
-    }
-
-    private function stampWatermark(Dompdf $dompdf): void
-    {
-        $canvas = $dompdf->getCanvas();
-        $fontMetrics = $dompdf->getFontMetrics();
-        $font = $fontMetrics->getFont('helvetica', 'bold');
-        $size = 15;
-        $color = [0.88, 0.88, 0.88];
-
-        $textWidth = $fontMetrics->getTextWidth(self::WATERMARK_TEXT, $font, $size);
-        $x = ($canvas->get_width() - $textWidth) / 2;
-        $y = $canvas->get_height() / 2;
-
-        $canvas->page_text($x, $y, self::WATERMARK_TEXT, $font, $size, $color, 0.0, 0.0, 45.0);
     }
 
     private function coverDataUri(CommunicationPdfContext $context): ?string

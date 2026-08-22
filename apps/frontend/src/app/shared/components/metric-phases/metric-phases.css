@@ -1,0 +1,42 @@
+/* Il guscio sta in `shared/styles/metric-shell.css`. Qui la sola ripartizione. */
+
+.bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  overflow: hidden;
+  border-radius: var(--mvp-radius-sm);
+  background: var(--mvp-surface-soft);
+}
+
+.seg {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--mvp-space-3);
+  color: var(--mvp-muted);
+  font-size: 0.7rem;
+}
+
+.item {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.item i {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 2px;
+}
+
+.item b {
+  color: var(--mvp-text);
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,58 @@
+/* Il guscio sta in `shared/styles/metric-shell.css`. Qui il solo anello. */
+
+.figure {
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--mvp-space-3);
+}
+
+.ring {
+  width: 76px;
+  height: 76px;
+  flex: none;
+}
+
+/* Il residuo porta il colore di cio' che manca, non un grigio di sfondo: e' il
+   numero su cui l'operatore deve agire. */
+.rest {
+  fill: none;
+  stroke: var(--mvp-danger);
+}
+
+.rest.plain {
+  stroke: var(--mvp-border-strong);
+}
+
+.done {
+  fill: none;
+  stroke: var(--mvp-primary);
+}
+
+.percent {
+  fill: var(--mvp-text);
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.side {
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-xs);
+  line-height: 1.55;
+}
+
+.side b {
+  color: var(--mvp-text);
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+span.rest {
+  color: var(--mvp-danger);
+  font-weight: 700;
+}
+
+span.rest.plain {
+  color: var(--mvp-muted);
+  font-weight: 600;
+}

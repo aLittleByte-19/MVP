@@ -13,11 +13,16 @@ groups:
           runbook: "https://github.com/aLittleByte-19/MVP/blob/main/docs/runbooks/observability.md"
 
       - alert: APIHighErrorRate
+        # Niente clamp_min sul denominatore: clampando a 1 req/s il rapporto
+        # veniva schiacciato a traffico basso (0.2 req/s tutte 5xx davano 0.2
+        # invece di 1.0), cioe' proprio quando un'applicazione rotta smette di
+        # ricevere richieste. Senza clamp, a traffico zero il risultato e' un
+        # vettore vuoto e l'alert semplicemente non scatta.
         expr: |
           (
             sum(rate(mvp_http_requests_total{status=~"5.."}[5m]))
             /
-            clamp_min(sum(rate(mvp_http_requests_total[5m])), 1)
+            sum(rate(mvp_http_requests_total[5m]))
           ) > 0.05
         for: 10m
         labels:
