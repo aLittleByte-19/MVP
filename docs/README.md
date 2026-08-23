@@ -47,8 +47,8 @@ Per evitare informazioni duplicate o divergenti, ogni tema ha **un** documento d
   [frontend/contratto API](architecture/diagrams/03_frontend_spa_contratto_api.drawio),
   [edge/runtime/API](architecture/diagrams/04_edge_runtime_backend_api.drawio),
   [dati/storage/protezione](architecture/diagrams/05_dati_storage_protezione.drawio),
-  [workflow AI/OCR](architecture/diagrams/06_workflow_async_ai_ocr.drawio) e
-  [osservabilità](architecture/diagrams/07_osservabilita.drawio), con export PNG/SVG accanto al sorgente.
+  [workflow AI/OCR](architecture/diagrams/06_workflow_async_ai_ocr.drawio), con export PNG/SVG
+  accanto al sorgente.
   I Mermaid residui restano nei punti in cui servono come overview o sequenze operative,
   inclusi [IMPLEMENTATION_OVERVIEW](IMPLEMENTATION_OVERVIEW.md) e
   [dlq-recovery](runbooks/dlq-recovery.md).
@@ -58,7 +58,6 @@ Per evitare informazioni duplicate o divergenti, ogni tema ha **un** documento d
 - [Sviluppo locale production-like](runbooks/local-development.md): avvio e uso dello stack.
 - [Pipeline documentale](runbooks/document-pipeline.md): flusso Co-Pilot end-to-end.
 - [Pipeline comunicazioni](runbooks/communication-pipeline.md): flusso AI Assistant end-to-end.
-- [Osservabilità](runbooks/observability.md): metriche, trace, log, dashboard, alert.
 - [DLQ e recovery](runbooks/dlq-recovery.md): gestione job falliti e ripristino.
 - [Backup/restore locale](runbooks/backup-restore-local.md): PostgreSQL.
 - [CI/CD](runbooks/ci-cd.md): pipeline e quality gate.
@@ -75,7 +74,7 @@ Per evitare informazioni duplicate o divergenti, ogni tema ha **un** documento d
 
 - [`openapi/v1/`](../openapi/v1/): contratto API OpenAPI (fonte del client generato).
 - [`infra/localstack/`](../infra/localstack/): Terraform e risorse AWS-like locali.
-- [`docker/`](../docker/): configurazioni runtime, edge e osservabilità.
+- [`docker/`](../docker/): configurazioni runtime ed edge.
 - [`.github/workflows/`](../.github/workflows/): pipeline CI e quality gate.
 
 ## Terminologia

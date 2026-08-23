@@ -1,6 +1,6 @@
 # ADR 0006: Osservabilità e audit trail
 
-Status: Accepted, implemented baseline
+Status: Metrics/dashboard/OTel Collector superseded by [0014](0014-rimozione-stack-osservabilita.md); audit trail e correlation ID Accepted, implemented baseline
 Date: 2026-06-08
 
 ## Context

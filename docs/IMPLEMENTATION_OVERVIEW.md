@@ -3,6 +3,13 @@
 > Documento aggiornato tramite analisi diretta della codebase.
 > Branch analizzato: integration/develop_merge.
 > Ultimo aggiornamento: 2026-08-15.
+>
+> **Nota (2026-08-23)**: lo stack di osservabilità operativa descritto in questo documento
+> (OpenTelemetry Collector, Prometheus, Grafana, Tempo, Loki, Alloy, Alertmanager,
+> `App\Mvp\Observability\*`, endpoint `/internal/metrics`) è stato rimosso — vedi
+> [ADR 0014](architecture-decisions/0014-rimozione-stack-osservabilita.md). Ogni riferimento a
+> quello stack nelle sezioni seguenti descrive uno stato non più presente nel codice; non è stato
+> riscritto per intero per preservare il documento come analisi storica del branch indicato.
 
 ---
 
@@ -12,7 +19,7 @@ L'applicativo è una MVP di **pipeline documentale HR assistita da AI** composta
 
 Il backend è **Laravel 12 / PHP 8.4** con PostgreSQL e Redis; il frontend è una **SPA Angular + TypeScript** servita di default tramite **Traefik → emulatore CDN locale (Nginx) → S3 LocalStack**, con Nginx applicativo come proxy per `/api/`, `/health` e `/ready`. Entrambi i flussi AI sono asincroni: due **state machine AWS Step Functions** (emulate in LocalStack) orchestrano i task via **SQS con callback task token**, ciascuna con la propria coda e il proprio worker Laravel dedicato. Le integrazioni AI usano **AWS Bedrock** (classificazione/split ed estrazione campi sul testo OCR e generazione del testo delle comunicazioni via Converse, copertine via `invokeModel` su un modello immagini in una region propria) e **AWS Textract** per l'OCR che alimenta la pipeline documentale (necessario per l'analisi, attivabile solo con S3 reale). La configurazione runtime arriva da **SSM Parameter Store + Secrets Manager**, caricata prima del boot di Laravel.
 
-L'osservabilità è il tratto più maturo della MVP: metriche golden-signal e di dominio esposte in formato Prometheus, trace OTLP verso Tempo, log dei container verso Loki via Alloy, 15 alert rule, 6 dashboard Grafana provisioned e runbook collegati. La CI (GitHub Actions) copre lint, analisi statica, test backend e frontend, scansione Trivy delle immagini, validazione Terraform e audit di accessibilità axe/pa11y contro lo stack reale.
+La CI (GitHub Actions) copre lint, analisi statica, test backend e frontend, scansione Trivy delle immagini, validazione Terraform e audit di accessibilità axe/pa11y contro lo stack reale. Lo stack di osservabilità operativa descritto nelle versioni precedenti di questo documento (OTel/Prometheus/Grafana) è stato rimosso — vedi la nota in testa e [ADR 0014](architecture-decisions/0014-rimozione-stack-osservabilita.md).
 
 Il livello di maturità è **alto per una MVP**: confini architetturali chiari, validazione input sistematica, idempotenza nel workflow, audit trail, hardening container e di rete. Non è production-ready per scelta dichiarata di scope: deploy reale, autenticazione degli utenti e invio delle comunicazioni sono stati esclusi esplicitamente dal committente il 15/07/2026, e restano fuori perimetro anche gestione segreti non-default e ridondanza operativa (dettagli in §17-19). L'obiettivo prioritario indicato dal committente è la **corretta identificazione del destinatario**.
 
@@ -34,10 +41,9 @@ L'analisi si basa sullo **stato attuale del codice**: route, controller, service
 | Schema dati | `database/migrations/` | 7 tabelle di dominio + indici/FK |
 | Frontend SPA | `apps/frontend/` | Angular + TypeScript, client API Angular generato |
 | Contratto API | `openapi/v1/alittlebyte-mvp-api.yaml` | OpenAPI 3.1, fonte del client frontend |
-| Infrastruttura locale | `docker-compose.yml`, `docker/` | 22 servizi: app, due worker (uno per pipeline), nginx, edge-cdn, traefik, datastore, stack osservabilità, tool |
+| Infrastruttura locale | `docker-compose.yml`, `docker/` | app, due worker (uno per pipeline), nginx, edge-cdn, traefik, datastore, tool |
 | Infrastruttura AWS (emulata) | `infra/localstack/` | Terraform: due coppie SQS+DLQ, S3 documenti, S3 frontend, SSM, Secrets Manager, EventBridge, IAM, due Step Functions, SES identity |
 | State machine | `infra/localstack/state-machines/` | Definizioni ASL delle pipeline documentale e comunicazioni |
-| Osservabilità | `docker/otel-collector/`, `docker/prometheus/`, `docker/grafana/`, `docker/loki/`, `docker/alloy/`, `docker/tempo/`, `docker/alertmanager/` | Collector, scrape, alert rule, dashboard, log shipping |
 | CI | `.github/workflows/ci.yml`, `mirror-images.yml`, `scripts/ci/` | Pipeline composta da 4 job (backend, frontend, coverage diff, stack) su ogni push di ogni branch, con mirroring immagini su GHCR |
 | Test | `tests/` (backend Pest), `apps/frontend/src/**/*.spec.ts` (Jest) | Feature + Unit backend, unit/component test frontend |
 | Audit a11y | `scripts/a11y/axe-playwright.mjs`, `pa11y-runner.mjs` | Audit automatici contro lo stack reale |
@@ -48,13 +54,12 @@ L'analisi si basa sullo **stato attuale del codice**: route, controller, service
 
 ## 4. Architettura generale
 
-Tre reti Docker segmentate per least privilege (`docker-compose.yml`, blocco `networks:` in coda al file):
+Due reti Docker segmentate per least privilege (`docker-compose.yml`, blocco `networks:` in coda al file):
 
 - **edge**: Traefik ↔ Nginx, più i container di audit frontend;
-- **backend**: app PHP-FPM, worker queue, Postgres, Redis, LocalStack, Terraform, e l'OTel Collector per l'ingest;
-- **observability**: collector, Prometheus, Tempo, Loki, Alloy, Alertmanager, Grafana; Traefik vi partecipa solo per instradare le dashboard e per esporre le proprie metriche.
+- **backend**: app PHP-FPM, worker queue, Postgres, Redis, LocalStack, Terraform.
 
-Le uniche porte pubblicate sull'host sono Traefik `8080/8443` (la 8080 redirige globalmente su HTTPS, `docker/traefik/traefik.yml`) e LocalStack su `127.0.0.1:4566`. Postgres, Redis e tutte le UI di osservabilità non espongono porte host.
+Le uniche porte pubblicate sull'host sono Traefik `8080/8443` (la 8080 redirige globalmente su HTTPS, `docker/traefik/traefik.yml`) e LocalStack su `127.0.0.1:4566`. Postgres e Redis non espongono porte host.
 
 ```mermaid
 flowchart LR
@@ -74,33 +79,14 @@ flowchart LR
         R[(Redis)]
         LS[LocalStack<br/>S3 SQS SFN SSM SM EventBridge]
     end
-    subgraph obs[rete observability]
-        OC[OTel Collector]
-        P[(Prometheus)]
-        TE[(Tempo)]
-        LK[(Loki)]
-        AL[Alloy]
-        AM[Alertmanager]
-        G[Grafana]
-    end
     B -->|https://localhost:8443| T --> FC
     FC -->|SPA da bucket S3| LS
     FC -->|/api /health /ready| N -->|fastcgi| A
-    B -->|https://grafana.localhost:8443| T --> G
-    B -->|*.localhost + basic auth| T --> P & AM & TE
     TF -->|127.0.0.1:4566| LS
     A & Q --> PG & R & LS
-    A & Q -->|OTLP| OC
-    OC -->|scrape /internal/metrics| N
-    OC -->|scrape :9100| T
-    OC --> TE & LK
-    P -->|scrape :9464| OC
-    P --> AM
-    G --> P & TE & LK
-    AL -->|docker logs| LK
 ```
 
-Confini di responsabilità: Traefik termina TLS e applica auth alle dashboard; l'emulatore CDN locale (`edge-cdn`, un secondo Nginx) serve la SPA da S3 LocalStack e inoltra `/api/`, `/health` e `/ready` all'Nginx applicativo, che resta il proxy verso PHP-FPM (oltre a poter servire la SPA in modalità standard dall'immagine); Laravel gestisce validazione, identità, persistenza e orchestrazione; Step Functions (LocalStack) detiene lo stato del workflow; il worker esegue i task e risponde con i task token; il collector è l'unico punto di raccolta telemetria.
+Confini di responsabilità: Traefik termina TLS ed è l'unico entrypoint; l'emulatore CDN locale (`edge-cdn`, un secondo Nginx) serve la SPA da S3 LocalStack e inoltra `/api/`, `/health` e `/ready` all'Nginx applicativo, che resta il proxy verso PHP-FPM (oltre a poter servire la SPA in modalità standard dall'immagine); Laravel gestisce validazione, identità, persistenza e orchestrazione; Step Functions (LocalStack) detiene lo stato del workflow; il worker esegue i task e risponde con i task token.
 
 ---
 

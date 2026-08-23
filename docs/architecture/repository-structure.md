@@ -13,7 +13,6 @@ dominio.
 - `app/Mvp/Communications`: dominio generativo (AI Assistant), copertine e impaginazione del PDF
   finale. Stessa architettura esagonale di `Documents` (ADR 0010).
 - `app/Mvp/Identity`: identità utente risolta a runtime.
-- `app/Mvp/Observability`: exporter Prometheus e registrazione delle metriche.
 - `app/Mvp/Support`: servizi trasversali a piu' domini (stato applicativo esposto alla SPA, caricamento della configurazione runtime, piè di pagina condiviso dei PDF generati).
 - `app/Mvp/Workflow`: infrastruttura di orchestrazione Step Functions/SQS comune alle pipeline (contratto degli handler, registry, runner, heartbeat, contesto di correlazione). I servizi specifici di un flusso vivono nella cartella del flusso.
 - `app/Console/Commands`: comandi artisan, incluso il worker `mvp:workflow:consume`.

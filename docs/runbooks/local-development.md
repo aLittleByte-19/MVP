@@ -13,7 +13,7 @@ Il target esegue:
 - avvio di PostgreSQL, Redis e LocalStack;
 - `terraform init` e `terraform apply` dal container Compose `terraform`;
 - migrazioni applicative;
-- avvio di app, Nginx, worker SQS, Traefik, OTel Collector, Prometheus, Tempo, Alertmanager, Grafana, Loki e Grafana Alloy.
+- avvio di app, Nginx, worker SQS e Traefik.
 
 ![Ambiente locale e provisioning](../architecture/diagrams/02_ambiente_locale_provisioning.drawio.png)
 
@@ -24,14 +24,7 @@ Endpoint:
 - App: https://localhost:8443
 - Health: https://localhost:8443/health
 - Readiness: https://localhost:8443/ready
-- Grafana: https://grafana.localhost:8443 (login Grafana)
-- Prometheus: https://prometheus.localhost:8443 (basic auth `mvp` / `mvp-obs-local-password`)
-- Alertmanager: https://alertmanager.localhost:8443 (basic auth)
-- Tempo: https://tempo.localhost:8443 (basic auth)
 - LocalStack edge: http://localhost:4566 (bind solo 127.0.0.1)
-
-Le dashboard non espongono porte sull'host: si passa sempre da Traefik
-(`*.localhost` è risolto dai browser; da CLI usare `curl --resolve`).
 
 ## TLS locale trusted
 
@@ -77,23 +70,6 @@ Se una chiave obbligatoria manca, il bootstrap Laravel fallisce. Questa scelta e
 
 I valori risolti vengono cachati in `bootstrap/cache/runtime-config.php` dentro il container (PHP-FPM rieseguirebbe altrimenti le chiamate SSM/Secrets a ogni richiesta). La cache vive quanto il container: `make refresh-runtime` ricrea `app` e `queue` e quindi la rigenera.
 
-## Observability
-
-```bash
-make observability-config
-make observability-up
-```
-
-Il Collector scrapea:
-
-- metriche applicative interne da `nginx:8081/internal/metrics` (listener non instradato da Traefik);
-- metriche Traefik da `traefik:9100/metrics`;
-- metriche del Collector da `otel-collector:8888`.
-
-Prometheus legge l'exporter del Collector su `otel-collector:9464`, invia alert ad Alertmanager e Grafana carica datasource/dashboard da file.
-
-Grafana Alloy raccoglie i log di tutti i container del progetto tramite il socket Docker e li invia a Loki; Grafana li interroga con il datasource Loki (dashboard `Logs and Errors` e pannelli log delle altre dashboard). Le metriche di dominio del worker raggiungono `/internal/metrics` grazie al volume `observability-metrics` condiviso tra `app` e `queue`.
-
 ## Reset Completo
 
 ```bash
@@ -101,7 +77,7 @@ make reset-all          # chiede conferma
 make reset-all FORCE=1  # senza conferma
 ```
 
-Elimina tutti i volumi locali (PostgreSQL, Redis, LocalStack, osservabilita'), svuota il prefisso del bucket S3 reale se `AWS_REAL_S3_BUCKET` e' configurato nel `.env`, e riesegue `make setup` da zero. E' distruttivo per design: pensato per riportare la MVP allo stato iniziale.
+Elimina tutti i volumi locali (PostgreSQL, Redis, LocalStack), svuota il prefisso del bucket S3 reale se `AWS_REAL_S3_BUCKET` e' configurato nel `.env`, e riesegue `make setup` da zero. E' distruttivo per design: pensato per riportare la MVP allo stato iniziale.
 
 ## Checks
 

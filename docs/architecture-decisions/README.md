@@ -36,7 +36,7 @@ ADR che referenzia il precedente. La numerazione è progressiva e a quattro cifr
 | [0003](0003-sqs-instead-of-redis-queue.md) | Code asincrone su SQS; Redis solo per cache/sessioni | Accepted, implemented |
 | [0004](0004-localstack-terraform.md) | Emulazione AWS locale con LocalStack + Terraform | Accepted, implemented |
 | [0005](0005-no-automatic-fallbacks.md) | Nessun fallback automatico dei servizi AI: stato `failed` esplicito | Accepted, implemented |
-| [0006](0006-observability-and-audit.md) | Osservabilità (OTel/Prometheus) e audit trail append-only | Accepted, implemented baseline |
+| [0006](0006-observability-and-audit.md) | Osservabilità (OTel/Prometheus) e audit trail append-only | Metrics/dashboard superseded by 0014; audit trail Accepted |
 | [0007](0007-authn-authz-boundary.md) | Confine authn/authz: IdP simulato, RBAC/ABAC server-side | Accepted, implemented baseline |
 | [0008](0008-angular-frontend-static-serving.md) | Frontend Angular e serving statico S3 locale + emulatore CDN locale (Nginx) | Accepted, implemented |
 | [0009](0009-communication-async-pipeline-and-cover-storage.md) | Pipeline asincrona delle comunicazioni e copertine su storage a oggetti | Accepted, implemented |
@@ -44,6 +44,7 @@ ADR che referenzia il precedente. La numerazione è progressiva e a quattro cifr
 | [0011](0011-frontend-presentation-model-and-sse-client.md) | ViewModel puro (Presentation Model) e client SSE su `fetch` | Accepted, implemented |
 | [0012](0012-frontend-design-system-and-ui-language.md) | Sistema visivo e linguaggio dell'interfaccia della SPA | Accepted, implemented |
 | [0013](0013-per-field-ocr-confidence.md) | Confidenza per campo invece che media di pagina | Accepted, implemented |
+| [0014](0014-rimozione-stack-osservabilita.md) | Rimozione dello stack Prometheus/Grafana | Accepted, implemented |
 
 ## Aggiungere un ADR
 

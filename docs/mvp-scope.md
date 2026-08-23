@@ -120,16 +120,16 @@ Incluso:
 - request ID e correlation ID su risposte HTTP e log;
 - audit trail append-only per azioni rilevanti, incluse valutazione della bozza e scaricamento del
   messaggio di invio;
-- metriche HTTP golden-signal e di dominio in formato Prometheus;
-- OpenTelemetry Collector come unico gateway locale (metriche verso Prometheus, trace verso Tempo);
-- raccolta log dei container via Grafana Alloy verso Loki;
-- 6 dashboard Grafana provisionate (`api-golden-signals`, `document-pipeline`,
-  `communication-pipeline`, `ai-ocr-quality`, `queues-and-dlq`, `logs-and-errors`);
-- 15 alert rule Prometheus su error ratio, latenza, readiness, stato worker, code/DLQ per dominio,
-  esecuzioni Step Functions, generazioni bloccate e degrado delle copertine, collegate a runbook
-  dedicati;
+- metriche mostrate nell'app (`GET /api/v1/state` → pannelli Angular): conteggi e medie per
+  modulo, lette da `MvpStateService`;
+- diagnosi manuale delle DLQ (`php artisan mvp:dlq:list`);
 - contract OpenAPI 3.1 come fonte del client frontend, verificato in CI;
 - blocco runtime delle superfici non appartenenti alla SPA/API.
+
+Uno stack di osservabilità operativa (OpenTelemetry Collector, Prometheus, Grafana, Tempo,
+Loki/Alloy, Alertmanager) era stato incluso in una fase precedente ed è stato rimosso: era
+sovradimensionato per la scala del progetto, allineato a un modello di produzione mai raggiunto
+qui (vedi [ADR 0014](architecture-decisions/0014-rimozione-stack-osservabilita.md)).
 
 ## Esclusioni trasversali
 
@@ -153,7 +153,7 @@ Le prime tre voci sono state escluse esplicitamente dal committente il 15/07/202
 
 ### Evoluzione futura
 
-- SLO/error budget formalizzati e receiver di notifica reali per Alertmanager (oggi soglie statiche
-  e routing demo);
-- backend di osservabilità enterprise e retention dichiarate per metriche/trace/log;
-- propagazione del trace context attraverso SQS/Step Functions.
+- se il progetto crescesse verso un carico di produzione reale, rivalutare con una nuova ADR
+  l'introduzione di uno stack di osservabilità operativa (metriche, trace, dashboard, alert con
+  SLO/error budget formalizzati) — rimosso per sovradimensionamento, vedi
+  [ADR 0014](architecture-decisions/0014-rimozione-stack-osservabilita.md).

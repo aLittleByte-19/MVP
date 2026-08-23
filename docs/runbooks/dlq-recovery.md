@@ -25,9 +25,7 @@ flowchart TD
   failure["SendTaskFailure"]
   retry["Step Functions Retry/Catch"]
   dlq["SQS DLQ after receive limit"]
-  metrics["Prometheus metrics"]
-  alert["Alertmanager alert"]
-  operator["Operator runbook"]
+  operator["Operator runs mvp:dlq:list"]
   replay["Manual redrive/replay after fix"]
 
   task --> worker
@@ -35,10 +33,7 @@ flowchart TD
   worker --> failure
   failure --> retry
   task --> dlq
-  worker --> metrics
-  dlq --> metrics
-  metrics --> alert
-  alert --> operator
+  dlq --> operator
   operator --> replay
   replay --> task
 ```
@@ -49,29 +44,15 @@ flowchart TD
 docker compose exec app php artisan mvp:dlq:list --queue=documents
 ```
 
-The command reads up to 10 messages from the DLQ with `VisibilityTimeout=0` and prints a preview. It is a diagnostic tool and records no metric: queue depth is measured by `DlqDepthProbe`, which reads `ApproximateNumberOfMessages` on every scrape.
+The command reads up to 10 messages from the DLQ with `VisibilityTimeout=0` and prints a preview. There is no automated depth monitoring (the previous Prometheus-based probe was removed, see [ADR 0014](../architecture-decisions/0014-rimozione-stack-osservabilita.md)): run this command periodically or after a suspected failure to check whether a DLQ has accumulated messages.
 
 ## Recovery Procedure
 
-1. Open Grafana `Queues and DLQ`.
-2. Run `mvp:dlq:list --queue=<pipeline>` and capture message id/body preview.
-3. Check `workflow_tasks` for the task status and error message (`subject_type` tells the domain).
-4. Check `original_documents.workflow_failure_reason` or `communications.workflow_failure_reason`.
-5. Fix the root cause: missing IAM, bad S3 key, model access, or invalid payload.
-6. Re-drive from DLQ to source queue using the cloud console/CLI for the target environment.
-7. Confirm idempotency by checking that duplicated succeeded tasks are skipped.
+1. Run `mvp:dlq:list --queue=<pipeline>` and capture message id/body preview.
+2. Check `workflow_tasks` for the task status and error message (`subject_type` tells the domain).
+3. Check `original_documents.workflow_failure_reason` or `communications.workflow_failure_reason`.
+4. Fix the root cause: missing IAM, bad S3 key, model access, or invalid payload.
+5. Re-drive from DLQ to source queue using the cloud console/CLI for the target environment.
+6. Confirm idempotency by checking that duplicated succeeded tasks are skipped.
 
 The MVP implements diagnostic DLQ inspection and idempotent task records. Automated replay is intentionally not implemented because the final replay mechanism depends on enterprise operational controls and IAM boundaries.
-
-## Relevant Metrics
-
-| Metric | Meaning |
-| --- | --- |
-| `mvp_sqs_messages_received_total` | Worker received task messages. |
-| `mvp_sqs_messages_failed_total` | Worker task failures. |
-| `mvp_dlq_messages{queue}` | Messages currently held in the DLQ, per pipeline, read from SQS on every scrape. Absent when the probe fails. |
-| `mvp_dlq_probe_up{queue}` | 1 when the depth could be read, 0 otherwise. `DLQNotEmpty` is only trustworthy while this is 1. |
-| `mvp_document_stuck_processing_total` | Documents beyond processing timeout. |
-| `mvp_communication_stuck_processing_total` | Communications beyond generation timeout. |
-| `mvp_stepfunctions_executions_started_total` | Workflow starts. |
-| `mvp_stepfunctions_executions_failed_total` | Workflow start/task failures. |

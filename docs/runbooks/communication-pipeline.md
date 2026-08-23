@@ -46,7 +46,7 @@ make logs
 docker compose exec app php artisan mvp:dlq:list --queue=communications
 ```
 
-Worker logs are also available in Grafana (Loki): see the `communication-pipeline` dashboard or query `{project="mvp", service="queue-communications"}` in the `Logs and Errors` dashboard.
+Worker logs: `docker compose logs -f queue-communications`.
 
 ## Scaling Workers
 

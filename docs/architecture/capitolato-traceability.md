@@ -208,26 +208,33 @@ l'autorizzazione lato Laravel; il token JWT verso il backend è modellato dal mi
 
 ## 10. Osservabilità e audit trail
 
-**Scelta nella MVP:** request/correlation ID, log JSON strutturati, metriche golden-signal in
-formato Prometheus e gateway OpenTelemetry Collector locale → Prometheus/Tempo/Grafana
-([`config/observability.php`](../../config/observability.php),
-[`docker-compose.yml`](../../docker-compose.yml): `otel-collector`, `prometheus`, `tempo`, `grafana`),
-più tabella append-only `audit_events`. Una pipeline asincrona è gestibile solo se è osservabile:
-golden signals per l'esercizio e un audit immutabile per la tracciabilità delle azioni rilevanti.
-OpenTelemetry mantiene il confine vendor-neutral verso qualsiasi backend futuro.
+**Scelta nella MVP:** request/correlation ID, log JSON strutturati, tabella append-only
+`audit_events` ([`app/Http/Middleware/CorrelateRequests.php`](../../app/Http/Middleware/CorrelateRequests.php),
+[`app/Mvp/Audit/Services/AuditLogger.php`](../../app/Mvp/Audit/Services/AuditLogger.php)). Un
+audit immutabile copre la tracciabilità delle azioni rilevanti.
+
+Uno stack di metriche/tracing/dashboard equivalente a CloudWatch/X-Ray (OpenTelemetry Collector →
+Prometheus/Tempo/Grafana) era stato adottato in una fase precedente e **copriva questo requisito
+per intero**; è stato rimosso perché sovradimensionato per la scala del progetto — vedi
+[ADR 0014](../architecture-decisions/0014-rimozione-stack-osservabilita.md). Da quella rimozione
+in poi **il riscontro sotto è parziale**: resta coperta la parte di audit/tracciabilità delle
+azioni, non la parte di metriche/alarm/tracing continuo richiesta dal Capitolato.
 
 **Riscontro nel Capitolato:**
 > «CloudWatch Logs/Metrics/Alarms, X-Ray (tracing).»
 > Fonte: Capitolato C5, sezione «Vincoli tecnico tecnologici → Observability & Ops»
 
+Non più coperto dopo la rimozione dello stack: Metrics/Alarms e X-Ray (tracing) non hanno un
+equivalente locale attivo. Logs resta coperto (log JSON strutturati con correlation ID).
+
 L'audit trail riflette il flusso di tracciabilità documentale richiesto:
 > «Visualizzazione audit trail: upload → riconoscimento → split → mapping → invio → lettura.»
 > Fonte: Capitolato C5, sezione «Ambito Funzionale → AI Co-Pilot, UC-8: Ricerca, audit e conservazione»
 
-La MVP usa lo stack OTel/Prometheus/Tempo/Grafana (vendor-neutral, open source) come
-equivalente locale di CloudWatch/X-Ray.
+Questo secondo riscontro resta pienamente coperto: non dipende dallo stack rimosso.
 
 **ADR correlato:** [0006 - Observability And Audit](../architecture-decisions/0006-observability-and-audit.md)
+(superata in parte), [0014 - Rimozione dello stack Prometheus/Grafana](../architecture-decisions/0014-rimozione-stack-osservabilita.md)
 
 ---
 
@@ -427,8 +434,11 @@ nella libertà tecnologica della sezione «Vincoli».
   della pipeline, coerente con la delega delle operazioni «time consuming» a «sistemi batch»
   (sezione «Requisiti di Prestazione»).
 - **Stack di osservabilità open source (OpenTelemetry Collector, Prometheus, Tempo, Grafana,
-  Loki, Alertmanager):** adottato come equivalente locale, vendor-neutral, di CloudWatch/X-Ray,
-  che il Capitolato indica come telemetria target.
+  Loki, Alertmanager):** era stato adottato come equivalente locale, vendor-neutral, di
+  CloudWatch/X-Ray, che il Capitolato indica come telemetria target; rimosso perché
+  sovradimensionato per la scala del progetto (vedi §10 e
+  [ADR 0014](../architecture-decisions/0014-rimozione-stack-osservabilita.md)) — la copertura di
+  Metrics/Alarms/X-Ray non ha oggi un equivalente locale.
 - **Edge/runtime locale (Traefik, emulatore CDN locale Nginx, Nginx applicativo):** equivalenti locali di CloudFront/ALB, che il
   Capitolato nomina nella loro forma AWS gestita.
 - **Librerie di manipolazione PDF (`setasign/fpdf`, `setasign/fpdi`) per lo split documentale e

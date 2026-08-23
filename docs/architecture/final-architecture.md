@@ -20,6 +20,10 @@ least-privilege documentata: non applicata da LocalStack in locale) e il registr
 nella pipeline CI (mirror delle immagini base e pubblicazione delle immagini buildate). Gli
 export PNG/SVG vanno rigenerati da draw.io dopo ogni modifica (`drawio -x -f png -s 1.6 -b 24 ...`).
 
+> **Nota**: il piano "Osservabilità" e i flussi di telemetria disegnati nel diagramma sono superati
+> dalla rimozione dello stack Prometheus/Grafana ([ADR 0014](../architecture-decisions/0014-rimozione-stack-osservabilita.md));
+> il sorgente `.drawio` va aggiornato a mano con lo strumento draw.io, non è stato rigenerato qui.
+
 ## Confine di runtime
 
 | Livello | Componente implementato | Ruolo |
@@ -34,8 +38,6 @@ export PNG/SVG vanno rigenerati da draw.io dopo ogni modifica (`drawio -x -f png
 | Storage | Dischi Laravel `s3` o `real_s3`, bucket `frontend_static` | S3 LocalStack per documenti, copertine delle comunicazioni e asset Angular, S3 reale opzionale solo per documenti/Textract. |
 | Persistenza | PostgreSQL | Comunicazioni, documenti, sotto-documenti, dati estratti, audit e stato dei task di workflow. |
 | Cache/sessione | Redis | Cache/sessione e rate limiting; non è la fonte di verità dei dati. |
-| Osservabilità | OTel Collector, Prometheus, Tempo, Grafana, Alertmanager | Metriche, trace, dashboard e alert locali. |
-| Log | Grafana Alloy, Loki | Raccolta e archiviazione dei log dei container, interrogabili in Grafana. |
 
 ## LocalStack e AWS reale
 
@@ -97,15 +99,8 @@ I test e la CI standard non chiamano S3, Textract o Bedrock reali.
 | AWS Well-Architected: reliability | Retry/catch espliciti in Step Functions, heartbeat per task, DLQ SQS, tabella di workflow idempotente. |
 | AWS Well-Architected: security | Nessuna UI di amministrazione runtime, nessun segreto reale committato, header di sicurezza e CSP in nginx, matrice IAM a privilegio minimo documentata. |
 | Baseline OWASP ASVS/API | Validazione upload server-side, controlli di ownership per tenant, rate limit, confine di autenticazione strutturato. |
-| Google SRE: monitoring | Metriche API golden-signal, metriche di entrambe le pipeline, alert code/DLQ per dominio con runbook. |
-| Modello OpenTelemetry | Il Collector riceve OTLP ed esporta metriche verso Prometheus e trace verso Tempo. |
-| Logging centralizzato | Grafana Alloy invia i log di ogni container a Loki, correlati in Grafana con metriche e trace. |
 
 ## Riferimenti principali
 
 - AWS Well-Architected Framework: https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html
 - OWASP ASVS: https://owasp.org/www-project-application-security-verification-standard/
-- Google SRE: Monitoring Distributed Systems: https://sre.google/sre-book/monitoring-distributed-systems/
-- OpenTelemetry Collector: https://opentelemetry.io/docs/collector/
-- Prometheus alerting: https://prometheus.io/docs/alerting/latest/overview/
-- Grafana provisioning: https://grafana.com/docs/grafana/latest/administration/provisioning/
