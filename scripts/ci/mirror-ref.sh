@@ -13,7 +13,7 @@ case "$path" in
   ghcr.io/*) exit 1 ;;
   public.ecr.aws/*) path="${path#public.ecr.aws/}" ;;
   mcr.microsoft.com/*) path="${path#mcr.microsoft.com/}" ;;
-  */*) ;;                      # Docker Hub org/repo (es. grafana/loki)
+  */*) ;;                      # Docker Hub org/repo (es. localstack/localstack)
   *) path="library/${path}" ;; # Docker Hub ufficiale (es. traefik)
 esac
 

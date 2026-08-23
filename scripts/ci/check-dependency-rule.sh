@@ -3,8 +3,8 @@
 # domini esagonali (Documents, Communications) non deve importare ne'
 # referenziare Illuminate\*, Aws\*, o modelli Eloquent (App\Models\*), ne'
 # il namespace dell'altro dominio (i due domini non si conoscono a vicenda:
-# solo Support/Identity/Workflow/Audit/Observability sono infrastruttura
-# condivisa legittima). Le violazioni sono cercate su tutto il contenuto del
+# solo Support/Identity/Workflow/Audit sono infrastruttura condivisa
+# legittima). Le violazioni sono cercate su tutto il contenuto del
 # file, non solo sulle istruzioni "use", cosi' da intercettare anche i nomi
 # pienamente qualificati usati inline.
 #

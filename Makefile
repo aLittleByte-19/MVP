@@ -1,4 +1,4 @@
-.PHONY: help test backend-coverage pint node-install frontend-build frontend-lint frontend-test frontend-coverage frontend-typecheck frontend-audit frontend-a11y frontend-s3-local-provision frontend-s3-local-upload frontend-s3-local-deploy edge-cdn-local-url frontend-serving-local-test openapi-generate openapi-validate observability-config observability-up local-tls trusted-local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke reset-all workers backup-local restore-local
+.PHONY: help test backend-coverage pint node-install frontend-build frontend-lint frontend-test frontend-coverage frontend-typecheck frontend-audit frontend-a11y frontend-s3-local-provision frontend-s3-local-upload frontend-s3-local-deploy edge-cdn-local-url frontend-serving-local-test openapi-generate openapi-validate local-tls trusted-local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-ci-local aws-smoke reset-all workers backup-local restore-local
 
 # Colori per l'output
 BLUE  := \033[34m
@@ -58,8 +58,6 @@ help:
 	@echo "  $(BLUE)make frontend-serving-local-test$(RESET) Smoke test del serving S3 locale + CDN/edge locale"
 	@echo "  $(BLUE)make openapi-generate$(RESET) Rigenera il client TypeScript"
 	@echo "  $(BLUE)make openapi-validate$(RESET) Valida il contratto OpenAPI"
-	@echo "  $(BLUE)make observability-config$(RESET) Valida la configurazione OTel Collector"
-	@echo "  $(BLUE)make observability-up$(RESET) Avvia OTel Collector e Prometheus"
 	@echo "  $(BLUE)make local-tls$(RESET) Genera il certificato TLS locale per Traefik"
 	@echo "  $(BLUE)make trusted-local-tls$(RESET) Genera un certificato locale trusted via mkcert"
 	@echo "  $(BLUE)make fresh$(RESET)     Resetta database, Redis (sessioni/cache/rate limit) e dati generati"
@@ -83,7 +81,7 @@ help:
 	@echo "  $(BLUE)make reset-all$(RESET)     Reset TOTALE: volumi locali + S3 reale, poi setup da zero (FORCE=1 senza conferma)"
 
 # Quality gate rapido: usa solo container e non richiede credenziali AWS reali.
-verify-fast: verify-backend verify-frontend verify-infra verify-observability
+verify-fast: verify-backend verify-frontend verify-infra
 
 # Quality gate completo locale: include contratto OpenAPI e audit dipendenze frontend.
 verify: verify-fast openapi-validate frontend-audit
@@ -109,8 +107,6 @@ verify-infra:
 	$(TERRAFORM) fmt -check
 	$(TERRAFORM) init -backend=false
 	$(TERRAFORM) validate
-
-verify-observability: observability-config
 
 verify-ci-local: verify-fast openapi-validate
 
@@ -185,13 +181,6 @@ openapi-generate: node-install
 openapi-validate: node-install
 	$(NODE) npx --yes @redocly/cli@latest lint openapi/v1/alittlebyte-mvp-api.yaml
 
-observability-config:
-	docker compose run --rm --no-deps otel-collector validate --config=/etc/otelcol-contrib/config.yml
-	docker compose run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
-
-observability-up:
-	docker compose up -d otel-collector prometheus tempo alertmanager grafana loki alloy
-
 pint:
 	docker compose build app
 	docker compose run --rm --no-deps app php vendor/bin/pint --test
@@ -244,10 +233,9 @@ setup:
 	$(MAKE) frontend-build
 	$(MAKE) frontend-s3-local-upload
 	$(MAKE) release
-	docker compose up -d app nginx queue queue-communications traefik otel-collector prometheus tempo alertmanager grafana loki alloy
+	docker compose up -d app nginx queue queue-communications traefik
 	@echo "$(BLUE)L'ambiente è stato configurato ed è in fase di avvio.$(RESET)"
 	@echo "$(BLUE)Endpoint locale: https://localhost:8443$(RESET)"
-	@echo "$(BLUE)Grafana: https://grafana.localhost:8443$(RESET)"
 	@echo "$(BLUE)Puoi monitorare il progresso con: make logs$(RESET)"
 
 release:
@@ -277,8 +265,8 @@ refresh-runtime: infra-apply
 	@echo "$(BLUE)Runtime aggiornato: SSM/Secrets riscritti, app e worker ricreati.$(RESET)"
 
 # Reset TOTALE della MVP: ferma lo stack, elimina tutti i volumi locali
-# (PostgreSQL, Redis, LocalStack, osservabilita'), svuota il prefisso del
-# bucket S3 reale se configurato nel .env e riparte da zero con make setup.
+# (PostgreSQL, Redis, LocalStack), svuota il prefisso del bucket S3 reale
+# se configurato nel .env e riparte da zero con make setup.
 # Distruttivo per design (e' una MVP): FORCE=1 salta la conferma interattiva.
 reset-all:
 	@if [ "$(FORCE)" != "1" ]; then \

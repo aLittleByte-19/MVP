@@ -401,9 +401,6 @@ jobs:
       - name: Terraform validate
         run: docker compose --profile tools run --rm terraform validate
 
-      - name: Validate observability config
-        run: make observability-config
-
       # --- Build immagini (una sola volta su questo runner) ---
 
       - name: Build images
@@ -439,8 +436,7 @@ jobs:
       # --- Stack completo: smoke HTTPS + accessibilità sullo stesso ambiente ---
 
       - name: Generate local TLS certificate
-        # Stesso script di make local-tls: i SAN (incluso *.localhost per le
-        # dashboard) vivono in un posto solo
+        # Stesso script di make local-tls: i SAN vivono in un posto solo
         run: sh scripts/tls/generate-local-cert.sh docker/traefik/certs/mvp-local.test.crt docker/traefik/certs/mvp-local.test.key
 
       - name: Start dependencies
@@ -462,12 +458,10 @@ jobs:
         run: docker compose --profile release run --rm migrate
 
       - name: Start runtime
-        run: docker compose up -d app queue nginx traefik otel-collector prometheus tempo alertmanager grafana
+        run: docker compose up -d app queue nginx traefik
 
       - name: Smoke HTTPS endpoints
         run: |
-          # Le dashboard non espongono più porte host: si passa da Traefik con
-          # routing per hostname (*.localhost) e basic auth (docker/traefik/usersfile).
           wait_for() {
             for _ in {1..120}; do
               if curl --silent --fail --insecure "$@" > /dev/null; then
@@ -481,20 +475,11 @@ jobs:
             return 1
           }
 
-          obs_curl() {
-            local host="$1" path="$2"
-            wait_for "https://${host}:8443${path}" \
-              --resolve "${host}:8443:127.0.0.1" \
-              --user "mvp:mvp-obs-local-password"
-          }
-
           wait_for https://localhost:8443/health
 
           curl --silent --fail --insecure https://localhost:8443/health
           curl --silent --fail --insecure https://localhost:8443/ready
           curl --silent --fail --insecure https://localhost:8443/api/v1/state
-          test "$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure https://localhost:8443/internal/metrics)" = "404"
-          docker compose exec -T nginx wget -q -O - http://127.0.0.1:8081/internal/metrics | grep mvp_app_info
 
           # Security headers: CSP enforced ovunque, con frame-ancestors 'self'
           # solo sulla preview PDF (incorporata in iframe dalla SPA)
@@ -509,13 +494,6 @@ jobs:
           curl --silent --fail --insecure https://localhost:8443/copilot | grep -q '<mvp-root'
           curl --silent --insecure -I https://localhost:8443/api/v1/documents/1/preview \
             | grep -i '^content-security-policy:' | grep -F "frame-ancestors 'self'"
-
-          obs_curl prometheus.localhost /-/ready
-          obs_curl alertmanager.localhost /-/ready
-          wait_for https://grafana.localhost:8443/api/health \
-            --resolve grafana.localhost:8443:127.0.0.1
-          # Senza credenziali le UI protette devono rispondere 401
-          test "$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure --resolve prometheus.localhost:8443:127.0.0.1 https://prometheus.localhost:8443/-/ready)" = "401"
 
       # Il volume node-modules è per-job: l'npm ci del job frontend non è
       # disponibile qui e va rieseguito prima degli audit a11y
