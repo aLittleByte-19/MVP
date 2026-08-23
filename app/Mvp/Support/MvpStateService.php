@@ -7,7 +7,6 @@ use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
 use App\Models\PromptConfiguration;
 use App\Models\SubDocument;
-use App\Models\WorkflowTask;
 use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
@@ -24,47 +23,6 @@ class MvpStateService
      * Giorni coperti dalla serie storica delle metriche.
      */
     private const HISTORY_DAYS = 7;
-
-    /**
-     * Le fasi della pipeline documentale, nell'ordine in cui l'elaborazione le
-     * attraversa, con l'etichetta con cui compaiono nella ripartizione. I nomi
-     * a sinistra sono i `task_type` scritti da WorkflowTaskRunner.
-     *
-     * `dispatch.domain_event` non compare: e' la notifica interna che segue il
-     * lavoro, dura millesimi di secondo e nella barra sarebbe un segmento
-     * invisibile con un'etichetta ingombrante.
-     */
-    private const DOCUMENT_PHASES = [
-        'textract.ocr' => 'OCR',
-        'bedrock.extract' => 'Estrazione',
-        'persist.results' => 'Salvataggio',
-    ];
-
-    /** Come sopra, per la pipeline delle comunicazioni. */
-    private const COMMUNICATION_PHASES = [
-        'communication.generate_text' => 'Testo',
-        'communication.generate_cover' => 'Copertina',
-        'communication.finalize' => 'Chiusura',
-    ];
-
-    /**
-     * Passi ammessi per l'asse dei tempi della densita'. Dieci intervalli di
-     * uno di questi valori coprono la durata piu' lunga: cosi' le tacche
-     * cadono su numeri che si leggono (30s, 60s) invece che su 17,3s.
-     *
-     * @var list<int>
-     */
-    private const DURATION_STEPS = [1, 2, 5, 10, 15, 20, 30, 60, 120, 300, 600];
-
-    /** Intervalli in cui si divide l'asse della densita'. */
-    private const DURATION_BUCKETS = 10;
-
-    /**
-     * Sotto questa soglia una curva di densita' e' piu' interpolazione che
-     * dato: l'interfaccia la sostituisce con una riga di testo, e per farlo
-     * deve sapere quante misure ci sono dietro.
-     */
-    private const DENSITY_MIN_SAMPLES = 8;
 
     /**
      * @return array<string, mixed>
@@ -155,15 +113,12 @@ class MvpStateService
                     'sampleSize' => $rated,
                     'label' => 'Media stelle',
                 ],
-                $this->phaseMetric(
+                $this->averageDurationMetric(
                     'assistant.generation_seconds',
                     'Tempo medio di generazione',
-                    'communication',
-                    Communication::query()->where('tenant_id', $actor->tenantId)->select('id'),
-                    self::COMMUNICATION_PHASES,
                     $this->workflowDurations(Communication::query()->where('tenant_id', $actor->tenantId)),
                 ),
-                $this->distributionMetric(
+                $this->averageDurationMetric(
                     'assistant.duration',
                     'Durata delle generazioni',
                     $this->workflowDurations(Communication::query()->where('tenant_id', $actor->tenantId)),
@@ -221,33 +176,6 @@ class MvpStateService
     }
 
     /**
-     * Durata media in secondi delle corse concluse negli ultimi sette giorni.
-     *
-     * La finestra e' la stessa della serie storica: una media su tutto lo
-     * storico descriverebbe un sistema che non e' piu' quello in esercizio, e
-     * una corsa lenta di mesi fa peserebbe quanto una di stamattina.
-     *
-     * La differenza fra i due istanti si calcola in PHP e non con una funzione
-     * di data SQL, per la stessa ragione di `dailySeries`: deve valere su
-     * PostgreSQL e su SQLite senza dialetti diversi.
-     *
-     * @param  Builder<OriginalDocument>|Builder<Communication>  $query
-     */
-    private function averageWorkflowSeconds(Builder $query): ?float
-    {
-        $since = now()->subDays(self::HISTORY_DAYS - 1)->startOfDay();
-
-        $durations = (clone $query)
-            ->whereNotNull('workflow_started_at')
-            ->whereNotNull('workflow_completed_at')
-            ->where('workflow_completed_at', '>=', $since)
-            ->get(['workflow_started_at', 'workflow_completed_at'])
-            ->map(fn ($row): float => (float) $row->workflow_started_at->diffInSeconds($row->workflow_completed_at, true));
-
-        return $durations->isEmpty() ? null : (float) $durations->avg();
-    }
-
-    /**
      * Durate in secondi delle corse concluse negli ultimi sette giorni.
      *
      * La differenza fra i due istanti si calcola in PHP e non con una funzione
@@ -272,130 +200,15 @@ class MvpStateService
     }
 
     /**
-     * Densita' delle durate: quante elaborazioni cadono in ciascun intervallo.
-     *
-     * L'asse arriva alla corsa piu' lunga, non al novantacinquesimo percentile:
-     * troncare la coda nasconderebbe proprio il caso che l'operatore cerca.
-     * Il valore della metrica resta la mediana, che serve alla descrizione
-     * accessibile e al testo di ripiego quando i campioni sono pochi.
+     * Durata media in secondi, sulla stessa finestra di sette giorni delle
+     * durate grezze in ingresso.
      *
      * @param  list<float>  $durations
      * @return array<string, mixed>
      */
-    private function distributionMetric(string $key, string $label, array $durations): array
-    {
-        $sampleSize = count($durations);
-
-        if ($sampleSize === 0) {
-            return ['key' => $key, 'value' => '—', 'sampleSize' => 0, 'label' => $label];
-        }
-
-        sort($durations);
-        $median = $durations[intdiv($sampleSize, 2)];
-        $step = $this->durationStep(max($durations));
-        $distribution = [];
-
-        for ($bucket = 1; $bucket <= self::DURATION_BUCKETS; $bucket++) {
-            $upTo = $step * $bucket;
-            $from = $upTo - $step;
-            $distribution[] = [
-                'upTo' => $upTo,
-                'count' => count(array_filter(
-                    $durations,
-                    fn (float $seconds): bool => $seconds > $from && $seconds <= $upTo || ($from === 0 && $seconds === 0.0)
-                )),
-            ];
-        }
-
-        return [
-            'key' => $key,
-            'value' => (int) round($median),
-            'unit' => 's',
-            'sampleSize' => $sampleSize,
-            'distribution' => $distribution,
-            'label' => $label,
-        ];
-    }
-
-    /** Il passo piu' stretto i cui dieci intervalli coprono la corsa piu' lunga. */
-    private function durationStep(float $longest): int
-    {
-        foreach (self::DURATION_STEPS as $step) {
-            if ($step * self::DURATION_BUCKETS >= $longest) {
-                return $step;
-            }
-        }
-
-        return (int) ceil($longest / self::DURATION_BUCKETS);
-    }
-
-    /**
-     * Tempo medio di una corsa, ripartito fra le fasi che l'hanno consumato.
-     *
-     * Le fasi arrivano da `workflow_tasks`, che tiene inizio e fine di ogni
-     * passo; il tenant si filtra sui soggetti, perche' la tabella e' condivisa
-     * fra le due pipeline e non porta il tenant per se'. L'ultima voce e'
-     * l'orchestrazione: la differenza fra la durata complessiva e la somma
-     * delle fasi, cioe' il tempo speso fra un passo e l'altro dalla macchina a
-     * stati e dalle code, piu' quello di un'eventuale fase che non registra il
-     * proprio task. Senza, la barra direbbe che l'elaborazione e' finita prima
-     * di quanto sia vero.
-     *
-     * @param  Builder<OriginalDocument>|Builder<Communication>  $subjects
-     * @param  array<string, string>  $phases
-     * @param  list<float>  $durations
-     * @return array<string, mixed>
-     */
-    private function phaseMetric(string $key, string $label, string $subjectType, Builder $subjects, array $phases, array $durations): array
+    private function averageDurationMetric(string $key, string $label, array $durations): array
     {
         $average = $durations === [] ? null : array_sum($durations) / count($durations);
-
-        if ($average === null) {
-            return ['key' => $key, 'value' => '—', 'label' => $label];
-        }
-
-        $since = now()->subDays(self::HISTORY_DAYS - 1)->startOfDay();
-        $byPhase = WorkflowTask::query()
-            ->where('subject_type', $subjectType)
-            ->whereIn('task_type', array_keys($phases))
-            ->whereNotNull('started_at')
-            ->whereNotNull('completed_at')
-            ->where('completed_at', '>=', $since)
-            ->whereIn('subject_id', $subjects)
-            ->get(['task_type', 'started_at', 'completed_at'])
-            ->groupBy('task_type')
-            ->map(fn ($tasks): float => (float) $tasks
-                ->map(fn ($task): float => (float) $task->started_at->diffInSeconds($task->completed_at, true))
-                ->avg());
-
-        $parts = [];
-
-        foreach ($phases as $taskType => $phaseLabel) {
-            $seconds = $byPhase[$taskType] ?? null;
-
-            if ($seconds !== null && $seconds > 0) {
-                $parts[] = ['label' => $phaseLabel, 'value' => round($seconds, 1)];
-            }
-        }
-
-        $waiting = round($average - array_sum(array_column($parts, 'value')), 1);
-
-        if ($parts !== [] && $waiting > 0) {
-            $parts[] = ['label' => 'Orchestrazione', 'value' => $waiting];
-        }
-
-        // Con la ripartizione il totale resta in secondi anche oltre il minuto
-        // e mezzo: le parti sono in secondi, e "1,7 min" sopra una legenda che
-        // dice "OCR 60s" costringerebbe a convertire per verificare la somma.
-        if ($parts !== []) {
-            return [
-                'key' => $key,
-                'value' => (int) round($average),
-                'unit' => 's',
-                'parts' => $parts,
-                'label' => $label,
-            ];
-        }
 
         return $this->durationMetric($key, $label, $average);
     }
@@ -627,15 +440,12 @@ class MvpStateService
                     ],
                 ),
                 $this->fieldConfidenceMetric($actor->tenantId),
-                $this->phaseMetric(
+                $this->averageDurationMetric(
                     'copilot.processing_seconds',
                     'Tempo medio di elaborazione',
-                    'original_document',
-                    OriginalDocument::query()->where('tenant_id', $actor->tenantId)->select('id'),
-                    self::DOCUMENT_PHASES,
                     $this->workflowDurations(OriginalDocument::query()->where('tenant_id', $actor->tenantId)),
                 ),
-                $this->distributionMetric(
+                $this->averageDurationMetric(
                     'copilot.duration',
                     'Durata delle elaborazioni',
                     $this->workflowDurations(OriginalDocument::query()->where('tenant_id', $actor->tenantId)),

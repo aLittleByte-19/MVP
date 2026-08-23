@@ -1,7 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, input } from "@angular/core";
 import { ringArcs } from "../../util/charts";
 import { formatCount } from "../../util/metrics";
-import type { MetricPart } from "../metric-phases/metric-phases";
+
+/** Una voce di una ripartizione: quanto vale e con che tono. */
+export interface MetricPart {
+  readonly label: string;
+  readonly value: number;
+}
 
 const SIZE = 92;
 const STROKE = 12;

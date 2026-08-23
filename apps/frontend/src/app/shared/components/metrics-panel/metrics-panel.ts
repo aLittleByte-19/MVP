@@ -4,9 +4,7 @@ import { formatMetric, type MetricTone, newToday } from "../../util/metrics";
 import { EmptyStateComponent } from "../empty-state/empty-state";
 import { MetricBreakdownComponent } from "../metric-breakdown/metric-breakdown";
 import { MetricCardComponent } from "../metric-card/metric-card";
-import { MetricDistributionComponent } from "../metric-distribution/metric-distribution";
 import { MetricGaugeComponent } from "../metric-gauge/metric-gauge";
-import { MetricPhasesComponent } from "../metric-phases/metric-phases";
 import { MetricShareComponent } from "../metric-share/metric-share";
 import { MetricStarsComponent } from "../metric-stars/metric-stars";
 import { MetricStatusComponent } from "../metric-status/metric-status";
@@ -16,32 +14,23 @@ import { MetricStatusComponent } from "../metric-status/metric-status";
  *
  * Non e' una preferenza estetica ma il tipo di domanda a cui il numero
  * risponde: quanto e con che ritmo (`trend`), quanta parte di un totale
- * (`share`), dove cade dentro una scala nota (`gauge`), com'e' distribuito
- * (`distribution`), fra quali stati si divide (`breakdown`), in che cosa si
- * spende (`phases`), che voto ha preso
- * (`stars`), se c'e' qualcosa da guardare (`status`). Con una forma sola le
- * schede di un pannello si leggevano tutte uguali, e per capire che cosa si
- * stesse guardando bisognava ogni volta tornare all'etichetta.
+ * (`share`), dove cade dentro una scala nota (`gauge`), fra quali stati si
+ * divide (`breakdown`), che voto ha preso (`stars`), se c'e' qualcosa da
+ * guardare (`status`). Con una forma sola le schede di un pannello si
+ * leggevano tutte uguali, e per capire che cosa si stesse guardando
+ * bisognava ogni volta tornare all'etichetta.
  */
-export type MetricKind =
-  | "trend"
-  | "share"
-  | "gauge"
-  | "status"
-  | "phases"
-  | "distribution"
-  | "breakdown"
-  | "stars";
+export type MetricKind = "trend" | "share" | "gauge" | "status" | "breakdown" | "stars";
 
 /** Come la pagina che conosce il contesto vuole che una metrica sia resa. */
 export interface MetricPresentation {
   readonly kind?: MetricKind;
   readonly tone?: MetricTone;
   /**
-   * Quante colonne occupa la scheda. Le forme che portano un grafico con un
-   * asse — la densita', la ripartizione in fasi — hanno bisogno di larghezza
-   * per restare leggibili; un verdetto di tre parole no. E' il mosaico a
-   * rendere il pannello una dashboard invece di una scacchiera.
+   * Quante colonne occupa la scheda. Le forme che portano una legenda da
+   * leggere — la ripartizione — hanno bisogno di larghezza per restare
+   * leggibili; un verdetto di tre parole no. E' il mosaico a rendere il
+   * pannello una dashboard invece di una scacchiera.
    */
   readonly span?: 1 | 2;
   /** Estremo della scala (`gauge`); di default cento. */
@@ -49,8 +38,6 @@ export interface MetricPresentation {
   /** Come si legge cio' che manca alla quota (`share`). */
   readonly restTone?: "alert" | "neutral";
   readonly restNoun?: string;
-  /** Come si chiamano le corse misurate (`distribution`): elaborazioni, generazioni. */
-  readonly subject?: string;
   /** Verdetto a zero e azione da fare quando ce n'e' almeno uno (`status`). */
   readonly okLabel?: string;
   readonly issueLabel?: string;
@@ -65,9 +52,7 @@ export interface MetricPresentation {
     EmptyStateComponent,
     MetricBreakdownComponent,
     MetricCardComponent,
-    MetricDistributionComponent,
     MetricGaugeComponent,
-    MetricPhasesComponent,
     MetricShareComponent,
     MetricStarsComponent,
     MetricStatusComponent
@@ -121,22 +106,6 @@ export interface MetricPresentation {
               }
               @case ("breakdown") {
                 <mvp-metric-breakdown [label]="entry.label" [parts]="entry.parts" />
-              }
-              @case ("phases") {
-                <mvp-metric-phases
-                  [label]="entry.label"
-                  [value]="entry.value"
-                  [unit]="entry.unit"
-                  [parts]="entry.parts"
-                />
-              }
-              @case ("distribution") {
-                <mvp-metric-distribution
-                  [label]="entry.label"
-                  [buckets]="entry.distribution"
-                  [sampleSize]="entry.sampleSize"
-                  [subject]="entry.subject"
-                />
               }
               @case ("stars") {
                 <mvp-metric-stars
@@ -206,9 +175,6 @@ export class MetricsPanelComponent {
         issueLabel: presentation?.issueLabel ?? "da esaminare",
         issueTone: presentation?.issueTone ?? ("danger" as const),
         parts: metric.parts,
-        distribution: metric.distribution,
-        sampleSize: metric.sampleSize ?? 0,
-        subject: presentation?.subject ?? "elaborazioni",
         context: this.contextFor(metric),
         history: metric.history
       };

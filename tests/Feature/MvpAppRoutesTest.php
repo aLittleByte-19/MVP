@@ -5,7 +5,6 @@ use App\Models\Communication;
 use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
 use App\Models\SubDocument;
-use App\Models\WorkflowTask;
 use App\Mvp\Ai\BedrockService;
 use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
@@ -1202,39 +1201,24 @@ test('the extracted fields metric splits them by their own confidence', function
         ->and($parts['Da revisionare']['tone'])->toBe('warning');
 });
 
-test('the average duration is broken down into the phases that consumed it', function () {
-    // L'ultima voce e' l'orchestrazione: la differenza fra la durata
-    // complessiva e la somma delle fasi, cioe' il tempo speso fra un passo e
-    // l'altro dalla macchina a stati e dalle code.
-    $document = OriginalDocument::factory()->completed()->create([
+test('the processing time is a plain average across the runs concluded in the window', function () {
+    OriginalDocument::factory()->completed()->create([
         'workflow_started_at' => now()->subSeconds(100),
         'workflow_completed_at' => now(),
     ]);
-
-    foreach ([['textract.ocr', 60], ['bedrock.extract', 30]] as [$taskType, $seconds]) {
-        WorkflowTask::query()->create([
-            'subject_type' => 'original_document',
-            'subject_id' => $document->id,
-            'task_type' => $taskType,
-            'task_token_hash' => hash('sha256', $taskType.$document->id),
-            'status' => 'succeeded',
-            'started_at' => now()->subSeconds($seconds),
-            'completed_at' => now(),
-        ]);
-    }
+    OriginalDocument::factory()->completed()->create([
+        'workflow_started_at' => now()->subSeconds(60),
+        'workflow_completed_at' => now(),
+    ]);
 
     $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
-    $parts = collect($metrics['copilot.processing_seconds']['parts'])->pluck('value', 'label');
 
-    expect($metrics['copilot.processing_seconds']['value'])->toBe(100)
+    expect($metrics['copilot.processing_seconds']['value'])->toBe(80)
         ->and($metrics['copilot.processing_seconds']['unit'])->toBe('s')
-        // toEqual e non toBe: un decimale tondo torna dal JSON come intero.
-        ->and($parts['OCR'])->toEqual(60)
-        ->and($parts['Estrazione'])->toEqual(30)
-        ->and($parts['Orchestrazione'])->toEqual(10);
+        ->and($metrics['copilot.processing_seconds'])->not->toHaveKey('parts');
 });
 
-test('the duration distribution splits the runs into ten intervals', function () {
+test('the duration metric is a plain average, not a histogram', function () {
     foreach ([4, 6, 7, 9, 12, 14, 19, 23] as $seconds) {
         OriginalDocument::factory()->completed()->create([
             'workflow_started_at' => now()->subSeconds($seconds),
@@ -1243,14 +1227,12 @@ test('the duration distribution splits the runs into ten intervals', function ()
     }
 
     $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
-    $distribution = collect($metrics['copilot.duration']['distribution']);
 
-    // Passo di 5 secondi: dieci intervalli coprono la corsa piu' lunga (23s).
-    expect($distribution)->toHaveCount(10)
-        ->and($distribution->first()['upTo'])->toBe(5)
-        ->and($distribution->last()['upTo'])->toBe(50)
-        ->and($distribution->sum('count'))->toBe(8)
-        ->and($metrics['copilot.duration']['sampleSize'])->toBe(8);
+    // (4+6+7+9+12+14+19+23)/8 = 11.75, arrotondato a 12.
+    expect($metrics['copilot.duration']['value'])->toBe(12)
+        ->and($metrics['copilot.duration']['unit'])->toBe('s')
+        ->and($metrics['copilot.duration'])->not->toHaveKey('distribution')
+        ->and($metrics['copilot.duration'])->not->toHaveKey('sampleSize');
 });
 
 test('an average duration past ninety seconds is expressed in minutes', function () {

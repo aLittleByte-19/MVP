@@ -132,8 +132,8 @@ export class CopilotPageViewModel {
     "copilot.review_breakdown": { kind: "breakdown", span: 2 },
     "copilot.download_breakdown": { kind: "breakdown", span: 2 },
     "copilot.field_confidence": { kind: "breakdown", span: 2 },
-    "copilot.processing_seconds": { kind: "phases", span: 2 },
-    "copilot.duration": { kind: "distribution", span: 2 },
+    "copilot.processing_seconds": { kind: "trend", span: 2 },
+    "copilot.duration": { kind: "trend", span: 2 },
     "copilot.processing_failed": {
       kind: "status",
       okLabel: "Nessun errore",

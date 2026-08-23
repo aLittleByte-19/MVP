@@ -68,13 +68,21 @@ describe("MetricsPanelComponent", () => {
   });
 
   it("da' alle schede con un grafico due colonne del mosaico", () => {
-    // Su una colonna sola le tacche dei tempi si accavallerebbero.
+    // Su una colonna sola una legenda con piu' voci si accavallerebbe.
     const host = render({
       metrics: [
-        { key: "durata", value: 41, label: "Durata", sampleSize: 20, distribution: [] },
+        {
+          key: "esito",
+          value: 41,
+          label: "Esito",
+          parts: [
+            { label: "Validato", value: 30 },
+            { label: "Da rivedere", value: 11 }
+          ]
+        },
         { key: "conteggio", value: 12, label: "Documenti" }
       ],
-      presentation: { durata: { kind: "distribution", span: 2 } }
+      presentation: { esito: { kind: "breakdown", span: 2 } }
     });
     const cells = host.querySelectorAll("li");
 

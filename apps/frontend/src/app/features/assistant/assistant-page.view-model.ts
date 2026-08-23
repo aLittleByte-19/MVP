@@ -152,8 +152,8 @@ export class AssistantPageViewModel {
       restNoun: "senza voto"
     },
     "assistant.rating_average": { kind: "stars", span: 2, max: 5 },
-    "assistant.generation_seconds": { kind: "phases", span: 2 },
-    "assistant.duration": { kind: "distribution", span: 2, subject: "generazioni" },
+    "assistant.generation_seconds": { kind: "trend", span: 2 },
+    "assistant.duration": { kind: "trend", span: 2 },
     "assistant.generation_failed": {
       kind: "status",
       okLabel: "Nessun errore",
