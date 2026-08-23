@@ -3,7 +3,6 @@
 namespace App\Mvp\Communications\Adapters\Outbound\Storage;
 
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
-use App\Mvp\Observability\MetricsRecorder;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -11,8 +10,6 @@ use League\Flysystem\FilesystemException;
 
 class FlysystemCommunicationCoverAdapter implements CommunicationCoverStoragePort
 {
-    public function __construct(private readonly MetricsRecorder $metrics) {}
-
     public function store(string $path, string $bytes): void
     {
         try {
@@ -23,8 +20,6 @@ class FlysystemCommunicationCoverAdapter implements CommunicationCoverStoragePor
         }
 
         if ($stored === false) {
-            $this->metrics->recordDomainCounter('communication_cover_storage_failed_total', ['operation' => 'put']);
-
             throw new \RuntimeException('Storage copertine non raggiungibile.');
         }
     }
@@ -38,7 +33,6 @@ class FlysystemCommunicationCoverAdapter implements CommunicationCoverStoragePor
         try {
             $this->disk()->delete($path);
         } catch (FilesystemException $e) {
-            $this->metrics->recordDomainCounter('communication_cover_storage_failed_total', ['operation' => 'delete']);
             Log::warning('Communication cover delete failed', ['path' => $path, 'message' => $e->getMessage()]);
         }
     }
@@ -48,8 +42,6 @@ class FlysystemCommunicationCoverAdapter implements CommunicationCoverStoragePor
         try {
             return $this->disk()->exists($path);
         } catch (FilesystemException $e) {
-            $this->metrics->recordDomainCounter('communication_cover_storage_failed_total', ['operation' => 'exists']);
-
             throw new \RuntimeException("Storage copertine non raggiungibile: {$path}", previous: $e);
         }
     }
@@ -63,8 +55,6 @@ class FlysystemCommunicationCoverAdapter implements CommunicationCoverStoragePor
         }
 
         if ($contents === null) {
-            $this->metrics->recordDomainCounter('communication_cover_storage_failed_total', ['operation' => 'get']);
-
             throw new \RuntimeException("Copertina non trovata sullo storage: {$path}");
         }
 

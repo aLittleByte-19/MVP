@@ -2,7 +2,6 @@
 
 namespace App\Mvp\Workflow\Services;
 
-use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowHeartbeatPort;
 use Aws\Exception\AwsException;
 use Aws\Sfn\SfnClient;
@@ -28,7 +27,6 @@ class WorkflowTaskHeartbeat implements WorkflowHeartbeatPort
 
     public function __construct(
         private readonly SfnClient $stepFunctions,
-        private readonly MetricsRecorder $metrics,
     ) {}
 
     /**
@@ -57,8 +55,8 @@ class WorkflowTaskHeartbeat implements WorkflowHeartbeatPort
      * Send a heartbeat, throttled to one call per configured interval. A
      * rejected heartbeat (task already timed out, token unknown, emulator
      * without SendTaskHeartbeat support) must not abort the business task:
-     * it is logged, counted and the channel degrades to no-op for the rest
-     * of the current task.
+     * it is logged and the channel degrades to no-op for the rest of the
+     * current task.
      */
     public function beat(bool $force = false): void
     {
@@ -76,13 +74,8 @@ class WorkflowTaskHeartbeat implements WorkflowHeartbeatPort
         try {
             $this->stepFunctions->sendTaskHeartbeat(['taskToken' => $this->taskToken]);
             $this->lastBeatAt = $now;
-            $this->metrics->recordDomainCounter('stepfunctions_heartbeats_sent_total', ['task_type' => $this->taskType]);
         } catch (AwsException $e) {
             $this->degraded = true;
-            $this->metrics->recordDomainCounter('stepfunctions_heartbeats_failed_total', [
-                'task_type' => $this->taskType,
-                'error' => $e->getAwsErrorCode() ?: 'aws_error',
-            ]);
             Log::warning('SendTaskHeartbeat rejected; continuing task without heartbeats', [
                 'task_type' => $this->taskType,
                 'aws_error' => $e->getAwsErrorCode(),

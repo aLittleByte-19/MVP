@@ -2,7 +2,6 @@
 
 use App\Mvp\Ai\AiOutputValidator;
 use App\Mvp\Ai\BedrockService;
-use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
 use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\Command;
@@ -13,7 +12,7 @@ use Aws\Sfn\SfnClient;
 function makeBedrockService(BedrockRuntimeClient $client, ?string $modelId = 'test-model-id', ?string $imageModelId = null): BedrockService
 {
     // Heartbeat mai attivato: resta no-op fuori da un task workflow.
-    $heartbeat = new WorkflowTaskHeartbeat(Mockery::mock(SfnClient::class), app(MetricsRecorder::class));
+    $heartbeat = new WorkflowTaskHeartbeat(Mockery::mock(SfnClient::class));
 
     // Stesso doppio per testo e immagini: la separazione dei client riguarda la
     // region, non il comportamento verificato qui.

@@ -3,7 +3,6 @@
 namespace App\Mvp\Documents\Adapters\Outbound\Ocr;
 
 use App\Mvp\Documents\Domain\Ports\Outbound\OcrGatewayPort;
-use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
 use Aws\Exception\AwsException;
 use Aws\Textract\TextractClient;
@@ -18,15 +17,12 @@ class TextractOcrAdapter implements OcrGatewayPort
 {
     public function __construct(
         private readonly TextractClient $client,
-        private readonly MetricsRecorder $metrics,
         private readonly WorkflowTaskHeartbeat $heartbeat,
     ) {}
 
     public function detectText(string $bucket, string $key, string $idempotencyKey): array
     {
         if (! (bool) config('services.textract.enabled')) {
-            $this->metrics->recordDomainCounter('textract_jobs_skipped_total', ['reason' => 'disabled']);
-
             return [
                 'enabled' => false,
                 'jobId' => null,
@@ -55,14 +51,7 @@ class TextractOcrAdapter implements OcrGatewayPort
             ]);
 
             $jobId = (string) $result->get('JobId');
-            $this->metrics->recordDomainCounter('textract_jobs_started_total');
-
             $output = $this->pollTextDetection($jobId, $startedAt);
-            $this->metrics->recordDomainCounter('textract_jobs_completed_total');
-            $this->metrics->recordDomainCounter('textract_confidence_sum', [], (float) ($output['confidenceAvg'] ?? 0));
-            $this->metrics->recordDomainCounter('textract_confidence_count');
-            $this->metrics->recordDomainCounter('textract_duration_seconds_sum', [], microtime(true) - $startedAt);
-            $this->metrics->recordDomainCounter('textract_duration_seconds_count');
 
             return [
                 'enabled' => true,
@@ -72,9 +61,6 @@ class TextractOcrAdapter implements OcrGatewayPort
                 'confidenceAvg' => $output['confidenceAvg'],
             ];
         } catch (AwsException $e) {
-            $this->metrics->recordDomainCounter('textract_jobs_failed_total', [
-                'error' => $this->awsErrorCode($e),
-            ]);
             Log::error('Textract OCR failed', [
                 'bucket' => $bucket,
                 'key' => $key,

@@ -29,7 +29,6 @@ use App\Mvp\Communications\Application\Listeners\RecordCommunicationGenerationRe
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationRated;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationRegenerationRequested;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationTextGenerated;
-use App\Mvp\Communications\Application\Listeners\RecordCommunicationWorkflowCompleted;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationWorkflowStarted;
 use App\Mvp\Communications\Application\Listeners\RecordCommunicationWorkflowStartFailed;
 use App\Mvp\Communications\Application\Listeners\RecordPromptConfigurationDeleted;
@@ -64,7 +63,6 @@ use App\Mvp\Communications\Domain\Events\CommunicationGenerationRequested;
 use App\Mvp\Communications\Domain\Events\CommunicationRated;
 use App\Mvp\Communications\Domain\Events\CommunicationRegenerationRequested;
 use App\Mvp\Communications\Domain\Events\CommunicationTextGenerated;
-use App\Mvp\Communications\Domain\Events\CommunicationWorkflowCompleted;
 use App\Mvp\Communications\Domain\Events\CommunicationWorkflowStarted;
 use App\Mvp\Communications\Domain\Events\CommunicationWorkflowStartFailed;
 use App\Mvp\Communications\Domain\Events\PromptConfigurationDeleted;
@@ -101,7 +99,6 @@ use App\Mvp\Documents\Application\Listeners\RecordDocumentProcessingCompleted;
 use App\Mvp\Documents\Application\Listeners\RecordDocumentProcessingFailed;
 use App\Mvp\Documents\Application\Listeners\RecordDocumentProcessingStarted;
 use App\Mvp\Documents\Application\Listeners\RecordDocumentUploadAccepted;
-use App\Mvp\Documents\Application\Listeners\RecordDocumentWorkflowCompleted;
 use App\Mvp\Documents\Application\Listeners\RecordDocumentWorkflowStarted;
 use App\Mvp\Documents\Application\Listeners\RecordDocumentWorkflowStartFailed;
 use App\Mvp\Documents\Application\Listeners\RecordSendMessageExported;
@@ -128,7 +125,6 @@ use App\Mvp\Documents\Domain\Events\DocumentProcessingCompleted;
 use App\Mvp\Documents\Domain\Events\DocumentProcessingFailed;
 use App\Mvp\Documents\Domain\Events\DocumentProcessingStarted;
 use App\Mvp\Documents\Domain\Events\DocumentUploadAccepted;
-use App\Mvp\Documents\Domain\Events\DocumentWorkflowCompleted;
 use App\Mvp\Documents\Domain\Events\DocumentWorkflowStarted;
 use App\Mvp\Documents\Domain\Events\DocumentWorkflowStartFailed;
 use App\Mvp\Documents\Domain\Events\SendMessageExported;
@@ -156,8 +152,6 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
 use App\Mvp\Documents\Domain\Ports\Outbound\OcrGatewayPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\SendMessageRendererPort;
 use App\Mvp\Identity\MvpUserProvider;
-use App\Mvp\Observability\DlqDepthProbe;
-use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Support\Clock\SystemClock;
 use App\Mvp\Support\Identifiers\RandomUuidGenerator;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
@@ -232,26 +226,6 @@ class AppServiceProvider extends ServiceProvider
             return new SqsClient($config);
         });
 
-        // Client dedicato al probe DLQ: timeout corti perche' viene usato dentro
-        // /internal/metrics, dove una chiamata lenta ritarderebbe lo scrape di
-        // tutte le altre metriche. Il singleton generico non li impone.
-        $this->app->singleton(DlqDepthProbe::class, function () {
-            $config = [
-                'version' => 'latest',
-                'region' => config('services.sqs.region'),
-                'http' => [
-                    'connect_timeout' => 2,
-                    'timeout' => 3,
-                ],
-            ];
-
-            if (filled(config('services.sqs.endpoint'))) {
-                $config['endpoint'] = config('services.sqs.endpoint');
-            }
-
-            return new DlqDepthProbe(new SqsClient($config));
-        });
-
         $this->app->singleton(TextractClient::class, function () {
             $config = [
                 'version' => 'latest',
@@ -274,10 +248,7 @@ class AppServiceProvider extends ServiceProvider
         // Singleton: il consumer la attiva per messaggio e i service di lunga
         // durata (Textract, split Bedrock) devono condividere la stessa istanza.
         $this->app->singleton(WorkflowTaskHeartbeat::class, function ($app) {
-            return new WorkflowTaskHeartbeat(
-                $app->make(SfnClient::class),
-                $app->make(MetricsRecorder::class),
-            );
+            return new WorkflowTaskHeartbeat($app->make(SfnClient::class));
         });
         $this->app->singleton(WorkflowHeartbeatPort::class, fn ($app) => $app->make(WorkflowTaskHeartbeat::class));
 
@@ -506,7 +477,6 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(CommunicationCoverReplaced::class, RecordCommunicationCoverReplaced::class);
         Event::listen(CommunicationCoverRemoved::class, RecordCommunicationCoverRemoved::class);
         Event::listen(CommunicationCoverDegraded::class, RecordCommunicationCoverDegraded::class);
-        Event::listen(CommunicationWorkflowCompleted::class, RecordCommunicationWorkflowCompleted::class);
         Event::listen(CommunicationDraftFavorited::class, RecordCommunicationDraftFavorited::class);
         Event::listen(CommunicationDraftUnfavorited::class, RecordCommunicationDraftUnfavorited::class);
         Event::listen(CommunicationDraftEdited::class, RecordCommunicationDraftEdited::class);
@@ -530,7 +500,6 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(DocumentProcessingFailed::class, RecordDocumentProcessingFailed::class);
         Event::listen(SubDocumentFieldsExtracted::class, RecordSubDocumentFieldsExtracted::class);
         Event::listen(DocumentAiOutputRejected::class, RecordDocumentAiOutputRejected::class);
-        Event::listen(DocumentWorkflowCompleted::class, RecordDocumentWorkflowCompleted::class);
         Event::listen(DocumentWorkflowStarted::class, RecordDocumentWorkflowStarted::class);
         Event::listen(DocumentWorkflowStartFailed::class, RecordDocumentWorkflowStartFailed::class);
         Event::listen(SubDocumentDeleted::class, RecordSubDocumentDeleted::class);

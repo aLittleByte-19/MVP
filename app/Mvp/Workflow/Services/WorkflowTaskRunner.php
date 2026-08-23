@@ -4,22 +4,19 @@ namespace App\Mvp\Workflow\Services;
 
 use App\Models\WorkflowTask;
 use App\Mvp\Audit\Services\AuditLogger;
-use App\Mvp\Observability\MetricsRecorder;
-use App\Mvp\Workflow\Support\StateMachineName;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Domain-agnostic execution of a Step Functions callback task: it owns
- * deduplication, the atomic claim, audit and metrics, and delegates the
- * business step to the handler registered for the task type.
+ * deduplication, the atomic claim, audit, and delegates the business step
+ * to the handler registered for the task type.
  */
 class WorkflowTaskRunner
 {
     public function __construct(
         private readonly WorkflowTaskRegistry $registry,
         private readonly AuditLogger $audit,
-        private readonly MetricsRecorder $metrics,
     ) {}
 
     /**
@@ -86,8 +83,6 @@ class WorkflowTaskRunner
         if (! $this->claim($task)) {
             // Consegna duplicata mentre un altro worker sta gia' elaborando lo
             // stesso token: nessun callback, il worker attivo completera' il task.
-            $this->metrics->recordDomainCounter('sqs_messages_duplicate_total', ['task_type' => $taskType]);
-
             return [
                 'callback_required' => false,
                 'duplicate_in_flight' => true,
@@ -100,7 +95,6 @@ class WorkflowTaskRunner
                 ]),
             ];
         }
-        $this->metrics->recordDomainCounter('sqs_messages_received_total', ['task_type' => $taskType]);
 
         try {
             // Ri-risolve il subject invece di un semplice refresh: tra il
@@ -141,14 +135,6 @@ class WorkflowTaskRunner
             $subject = $handler->resolveSubject($message);
             $handler->onFailure($subject, $taskType, $e);
 
-            $this->metrics->recordDomainCounter('sqs_messages_failed_total', ['task_type' => $taskType]);
-            // La state machine va etichettata anche qui: senza, i pannelli che
-            // filtrano per state_machine perdevano proprio i fallimenti da task,
-            // che sono il caso piu' frequente.
-            $this->metrics->recordDomainCounter('stepfunctions_executions_failed_total', [
-                'reason' => 'task_failure',
-                'state_machine' => StateMachineName::forPipeline($handler->pipeline()),
-            ]);
             Log::error('Workflow task failed', [
                 'subject_type' => $handler->subjectType(),
                 'subject_id' => $subject->id,

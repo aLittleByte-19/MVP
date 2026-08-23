@@ -94,28 +94,6 @@ test('readiness reports dependency errors without leaking credentials', function
         ->not->toContain('super-secret');
 });
 
-test('internal metrics endpoint exposes application and http telemetry', function () {
-    $this->getJson('/health')->assertOk();
-
-    $this->get('/internal/metrics')
-        ->assertOk()
-        ->assertHeader('content-type', 'text/plain; version=0.0.4; charset=utf-8')
-        ->assertSee('mvp_app_info', false)
-        ->assertSee('mvp_http_requests_total', false)
-        ->assertSee('route="health"', false)
-        ->assertSee('mvp_readiness_status', false);
-});
-
-test('metrics endpoint exposes send status and rating gauges', function () {
-    $this->get('/internal/metrics')
-        ->assertOk()
-        ->assertSee('mvp_sub_documents_send', false)
-        ->assertSee('send_status="pending"', false)
-        ->assertSee('send_status="sent"', false)
-        ->assertSee('mvp_communications_rated', false)
-        ->assertSee('mvp_communication_rating_average', false);
-});
-
 test('versioned api exposes existing mvp state contract', function () {
     $this->getJson('/api/v1/state')
         ->assertOk()

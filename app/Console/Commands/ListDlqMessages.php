@@ -6,12 +6,9 @@ use Aws\Sqs\SqsClient;
 use Illuminate\Console\Command;
 
 /**
- * Strumento di diagnosi, non punto di strumentazione: la profondita' della DLQ
- * e' misurata da DlqDepthProbe a ogni scrape. Questo comando incrementava un
- * counter `dlq_messages_total` che cresceva solo quando qualcuno lo lanciava a
- * mano, con un tetto di 10 messaggi, e non tornava mai indietro — gli alert che
- * ci si basavano erano quindi ciechi prima della prima esecuzione e bloccati in
- * firing dopo.
+ * Strumento di diagnosi manuale sulla profondita' e il contenuto di una DLQ:
+ * interroga SQS per conto proprio, senza dipendere da alcuna infrastruttura
+ * di monitoraggio.
  */
 class ListDlqMessages extends Command
 {

@@ -2,7 +2,6 @@
 
 use App\Models\OriginalDocument;
 use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
-use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
 use Aws\Command;
 use Aws\Exception\AwsException;
@@ -13,7 +12,7 @@ use Mockery\MockInterface;
 
 function makeHeartbeat(MockInterface $sfn): WorkflowTaskHeartbeat
 {
-    return new WorkflowTaskHeartbeat($sfn, app(MetricsRecorder::class));
+    return new WorkflowTaskHeartbeat($sfn);
 }
 
 test('activate sends the initial heartbeat and throttles the following beats', function () {

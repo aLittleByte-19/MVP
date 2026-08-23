@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
 use App\Mvp\Workflow\Services\WorkflowTaskRunner;
 use App\Mvp\Workflow\Support\WorkflowContext;
@@ -29,7 +28,7 @@ class ConsumeWorkflowTasks extends Command
      */
     private const PERMANENT_CALLBACK_ERRORS = ['TaskTimedOut', 'TaskDoesNotExist', 'InvalidToken'];
 
-    public function handle(SqsClient $sqs, SfnClient $stepFunctions, WorkflowTaskRunner $runner, WorkflowTaskHeartbeat $heartbeat, WorkflowContext $context, MetricsRecorder $metrics): int
+    public function handle(SqsClient $sqs, SfnClient $stepFunctions, WorkflowTaskRunner $runner, WorkflowTaskHeartbeat $heartbeat, WorkflowContext $context): int
     {
         $pipeline = (string) $this->option('queue');
         $maxMessages = max(0, (int) $this->option('max'));
@@ -99,13 +98,13 @@ class ConsumeWorkflowTasks extends Command
 
                     if ($taskResult['callback_required']) {
                         if (($taskResult['callback'] ?? 'success') === 'failure') {
-                            $callbackOk = $this->sendCallback($metrics, fn () => $stepFunctions->sendTaskFailure([
+                            $callbackOk = $this->sendCallback(fn () => $stepFunctions->sendTaskFailure([
                                 'taskToken' => $taskToken,
                                 'error' => 'WorkflowTaskFailed',
                                 'cause' => substr((string) ($taskResult['error'] ?? 'Workflow task failed'), 0, 32000),
                             ]), 'sendTaskFailure');
                         } else {
-                            $callbackOk = $this->sendCallback($metrics, fn () => $stepFunctions->sendTaskSuccess([
+                            $callbackOk = $this->sendCallback(fn () => $stepFunctions->sendTaskSuccess([
                                 'taskToken' => $taskToken,
                                 'output' => json_encode($taskResult['output'], JSON_THROW_ON_ERROR),
                             ]), 'sendTaskSuccess');
@@ -122,7 +121,7 @@ class ConsumeWorkflowTasks extends Command
                     $callbackOk = false;
 
                     if ($taskToken !== '') {
-                        $callbackOk = $this->sendCallback($metrics, fn () => $stepFunctions->sendTaskFailure([
+                        $callbackOk = $this->sendCallback(fn () => $stepFunctions->sendTaskFailure([
                             'taskToken' => $taskToken,
                             'error' => 'WorkflowTaskFailed',
                             'cause' => substr($e->getMessage(), 0, 32000),
@@ -162,7 +161,7 @@ class ConsumeWorkflowTasks extends Command
      * (vedi PERMANENT_CALLBACK_ERRORS) e' invece trattato come successo ai
      * fini della coda: nessun retry con lo stesso token puo' riuscire.
      */
-    private function sendCallback(MetricsRecorder $metrics, callable $callback, string $operation): bool
+    private function sendCallback(callable $callback, string $operation): bool
     {
         try {
             $callback();
@@ -170,10 +169,6 @@ class ConsumeWorkflowTasks extends Command
             return true;
         } catch (AwsException $e) {
             $errorCode = $e->getAwsErrorCode() ?: 'aws_error';
-            $metrics->recordDomainCounter('stepfunctions_callbacks_failed_total', [
-                'operation' => $operation,
-                'error' => $errorCode,
-            ]);
             $this->warn("{$operation} rifiutato da Step Functions: ".($e->getAwsErrorMessage() ?: $e->getMessage()));
 
             if (in_array($errorCode, self::PERMANENT_CALLBACK_ERRORS, true)) {

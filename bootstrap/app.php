@@ -6,7 +6,6 @@ use App\Console\Commands\ResetMvpData;
 use App\Exceptions\AiServiceException;
 use App\Http\Middleware\AuthorizeMvpAccess;
 use App\Http\Middleware\CorrelateRequests;
-use App\Http\Middleware\RecordHttpMetrics;
 use App\Http\Middleware\ResolveMvpIdentity;
 use App\Mvp\Communications\Domain\Exceptions\PromptConfigurationNotAuthorizedException;
 use App\Mvp\Documents\Domain\Exceptions\DocumentNotAuthorizedException;
@@ -57,7 +56,6 @@ return (new ApplicationBuilder($app))
         // secure cookies work correctly.
         $middleware->trustProxies(at: '*');
         $middleware->append(CorrelateRequests::class);
-        $middleware->append(RecordHttpMetrics::class);
         $middleware->alias([
             'mvp.identity' => ResolveMvpIdentity::class,
             'mvp.authorize' => AuthorizeMvpAccess::class,

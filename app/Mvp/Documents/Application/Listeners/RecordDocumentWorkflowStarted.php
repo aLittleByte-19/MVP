@@ -4,13 +4,11 @@ namespace App\Mvp\Documents\Application\Listeners;
 
 use App\Mvp\Audit\Services\AuditLogger;
 use App\Mvp\Documents\Domain\Events\DocumentWorkflowStarted;
-use App\Mvp\Observability\MetricsRecorder;
 
 class RecordDocumentWorkflowStarted
 {
     public function __construct(
         private readonly AuditLogger $audit,
-        private readonly MetricsRecorder $metrics,
     ) {}
 
     public function handle(DocumentWorkflowStarted $event): void
@@ -27,8 +25,5 @@ class RecordDocumentWorkflowStarted
             ],
             tenantId: $event->tenantId,
         );
-        $this->metrics->recordDomainCounter('stepfunctions_executions_started_total', [
-            'state_machine' => $event->stateMachineShortName,
-        ]);
     }
 }

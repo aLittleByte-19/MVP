@@ -1,5 +1,0 @@
-# Basic auth per le UI di osservabilità senza autenticazione nativa
-# (prometheus/alertmanager/tempo dietro Traefik). Credenziali di default
-# SOLO per sviluppo locale: mvp / mvp-obs-local-password
-# Per cambiarle: htpasswd -nbB <user> <password> e sostituire la riga.
-mvp:$2y$05$v4AqYGdvoOFdHiTKiqBepe6cqpY7wc.mcOuB5v86EyarkziABBPAu

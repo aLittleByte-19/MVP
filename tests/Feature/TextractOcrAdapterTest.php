@@ -1,7 +1,6 @@
 <?php
 
 use App\Mvp\Documents\Adapters\Outbound\Ocr\TextractOcrAdapter;
-use App\Mvp\Observability\MetricsRecorder;
 use App\Mvp\Workflow\Services\WorkflowTaskHeartbeat;
 use Aws\Command;
 use Aws\Exception\AwsException;
@@ -16,12 +15,12 @@ use Aws\Textract\TextractClient;
  * e non la persistenza: quella e' responsabilita' del caso d'uso applicativo
  * che chiama questo adapter tramite OcrGatewayPort (vedi RunOcrUseCaseTest).
  */
-function mvpMakeTextractAdapter(TextractClient $client, ?MetricsRecorder $metrics = null): TextractOcrAdapter
+function mvpMakeTextractAdapter(TextractClient $client): TextractOcrAdapter
 {
     // Heartbeat mai attivato: resta no-op fuori da un task workflow.
-    $heartbeat = new WorkflowTaskHeartbeat(Mockery::mock(SfnClient::class), app(MetricsRecorder::class));
+    $heartbeat = new WorkflowTaskHeartbeat(Mockery::mock(SfnClient::class));
 
-    return new TextractOcrAdapter($client, $metrics ?? app(MetricsRecorder::class), $heartbeat);
+    return new TextractOcrAdapter($client, $heartbeat);
 }
 
 /** Blocco LINE come lo restituisce Textract. */
