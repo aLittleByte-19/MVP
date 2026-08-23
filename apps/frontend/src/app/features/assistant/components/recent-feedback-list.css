@@ -1,0 +1,36 @@
+.card {
+  display: grid;
+  gap: var(--mvp-space-2);
+  padding: var(--mvp-space-3);
+  border: 1px solid var(--mvp-border);
+  border-radius: var(--mvp-radius);
+  background: var(--mvp-surface-muted);
+}
+
+.cardHeader {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--mvp-space-2);
+}
+
+.card .title {
+  margin: 0;
+  font-size: 1.17em;
+  font-weight: bold;
+}
+
+.card .date {
+  margin: 0;
+  color: var(--mvp-muted);
+}
+
+.card .comment {
+  margin: 0;
+  color: var(--mvp-muted);
+}
+
+:host {
+  display: contents;
+}

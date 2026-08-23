@@ -58,19 +58,6 @@ export function formatMetric(metric: Metric): FormattedMetric {
 }
 
 /**
- * Tono di un conteggio di guasti — corse fallite, corse ferme oltre il tempo
- * previsto, prodotti degradati. Il rilievo dipende dal valore invece di essere
- * fisso: un rosso permanente segnalerebbe un problema anche sullo zero, che e'
- * invece la notizia buona, e l'operatore imparerebbe a ignorarlo.
- *
- * `whenPositive` distingue cio' che blocca da cio' che degrada: una copertina
- * non generata non ferma nulla, il PDF esce comunque senza immagine.
- */
-export function faultTone(entry: Metric | null, whenPositive: MetricTone = "alert"): MetricTone {
-  return typeof entry?.value === "number" && entry.value > 0 ? whenPositive : "ok";
-}
-
-/**
  * Elementi entrati oggi, cioe' l'ultimo punto della serie.
  *
  * `history` e' un flusso di ingresso, non la storia del totale (vedi lo schema

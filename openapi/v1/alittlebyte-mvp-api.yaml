@@ -858,7 +858,7 @@ components:
           $ref: "#/components/schemas/CopilotState"
     AssistantState:
       type: object
-      required: [metrics, history, promptConfigurations]
+      required: [metrics, history, promptConfigurations, recentFeedback]
       properties:
         metrics:
           type: array
@@ -872,6 +872,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PromptConfiguration"
+        recentFeedback:
+          type: array
+          description: Gli ultimi contenuti valutati, con voto e commento testuale.
+          items:
+            $ref: "#/components/schemas/Communication"
     CopilotState:
       type: object
       required: [metrics, documents]

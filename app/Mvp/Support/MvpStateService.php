@@ -7,12 +7,8 @@ use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
 use App\Models\PromptConfiguration;
 use App\Models\SubDocument;
-use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
-use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
-use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
-use App\Mvp\Documents\Domain\Enums\SendStatus;
 use App\Mvp\Documents\Domain\Support\SendMessageDraft;
 use App\Mvp\Support\Identity\Actor;
 use Illuminate\Database\Eloquent\Builder;
@@ -56,10 +52,14 @@ class MvpStateService
         // Preset di prompt salvati (UC-19): elenco limitato, non filtrabile,
         // pensato per un riuso rapido dal form di generazione, non come
         // archivio ricercabile.
-        $promptConfigurations = PromptConfiguration::query()
-            ->where('tenant_id', $actor->tenantId)
-            ->latest()
-            ->limit(20)
+        $promptConfigurationsQuery = PromptConfiguration::query()->where('tenant_id', $actor->tenantId);
+        $promptConfigurationsCount = (clone $promptConfigurationsQuery)->count();
+        $promptConfigurations = (clone $promptConfigurationsQuery)->latest()->limit(20)->get();
+        // UC-27.3: gli ultimi feedback testuali, non solo la media (UC-27.2).
+        $recentFeedback = (clone $baseQuery)
+            ->whereNotNull('rating')
+            ->latest('rated_at')
+            ->limit(10)
             ->get();
 
         return [
@@ -78,25 +78,11 @@ class MvpStateService
                     'history' => $this->dailySeries(Communication::query()->where('tenant_id', $actor->tenantId)),
                 ],
                 [
-                    'key' => 'assistant.generation_failed',
-                    'value' => (clone $baseQuery)->where('generation_status', CommunicationGenerationStatus::Failed)->count(),
-                    'label' => 'Generazioni non riuscite',
-                    'history' => $this->dailySeries(
-                        Communication::query()->where('tenant_id', $actor->tenantId)->where('generation_status', CommunicationGenerationStatus::Failed)
-                    ),
-                ],
-                [
-                    'key' => 'assistant.generation_stuck',
-                    'value' => (clone $baseQuery)
-                        ->where('generation_status', CommunicationGenerationStatus::Processing)
-                        ->where('workflow_started_at', '<', now()->subSeconds($this->generationTimeoutSeconds()))
-                        ->count(),
-                    'label' => 'Oltre il tempo previsto',
-                ],
-                [
-                    'key' => 'assistant.covers_failed',
-                    'value' => (clone $baseQuery)->where('cover_status', CoverImageStatus::Failed)->count(),
-                    'label' => 'Copertine non riuscite',
+                    // UC-27.1: il secondo conteggio di "statistiche di utilizzo",
+                    // accanto al totale dei contenuti generati.
+                    'key' => 'assistant.prompt_configurations',
+                    'value' => $promptConfigurationsCount,
+                    'label' => 'Configurazioni di prompt salvate',
                 ],
                 [
                     'key' => 'assistant.rated',
@@ -113,16 +99,6 @@ class MvpStateService
                     'sampleSize' => $rated,
                     'label' => 'Media stelle',
                 ],
-                $this->averageDurationMetric(
-                    'assistant.generation_seconds',
-                    'Tempo medio di generazione',
-                    $this->workflowDurations(Communication::query()->where('tenant_id', $actor->tenantId)),
-                ),
-                $this->averageDurationMetric(
-                    'assistant.duration',
-                    'Durata delle generazioni',
-                    $this->workflowDurations(Communication::query()->where('tenant_id', $actor->tenantId)),
-                ),
                 [
                     // Non compare nel pannello: e' la parte "in bozza" della
                     // ripartizione e, come priorita', vive nella Overview.
@@ -136,6 +112,8 @@ class MvpStateService
             ],
             'history' => $history->map(fn ($communication) => $this->communication($communication))->values()->all(),
             'promptConfigurations' => $promptConfigurations->map(fn ($configuration) => $this->promptConfiguration($configuration))->values()->all(),
+            // UC-27.3: gli ultimi feedback con voto e commento testuale.
+            'recentFeedback' => $recentFeedback->map(fn ($communication) => $this->communication($communication))->values()->all(),
         ];
     }
 
@@ -214,88 +192,79 @@ class MvpStateService
     }
 
     /**
-     * Ripartizione di un insieme fra gli stati in cui si trova.
+     * UC-56.4: percentuale di sotto-documenti in cui nome, cognome ed email
+     * del destinatario coincidono ancora con quanto l'AI aveva letto alla
+     * prima estrazione — cioe' nessuno li ha corretti a mano da allora.
      *
-     * Il tono di ciascuno stato lo dichiara l'enum di dominio: arancione per
-     * cio' che aspetta una mano, teal per cio' che il sistema ha validato da
-     * solo, verde per cio' che una persona ha confermato. Ricostruirlo
-     * nell'interfaccia con una tabella chiave -> colore vorrebbe dire tenere
-     * due verita' allineate a mano.
+     * Il confronto e' con `ai_payload`, lo snapshot immutabile scritto una
+     * sola volta da ExtractSubDocumentFieldsService e mai piu' toccato da
+     * una correzione manuale (che scrive solo le colonne tipizzate): e' un
+     * confronto per-campo specifico al destinatario, non una lettura dello
+     * stato dell'intero sotto-documento (che copilot.auto_classified da'
+     * gia', ma sull'insieme di tutti i campi chiave, non solo questi tre).
      *
-     * Gli stati a zero restano fuori: un segmento invisibile con la sua voce
-     * in legenda occupa spazio senza dire nulla.
+     * Un sotto-documento senza `ai_payload` (elaborato prima che questo
+     * snapshot esistesse) non e' confrontabile e resta fuori dal
+     * denominatore, non viene contato ne' come corretto ne' come sbagliato.
      *
-     * @param  array<string, int>  $counts  etichetta => quanti
-     * @param  array<string, string>  $tones  etichetta => tono
-     * @return array<string, mixed>
-     */
-    private function breakdownMetric(string $key, string $label, array $counts, array $tones): array
-    {
-        $parts = [];
-
-        foreach ($counts as $stateLabel => $count) {
-            if ($count > 0) {
-                $parts[] = ['label' => $stateLabel, 'value' => $count, 'tone' => $tones[$stateLabel]];
-            }
-        }
-
-        return [
-            'key' => $key,
-            'value' => array_sum($counts),
-            'parts' => $parts,
-            'label' => $label,
-        ];
-    }
-
-    /**
-     * Come si dividono i campi estratti fra quelli letti bene e quelli da
-     * rivedere.
-     *
-     * Contava quanta parte della scheda il modello riuscisse a riempire da
-     * solo, ma una casella piena non e' una casella buona: un dato letto al
-     * 40% risultava compilato quanto uno letto al 99, e la scheda diceva che
-     * il lavoro era finito proprio dove l'operatore doveva ancora guardare. Il
-     * metro e' ora la stessa soglia per campo dell'ispettore (ADR 0013), cosi'
-     * la ripartizione in cima e i segni sulle caselle raccontano la stessa
-     * cosa.
-     *
-     * I campi senza confidenza nota restano fuori: non sono stati rintracciati
-     * fra le righe OCR, e questo non li rende ne' buoni ne' dubbi.
+     * Un `ai_payload` con tutti e tre i campi a `null` (l'AI non ha
+     * riconosciuto nulla del destinatario) non conta come corrispondenza
+     * anche se le colonne correnti sono anch'esse tutte `null`: coincidenza
+     * di due assenze non e' un riconoscimento riuscito, e' l'AI che non ha
+     * letto nulla.
      *
      * @return array<string, mixed>
      */
-    private function fieldConfidenceMetric(string $tenantId): array
+    private function recipientAutoMatchMetric(string $tenantId): array
     {
         $rows = ExtractedData::query()
             ->whereHas('subDocument.originalDocument', fn ($query) => $query->where('tenant_id', $tenantId))
-            ->get(['field_confidences']);
+            ->whereNotNull('ai_payload')
+            ->get(['employee_first_name', 'employee_last_name', 'recipient_email', 'ai_payload']);
 
-        $known = 0;
-        $low = 0;
+        $comparable = 0;
+        $matched = 0;
 
         foreach ($rows as $row) {
-            $confidences = $row->field_confidences;
+            $original = $row->ai_payload;
 
-            if ($confidences === null) {
+            if (! is_array($original)) {
                 continue;
             }
 
-            $known += count(array_filter($confidences, fn ($confidence) => $confidence !== null));
-            $low += count($this->lowConfidenceFields($confidences));
+            $comparable++;
+
+            $aiRecognizedSomething = ($original['employee_first_name'] ?? null) !== null
+                || ($original['employee_last_name'] ?? null) !== null
+                || ($original['recipient_email'] ?? null) !== null;
+
+            $sameFirstName = $this->sameNormalized($row->employee_first_name, $original['employee_first_name'] ?? null);
+            $sameLastName = $this->sameNormalized($row->employee_last_name, $original['employee_last_name'] ?? null);
+            $sameEmail = $this->sameNormalized($row->recipient_email, $original['recipient_email'] ?? null);
+
+            if ($aiRecognizedSomething && $sameFirstName && $sameLastName && $sameEmail) {
+                $matched++;
+            }
         }
 
-        return $this->breakdownMetric(
-            'copilot.field_confidence',
-            'Campi estratti',
-            [
-                'Confidenza alta' => $known - $low,
-                ReviewStatus::NeedsReview->label() => $low,
-            ],
-            [
-                'Confidenza alta' => ReviewStatus::AutoValidated->color(),
-                ReviewStatus::NeedsReview->label() => ReviewStatus::NeedsReview->color(),
-            ],
-        );
+        if ($comparable === 0) {
+            return ['key' => 'copilot.recipient_auto_matched', 'value' => '—', 'label' => 'Destinatari riconosciuti in automatico'];
+        }
+
+        return [
+            'key' => 'copilot.recipient_auto_matched',
+            'value' => $matched,
+            'outOf' => $comparable,
+            'label' => 'Destinatari riconosciuti in automatico',
+        ];
+    }
+
+    /** Confronto senza distinzione di maiuscole/spazi iniziali o finali. */
+    private function sameNormalized(?string $current, ?string $original): bool
+    {
+        $normalize = fn (?string $value): ?string => $value === null ? null : mb_strtolower(trim($value));
+
+        return $normalize($current) === $normalize($original);
     }
 
     /**
@@ -323,21 +292,6 @@ class MvpStateService
     private function averageDecimal(mixed $average): string
     {
         return $average === null ? '—' : number_format((float) $average, 1, '.', '');
-    }
-
-    /**
-     * Oltre questa eta' una generazione ancora in corso e' considerata bloccata.
-     * Stessa soglia del gauge `mvp_communications_stuck_processing`.
-     */
-    private function generationTimeoutSeconds(): int
-    {
-        return (int) config('mvp.communications.generation_timeout_seconds', 900);
-    }
-
-    /** Come sopra, per la pipeline documentale (`mvp_documents_stuck_processing`). */
-    private function processingTimeoutSeconds(): int
-    {
-        return (int) config('mvp.document_limits.processing_timeout_seconds', 1800);
     }
 
     /**
@@ -381,14 +335,11 @@ class MvpStateService
         $validated = $autoValidated + $manuallyValidated;
         $needsReview = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)->count();
         $quarantined = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::Quarantined)->count();
-        $downloaded = $ofTenant(SubDocument::query())->where('send_status', SendStatus::Sent)->count();
 
         return [
             'metrics' => [
                 // L'ordine e' quello in cui le schede riempiono il mosaico del
-                // pannello: sette larghe a coppie e, a chiudere l'ultima riga, i
-                // due verdetti stretti. In fondo le quattro che il pannello non
-                // mostra — il totale e le parti della ripartizione — che restano
+                // pannello. In fondo le voci che il pannello non mostra — restano
                 // nel contratto perche' la Overview le legge.
                 [
                     'key' => 'copilot.documents',
@@ -399,73 +350,40 @@ class MvpStateService
                 [
                     // Media delle confidenze OCR dichiarate da Textract: dice
                     // quanto e' leggibile cio' che arriva, e la soglia accanto
-                    // dice oltre quale valore il sistema valida da solo.
+                    // dice oltre quale valore il sistema valida da solo. Non
+                    // compare nel pannello Co-Pilot (fuori da UC-56), ma resta
+                    // nel contratto perche' la Overview la legge.
                     'key' => 'copilot.ocr_confidence',
                     'value' => $this->averageDecimal((clone $documentsOfTenant)->whereNotNull('ocr_confidence_avg')->avg('ocr_confidence_avg')),
                     'unit' => '%',
                     'threshold' => $confidenceThreshold,
                     'label' => 'Confidenza media OCR',
                 ],
-                $this->breakdownMetric(
-                    'copilot.review_breakdown',
-                    'Esito della revisione',
-                    [
-                        ReviewStatus::NeedsReview->label() => $needsReview,
-                        ReviewStatus::AutoValidated->label() => $autoValidated,
-                        ReviewStatus::ManuallyValidated->label() => $manuallyValidated,
-                        ReviewStatus::Quarantined->label() => $quarantined,
-                        // I sotto-documenti ancora senza esito: senza questa
-                        // voce la ripartizione direbbe che tutto e' gia' stato
-                        // classificato.
-                        'In elaborazione' => max(0, $subDocumentCount - $needsReview - $validated - $quarantined),
-                    ],
-                    [
-                        ReviewStatus::NeedsReview->label() => ReviewStatus::NeedsReview->color(),
-                        ReviewStatus::AutoValidated->label() => ReviewStatus::AutoValidated->color(),
-                        ReviewStatus::ManuallyValidated->label() => ReviewStatus::ManuallyValidated->color(),
-                        ReviewStatus::Quarantined->label() => ReviewStatus::Quarantined->color(),
-                        'In elaborazione' => 'neutral',
-                    ],
-                ),
-                $this->breakdownMetric(
-                    'copilot.download_breakdown',
-                    'Scaricamento',
-                    [
-                        SendStatus::Sent->label() => $downloaded,
-                        SendStatus::Pending->label() => $subDocumentCount - $downloaded,
-                    ],
-                    [
-                        SendStatus::Sent->label() => SendStatus::Sent->color(),
-                        SendStatus::Pending->label() => SendStatus::Pending->color(),
-                    ],
-                ),
-                $this->fieldConfidenceMetric($actor->tenantId),
+                [
+                    // UC-56.2: percentuale di classificazioni corrette senza
+                    // alcun intervento manuale — un sotto-documento resta
+                    // AutoValidated solo finche' nessuno lo salva a mano
+                    // (vedi ReviewDocumentService::updateExtractedData).
+                    'key' => 'copilot.auto_classified',
+                    'value' => $autoValidated,
+                    'outOf' => $subDocumentCount,
+                    'label' => 'Classificazioni corrette senza intervento',
+                ],
+                [
+                    // UC-56.3: conteggio e percentuale (tramite outOf) dei
+                    // sotto-documenti sotto la soglia di confidenza.
+                    'key' => 'copilot.needs_review',
+                    'value' => $needsReview,
+                    'outOf' => $subDocumentCount,
+                    'label' => 'Sotto la soglia di confidenza',
+                    'history' => $this->dailySeries($ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)),
+                ],
+                $this->recipientAutoMatchMetric($actor->tenantId),
                 $this->averageDurationMetric(
                     'copilot.processing_seconds',
                     'Tempo medio di elaborazione',
                     $this->workflowDurations(OriginalDocument::query()->where('tenant_id', $actor->tenantId)),
                 ),
-                $this->averageDurationMetric(
-                    'copilot.duration',
-                    'Durata delle elaborazioni',
-                    $this->workflowDurations(OriginalDocument::query()->where('tenant_id', $actor->tenantId)),
-                ),
-                [
-                    'key' => 'copilot.processing_failed',
-                    'value' => (clone $documentsOfTenant)->where('processing_status', ProcessingStatus::Failed)->count(),
-                    'label' => 'Elaborazioni non riuscite',
-                    'history' => $this->dailySeries(
-                        OriginalDocument::query()->where('tenant_id', $actor->tenantId)->where('processing_status', ProcessingStatus::Failed)
-                    ),
-                ],
-                [
-                    'key' => 'copilot.processing_stuck',
-                    'value' => (clone $documentsOfTenant)
-                        ->where('processing_status', ProcessingStatus::Processing)
-                        ->where('workflow_started_at', '<', now()->subSeconds($this->processingTimeoutSeconds()))
-                        ->count(),
-                    'label' => 'Oltre il tempo previsto',
-                ],
                 [
                     // Fuori dal pannello: e' il totale su cui si misurano le
                     // quote, e come conteggio a se' non aggiunge nulla.
@@ -473,12 +391,6 @@ class MvpStateService
                     'value' => $subDocumentCount,
                     'label' => 'Sotto-documenti rilevati',
                     'history' => $this->dailySeries($ofTenant(SubDocument::query())),
-                ],
-                [
-                    'key' => 'copilot.needs_review',
-                    'value' => $needsReview,
-                    'label' => 'Da verificare',
-                    'history' => $this->dailySeries($ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)),
                 ],
                 // Pronti = validati, automaticamente o a mano. Non e' il
                 // complemento di "da verificare": la quarantena e' un terzo

@@ -12,6 +12,7 @@ import { scrollToElement } from "../../shared/util/scroll";
 import { CommunicationGeneratorPanelComponent } from "./components/communication-generator-panel";
 import { CommunicationHistoryListComponent } from "./components/communication-history-list";
 import { PromptConfigurationListComponent } from "./components/prompt-configuration-list";
+import { RecentFeedbackListComponent } from "./components/recent-feedback-list";
 import { GeneratedCommunicationPreviewComponent } from "./components/generated-communication-preview";
 import { communicationStyles, communicationTones } from "./assistant.model";
 import { AssistantService } from "./data/assistant.service";
@@ -44,6 +45,7 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
     MetricsPanelComponent,
     PromptConfigurationListComponent,
     ReactiveFormsModule,
+    RecentFeedbackListComponent,
     SectionComponent
   ],
   template: `
@@ -156,6 +158,8 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
           subject="comunicazioni"
           emptyLabel="Nessuna comunicazione ancora generata."
         />
+        <h3>Feedback recenti</h3>
+        <mvp-recent-feedback-list [feedback]="vm.recentFeedback()" />
       </mvp-section>
     </section>
   `,

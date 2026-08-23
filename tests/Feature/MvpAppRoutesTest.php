@@ -4,13 +4,13 @@ use App\Models\AuditEvent;
 use App\Models\Communication;
 use App\Models\ExtractedData;
 use App\Models\OriginalDocument;
+use App\Models\PromptConfiguration;
 use App\Models\SubDocument;
 use App\Mvp\Ai\BedrockService;
 use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Communications\Domain\Ports\Inbound\StartCommunicationWorkflowUseCase;
-use App\Mvp\Documents\Domain\Enums\ProcessingStatus;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Enums\SendStatus;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
@@ -1115,90 +1115,142 @@ test('state metrics expose stable keys alongside the presentation label', functi
 
     expect($keys)->toContain(
         'assistant.total',
+        'assistant.prompt_configurations',
         'assistant.drafts',
         'assistant.rated',
         'assistant.rating_average',
         'copilot.documents',
         'copilot.sub_documents',
+        'copilot.auto_classified',
         'copilot.needs_review',
+        'copilot.recipient_auto_matched',
         'copilot.validated',
         'copilot.quarantined',
     );
 });
 
-test('document metrics report the operational signals of the pipeline', function () {
-    // Gli stessi segnali dei gauge letti dalle dashboard Grafana — quanto e' in
-    // lavorazione, quanto e' fermo oltre il tempo previsto, quanto e' fallito —
-    // ristretti al tenant di chi guarda.
-    config()->set('mvp.document_limits.processing_timeout_seconds', 600);
+test('the prompt configurations count is not limited by the twenty-item list', function () {
+    // UC-27.1: il conteggio e' un numero a se', non la lunghezza dell'elenco
+    // esposto per il riuso rapido nel form di generazione (che si ferma a 20).
+    PromptConfiguration::factory()->count(24)->create();
 
-    OriginalDocument::factory()->create([
-        'processing_status' => ProcessingStatus::Processing,
-        'workflow_started_at' => now()->subMinutes(30),
-    ]);
-    OriginalDocument::factory()->create([
-        'processing_status' => ProcessingStatus::Processing,
-        'workflow_started_at' => now()->subMinute(),
-    ]);
-    OriginalDocument::factory()->create(['processing_status' => ProcessingStatus::Pending]);
-    OriginalDocument::factory()->failed()->create();
-    OriginalDocument::factory()->completed()->create([
-        'workflow_started_at' => now()->subSeconds(40),
-        'workflow_completed_at' => now()->subSeconds(10),
-    ]);
+    $metrics = collect($this->getJson('/api/v1/state')->json('assistant.metrics'))->keyBy('key');
 
-    $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
-
-    expect($metrics['copilot.processing_stuck']['value'])->toBe(1)
-        ->and($metrics['copilot.processing_failed']['value'])->toBe(1)
-        ->and($metrics['copilot.processing_seconds']['value'])->toBe(30)
-        ->and($metrics['copilot.processing_seconds']['unit'])->toBe('s');
+    expect($metrics['assistant.prompt_configurations']['value'])->toBe(24);
 });
 
-test('the review breakdown carries its own denominator', function () {
-    // Il totale sta nella metrica, non nella pagina: e' chi calcola le quote a
-    // sapere su che cosa si misurano. Le voci a zero restano fuori, perche' la
-    // ripartizione mostra gli esiti raggiunti, non quelli possibili.
+test('recent feedback lists only rated communications, most recent first, up to ten', function () {
+    // UC-27.3: gli ultimi feedback testuali, non solo la media (UC-27.2).
+    Communication::factory()->draft()->create();
+    Communication::factory()->discarded()->create();
+
+    $older = Communication::factory()->draft()->rated(3, 'Discreto')->create();
+    $older->forceFill(['rated_at' => now()->subDay()])->save();
+
+    $newer = Communication::factory()->draft()->rated(5, 'Ottimo')->create();
+
+    $response = $this->getJson('/api/v1/state')->assertOk();
+    $feedback = collect($response->json('assistant.recentFeedback'));
+
+    expect($feedback)->toHaveCount(2)
+        ->and($feedback->first()['id'])->toBe($newer->id)
+        ->and($feedback->first()['ratingComment'])->toBe('Ottimo')
+        ->and($feedback->last()['id'])->toBe($older->id);
+});
+
+test('the auto classified metric carries its own denominator', function () {
+    // UC-56.2: percentuale di classificazioni corrette senza intervento manuale.
+    SubDocument::factory()->create(['review_status' => ReviewStatus::AutoValidated]);
     SubDocument::factory()->create(['review_status' => ReviewStatus::AutoValidated]);
     SubDocument::factory()->create(['review_status' => ReviewStatus::ManuallyValidated]);
     SubDocument::factory()->create(['review_status' => ReviewStatus::NeedsReview]);
 
     $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
-    $breakdown = $metrics['copilot.review_breakdown'];
-    $parts = collect($breakdown['parts'])->pluck('value', 'label');
 
-    expect($breakdown['value'])->toBe(3)
-        ->and($parts['Validato automaticamente'])->toBe(1)
-        ->and($parts['Validato manualmente'])->toBe(1)
-        ->and($parts['Da revisionare'])->toBe(1)
-        ->and($parts->keys()->all())->not->toContain('In quarantena');
+    expect($metrics['copilot.auto_classified']['value'])->toBe(2)
+        ->and($metrics['copilot.auto_classified']['outOf'])->toBe(4);
 });
 
-test('the extracted fields metric splits them by their own confidence', function () {
-    $subDocument = SubDocument::factory()->create();
+test('the needs review metric carries its own denominator', function () {
+    // UC-56.3: conteggio e percentuale (tramite outOf) dei sotto-documenti
+    // sotto la soglia di confidenza.
+    SubDocument::factory()->create(['review_status' => ReviewStatus::AutoValidated]);
+    SubDocument::factory()->create(['review_status' => ReviewStatus::NeedsReview]);
+    SubDocument::factory()->create(['review_status' => ReviewStatus::NeedsReview]);
+    SubDocument::factory()->create(['review_status' => ReviewStatus::Quarantined]);
+
+    $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
+
+    expect($metrics['copilot.needs_review']['value'])->toBe(2)
+        ->and($metrics['copilot.needs_review']['outOf'])->toBe(4);
+});
+
+test('the recipient auto matched metric compares current fields against the original ai payload', function () {
+    // UC-56.4: destinatario ancora quello letto dall'AI (nome, cognome, email),
+    // mai corretto a mano da allora.
+    $matched = SubDocument::factory()->create();
     ExtractedData::factory()->create([
-        'sub_document_id' => $subDocument->id,
-        'field_confidences' => [
-            'employee_first_name' => 99.0,
-            'employee_last_name' => 97.5,
-            'company_name' => 62.0,
-            // Il codice fiscale ha una soglia sua, piu' alta: a 90 sta sotto
-            // mentre gli altri campi allo stesso valore starebbero sopra.
-            'fiscal_code' => 90.0,
-            // Senza confidenza nota il campo non e' ne' buono ne' dubbio: resta
-            // fuori dal conteggio.
-            'document_date' => null,
+        'sub_document_id' => $matched->id,
+        'employee_first_name' => 'Mario',
+        'employee_last_name' => 'Rossi',
+        'recipient_email' => 'mario.rossi@example.test',
+        'ai_payload' => [
+            'employee_first_name' => 'Mario',
+            'employee_last_name' => 'Rossi',
+            'recipient_email' => 'mario.rossi@example.test',
+        ],
+    ]);
+
+    // Corretto a mano su un solo campo (il cognome): non conta come corrispondenza.
+    $corrected = SubDocument::factory()->create();
+    ExtractedData::factory()->create([
+        'sub_document_id' => $corrected->id,
+        'employee_first_name' => 'Luca',
+        'employee_last_name' => 'Bianchi corretto',
+        'recipient_email' => 'luca.bianchi@example.test',
+        'ai_payload' => [
+            'employee_first_name' => 'Luca',
+            'employee_last_name' => 'Bianchi',
+            'recipient_email' => 'luca.bianchi@example.test',
+        ],
+    ]);
+
+    // Nessuno snapshot AI: elaborato prima che esistesse, resta fuori dal
+    // denominatore, ne' corretto ne' sbagliato.
+    $noSnapshot = SubDocument::factory()->create();
+    ExtractedData::factory()->create([
+        'sub_document_id' => $noSnapshot->id,
+        'ai_payload' => null,
+    ]);
+
+    // L'AI non ha riconosciuto nulla del destinatario (i tre campi sono
+    // null anche nello snapshot) e nessuno li ha compilati a mano: e'
+    // comparabile (lo snapshot esiste), ma la coincidenza di due assenze
+    // non e' un riconoscimento riuscito.
+    $nothingRecognized = SubDocument::factory()->create();
+    ExtractedData::factory()->create([
+        'sub_document_id' => $nothingRecognized->id,
+        'employee_first_name' => null,
+        'employee_last_name' => null,
+        'recipient_email' => null,
+        'ai_payload' => [
+            'employee_first_name' => null,
+            'employee_last_name' => null,
+            'recipient_email' => null,
         ],
     ]);
 
     $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
-    $parts = collect($metrics['copilot.field_confidence']['parts'])->keyBy('label');
 
-    expect($metrics['copilot.field_confidence']['value'])->toBe(4)
-        ->and($parts['Confidenza alta']['value'])->toBe(2)
-        ->and($parts['Confidenza alta']['tone'])->toBe('info')
-        ->and($parts['Da revisionare']['value'])->toBe(2)
-        ->and($parts['Da revisionare']['tone'])->toBe('warning');
+    expect($metrics['copilot.recipient_auto_matched']['value'])->toBe(1)
+        ->and($metrics['copilot.recipient_auto_matched']['outOf'])->toBe(3);
+});
+
+test('the recipient auto matched metric exposes a placeholder without comparable rows', function () {
+    $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
+
+    expect($metrics['copilot.recipient_auto_matched']['value'])->toBe('—')
+        ->and($metrics['copilot.recipient_auto_matched'])->not->toHaveKey('outOf');
 });
 
 test('the processing time is a plain average across the runs concluded in the window', function () {
@@ -1216,23 +1268,6 @@ test('the processing time is a plain average across the runs concluded in the wi
     expect($metrics['copilot.processing_seconds']['value'])->toBe(80)
         ->and($metrics['copilot.processing_seconds']['unit'])->toBe('s')
         ->and($metrics['copilot.processing_seconds'])->not->toHaveKey('parts');
-});
-
-test('the duration metric is a plain average, not a histogram', function () {
-    foreach ([4, 6, 7, 9, 12, 14, 19, 23] as $seconds) {
-        OriginalDocument::factory()->completed()->create([
-            'workflow_started_at' => now()->subSeconds($seconds),
-            'workflow_completed_at' => now(),
-        ]);
-    }
-
-    $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
-
-    // (4+6+7+9+12+14+19+23)/8 = 11.75, arrotondato a 12.
-    expect($metrics['copilot.duration']['value'])->toBe(12)
-        ->and($metrics['copilot.duration']['unit'])->toBe('s')
-        ->and($metrics['copilot.duration'])->not->toHaveKey('distribution')
-        ->and($metrics['copilot.duration'])->not->toHaveKey('sampleSize');
 });
 
 test('an average duration past ninety seconds is expressed in minutes', function () {
@@ -1260,27 +1295,6 @@ test('a metric without any measurement exposes the placeholder instead of a zero
     expect($metrics['copilot.processing_seconds']['value'])->toBe('—')
         ->and($metrics['copilot.processing_seconds'])->not->toHaveKey('unit')
         ->and($metrics['copilot.ocr_confidence']['value'])->toBe('—');
-});
-
-test('communication metrics report failed, stuck and degraded generations', function () {
-    config()->set('mvp.communications.generation_timeout_seconds', 300);
-
-    Communication::factory()->draft()->create(['generation_status' => CommunicationGenerationStatus::Failed]);
-    Communication::factory()->draft()->create([
-        'generation_status' => CommunicationGenerationStatus::Processing,
-        'workflow_started_at' => now()->subMinutes(10),
-    ]);
-    Communication::factory()->draft()->create([
-        'generation_status' => CommunicationGenerationStatus::Processing,
-        'workflow_started_at' => now()->subMinute(),
-    ]);
-    Communication::factory()->draft()->create(['cover_status' => CoverImageStatus::Failed]);
-
-    $metrics = collect($this->getJson('/api/v1/state')->json('assistant.metrics'))->keyBy('key');
-
-    expect($metrics['assistant.generation_failed']['value'])->toBe(1)
-        ->and($metrics['assistant.generation_stuck']['value'])->toBe(1)
-        ->and($metrics['assistant.covers_failed']['value'])->toBe(1);
 });
 
 test('the ready documents metric counts validated sub-documents without the quarantined ones', function () {

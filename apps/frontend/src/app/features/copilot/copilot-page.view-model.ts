@@ -20,13 +20,14 @@ import {
 /**
  * Metriche che il pannello non mostra come schede a sé.
  *
- * `needs_review`, `validated` e `quarantined` sono le parti della ripartizione
- * disegnata dalla scheda degli esiti, e come priorità vivono nella Overview;
+ * `validated` e `quarantined` sono le parti della ripartizione disegnata
+ * dalla scheda degli esiti, e come priorità vivono nella Overview;
  * `sub_documents` è il totale su cui si misurano le quote e come conteggio
- * isolato non aggiunge nulla.
+ * isolato non aggiunge nulla. `ocr_confidence` non risponde a nessun UC-56,
+ * ma resta nel contratto perché la Overview la legge (`copilotQuality`).
  */
 const HIDDEN_KEYS = [
-  "copilot.needs_review",
+  "copilot.ocr_confidence",
   "copilot.validated",
   "copilot.quarantined",
   "copilot.sub_documents"
@@ -119,30 +120,40 @@ export class CopilotPageViewModel {
   );
 
   /**
-   * Forma e ingombro di ciascuna scheda del pannello.
-   *
-   * Sedici celle su quattro righe: sette schede larghe a coppie e, a chiudere
-   * l'ultima riga, i due verdetti stretti. Le larghe sono quelle che portano
-   * un asse o una legenda da leggere; un verdetto di tre parole non ne ha
-   * bisogno.
+   * Forma e ingombro di ciascuna scheda del pannello: tutte larghe a coppie,
+   * perché ognuna porta un asse, un anello di quota o una legenda da leggere.
    */
   readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => ({
     "copilot.documents": { kind: "trend", span: 2 },
-    "copilot.ocr_confidence": { kind: "gauge", span: 2 },
-    "copilot.review_breakdown": { kind: "breakdown", span: 2 },
-    "copilot.download_breakdown": { kind: "breakdown", span: 2 },
-    "copilot.field_confidence": { kind: "breakdown", span: 2 },
     "copilot.processing_seconds": { kind: "trend", span: 2 },
-    "copilot.duration": { kind: "trend", span: 2 },
-    "copilot.processing_failed": {
-      kind: "status",
-      okLabel: "Nessun errore",
-      issueLabel: "da ricaricare"
+    // UC-56.2: percentuale di classificazioni corrette senza intervento manuale.
+    // Il resto include tanto chi aspetta ancora una revisione quanto chi e'
+    // gia' stato validato o messo in quarantena a mano: "non riconosciuti in
+    // automatico" resta vero per tutti, "con intervento manuale" no (una
+    // quarantena non e' un intervento, e' un rifiuto della pipeline).
+    "copilot.auto_classified": {
+      kind: "share",
+      span: 2,
+      restTone: "alert",
+      restNoun: "non riconosciuti in automatico"
     },
-    "copilot.processing_stuck": {
-      kind: "status",
-      okLabel: "Nessuna in ritardo",
-      issueLabel: "da sbloccare"
+    // UC-56.3: conteggio e percentuale sotto la soglia di confidenza. Il
+    // resto include anche i documenti in quarantena, che non hanno mai
+    // ricevuto un punteggio di confidenza da confrontare con la soglia
+    // (ExtractSubDocumentFieldsService li mette in quarantena prima del
+    // confronto): "sopra soglia" sarebbe falso per loro.
+    "copilot.needs_review": {
+      kind: "share",
+      span: 2,
+      restTone: "neutral",
+      restNoun: "non da revisionare"
+    },
+    // UC-56.4: destinatario ancora quello letto dall'AI, mai corretto a mano.
+    "copilot.recipient_auto_matched": {
+      kind: "share",
+      span: 2,
+      restTone: "neutral",
+      restNoun: "corretti a mano"
     }
   }));
 

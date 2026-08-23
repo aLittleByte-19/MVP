@@ -25,6 +25,7 @@ export class MvpStateStore {
 
   readonly documents = computed<SubDocument[]>(() => this._state()?.copilot.documents ?? []);
   readonly history = computed(() => this._state()?.assistant.history ?? []);
+  readonly recentFeedback = computed(() => this._state()?.assistant.recentFeedback ?? []);
   readonly promptConfigurations = computed(() => this._state()?.assistant.promptConfigurations ?? []);
   readonly assistantMetrics = computed(() => this._state()?.assistant.metrics ?? []);
   readonly copilotMetrics = computed(() => this._state()?.copilot.metrics ?? []);

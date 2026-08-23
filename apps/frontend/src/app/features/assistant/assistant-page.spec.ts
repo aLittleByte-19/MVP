@@ -41,12 +41,14 @@ function communication(overrides: Partial<Communication> = {}): Communication {
  */
 describe("AssistantPage", () => {
   let history: ReturnType<typeof signal<Communication[]>>;
+  let recentFeedback: ReturnType<typeof signal<Communication[]>>;
   let error: ReturnType<typeof signal<string | null>>;
   let promptConfigurations: ReturnType<typeof signal<PromptConfiguration[]>>;
   let assistant: Record<string, jest.Mock>;
 
   beforeEach(() => {
     history = signal<Communication[]>([]);
+    recentFeedback = signal<Communication[]>([]);
     error = signal<string | null>(null);
     promptConfigurations = signal<PromptConfiguration[]>([]);
     assistant = {
@@ -71,6 +73,7 @@ describe("AssistantPage", () => {
           provide: MvpStateStore,
           useValue: {
             history,
+            recentFeedback,
             error,
             promptConfigurations,
             loading: signal(false),

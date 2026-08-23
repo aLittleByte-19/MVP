@@ -43,12 +43,14 @@ describe("AssistantPageViewModel", () => {
     style: "Testo informativo"
   };
   let history: ReturnType<typeof signal<Communication[]>>;
+  let recentFeedback: ReturnType<typeof signal<Communication[]>>;
   let promptConfigurations: ReturnType<typeof signal<PromptConfiguration[]>>;
   let error: ReturnType<typeof signal<string | null>>;
   let assistant: Record<string, jest.Mock>;
 
   beforeEach(() => {
     history = signal<Communication[]>([]);
+    recentFeedback = signal<Communication[]>([]);
     promptConfigurations = signal<PromptConfiguration[]>([]);
     error = signal<string | null>(null);
     assistant = {
@@ -70,7 +72,7 @@ describe("AssistantPageViewModel", () => {
   });
 
   function createViewModel(): AssistantPageViewModel {
-    const store = { history, promptConfigurations, error } as unknown as MvpStateStore;
+    const store = { history, recentFeedback, promptConfigurations, error } as unknown as MvpStateStore;
     return new AssistantPageViewModel(assistant as unknown as AssistantService, store);
   }
 
@@ -96,6 +98,16 @@ describe("AssistantPageViewModel", () => {
 
     error.set("errore autorevole");
     expect(vm.error()).toBe("errore autorevole");
+  });
+
+  it("espone recentFeedback come pass-through dello store (UC-27.3)", () => {
+    const vm = createViewModel();
+
+    expect(vm.recentFeedback()).toEqual([]);
+
+    const record = communication({ rating: 4, ratingComment: "Chiaro e utile" });
+    recentFeedback.set([record]);
+    expect(vm.recentFeedback()).toEqual([record]);
   });
 
   it("reload cerca con i filtri attivi, imposta i risultati e azzera l'errore dello storico", () => {

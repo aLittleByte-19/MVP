@@ -6,7 +6,7 @@ import type { MvpState, SubDocument } from "../../../api/generated/model";
 
 function stateWith(assistantMetrics: MvpState["assistant"]["metrics"], copilotMetrics: MvpState["copilot"]["metrics"]): MvpState {
   return {
-    assistant: { metrics: assistantMetrics, history: [], promptConfigurations: [] },
+    assistant: { metrics: assistantMetrics, history: [], promptConfigurations: [], recentFeedback: [] },
     copilot: { metrics: copilotMetrics, documents: [] }
   } as MvpState;
 }

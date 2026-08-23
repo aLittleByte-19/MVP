@@ -145,34 +145,18 @@ export class AssistantPageViewModel {
    */
   readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => ({
     "assistant.total": { kind: "trend" },
+    "assistant.prompt_configurations": { kind: "trend" },
     "assistant.rated": {
       kind: "share",
       span: 2,
       restTone: "neutral",
       restNoun: "senza voto"
     },
-    "assistant.rating_average": { kind: "stars", span: 2, max: 5 },
-    "assistant.generation_seconds": { kind: "trend", span: 2 },
-    "assistant.duration": { kind: "trend", span: 2 },
-    "assistant.generation_failed": {
-      kind: "status",
-      okLabel: "Nessun errore",
-      issueLabel: "da rigenerare"
-    },
-    "assistant.generation_stuck": {
-      kind: "status",
-      okLabel: "Nessuna in ritardo",
-      issueLabel: "da sbloccare"
-    },
-    // La copertina non generata non ferma nulla: il PDF esce comunque, senza
-    // immagine. E' un avviso, non un guasto.
-    "assistant.covers_failed": {
-      kind: "status",
-      issueTone: "warning",
-      okLabel: "Tutte generate",
-      issueLabel: "PDF senza immagine"
-    }
+    "assistant.rating_average": { kind: "stars", span: 2, max: 5 }
   }));
+
+  /** UC-27.3: gli ultimi feedback con voto e commento testuale. */
+  readonly recentFeedback: Signal<Communication[]> = computed(() => this.store.recentFeedback());
 
   /**
    * Composizione dello stato delle bozze: è la decisione presa su ciascuna,

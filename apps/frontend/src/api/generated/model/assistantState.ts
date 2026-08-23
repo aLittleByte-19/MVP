@@ -13,4 +13,6 @@ export interface AssistantState {
   metrics: Metric[];
   history: Communication[];
   promptConfigurations: PromptConfiguration[];
+  /** Gli ultimi contenuti valutati, con voto e commento testuale. */
+  recentFeedback: Communication[];
 }
