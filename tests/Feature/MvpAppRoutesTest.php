@@ -1158,31 +1158,48 @@ test('recent feedback lists only rated communications, most recent first, up to 
         ->and($feedback->last()['id'])->toBe($older->id);
 });
 
-test('the auto classified metric carries its own denominator', function () {
-    // UC-56.2: percentuale di classificazioni corrette senza intervento manuale.
+test('the auto classified metric is measured against validated documents, not against every sub-document', function () {
+    // UC-56.2: percentuale di classificazioni corrette senza intervento
+    // manuale. Il denominatore e' chi e' arrivato a una validazione (auto o
+    // manuale): needs_review e quarantined non sono ne' un successo ne' un
+    // fallimento dell'automazione, quindi restano fuori dal conteggio invece
+    // di diluire la quota.
     SubDocument::factory()->create(['review_status' => ReviewStatus::AutoValidated]);
     SubDocument::factory()->create(['review_status' => ReviewStatus::AutoValidated]);
     SubDocument::factory()->create(['review_status' => ReviewStatus::ManuallyValidated]);
-    SubDocument::factory()->create(['review_status' => ReviewStatus::NeedsReview]);
-
-    $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
-
-    expect($metrics['copilot.auto_classified']['value'])->toBe(2)
-        ->and($metrics['copilot.auto_classified']['outOf'])->toBe(4);
-});
-
-test('the needs review metric carries its own denominator', function () {
-    // UC-56.3: conteggio e percentuale (tramite outOf) dei sotto-documenti
-    // sotto la soglia di confidenza.
-    SubDocument::factory()->create(['review_status' => ReviewStatus::AutoValidated]);
-    SubDocument::factory()->create(['review_status' => ReviewStatus::NeedsReview]);
     SubDocument::factory()->create(['review_status' => ReviewStatus::NeedsReview]);
     SubDocument::factory()->create(['review_status' => ReviewStatus::Quarantined]);
 
     $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
 
-    expect($metrics['copilot.needs_review']['value'])->toBe(2)
-        ->and($metrics['copilot.needs_review']['outOf'])->toBe(4);
+    expect($metrics['copilot.auto_classified']['value'])->toBe(2)
+        ->and($metrics['copilot.auto_classified']['outOf'])->toBe(3);
+});
+
+test('the needs review metric is measured against evaluated documents, excluding ones not yet extracted', function () {
+    // UC-56.3: conteggio e percentuale (tramite outOf) dei sotto-documenti
+    // sotto la soglia di confidenza. Un sotto-documento nasce a NeedsReview
+    // per default prima ancora che la sua estrazione giri (vedi
+    // ProcessDocumentService): senza un ExtractedData non e' stato valutato
+    // per davvero, quindi non conta ne' come "sotto soglia" ne' nel
+    // denominatore — esattamente come un sotto-documento in quarantena, la
+    // cui ExtractedData viene cancellata.
+    $autoValidated = SubDocument::factory()->create(['review_status' => ReviewStatus::AutoValidated]);
+    ExtractedData::factory()->create(['sub_document_id' => $autoValidated->id]);
+
+    $genuinelyNeedsReview = SubDocument::factory()->create(['review_status' => ReviewStatus::NeedsReview]);
+    ExtractedData::factory()->create(['sub_document_id' => $genuinelyNeedsReview->id]);
+
+    // Non ancora estratto: nasce a NeedsReview per default, nessuna
+    // ExtractedData associata.
+    SubDocument::factory()->create(['review_status' => ReviewStatus::NeedsReview]);
+
+    SubDocument::factory()->create(['review_status' => ReviewStatus::Quarantined]);
+
+    $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
+
+    expect($metrics['copilot.needs_review']['value'])->toBe(1)
+        ->and($metrics['copilot.needs_review']['outOf'])->toBe(2);
 });
 
 test('the recipient auto matched metric compares current fields against the original ai payload', function () {
@@ -1301,7 +1318,8 @@ test('the ready documents metric counts validated sub-documents without the quar
     SubDocument::factory()->create(['review_status' => ReviewStatus::AutoValidated]);
     SubDocument::factory()->create(['review_status' => ReviewStatus::ManuallyValidated]);
     SubDocument::factory()->create(['review_status' => ReviewStatus::Quarantined]);
-    SubDocument::factory()->create(['review_status' => ReviewStatus::NeedsReview]);
+    $needsReview = SubDocument::factory()->create(['review_status' => ReviewStatus::NeedsReview]);
+    ExtractedData::factory()->create(['sub_document_id' => $needsReview->id]);
 
     $metrics = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
 

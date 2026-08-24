@@ -139,13 +139,13 @@ export class AssistantPageViewModel {
   );
 
   /**
-   * Forma e ingombro di ciascuna scheda: quattro strette in alto, poi le due
-   * righe larghe dove c'è un grafico da leggere. Dodici celle in tutto, così
-   * la griglia non lascia righe spaiate.
+   * Forma e ingombro di ciascuna scheda: tutte larghe a coppie. Quattro
+   * schede da due celle fanno otto, multiplo di quattro richiesto dalla
+   * griglia (vedi metrics-panel.css) perché non restino righe spaiate.
    */
   readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => ({
-    "assistant.total": { kind: "trend" },
-    "assistant.prompt_configurations": { kind: "trend" },
+    "assistant.total": { kind: "trend", span: 2 },
+    "assistant.prompt_configurations": { kind: "trend", span: 2 },
     "assistant.rated": {
       kind: "share",
       span: 2,

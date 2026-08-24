@@ -68,9 +68,10 @@ class MvpStateService
             // metrica (vedi overview-page, che ne mostra solo alcune).
             'metrics' => [
                 // L'ordine e' quello in cui le schede riempiono il mosaico del
-                // pannello: prima le quattro strette, che si leggono in un colpo
-                // d'occhio, poi le larghe a coppie. Cambiarlo lascia righe spaiate
-                // nella griglia a quattro colonne.
+                // pannello: tutte e quattro larghe a coppie, due file piene
+                // nella griglia a quattro colonne (vedi la stessa nota in
+                // copilotState() qui sotto, dove l'ordine non e' solo
+                // simmetrico per estetica ma necessario a chiudere le righe).
                 [
                     'key' => 'assistant.total',
                     'value' => $total,
@@ -333,20 +334,40 @@ class MvpStateService
         $autoValidated = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::AutoValidated)->count();
         $manuallyValidated = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::ManuallyValidated)->count();
         $validated = $autoValidated + $manuallyValidated;
-        $needsReview = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)->count();
+        // Un sotto-documento nasce a NeedsReview per default, prima ancora che
+        // la sua estrazione giri (vedi ProcessDocumentService, che crea la riga
+        // e solo dopo la estrae): in un documento multi-destinatario, mentre un
+        // segmento successivo aspetta il proprio turno, sta a NeedsReview per
+        // un motivo che non ha niente a che fare con la confidenza. Un
+        // ExtractedData esiste solo dopo che l'estrazione e' davvero girata
+        // (Quarantined la cancella, gli altri esiti la scrivono), quindi
+        // `whereHas('extractedData')` seleziona solo chi e' stato valutato
+        // per davvero — la stessa distinzione che regola il denominatore di
+        // copilot.auto_classified qui sotto.
+        $needsReview = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)->whereHas('extractedData')->count();
+        $evaluatedCount = $ofTenant(SubDocument::query())->whereHas('extractedData')->count();
         $quarantined = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::Quarantined)->count();
 
         return [
             'metrics' => [
                 // L'ordine e' quello in cui le schede riempiono il mosaico del
-                // pannello. In fondo le voci che il pannello non mostra — restano
-                // nel contratto perche' la Overview le legge.
+                // pannello: prima le due strette (un conteggio, una durata
+                // media), poi le tre larghe a quota, cosi' la griglia a
+                // quattro colonne si chiude senza celle vuote (vedi il
+                // commento sull'ordine in copilot-page.view-model.ts). In
+                // fondo le voci che il pannello non mostra — restano nel
+                // contratto perche' la Overview le legge.
                 [
                     'key' => 'copilot.documents',
                     'value' => $originalCount,
                     'label' => 'Documenti analizzati',
                     'history' => $this->dailySeries($documentsOfTenant),
                 ],
+                $this->averageDurationMetric(
+                    'copilot.processing_seconds',
+                    'Tempo medio di elaborazione',
+                    $this->workflowDurations(OriginalDocument::query()->where('tenant_id', $actor->tenantId)),
+                ),
                 [
                     // Media delle confidenze OCR dichiarate da Textract: dice
                     // quanto e' leggibile cio' che arriva, e la soglia accanto
@@ -363,27 +384,36 @@ class MvpStateService
                     // UC-56.2: percentuale di classificazioni corrette senza
                     // alcun intervento manuale — un sotto-documento resta
                     // AutoValidated solo finche' nessuno lo salva a mano
-                    // (vedi ReviewDocumentService::updateExtractedData).
+                    // (vedi ReviewDocumentService::updateExtractedData). Il
+                    // denominatore e' $validated (auto + manuale), non
+                    // l'intero $subDocumentCount: un sotto-documento ancora da
+                    // revisionare non e' "classificato male", e' una
+                    // classificazione non ancora conclusa (e in un documento
+                    // multi-destinatario puo' anche non essere ancora stato
+                    // estratto affatto — vedi ProcessDocumentService, dove
+                    // ogni segmento nasce a needs_review finche' la sua
+                    // estrazione non gira); includerlo diluirebbe la quota con
+                    // casi che non sono ne' un successo ne' un fallimento
+                    // dell'automazione.
                     'key' => 'copilot.auto_classified',
                     'value' => $autoValidated,
-                    'outOf' => $subDocumentCount,
+                    'outOf' => $validated,
                     'label' => 'Classificazioni corrette senza intervento',
                 ],
                 [
                     // UC-56.3: conteggio e percentuale (tramite outOf) dei
-                    // sotto-documenti sotto la soglia di confidenza.
+                    // sotto-documenti sotto la soglia di confidenza. Il
+                    // denominatore e' $evaluatedCount, non $subDocumentCount:
+                    // un sotto-documento non ancora estratto non e' "sopra
+                    // soglia", e' semplicemente senza una confidenza da
+                    // confrontare (vedi il commento su $needsReview qui sopra).
                     'key' => 'copilot.needs_review',
                     'value' => $needsReview,
-                    'outOf' => $subDocumentCount,
+                    'outOf' => $evaluatedCount,
                     'label' => 'Sotto la soglia di confidenza',
-                    'history' => $this->dailySeries($ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)),
+                    'history' => $this->dailySeries($ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)->whereHas('extractedData')),
                 ],
                 $this->recipientAutoMatchMetric($actor->tenantId),
-                $this->averageDurationMetric(
-                    'copilot.processing_seconds',
-                    'Tempo medio di elaborazione',
-                    $this->workflowDurations(OriginalDocument::query()->where('tenant_id', $actor->tenantId)),
-                ),
                 [
                     // Fuori dal pannello: e' il totale su cui si misurano le
                     // quote, e come conteggio a se' non aggiunge nulla.

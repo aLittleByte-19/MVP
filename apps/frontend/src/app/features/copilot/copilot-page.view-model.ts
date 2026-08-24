@@ -120,22 +120,32 @@ export class CopilotPageViewModel {
   );
 
   /**
-   * Forma e ingombro di ciascuna scheda del pannello: tutte larghe a coppie,
-   * perché ognuna porta un asse, un anello di quota o una legenda da leggere.
+   * Forma e ingombro di ciascuna scheda del pannello: le tre schede a quota
+   * sono larghe, perché portano un anello e una legenda da leggere; le due
+   * strette (un conteggio, una durata media) restano a una cella. Il
+   * conteggio delle celle non basta da solo: la griglia CSS riempie le righe
+   * nell'ordine con cui il backend le manda (vedi `metrics` qui sopra), senza
+   * ricomporle per colmare i vuoti — due strette (due celle) seguite da tre
+   * larghe (sei celle) chiudono ordinatamente due righe da quattro; un ordine
+   * diverso, anche a parità di celle totali, può lasciare una cella vuota a
+   * metà riga. L'ordine delle schede lo decide `MvpStateService::copilotState`
+   * proprio per questo.
    */
   readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => ({
-    "copilot.documents": { kind: "trend", span: 2 },
-    "copilot.processing_seconds": { kind: "trend", span: 2 },
-    // UC-56.2: percentuale di classificazioni corrette senza intervento manuale.
-    // Il resto include tanto chi aspetta ancora una revisione quanto chi e'
-    // gia' stato validato o messo in quarantena a mano: "non riconosciuti in
-    // automatico" resta vero per tutti, "con intervento manuale" no (una
-    // quarantena non e' un intervento, e' un rifiuto della pipeline).
+    "copilot.documents": { kind: "trend" },
+    "copilot.processing_seconds": { kind: "trend" },
+    // UC-56.2: percentuale di classificazioni corrette senza intervento
+    // manuale. Il denominatore e' solo chi e' arrivato a una validazione
+    // (automatica o manuale): chi e' ancora da revisionare o in quarantena
+    // non e' incluso, ne' nel resto ne' nel totale — non e' una
+    // classificazione conclusa (backend: MvpStateService::copilotState).
+    // Il resto e' quindi solo chi e' stato validato a mano: gia' risolto,
+    // non un'urgenza.
     "copilot.auto_classified": {
       kind: "share",
       span: 2,
-      restTone: "alert",
-      restNoun: "non riconosciuti in automatico"
+      restTone: "neutral",
+      restNoun: "validati a mano"
     },
     // UC-56.3: conteggio e percentuale sotto la soglia di confidenza. Il
     // resto include anche i documenti in quarantena, che non hanno mai
@@ -149,11 +159,14 @@ export class CopilotPageViewModel {
       restNoun: "non da revisionare"
     },
     // UC-56.4: destinatario ancora quello letto dall'AI, mai corretto a mano.
+    // Il resto non e' sempre "corretto a mano": include anche i casi in cui
+    // l'AI non aveva riconosciuto nulla da confermare (vedi il guard su
+    // aiRecognizedSomething in recipientAutoMatchMetric).
     "copilot.recipient_auto_matched": {
       kind: "share",
       span: 2,
-      restTone: "neutral",
-      restNoun: "corretti a mano"
+      restTone: "alert",
+      restNoun: "non confermati"
     }
   }));
 
