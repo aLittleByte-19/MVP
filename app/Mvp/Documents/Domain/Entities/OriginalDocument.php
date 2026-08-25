@@ -46,6 +46,7 @@ final class OriginalDocument
         private bool $workflowCompleted,
         private ?string $workflowExecutionArn,
         private ?string $errorMessage,
+        public readonly ?string $originalFilename = null,
     ) {
         $this->pending = OriginalDocumentChanges::none();
     }
@@ -69,6 +70,7 @@ final class OriginalDocument
             $record->workflowCompleted,
             $record->workflowExecutionArn,
             $record->errorMessage,
+            $record->originalFilename,
         );
     }
 

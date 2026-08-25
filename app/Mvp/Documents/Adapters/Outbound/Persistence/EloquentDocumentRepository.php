@@ -241,6 +241,7 @@ class EloquentDocumentRepository implements DocumentRepository
             workflowCompleted: $document->workflow_completed_at !== null,
             workflowExecutionArn: $document->workflow_execution_arn,
             errorMessage: $document->error_message,
+            originalFilename: $document->original_filename,
         );
     }
 

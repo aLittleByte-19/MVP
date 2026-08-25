@@ -110,6 +110,12 @@ describe("AssistantPageViewModel", () => {
     expect(vm.recentFeedback()).toEqual([record]);
   });
 
+  it("espone l'URL di export del report riepilogativo (RF34-OB)", () => {
+    const vm = createViewModel();
+
+    expect(vm.metricsReportExportUrl).toBe("/api/v1/assistant/metrics/export");
+  });
+
   it("reload cerca con i filtri attivi, imposta i risultati e azzera l'errore dello storico", () => {
     const record = communication();
     assistant["searchCommunications"].mockReturnValue(of([record]));

@@ -1,4 +1,4 @@
-import type { AbstractControl, ValidationErrors } from "@angular/forms";
+import { type AbstractControl, type ValidationErrors, Validators } from "@angular/forms";
 
 /** Tipologie ammesse per "documentType" (UC-43) — allineate all'enum OpenAPI. */
 export const DOCUMENT_TYPE_OPTIONS = [
@@ -59,4 +59,20 @@ export function codiceFiscaleValidator(control: AbstractControl): ValidationErro
   }
 
   return isValidCodiceFiscale(value) ? null : { codiceFiscale: true };
+}
+
+/**
+ * Validator reactive-forms: come `Validators.email`, ma tollera gli spazi di
+ * contorno che l'utente lascia digitando — vengono tagliati al salvataggio
+ * (`nullableTrim`), quindi non devono far fallire la validazione prima che
+ * l'utente abbia finito di correggere il campo.
+ */
+export function emailValidator(control: AbstractControl): ValidationErrors | null {
+  const value = ((control.value as string | null) ?? "").trim();
+
+  if (value === "") {
+    return null;
+  }
+
+  return Validators.email({ value } as unknown as AbstractControl) === null ? null : { email: true };
 }

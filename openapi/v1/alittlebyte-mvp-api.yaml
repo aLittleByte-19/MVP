@@ -34,6 +34,23 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /api/v1/assistant/metrics/export:
+    get:
+      summary: Export the AI Assistant metrics as a summary PDF report
+      operationId: exportAssistantMetricsReport
+      tags: [State]
+      responses:
+        "200":
+          description: PDF attachment.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /api/v1/communications:
     get:
       summary: List the tenant communication drafts, optionally filtered
@@ -705,6 +722,23 @@ paths:
                 format: binary
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/documents/{subDocument}/original-preview:
+    get:
+      summary: Preview the complete, non-split original document (UC-40.2)
+      operationId: previewMvpOriginalDocument
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      responses:
+        "200":
+          description: PDF preview stream.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/documents/{subDocument}/send-preview:
     get:
       summary: Preview the precompiled send message for a sub-document
@@ -1321,6 +1355,8 @@ components:
         error:
           type: [string, "null"]
         previewUrl:
+          type: string
+        originalPreviewUrl:
           type: string
         sendRecipient:
           type: string

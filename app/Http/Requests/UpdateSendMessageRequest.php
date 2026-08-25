@@ -18,7 +18,7 @@ class UpdateSendMessageRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'recipient' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'recipient' => ['sometimes', 'nullable', 'email', 'max:255'],
             'subject' => ['sometimes', 'nullable', 'string', 'max:255'],
             'body' => ['sometimes', 'nullable', 'string', 'max:5000'],
         ];

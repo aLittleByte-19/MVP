@@ -584,6 +584,8 @@ class MvpStateService
             // sarebbe generato con schema "http://" dietro Traefik e bloccato dal
             // browser (mixed-content sull'iframe e sul fetch dell'anteprima).
             'previewUrl' => route('api.v1.documents.preview', ['subDocument' => $subDocument->id], false),
+            // UC-40.2/RF56-OB: il documento originale completo, non splittato.
+            'originalPreviewUrl' => route('api.v1.documents.original-preview', ['subDocument' => $subDocument->id], false),
             'sendRecipient' => $sendMessage['recipient'],
             'sendSubject' => $sendMessage['subject'],
             'sendBody' => $sendMessage['body'],
