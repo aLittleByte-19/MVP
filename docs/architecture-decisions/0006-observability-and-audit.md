@@ -69,5 +69,6 @@ Alloy.
 ## Related documents
 
 - [`0005-no-automatic-fallbacks.md`](0005-no-automatic-fallbacks.md)
-- [`../runbooks/observability.md`](../runbooks/observability.md)
+- [`0014-rimozione-stack-osservabilita.md`](0014-rimozione-stack-osservabilita.md)
+- [`0015-osservabilita-minima-cloudwatch-emf.md`](0015-osservabilita-minima-cloudwatch-emf.md)
 - [`../IMPLEMENTATION_OVERVIEW.md`](../IMPLEMENTATION_OVERVIEW.md) (§14)

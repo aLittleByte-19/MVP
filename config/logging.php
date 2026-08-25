@@ -1,6 +1,7 @@
 <?php
 
 use Monolog\Formatter\JsonFormatter;
+use Monolog\Formatter\LineFormatter;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -111,6 +112,25 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'facility' => env('LOG_SYSLOG_FACILITY', LOG_USER),
             'replace_placeholders' => true,
+        ],
+
+        // Canale dedicato alle righe CloudWatch EMF (vedi EmfMetricsRecorder, ADR
+        // 0015): LineFormatter senza avvolgimento, non JsonFormatter, altrimenti
+        // Monolog incapsulerebbe la riga EMF in un envelope che le farebbe perdere
+        // la struttura "_aws" richiesta al primo livello del JSON.
+        'metrics' => [
+            'driver' => 'monolog',
+            'level' => 'info',
+            'handler' => StreamHandler::class,
+            'handler_with' => [
+                'stream' => 'php://stderr',
+            ],
+            'formatter' => LineFormatter::class,
+            'formatter_with' => [
+                'format' => "%message%\n",
+                'allowInlineLineBreaks' => false,
+                'ignoreEmptyContextAndExtra' => true,
+            ],
         ],
 
         'errorlog' => [

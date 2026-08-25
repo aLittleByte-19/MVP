@@ -152,6 +152,8 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentStoragePort;
 use App\Mvp\Documents\Domain\Ports\Outbound\OcrGatewayPort;
 use App\Mvp\Documents\Domain\Ports\Outbound\SendMessageRendererPort;
 use App\Mvp\Identity\MvpUserProvider;
+use App\Mvp\Observability\EmfMetricsRecorder;
+use App\Mvp\Observability\RecordRequestMetrics;
 use App\Mvp\Support\Clock\SystemClock;
 use App\Mvp\Support\Identifiers\RandomUuidGenerator;
 use App\Mvp\Support\Identifiers\UniqueIdGeneratorPort;
@@ -168,6 +170,7 @@ use Aws\Sfn\SfnClient;
 use Aws\Sqs\SqsClient;
 use Aws\Textract\TextractClient;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Foundation\Http\Events\RequestHandled;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
@@ -224,6 +227,13 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return new SqsClient($config);
+        });
+
+        $this->app->singleton(EmfMetricsRecorder::class, function () {
+            return new EmfMetricsRecorder(
+                (bool) config('services.metrics.enabled'),
+                (string) config('services.metrics.namespace'),
+            );
         });
 
         $this->app->singleton(TextractClient::class, function () {
@@ -507,5 +517,10 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(SubDocumentManuallyValidated::class, RecordSubDocumentManuallyValidated::class);
         Event::listen(SendMessageExported::class, RecordSendMessageExported::class);
         Event::listen(SendMessageOverridesCorrected::class, RecordSendMessageOverridesCorrected::class);
+
+        // RequestHandled (non un middleware, vedi ADR 0015): dispatchato da
+        // Kernel::handle() dopo che un'eventuale eccezione e' gia' stata
+        // tradotta in risposta, quindi vede sempre lo status code finale.
+        Event::listen(RequestHandled::class, RecordRequestMetrics::class);
     }
 }

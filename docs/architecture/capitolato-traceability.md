@@ -214,18 +214,28 @@ l'autorizzazione lato Laravel; il token JWT verso il backend è modellato dal mi
 audit immutabile copre la tracciabilità delle azioni rilevanti.
 
 Uno stack di metriche/tracing/dashboard equivalente a CloudWatch/X-Ray (OpenTelemetry Collector →
-Prometheus/Tempo/Grafana) era stato adottato in una fase precedente e **copriva questo requisito
-per intero**; è stato rimosso perché sovradimensionato per la scala del progetto — vedi
-[ADR 0014](../architecture-decisions/0014-rimozione-stack-osservabilita.md). Da quella rimozione
-in poi **il riscontro sotto è parziale**: resta coperta la parte di audit/tracciabilità delle
-azioni, non la parte di metriche/alarm/tracing continuo richiesta dal Capitolato.
+Prometheus/Tempo/Grafana) era stato adottato in una fase precedente e copriva questo requisito
+per intero; è stato rimosso perché sovradimensionato per la scala del progetto — vedi
+[ADR 0014](../architecture-decisions/0014-rimozione-stack-osservabilita.md). Al suo posto,
+[ADR 0015](../architecture-decisions/0015-osservabilita-minima-cloudwatch-emf.md) introduce una
+soluzione minima puntata direttamente su CloudWatch, senza stack dedicato.
 
 **Riscontro nel Capitolato:**
 > «CloudWatch Logs/Metrics/Alarms, X-Ray (tracing).»
 > Fonte: Capitolato C5, sezione «Vincoli tecnico tecnologici → Observability & Ops»
 
-Non più coperto dopo la rimozione dello stack: Metrics/Alarms e X-Ray (tracing) non hanno un
-equivalente locale attivo. Logs resta coperto (log JSON strutturati con correlation ID).
+Riscontro dopo l'ADR 0015: **Logs** e **Metrics** sono coperti — log JSON strutturati con
+correlation ID instradabili verso CloudWatch Logs tramite il log driver del container
+([`config/logging.php`](../../config/logging.php), canale `stderr`), metriche minime (traffico,
+latenza, tasso di errore, profondità DLQ) emesse in **CloudWatch Embedded Metric Format**
+([`app/Mvp/Observability/EmfMetricsRecorder.php`](../../app/Mvp/Observability/EmfMetricsRecorder.php),
+[`app/Http/Middleware/RecordRequestMetrics.php`](../../app/Http/Middleware/RecordRequestMetrics.php)).
+**Alarms** ha un riscontro parziale: esempio Terraform documentato in
+[`infra/aws/README.md`](../../infra/aws/README.md), non provisionato in assenza di un ambiente
+AWS reale collegato al progetto. **X-Ray** (tracing distribuito continuo) resta non implementato
+letteralmente; è dichiarato equivalente-MVP dalla propagazione end-to-end di
+`request_id`/`correlation_id` già esistente (HTTP → coda → worker), proporzionata alla scala del
+progetto (nessun traffico di produzione reale).
 
 L'audit trail riflette il flusso di tracciabilità documentale richiesto:
 > «Visualizzazione audit trail: upload → riconoscimento → split → mapping → invio → lettura.»
@@ -234,7 +244,8 @@ L'audit trail riflette il flusso di tracciabilità documentale richiesto:
 Questo secondo riscontro resta pienamente coperto: non dipende dallo stack rimosso.
 
 **ADR correlato:** [0006 - Observability And Audit](../architecture-decisions/0006-observability-and-audit.md)
-(superata in parte), [0014 - Rimozione dello stack Prometheus/Grafana](../architecture-decisions/0014-rimozione-stack-osservabilita.md)
+(superata in parte), [0014 - Rimozione dello stack Prometheus/Grafana](../architecture-decisions/0014-rimozione-stack-osservabilita.md),
+[0015 - Osservabilità minima verso CloudWatch](../architecture-decisions/0015-osservabilita-minima-cloudwatch-emf.md)
 
 ---
 

@@ -2,6 +2,7 @@
 
 use App\Console\Commands\ConsumeWorkflowTasks;
 use App\Console\Commands\ListDlqMessages;
+use App\Console\Commands\PublishDlqDepthMetric;
 use App\Console\Commands\ResetMvpData;
 use App\Exceptions\AiServiceException;
 use App\Http\Middleware\AuthorizeMvpAccess;
@@ -48,6 +49,7 @@ return (new ApplicationBuilder($app))
     ->withCommands([
         ConsumeWorkflowTasks::class,
         ListDlqMessages::class,
+        PublishDlqDepthMetric::class,
         ResetMvpData::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
@@ -56,6 +58,9 @@ return (new ApplicationBuilder($app))
         // secure cookies work correctly.
         $middleware->trustProxies(at: '*');
         $middleware->append(CorrelateRequests::class);
+        // La metrica per richiesta (ADR 0015) non è più un middleware: ascolta
+        // RequestHandled (registrato in AppServiceProvider), cosi' vede anche
+        // lo status code delle richieste finite in eccezione.
         $middleware->alias([
             'mvp.identity' => ResolveMvpIdentity::class,
             'mvp.authorize' => AuthorizeMvpAccess::class,

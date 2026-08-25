@@ -1,6 +1,6 @@
 # ADR 0014: Rimozione dello stack Prometheus/Grafana
 
-Status: Accepted, implemented
+Status: Accepted, implemented; parzialmente estesa da [0015](0015-osservabilita-minima-cloudwatch-emf.md)
 Date: 2026-08-23
 
 ## Context
