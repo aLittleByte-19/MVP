@@ -20,6 +20,7 @@ export * from './forbiddenResponse';
 export * from './generateCommunicationRequest';
 export * from './generateCommunicationRequestStyle';
 export * from './generateCommunicationRequestTone';
+export * from './getMvpStateParams';
 export * from './ifNoneMatchParameter';
 export * from './listCommunicationsResponse';
 export * from './listDocumentsResponse';

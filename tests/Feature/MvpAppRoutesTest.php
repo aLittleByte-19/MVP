@@ -1129,6 +1129,98 @@ test('state metrics expose stable keys alongside the presentation label', functi
     );
 });
 
+test('the assistant metrics filters restrict assistant metrics by tone, style and date range (RF38-OB..RF41-OB)', function () {
+    // Una in bozza e una approvata, entrambe nel tono/stile/intervallo
+    // cercati: contano nel totale, solo la prima nelle bozze, solo la
+    // seconda nello storico (che mostra solo le approvate, UC-9).
+    $matchingDraft = Communication::factory()->draft()->create([
+        'tone' => 'Tecnico',
+        'style' => 'Avviso operativo',
+    ]);
+    $matchingDraft->forceFill(['created_at' => '2026-03-15 10:00:00'])->save();
+
+    $matchingApproved = Communication::factory()->approved()->create([
+        'tone' => 'Tecnico',
+        'style' => 'Avviso operativo',
+    ]);
+    $matchingApproved->forceFill(['created_at' => '2026-03-20 10:00:00'])->save();
+
+    // Fuori tono: non deve essere contato.
+    Communication::factory()->approved()->create([
+        'tone' => 'Empatico',
+        'style' => 'Avviso operativo',
+    ])->forceFill(['created_at' => '2026-03-15 10:00:00'])->save();
+
+    // Fuori intervallo di date: non deve essere contato.
+    Communication::factory()->approved()->create([
+        'tone' => 'Tecnico',
+        'style' => 'Avviso operativo',
+    ])->forceFill(['created_at' => '2026-01-01 10:00:00'])->save();
+
+    $response = $this->getJson('/api/v1/state?'.http_build_query([
+        'tone' => 'Tecnico',
+        'style' => 'Avviso operativo',
+        'dateFrom' => '2026-03-01',
+        'dateTo' => '2026-03-31',
+    ]))->assertOk();
+
+    $metrics = collect($response->json('assistant.metrics'))->keyBy('key');
+
+    expect($metrics['assistant.total']['value'])->toBe(2)
+        ->and($metrics['assistant.drafts']['value'])->toBe(1)
+        ->and(collect($response->json('assistant.history'))->pluck('id')->all())->toBe([$matchingApproved->id]);
+});
+
+test('the assistant metrics filters never restrict copilot metrics', function () {
+    // Nessun documento risponde ai filtri, ma nessuno di questi campi esiste
+    // sui SubDocument: copilot.* deve restare invariata rispetto a senza filtri.
+    SubDocument::factory()->create(['review_status' => ReviewStatus::AutoValidated]);
+
+    $unfiltered = collect($this->getJson('/api/v1/state')->json('copilot.metrics'))->keyBy('key');
+    $filtered = collect($this->getJson('/api/v1/state?'.http_build_query([
+        'tone' => 'Tono che non esiste da nessuna parte',
+    ]))->json('copilot.metrics'))->keyBy('key');
+
+    expect($filtered['copilot.documents']['value'])->toBe($unfiltered['copilot.documents']['value'])
+        ->and($filtered['copilot.auto_classified']['value'])->toBe($unfiltered['copilot.auto_classified']['value']);
+});
+
+test('the assistant metrics date filter is open-ended when only one side is set', function () {
+    // Tono distintivo (nessun'altra fixture di questa suite lo usa): isola il
+    // conteggio da altre Communication gia' presenti nel database di sviluppo
+    // condiviso, come fanno gli altri test di questo blocco con "Tecnico" o
+    // con un tono inesistente.
+    $tone = 'Tono esclusivo del test open-ended';
+
+    $inRange = Communication::factory()->draft()->create(['tone' => $tone]);
+    $inRange->forceFill(['created_at' => '2026-06-10 10:00:00'])->save();
+
+    $beforeRange = Communication::factory()->draft()->create(['tone' => $tone]);
+    $beforeRange->forceFill(['created_at' => '2026-01-01 10:00:00'])->save();
+
+    $metrics = collect($this->getJson('/api/v1/state?'.http_build_query([
+        'tone' => $tone,
+        'dateFrom' => '2026-06-01',
+    ]))->json('assistant.metrics'))->keyBy('key');
+
+    expect($metrics['assistant.total']['value'])->toBe(1);
+});
+
+test('the assistant metrics filters reject an invalid date range', function () {
+    $this->withHeader('Accept', 'application/json')
+        ->getJson('/api/v1/state?'.http_build_query([
+            'dateFrom' => '2026-03-31',
+            'dateTo' => '2026-03-01',
+        ]))
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+
+    $this->withHeader('Accept', 'application/json')
+        ->getJson('/api/v1/state?'.http_build_query(['dateFrom' => '31-03-2026']))
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+});
+
 test('the prompt configurations count is not limited by the twenty-item list', function () {
     // UC-27.1: il conteggio e' un numero a se', non la lunghezza dell'elenco
     // esposto per il riuso rapido nel form di generazione (che si ferma a 20).

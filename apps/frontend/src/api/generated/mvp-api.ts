@@ -29,6 +29,7 @@ import type {
   CommunicationMutationResponse,
   DeleteDocumentResponse,
   GenerateCommunicationRequest,
+  GetMvpStateParams,
   ListCommunicationsResponse,
   ListDocumentsResponse,
   ListMvpCommunicationsParams,
@@ -167,34 +168,36 @@ export class AlittlebyteMVPAPIService {
 /**
  * @summary Get current MVP state
  */
- getMvpState<TData = MvpState>( options?: HttpClientBodyOptions): Observable<TData>;
- getMvpState<TData = MvpState>( options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
- getMvpState<TData = MvpState>( options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
+ getMvpState<TData = MvpState>(params?: GetMvpStateParams, options?: HttpClientBodyOptions): Observable<TData>;
+ getMvpState<TData = MvpState>(params?: GetMvpStateParams, options?: HttpClientEventOptions): Observable<HttpEvent<TData>>;
+ getMvpState<TData = MvpState>(params?: GetMvpStateParams, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<TData>>;
   getMvpState<TData = MvpState>(
-     options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
+    params?: GetMvpStateParams, options?: HttpClientObserveOptions): Observable<TData | HttpEvent<TData> | AngularHttpResponse<TData>> {
+    const filteredParams = filterParams({...params, ...options?.params}, new Set<string>([]));
+
     if (options?.observe === 'events') {
       return this.http.get<TData>(
       `/api/v1/state`,{
-        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
         observe: 'events',
-      }
+        params: filteredParams,}
     );
     }
 
     if (options?.observe === 'response') {
       return this.http.get<TData>(
       `/api/v1/state`,{
-        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
         observe: 'response',
-      }
+        params: filteredParams,}
     );
     }
 
     return this.http.get<TData>(
       `/api/v1/state`,{
-        ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
         observe: 'body',
-      }
+        params: filteredParams,}
     );
   }
 

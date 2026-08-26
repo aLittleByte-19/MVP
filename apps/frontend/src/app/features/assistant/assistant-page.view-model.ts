@@ -9,7 +9,7 @@ import type {
   UpdateCommunicationRequest
 } from "../../../api/generated/model";
 import { getApiErrorMessage } from "../../core/errors/api-error";
-import { MvpStateStore } from "../../core/state/mvp-state.store";
+import { MvpStateStore, type AssistantMetricsFilters } from "../../core/state/mvp-state.store";
 import type { CompositionSlice } from "../../shared/components/metric-composition/metric-composition";
 import type { MetricPresentation } from "../../shared/components/metrics-panel/metrics-panel";
 import type {
@@ -126,16 +126,21 @@ export class AssistantPageViewModel {
   readonly filteredCommunications: WritableSignal<Communication[]> = signal([]);
   readonly historyError: WritableSignal<string | null> = signal(null);
 
-  readonly error: Signal<string | null> = computed(() => this.store.error());
-  readonly loading: Signal<boolean> = computed(() => this.store.loading());
+  readonly error: Signal<string | null> = computed(() => this.store.error() ?? this.store.filteredAssistantError());
+  readonly loading: Signal<boolean> = computed(() => this.store.loading() || this.store.filteredAssistantLoading());
+
+  /** Filtri della sezione Metriche (RF38-OB..RF41-OB), separati da quelli dello storico qui sopra. */
+  readonly metricsFilters: WritableSignal<AssistantMetricsFilters> = signal({});
+  readonly hasActiveMetricsFilters: Signal<boolean> = computed(() => Object.keys(this.metricsFilters()).length > 0);
 
   /**
-   * Metriche descrittive del modulo. `assistant.drafts` è escluso: le bozze da
-   * valutare sono una priorità e vivono nella Overview, qui sono la parte "in
-   * bozza" della ripartizione sottostante.
+   * Metriche descrittive del modulo, ricalcolate secondo `metricsFilters`.
+   * `assistant.drafts` è escluso: le bozze da valutare sono una priorità e
+   * vivono nella Overview, qui sono la parte "in bozza" della ripartizione
+   * sottostante.
    */
   readonly metrics = computed(() =>
-    this.store.assistantMetrics().filter((metric) => metric.key !== "assistant.drafts")
+    (this.store.filteredAssistantState()?.metrics ?? []).filter((metric) => metric.key !== "assistant.drafts")
   );
 
   /**
@@ -155,15 +160,20 @@ export class AssistantPageViewModel {
     "assistant.rating_average": { kind: "stars", span: 2, max: 5 }
   }));
 
-  /** UC-27.3: gli ultimi feedback con voto e commento testuale. */
-  readonly recentFeedback: Signal<Communication[]> = computed(() => this.store.recentFeedback());
+  /**
+   * UC-27.3: gli ultimi feedback con voto e commento testuale, ricalcolati
+   * secondo `metricsFilters` come il resto della sezione.
+   */
+  readonly recentFeedback: Signal<Communication[]> = computed(
+    () => this.store.filteredAssistantState()?.recentFeedback ?? []
+  );
 
   /**
    * Composizione dello stato delle bozze: è la decisione presa su ciascuna,
    * un'informazione che oggi non compare da nessuna parte nell'interfaccia.
    */
   readonly draftComposition = computed<CompositionSlice[]>(() => {
-    const metrics = this.store.assistantMetrics();
+    const metrics = this.store.filteredAssistantState()?.metrics ?? [];
     const valueOf = (key: string): number => {
       const found = metrics.find((metric) => metric.key === key);
 
@@ -192,6 +202,15 @@ export class AssistantPageViewModel {
     this.activeFilters.set(filters);
   }
 
+  setMetricsFilters(filters: AssistantMetricsFilters): void {
+    this.metricsFilters.set(filters);
+  }
+
+  /** Rilegge la sezione Metriche, col filtro attivo corrente (RF38-OB). */
+  refreshFilteredMetrics(): void {
+    this.store.reloadFilteredAssistantMetrics(this.metricsFilters());
+  }
+
   /**
    * Rilettura dello storico comunicazioni: stessa forma di generate/discard/...,
    * non solo un setter. Annulla la ricerca precedente ancora in volo prima di
@@ -207,13 +226,14 @@ export class AssistantPageViewModel {
   }
 
   /**
-   * Ricarica lo stato condiviso, che è ciò che il pulsante "Riprova"
-   * dell'errore di pagina deve rifare. Distinto da `reload()`, che rilegge il
-   * storico comunicazioni: confonderli lascerebbe lo stato globale in errore
-   * pur avendo ricaricato l'elenco.
+   * Ricarica lo stato condiviso e la sezione Metriche filtrata, che è ciò
+   * che il pulsante "Riprova" dell'errore di pagina deve rifare. Distinto da
+   * `reload()`, che rilegge lo storico comunicazioni: confonderli
+   * lascerebbe lo stato globale in errore pur avendo ricaricato l'elenco.
    */
   reloadState(): void {
     this.store.reload();
+    this.refreshFilteredMetrics();
   }
 
   /**
@@ -568,5 +588,4 @@ export class AssistantPageViewModel {
       statusValue: communication.statusValue ?? "draft"
     };
   }
-
 }

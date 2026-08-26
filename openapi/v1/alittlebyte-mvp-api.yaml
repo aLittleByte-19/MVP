@@ -23,6 +23,35 @@ paths:
       summary: Get current MVP state
       operationId: getMvpState
       tags: [State]
+      parameters:
+        - name: tone
+          in: query
+          required: false
+          description: Filtra le metriche AI Assistant per tono (RF40-OB). Non incide sulle metriche Co-Pilot.
+          schema:
+            type: string
+            maxLength: 255
+        - name: style
+          in: query
+          required: false
+          description: Filtra le metriche AI Assistant per stile (RF41-OB). Non incide sulle metriche Co-Pilot.
+          schema:
+            type: string
+            maxLength: 255
+        - name: dateFrom
+          in: query
+          required: false
+          description: Inizio (incluso) dell'intervallo di date delle metriche AI Assistant (RF39-OB).
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          required: false
+          description: Fine (inclusa) dell'intervallo di date delle metriche AI Assistant (RF39-OB).
+          schema:
+            type: string
+            format: date
       responses:
         "200":
           description: Current operational state.
@@ -34,6 +63,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   /api/v1/communications:
     get:
       summary: List the tenant communication drafts, optionally filtered

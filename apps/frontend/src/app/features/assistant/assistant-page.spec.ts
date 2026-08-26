@@ -41,14 +41,12 @@ function communication(overrides: Partial<Communication> = {}): Communication {
  */
 describe("AssistantPage", () => {
   let history: ReturnType<typeof signal<Communication[]>>;
-  let recentFeedback: ReturnType<typeof signal<Communication[]>>;
   let error: ReturnType<typeof signal<string | null>>;
   let promptConfigurations: ReturnType<typeof signal<PromptConfiguration[]>>;
   let assistant: Record<string, jest.Mock>;
 
   beforeEach(() => {
     history = signal<Communication[]>([]);
-    recentFeedback = signal<Communication[]>([]);
     error = signal<string | null>(null);
     promptConfigurations = signal<PromptConfiguration[]>([]);
     assistant = {
@@ -73,12 +71,14 @@ describe("AssistantPage", () => {
           provide: MvpStateStore,
           useValue: {
             history,
-            recentFeedback,
             error,
             promptConfigurations,
             loading: signal(false),
-            assistantMetrics: signal([]),
-            metricEntry: () => null
+            filteredAssistantState: signal({ metrics: [], recentFeedback: [] }),
+            filteredAssistantLoading: signal(false),
+            filteredAssistantError: signal(null),
+            reloadFilteredAssistantMetrics: jest.fn(),
+            reload: jest.fn()
           }
         },
         { provide: AssistantService, useValue: assistant }
@@ -144,5 +144,28 @@ describe("AssistantPage", () => {
     page["resetFilters"]();
 
     expect(page["filterForm"].getRawValue()).toEqual({ keyword: "", tone: "", style: "", date: "" });
+  });
+
+  it("propaga il form dei filtri della sezione Metriche, con debounce, al ViewModel, separato dallo storico (RF38-OB..RF41-OB)", fakeAsync(() => {
+    const fixture = TestBed.createComponent(AssistantPage);
+    fixture.detectChanges();
+    const page = fixture.componentInstance;
+
+    page["metricsFilterForm"].controls.tone.setValue("Tecnico");
+    tick(300);
+
+    expect(page["vm"].metricsFilters()).toEqual({ tone: "Tecnico", style: "", dateFrom: "", dateTo: "" });
+    expect(page["vm"].activeFilters()).toEqual({});
+  }));
+
+  it("azzera i filtri della sezione Metriche senza toccare quelli dello storico", () => {
+    const page = createPage();
+    page["filterForm"].controls.keyword.setValue("ferie");
+    page["metricsFilterForm"].controls.tone.setValue("Tecnico");
+
+    page["resetMetricsFilters"]();
+
+    expect(page["metricsFilterForm"].getRawValue()).toEqual({ tone: "", style: "", dateFrom: "", dateTo: "" });
+    expect(page["filterForm"].controls.keyword.value).toBe("ferie");
   });
 });

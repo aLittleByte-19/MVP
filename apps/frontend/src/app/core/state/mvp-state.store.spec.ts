@@ -155,4 +155,62 @@ describe("MvpStateStore", () => {
     expect(store.documents()).toEqual([updated, other]);
     expect(store.state()?.assistant).toBe(state.assistant);
   });
+
+  it("carica la fetta filtrata delle metriche Assistant senza toccare lo stato condiviso (RF38-OB)", () => {
+    const sharedState = stateWith([{ key: "assistant.total", value: 1, label: "Contenuti generati" }], []);
+    store.setState(sharedState);
+
+    const filteredState = stateWith([{ key: "assistant.drafts", value: 2, label: "Bozze" }], []);
+    getMvpState.mockReturnValue(of(filteredState));
+
+    store.reloadFilteredAssistantMetrics({ tone: "Tecnico", style: "Avviso operativo", dateFrom: "2026-01-01", dateTo: null });
+
+    expect(getMvpState).toHaveBeenCalledWith({
+      tone: "Tecnico",
+      style: "Avviso operativo",
+      dateFrom: "2026-01-01",
+      dateTo: undefined
+    });
+    // Lo stato condiviso (letto da Overview e Co-Pilot) resta quello di prima.
+    expect(store.state()).toBe(sharedState);
+    expect(store.filteredAssistantState()?.metrics).toEqual(filteredState.assistant.metrics);
+    expect(store.filteredAssistantLoading()).toBe(false);
+    expect(store.filteredAssistantError()).toBeNull();
+  });
+
+  it("ritenta una volta un errore temporaneo della fetta filtrata prima di salvarla", () => {
+    const filteredState = stateWith([], []);
+    let subscriptions = 0;
+    getMvpState.mockReturnValue(defer(() => {
+      subscriptions += 1;
+      return subscriptions === 1 ? throwError(() => new Error("temporaneo")) : of(filteredState);
+    }));
+
+    store.reloadFilteredAssistantMetrics({});
+
+    expect(subscriptions).toBe(2);
+    expect(store.filteredAssistantLoading()).toBe(false);
+    expect(store.filteredAssistantError()).toBeNull();
+  });
+
+  it("ignora una richiesta di fetta filtrata mentre una e' gia' in volo", () => {
+    const inFlight = new Subject<MvpState>();
+    getMvpState.mockReturnValue(inFlight);
+
+    store.reloadFilteredAssistantMetrics({});
+    store.reloadFilteredAssistantMetrics({});
+    inFlight.next(stateWith([], []));
+
+    expect(getMvpState).toHaveBeenCalledTimes(1);
+    expect(store.filteredAssistantLoading()).toBe(false);
+  });
+
+  it("espone un messaggio d'errore della fetta filtrata, senza toccare l'errore condiviso", () => {
+    getMvpState.mockReturnValue(throwError(() => new Error("filtro non applicabile")));
+
+    store.reloadFilteredAssistantMetrics({ tone: "Tecnico" });
+
+    expect(store.filteredAssistantError()).toBe("filtro non applicabile");
+    expect(store.error()).toBeNull();
+  });
 });

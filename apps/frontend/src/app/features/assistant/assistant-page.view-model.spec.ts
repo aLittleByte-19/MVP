@@ -43,16 +43,24 @@ describe("AssistantPageViewModel", () => {
     style: "Testo informativo"
   };
   let history: ReturnType<typeof signal<Communication[]>>;
-  let recentFeedback: ReturnType<typeof signal<Communication[]>>;
   let promptConfigurations: ReturnType<typeof signal<PromptConfiguration[]>>;
   let error: ReturnType<typeof signal<string | null>>;
+  let filteredAssistantState: ReturnType<typeof signal<{ metrics: unknown[]; recentFeedback: Communication[] } | null>>;
+  let filteredAssistantLoading: ReturnType<typeof signal<boolean>>;
+  let filteredAssistantError: ReturnType<typeof signal<string | null>>;
+  let reloadFilteredAssistantMetrics: jest.Mock;
+  let reloadShared: jest.Mock;
   let assistant: Record<string, jest.Mock>;
 
   beforeEach(() => {
     history = signal<Communication[]>([]);
-    recentFeedback = signal<Communication[]>([]);
     promptConfigurations = signal<PromptConfiguration[]>([]);
     error = signal<string | null>(null);
+    filteredAssistantState = signal<{ metrics: unknown[]; recentFeedback: Communication[] } | null>(null);
+    filteredAssistantLoading = signal(false);
+    filteredAssistantError = signal<string | null>(null);
+    reloadFilteredAssistantMetrics = jest.fn();
+    reloadShared = jest.fn();
     assistant = {
       searchCommunications: jest.fn(() => of([])),
       generate: jest.fn(),
@@ -72,7 +80,17 @@ describe("AssistantPageViewModel", () => {
   });
 
   function createViewModel(): AssistantPageViewModel {
-    const store = { history, recentFeedback, promptConfigurations, error } as unknown as MvpStateStore;
+    const store = {
+      history,
+      promptConfigurations,
+      error,
+      loading: signal(false),
+      filteredAssistantState,
+      filteredAssistantLoading,
+      filteredAssistantError,
+      reloadFilteredAssistantMetrics,
+      reload: reloadShared
+    } as unknown as MvpStateStore;
     return new AssistantPageViewModel(assistant as unknown as AssistantService, store);
   }
 
@@ -100,14 +118,50 @@ describe("AssistantPageViewModel", () => {
     expect(vm.error()).toBe("errore autorevole");
   });
 
-  it("espone recentFeedback come pass-through dello store (UC-27.3)", () => {
+  it("espone recentFeedback come pass-through della fetta filtrata (UC-27.3, RF38-OB)", () => {
     const vm = createViewModel();
 
     expect(vm.recentFeedback()).toEqual([]);
 
     const record = communication({ rating: 4, ratingComment: "Chiaro e utile" });
-    recentFeedback.set([record]);
+    filteredAssistantState.set({ metrics: [], recentFeedback: [record] });
     expect(vm.recentFeedback()).toEqual([record]);
+  });
+
+  it("imposta i filtri delle metriche e rilegge la fetta filtrata separatamente dallo storico (RF38-OB..RF41-OB)", () => {
+    const vm = createViewModel();
+
+    expect(vm.hasActiveMetricsFilters()).toBe(false);
+
+    vm.setMetricsFilters({ tone: "Tecnico" });
+    expect(vm.hasActiveMetricsFilters()).toBe(true);
+
+    vm.refreshFilteredMetrics();
+    expect(reloadFilteredAssistantMetrics).toHaveBeenCalledWith({ tone: "Tecnico" });
+  });
+
+  it("combina errore e loading condivisi con quelli della fetta filtrata", () => {
+    const vm = createViewModel();
+
+    expect(vm.error()).toBeNull();
+    expect(vm.loading()).toBe(false);
+
+    filteredAssistantError.set("filtro non applicabile");
+    expect(vm.error()).toBe("filtro non applicabile");
+    filteredAssistantError.set(null);
+
+    filteredAssistantLoading.set(true);
+    expect(vm.loading()).toBe(true);
+  });
+
+  it("reloadState ricarica lo stato condiviso e la sezione Metriche filtrata", () => {
+    const vm = createViewModel();
+
+    vm.setMetricsFilters({ style: "Avviso operativo" });
+    vm.reloadState();
+
+    expect(reloadShared).toHaveBeenCalledTimes(1);
+    expect(reloadFilteredAssistantMetrics).toHaveBeenCalledWith({ style: "Avviso operativo" });
   });
 
   it("reload cerca con i filtri attivi, imposta i risultati e azzera l'errore dello storico", () => {

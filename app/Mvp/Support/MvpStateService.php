@@ -11,6 +11,7 @@ use App\Mvp\Communications\Domain\Enums\CommunicationStatus;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Support\SendMessageDraft;
 use App\Mvp\Support\Identity\Actor;
+use App\Mvp\Support\ValueObjects\AssistantMetricsFilters;
 use Illuminate\Database\Eloquent\Builder;
 
 class MvpStateService
@@ -23,20 +24,30 @@ class MvpStateService
     /**
      * @return array<string, mixed>
      */
-    public function forActor(Actor $actor): array
+    public function forActor(Actor $actor, ?AssistantMetricsFilters $filters = null): array
     {
         return [
-            'assistant' => $this->assistantState($actor),
+            'assistant' => $this->assistantState($actor, $filters),
             'copilot' => $this->copilotState($actor),
         ];
     }
 
     /**
+     * I filtri (RF38-OB..RF41-OB) valgono solo qui: tono e stile non
+     * esistono sui documenti del Co-Pilot, quindi copilotState() non ne
+     * prende — filtrare solo meta' della sezione Metriche con lo stesso
+     * controllo sarebbe piu' incoerente che utile. Applicati una sola volta
+     * su $baseQuery, propagano a tutto cio' che ne clona (totale, bozze,
+     * valutate, media voto, storico, feedback recenti).
+     *
      * @return array<string, mixed>
      */
-    public function assistantState(Actor $actor): array
+    public function assistantState(Actor $actor, ?AssistantMetricsFilters $filters = null): array
     {
-        $baseQuery = Communication::query()->where('tenant_id', $actor->tenantId);
+        $baseQuery = $this->applyAssistantMetricsFilters(
+            Communication::query()->where('tenant_id', $actor->tenantId),
+            $filters,
+        );
         $total = (clone $baseQuery)->count();
         $drafts = (clone $baseQuery)->where('status', CommunicationStatus::Draft)->count();
         $rated = (clone $baseQuery)->whereNotNull('rating')->count();
@@ -49,9 +60,10 @@ class MvpStateService
             ->latest()
             ->limit(10)
             ->get();
-        // Preset di prompt salvati (UC-19): elenco limitato, non filtrabile,
-        // pensato per un riuso rapido dal form di generazione, non come
-        // archivio ricercabile.
+        // Preset di prompt salvati (UC-19): elenco limitato, non soggetto ai
+        // filtri di questa sezione (non hanno una data di riferimento sul
+        // contenuto), pensato per un riuso rapido dal form di generazione,
+        // non come archivio ricercabile.
         $promptConfigurationsQuery = PromptConfiguration::query()->where('tenant_id', $actor->tenantId);
         $promptConfigurationsCount = (clone $promptConfigurationsQuery)->count();
         $promptConfigurations = (clone $promptConfigurationsQuery)->latest()->limit(20)->get();
@@ -76,7 +88,7 @@ class MvpStateService
                     'key' => 'assistant.total',
                     'value' => $total,
                     'label' => 'Contenuti generati',
-                    'history' => $this->dailySeries(Communication::query()->where('tenant_id', $actor->tenantId)),
+                    'history' => $this->dailySeries($baseQuery),
                 ],
                 [
                     // UC-27.1: il secondo conteggio di "statistiche di utilizzo",
@@ -106,9 +118,7 @@ class MvpStateService
                     'key' => 'assistant.drafts',
                     'value' => $drafts,
                     'label' => 'Bozze generate',
-                    'history' => $this->dailySeries(
-                        Communication::query()->where('tenant_id', $actor->tenantId)->where('status', CommunicationStatus::Draft)
-                    ),
+                    'history' => $this->dailySeries((clone $baseQuery)->where('status', CommunicationStatus::Draft)),
                 ],
             ],
             'history' => $history->map(fn ($communication) => $this->communication($communication))->values()->all(),
@@ -116,6 +126,41 @@ class MvpStateService
             // UC-27.3: gli ultimi feedback con voto e commento testuale.
             'recentFeedback' => $recentFeedback->map(fn ($communication) => $this->communication($communication))->values()->all(),
         ];
+    }
+
+    /**
+     * Stessa logica (trim, ignora se vuoto) di
+     * EloquentCommunicationRepository::paginateApprovedCommunications() per
+     * tono e stile; la data pero' e' un intervallo (RF39-OB), non un giorno
+     * singolo come nello storico — ciascun estremo e' indipendente, cosi' un
+     * solo lato valorizzato apre l'intervallo invece di richiederli entrambi.
+     *
+     * @param  Builder<Communication>  $query
+     * @return Builder<Communication>
+     */
+    private function applyAssistantMetricsFilters(Builder $query, ?AssistantMetricsFilters $filters): Builder
+    {
+        if ($filters === null) {
+            return $query;
+        }
+
+        if ($tone = trim((string) ($filters->tone ?? ''))) {
+            $query->where('tone', $tone);
+        }
+
+        if ($style = trim((string) ($filters->style ?? ''))) {
+            $query->where('style', $style);
+        }
+
+        if ($filters->dateFrom !== null) {
+            $query->whereDate('created_at', '>=', $filters->dateFrom);
+        }
+
+        if ($filters->dateTo !== null) {
+            $query->whereDate('created_at', '<=', $filters->dateTo);
+        }
+
+        return $query;
     }
 
     /**

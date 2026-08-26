@@ -26,9 +26,12 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
  * `takeUntilDestroyed()` nel costruttore, che richiedono un injection
  * context che il ViewModel (Presentation Model) non ha per costruzione:
  * uno legge i segnali sorgente e chiama `vm.reload()`, che possiede la
- * vera chiamata di ricerca; l'altro legge `vm.pendingScrollTarget()` e,
- * quando non è nullo, esegue lo scroll con `scrollToElement` (l'unica
- * operazione DOM richiesta dal ViewModel, che resta un'unità separata in
+ * vera chiamata di ricerca sullo storico; un altro legge
+ * `vm.metricsFilters()` e chiama `vm.refreshFilteredMetrics()` per la
+ * sezione Metriche (RF38-OB..RF41-OB, filtro separato da quello dello
+ * storico); il terzo legge `vm.pendingScrollTarget()` e, quando non è
+ * nullo, esegue lo scroll con `scrollToElement` (l'unica operazione DOM
+ * richiesta dal ViewModel, che resta un'unità separata in
  * `shared/util/scroll.ts`) e azzera il segnale — il ViewModel *chiede* lo
  * scroll, non lo esegue né chiama mai la View direttamente.
  */
@@ -145,6 +148,40 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
       </mvp-section>
 
       <mvp-section id="assistant-metrics" title="Qualità della generazione">
+        <div
+          class="filters"
+          role="search"
+          [formGroup]="metricsFilterForm"
+          aria-label="Filtra le metriche dell'AI Assistant"
+        >
+          <label class="field" for="metrics-filter-tone">
+            <span>Tono</span>
+            <select id="metrics-filter-tone" formControlName="tone">
+              <option value="">Tutti i toni</option>
+              @for (tone of tones; track tone) {
+                <option [value]="tone">{{ tone }}</option>
+              }
+            </select>
+          </label>
+          <label class="field" for="metrics-filter-style">
+            <span>Stile</span>
+            <select id="metrics-filter-style" formControlName="style">
+              <option value="">Tutti gli stili</option>
+              @for (style of styles; track style) {
+                <option [value]="style">{{ style }}</option>
+              }
+            </select>
+          </label>
+          <label class="field" for="metrics-filter-date-from">
+            <span>Da</span>
+            <input id="metrics-filter-date-from" type="date" formControlName="dateFrom" />
+          </label>
+          <label class="field" for="metrics-filter-date-to">
+            <span>A</span>
+            <input id="metrics-filter-date-to" type="date" formControlName="dateTo" />
+          </label>
+          <button mvpButton variant="secondary" type="button" (click)="resetMetricsFilters()">Azzera filtri</button>
+        </div>
         <mvp-metrics-panel
           [isLoading]="vm.loading()"
           [hasError]="!!vm.error()"
@@ -217,6 +254,14 @@ export class AssistantPage {
     date: new FormControl("", { nonNullable: true })
   });
 
+  /** Filtro separato per la sezione Metriche (RF38-OB..RF41-OB): non condivide stato con `filterForm` qui sopra. */
+  protected readonly metricsFilterForm = new FormGroup({
+    tone: new FormControl("", { nonNullable: true }),
+    style: new FormControl("", { nonNullable: true }),
+    dateFrom: new FormControl("", { nonNullable: true }),
+    dateTo: new FormControl("", { nonNullable: true })
+  });
+
   protected readonly vm: AssistantPageViewModel;
 
   constructor() {
@@ -236,6 +281,20 @@ export class AssistantPage {
       )
       .subscribe((value) => this.vm.setActiveFilters(value));
 
+    this.metricsFilterForm.valueChanges
+      .pipe(
+        debounceTime(300),
+        distinctUntilChanged(
+          (previous, current) =>
+            previous.tone === current.tone &&
+            previous.style === current.style &&
+            previous.dateFrom === current.dateFrom &&
+            previous.dateTo === current.dateTo
+        ),
+        takeUntilDestroyed()
+      )
+      .subscribe((value) => this.vm.setMetricsFilters(value));
+
     // Una sola sorgente per lo storico: i filtri e ogni mutazione dello stato
     // (generazione, scarto, eliminazione, valutazione) rileggono dal backend.
     // Eccezione documentata: l'effect() richiede un injection context che
@@ -245,6 +304,16 @@ export class AssistantPage {
       this.store.history();
       this.vm.activeFilters();
       this.vm.reload();
+    });
+
+    // Terza eccezione documentata, stessa forma delle altre due: legge
+    // `vm.metricsFilters()` e chiama `vm.refreshFilteredMetrics()`, che
+    // possiede la vera chiamata (in `MvpStateStore.reloadFilteredAssistantMetrics()`,
+    // scritta con `untracked()` apposta perché chiamata da qui non generi un
+    // ciclo di richieste).
+    effect(() => {
+      this.vm.metricsFilters();
+      this.vm.refreshFilteredMetrics();
     });
 
     // Altra eccezione documentata: il ViewModel non chiama mai la View,
@@ -264,5 +333,9 @@ export class AssistantPage {
 
   protected resetFilters(): void {
     this.filterForm.reset();
+  }
+
+  protected resetMetricsFilters(): void {
+    this.metricsFilterForm.reset();
   }
 }
