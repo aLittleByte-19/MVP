@@ -285,6 +285,7 @@ final class InMemoryDocumentRepository implements DocumentRepository
             'id' => $id,
             'tenant_id' => 'tenant-test',
             'file_path' => 'documents/originals/test.pdf',
+            'original_filename' => null,
             'manual_document_type' => null,
             'manual_company_name' => null,
             'manual_reference_month' => null,
@@ -340,6 +341,7 @@ final class InMemoryDocumentRepository implements DocumentRepository
             workflowCompleted: $row['workflow_completed_at'] !== null,
             workflowExecutionArn: $row['workflow_execution_arn'],
             errorMessage: $row['error_message'],
+            originalFilename: $row['original_filename'] ?? null,
         );
     }
 }

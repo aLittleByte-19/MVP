@@ -79,6 +79,15 @@ return [
         'endpoint' => env('SQS_ENDPOINT'),
     ],
 
+    // Metriche applicative in formato CloudWatch EMF (vedi EmfMetricsRecorder,
+    // ADR 0015): namespace e interruttore, nessuna credenziale dedicata perché
+    // il trasporto verso CloudWatch e' il log driver del container, non una
+    // chiamata SDK diretta.
+    'metrics' => [
+        'namespace' => env('CLOUDWATCH_METRICS_NAMESPACE', 'MVP/App'),
+        'enabled' => (bool) env('METRICS_ENABLED', true),
+    ],
+
     'textract' => [
         'enabled' => (bool) env('TEXTRACT_ENABLED', false),
         'region' => env('TEXTRACT_REGION', env('TEXTRACT_AWS_REGION', env('AWS_REAL_REGION', env('AWS_DEFAULT_REGION', 'eu-central-1')))),

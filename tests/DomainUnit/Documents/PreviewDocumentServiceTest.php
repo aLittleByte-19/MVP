@@ -50,3 +50,49 @@ test('preview refuses a sub-document that belongs to another tenant', function (
     expect(fn () => (new PreviewDocumentService($documents, $storage))->preview(1, fakePreviewActor('altro-tenant')))
         ->toThrow(DocumentNotAuthorizedException::class);
 });
+
+test('previewOriginal returns the original document bytes and filename (RF56-OB/UC-40.2)', function () {
+    $documents = new InMemoryDocumentRepository;
+    $documents->seedOriginal(1, ['file_path' => 'documents/originals/1.pdf', 'original_filename' => 'cedolini-marzo.pdf']);
+    $documents->seedSubDocument(1, 1);
+    $storage = new FakeDocumentStorage;
+    $storage->write('documents/originals/1.pdf', 'contenuto-documento-originale');
+
+    $result = (new PreviewDocumentService($documents, $storage))->previewOriginal(1, fakePreviewActor());
+
+    expect($result->bytes)->toBe('contenuto-documento-originale')
+        ->and($result->filename)->toBe('cedolini-marzo.pdf');
+});
+
+test('previewOriginal falls back to a default filename when none was recorded', function () {
+    $documents = new InMemoryDocumentRepository;
+    $documents->seedOriginal(1, ['file_path' => 'documents/originals/1.pdf']);
+    $documents->seedSubDocument(1, 1);
+    $storage = new FakeDocumentStorage;
+    $storage->write('documents/originals/1.pdf', 'contenuto-documento-originale');
+
+    $result = (new PreviewDocumentService($documents, $storage))->previewOriginal(1, fakePreviewActor());
+
+    expect($result->filename)->toBe('documento-originale.pdf');
+});
+
+test('previewOriginal refuses when the original file is missing from storage', function () {
+    $documents = new InMemoryDocumentRepository;
+    $documents->seedOriginal(1, ['file_path' => 'documents/originals/1.pdf']);
+    $documents->seedSubDocument(1, 1);
+    $storage = new FakeDocumentStorage;
+
+    expect(fn () => (new PreviewDocumentService($documents, $storage))->previewOriginal(1, fakePreviewActor()))
+        ->toThrow(DocumentPreviewUnavailableException::class);
+});
+
+test('previewOriginal refuses a sub-document whose original belongs to another tenant', function () {
+    $documents = new InMemoryDocumentRepository;
+    $documents->seedOriginal(1, ['file_path' => 'documents/originals/1.pdf']);
+    $documents->seedSubDocument(1, 1);
+    $storage = new FakeDocumentStorage;
+    $storage->write('documents/originals/1.pdf', 'contenuto-documento-originale');
+
+    expect(fn () => (new PreviewDocumentService($documents, $storage))->previewOriginal(1, fakePreviewActor('altro-tenant')))
+        ->toThrow(DocumentNotAuthorizedException::class);
+});

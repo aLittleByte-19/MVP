@@ -37,4 +37,28 @@ class DocumentPreviewController
             'Content-Disposition' => 'inline; filename="'.str_replace('"', '', $document->filename).'"',
         ]);
     }
+
+    /**
+     * Anteprima del documento originale completo, non splittato (UC-40.2/RF56-OB).
+     */
+    public function originalPreview(Request $request, SubDocument $subDocument, PreviewDocumentUseCase $preview): Response
+    {
+        $actor = $this->actor($request);
+        $this->authorizeSubDocument($subDocument, $actor);
+
+        try {
+            $document = $preview->previewOriginal($subDocument->id, $actor);
+        } catch (DocumentPreviewUnavailableException $exception) {
+            abort(404, $exception->getMessage());
+        } catch (\RuntimeException $exception) {
+            report($exception);
+
+            abort(503, 'Storage documenti non raggiungibile.');
+        }
+
+        return response($document->bytes, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.str_replace('"', '', $document->filename).'"',
+        ]);
+    }
 }

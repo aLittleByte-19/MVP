@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/badge/PostgreSQL-persistence-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL">
   <img src="https://img.shields.io/badge/LocalStack-AWS%20emulation-FF9900?logo=amazonaws&logoColor=white" alt="LocalStack">
   <img src="https://img.shields.io/badge/Bedrock-AI%20provider-FF9900?logo=amazonaws&logoColor=white" alt="Bedrock">
-  <img src="https://img.shields.io/badge/OpenTelemetry-observability-000000?logo=opentelemetry&logoColor=white" alt="OpenTelemetry">
+  <img src="https://img.shields.io/badge/CloudWatch-observability%20(EMF)-FF9900?logo=amazonaws&logoColor=white" alt="CloudWatch observability">
 </p>
 
 <p align="center">
@@ -36,7 +36,7 @@ La MVP dimostra un modello applicativo composto da più livelli cooperanti:
 * **LocalStack** per emulare localmente servizi AWS come SQS, Step Functions, SSM, Secrets Manager e S3;
 * **emulatore CDN locale** (Nginx) davanti al bucket S3 LocalStack per il serving della SPA Angular (in produzione: AWS CloudFront);
 * integrazione AI tramite astrazione verso **Bedrock** e integrazione OCR tramite **Textract** (attivabile, disabilitata di default);
-* stack di osservabilità con **OpenTelemetry, Prometheus, Grafana, Tempo, Loki, Alloy e Alertmanager**;
+* osservabilità minimale verso **CloudWatch**: log JSON strutturati con correlation ID e metriche custom in formato **CloudWatch EMF**, senza stack dedicato (vedi ADR 0014/0015);
 * CI con test backend/frontend, scansione immagini, validazione infrastrutturale e audit accessibilità.
 
 La separazione tra richiesta HTTP e workflow asincrono è uno dei punti centrali: l’utente avvia l’elaborazione, il backend registra lo stato e il worker si occupa dei task più lunghi tramite una pipeline orchestrata.
@@ -85,11 +85,13 @@ Sui sotto-documenti prodotti l’operatore lavora in revisione human-in-the-loop
 
 ## Monitoring e osservabilità
 
-La MVP integra un layer di osservabilità locale per seguire il comportamento dell’applicazione e della pipeline documentale.
+Dopo la rimozione dello stack di osservabilità self-hosted (Prometheus/Grafana/Tempo/Loki/Alloy/Alertmanager, [ADR 0014](docs/architecture-decisions/0014-rimozione-stack-osservabilita.md), sproporzionato per un progetto senza traffico di produzione reale), l'osservabilità della MVP punta direttamente ai meccanismi nativi di CloudWatch, con la minima superficie operativa possibile ([ADR 0015](docs/architecture-decisions/0015-osservabilita-minima-cloudwatch-emf.md)):
 
-Le metriche applicative e infrastrutturali vengono raccolte tramite OpenTelemetry Collector e Prometheus. Le trace vengono inviate a Tempo, i log sono centralizzati su Loki tramite Alloy, mentre Grafana fornisce dashboard per API, workflow documentale, qualità AI/OCR, code, DLQ, log ed errori. Alertmanager completa il flusso operativo con regole collegate a runbook dedicati.
-
-Questa impostazione rende visibili latency, traffico, errori, saturazione, stato dei worker, andamento della pipeline e qualità delle elaborazioni AI.
+* **Log**: ogni richiesta viene arricchita da `CorrelateRequests` con `request_id`/`correlation_id` e scritta in JSON strutturato (`config/logging.php`, canale `stderr`); in produzione queste righe sono raccolte da CloudWatch Logs tramite il log driver del container, senza codice applicativo dedicato.
+* **Metriche**: traffico, latenza, tasso di errore per richiesta e profondità delle DLQ vengono emesse come righe **CloudWatch EMF** sullo stesso canale di log (`EmfMetricsRecorder`, middleware `RecordRequestMetrics`, comando `mvp:metrics:dlq-depth`), che CloudWatch interpreta automaticamente come dati di metrica senza collector né endpoint di scrape.
+* **Audit trail**: le azioni di dominio restano tracciate su `audit_events` (`AuditLogger`), indipendente dallo stack rimosso.
+* **Alarms**: documentati come esempio Terraform di riferimento (`infra/aws/README.md`), non provisionati in assenza di un ambiente AWS reale collegato al progetto.
+* **Tracing distribuito**: sostituito dalla propagazione end-to-end di `request_id`/`correlation_id` tra richiesta HTTP e lavorazione asincrona, equivalente proporzionato alla scala del progetto (stessa logica di scope-reduction già accettata per l'autenticazione simulata, [ADR 0007](docs/architecture-decisions/0007-authn-authz-boundary.md)).
 
 ## CI e quality gate
 

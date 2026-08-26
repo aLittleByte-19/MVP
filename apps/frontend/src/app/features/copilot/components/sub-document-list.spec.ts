@@ -48,6 +48,8 @@ interface TestableSubDocumentList {
   readonly previewStatus: Signal<DocumentPreviewStatus>;
   readonly previewSrc: Signal<SafeResourceUrl | null>;
   fieldError(name: "recipientEmail" | "fiscalCode"): string | null;
+  sendFieldError(name: "recipient"): string | null;
+  employeeNameDisplay(document: SubDocument): string;
   isPredefinedDocumentType(value: string): boolean;
   resetForm(document: SubDocument | null): void;
   cancelSendMessageEdit(document: SubDocument): void;
@@ -287,6 +289,39 @@ describe("SubDocumentListComponent", () => {
     expect(component.confidenceDisplay(subDocument({ confidence: null }))).toBe("Da verificare");
     expect(component.documentDateDisplay(subDocument({ documentDate: "2026-03-31" }))).toBe("31/03/2026");
     expect(component.documentDateDisplay(subDocument({ documentDate: null }))).toBe("Non disponibile");
+  });
+
+  it("mostra 'Non disponibile' per nome e cognome mancanti (RF101-OB)", () => {
+    const { component } = render();
+
+    expect(component.employeeNameDisplay(subDocument({ employee: "Mario Rossi" }))).toBe("Mario Rossi");
+    expect(
+      component.employeeNameDisplay(subDocument({ employee: null, employeeFirstName: null, employeeLastName: null }))
+    ).toBe("Non disponibile");
+  });
+
+  it("segnala un indirizzo email non valido sul destinatario del messaggio di invio (RF95-OB/UC-58)", () => {
+    const fixture = render(subDocument());
+    const recipient = fixture.component.sendForm.get("recipient");
+
+    expect(fixture.component.sendFieldError("recipient")).toBeNull();
+
+    recipient?.setValue("non-una-email");
+    recipient?.markAsTouched();
+
+    expect(fixture.component.sendFieldError("recipient")).toBe("Formato e-mail non valido.");
+  });
+
+  it("blocca il salvataggio del messaggio di invio con un destinatario non valido", () => {
+    const fixture = render(subDocument());
+    const emitted: unknown[] = [];
+    fixture.fixture.componentInstance.saveSendMessageRequested.subscribe((event) => emitted.push(event));
+
+    fixture.component.sendForm.patchValue({ recipient: "non-una-email" });
+    fixture.component.saveSendMessage(subDocument());
+
+    expect(emitted).toEqual([]);
+    expect(fixture.component.sendForm.get("recipient")?.touched).toBe(true);
   });
 
   it("copia l'email destinatario negli appunti e mostra il feedback per 2 secondi", async () => {

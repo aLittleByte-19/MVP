@@ -169,6 +169,13 @@ export class AssistantPageViewModel {
   );
 
   /**
+   * RF34-OB: export del report riepilogativo del pannello metriche in PDF.
+   * Percorso relativo: frontend e API sono stesso-origine dietro
+   * Traefik/edge-cdn, come per `previewUrl`/`exportUrl` delle comunicazioni.
+   */
+  readonly metricsReportExportUrl = "/api/v1/assistant/metrics/export";
+
+  /**
    * Composizione dello stato delle bozze: è la decisione presa su ciascuna,
    * un'informazione che oggi non compare da nessuna parte nell'interfaccia.
    */

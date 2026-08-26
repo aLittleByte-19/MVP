@@ -43,6 +43,7 @@ export interface SubDocument {
   /** @nullable */
   error?: string | null;
   previewUrl?: string;
+  originalPreviewUrl?: string;
   sendRecipient?: string;
   sendSubject?: string;
   sendBody?: string;

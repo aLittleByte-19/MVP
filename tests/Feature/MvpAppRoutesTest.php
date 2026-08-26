@@ -840,6 +840,64 @@ test('sub-document preview rejects cross tenant access', function () {
         ->assertJsonPath('error.code', 'forbidden');
 });
 
+test('operator can preview the complete, non-split original document (RF56-OB)', function () {
+    Storage::fake('s3');
+    config(['mvp.documents.storage_disk' => 's3']);
+
+    $subDocument = SubDocument::factory()->create();
+    $original = $subDocument->originalDocument;
+    Storage::disk('s3')->put($original->file_path, 'contenuto-documento-originale');
+
+    $response = $this->get("/api/v1/documents/{$subDocument->id}/original-preview");
+
+    $response->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf');
+
+    expect($response->headers->get('Content-Disposition'))->toContain('inline')
+        ->and($response->headers->get('Content-Disposition'))->toContain($original->original_filename)
+        ->and($response->getContent())->toBe('contenuto-documento-originale');
+});
+
+test('original document preview returns 404 when the file is missing', function () {
+    Storage::fake('s3');
+    config(['mvp.documents.storage_disk' => 's3']);
+
+    $subDocument = SubDocument::factory()->create();
+
+    $this->withHeader('Accept', 'application/json')
+        ->get("/api/v1/documents/{$subDocument->id}/original-preview")
+        ->assertNotFound();
+});
+
+test('original document preview rejects cross tenant access', function () {
+    config(['mvp.identity.mode' => 'trusted_headers']);
+    Storage::fake('s3');
+    config(['mvp.documents.storage_disk' => 's3']);
+
+    $subDocument = SubDocument::factory()->create();
+    Storage::disk('s3')->put($subDocument->originalDocument->file_path, 'contenuto-documento-originale');
+
+    $this->withHeaders([
+        'Accept' => 'application/json',
+        'X-Mvp-User-Id' => 'operator-b',
+        'X-Mvp-User-Email' => 'operator-b@example.test',
+        'X-Mvp-Tenant-Id' => 'another-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
+    ])->get("/api/v1/documents/{$subDocument->id}/original-preview")
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
+});
+
+test('send message correction rejects an invalid recipient email (RF95-OB/UC-58)', function () {
+    $subDocument = SubDocument::factory()->create();
+
+    $this->putJson("/api/v1/documents/{$subDocument->id}/send-message", [
+        'recipient' => 'non-una-email',
+    ])
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'validation_failed');
+});
+
 test('send message fields are composed from extracted data', function () {
     $subDocument = SubDocument::factory()->create();
     ExtractedData::factory()->create([

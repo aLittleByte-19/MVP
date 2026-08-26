@@ -32,4 +32,23 @@ class PreviewDocumentService implements PreviewDocumentUseCase
 
         return new PreviewableDocument($this->storage->read($subDocument->filePath), $subDocument->originalFilename);
     }
+
+    public function previewOriginal(int $subDocumentId, Actor $actor): PreviewableDocument
+    {
+        $subDocument = $this->documents->findSubDocument($subDocumentId);
+        $original = $this->documents->findOriginalDocument($subDocument->originalDocumentId);
+
+        if ($original->tenantId !== $actor->tenantId) {
+            throw new DocumentNotAuthorizedException;
+        }
+
+        if (! $this->storage->exists($original->filePath)) {
+            throw new DocumentPreviewUnavailableException;
+        }
+
+        return new PreviewableDocument(
+            $this->storage->read($original->filePath),
+            $original->originalFilename ?? 'documento-originale.pdf',
+        );
+    }
 }

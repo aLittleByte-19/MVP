@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AssistantMetricsReportController;
 use App\Http\Controllers\Api\V1\CommunicationController;
 use App\Http\Controllers\Api\V1\CommunicationCoverController;
 use App\Http\Controllers\Api\V1\CommunicationExportController;
@@ -18,6 +19,10 @@ Route::prefix('v1')
     ->middleware(['mvp.identity', 'mvp.authorize', 'throttle:60,1'])
     ->group(function () {
         Route::get('/state', StateController::class)->name('state');
+
+        Route::get('/assistant/metrics/export', AssistantMetricsReportController::class)
+            ->middleware('throttle:30,1')
+            ->name('assistant.metrics.export');
 
         Route::get('/communications', [CommunicationController::class, 'index'])
             ->name('communications.index');
@@ -133,6 +138,10 @@ Route::prefix('v1')
         Route::get('/documents/{subDocument}/preview', [DocumentPreviewController::class, 'preview'])
             ->whereNumber('subDocument')
             ->name('documents.preview');
+
+        Route::get('/documents/{subDocument}/original-preview', [DocumentPreviewController::class, 'originalPreview'])
+            ->whereNumber('subDocument')
+            ->name('documents.original-preview');
 
         Route::get('/documents/{subDocument}/send-preview', [SendMessageController::class, 'sendPreview'])
             ->whereNumber('subDocument')

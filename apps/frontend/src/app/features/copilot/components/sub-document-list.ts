@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from "@angular/core";
-import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
+import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
 import { DomSanitizer, type SafeResourceUrl } from "@angular/platform-browser";
 import { LucideCheckCircle2, LucideCopy, LucidePencil, LucideSave, LucideTrash2, LucideX } from "@lucide/angular";
 import type { SubDocument, UpdateExtractedDataRequest, UpdateSendMessageRequest } from "../../../../api/generated/model";
@@ -7,7 +7,7 @@ import { ButtonComponent } from "../../../shared/components/button/button";
 import { EmptyStateComponent } from "../../../shared/components/empty-state/empty-state";
 import { SectionComponent } from "../../../layout/section/section";
 import { capitalizeFirst, formatConfidence, formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
-import { DOCUMENT_TYPE_OPTIONS, codiceFiscaleValidator } from "../../../shared/util/document-field-validators";
+import { DOCUMENT_TYPE_OPTIONS, codiceFiscaleValidator, emailValidator } from "../../../shared/util/document-field-validators";
 import type { DocumentPreviewStatus } from "../data/document-workflow.service";
 import { DocumentStatusTimelineComponent } from "./document-status-timeline";
 import {
@@ -112,6 +112,15 @@ const emptySendMessageForm: SendMessageFormState = {
               } @else {
                 <span>Anteprima non ancora disponibile per questo documento.</span>
               }
+              @if (document.originalPreviewUrl) {
+                <!-- Indipendente dallo stato dell'anteprima splittata (RF56-OB,
+                     UC-40.2): resta raggiungibile anche quando lo split non è
+                     disponibile, perché è proprio in quel caso che serve come
+                     alternativa. -->
+                <a class="previewLink" [href]="document.originalPreviewUrl" target="_blank" rel="noreferrer">
+                  Documento originale
+                </a>
+              }
             </div>
             @if (document.previewLines.length) {
               <ul class="previewLines">
@@ -154,32 +163,42 @@ const emptySendMessageForm: SendMessageFormState = {
               [class.statusManual]="document.reviewStatus === 'manually_validated'"
             >
               <div class="inspectorGrid">
-                <label class="field editableField">
+                <label class="field editableField" for="employee-name-field">
                   <span>Nome e cognome</span>
                   <div class="control">
                     @if (fieldOrigin(document, "employeeName"); as origin) {
                       <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'employeeName')" />
                     }
-                    <input
-                      formControlName="employeeName"
-                      [readOnly]="!isEditing()"
-                      [attr.aria-readonly]="!isEditing()"
-                      [attr.tabindex]="isEditing() ? null : -1"
-                    />
+                    @if (isEditing()) {
+                      <input id="employee-name-field" formControlName="employeeName" />
+                    } @else {
+                      <input
+                        id="employee-name-field"
+                        [value]="employeeNameDisplay(document)"
+                        readOnly
+                        aria-readonly="true"
+                        tabindex="-1"
+                      />
+                    }
                   </div>
                 </label>
-                <label class="field editableField">
+                <label class="field editableField" for="company-name-field">
                   <span>Azienda</span>
                   <div class="control">
                     @if (fieldOrigin(document, "companyName"); as origin) {
                       <mvp-field-origin [origin]="origin" [confidence]="fieldConfidence(document, 'companyName')" />
                     }
-                    <input
-                      formControlName="companyName"
-                      [readOnly]="!isEditing()"
-                      [attr.aria-readonly]="!isEditing()"
-                      [attr.tabindex]="isEditing() ? null : -1"
-                    />
+                    @if (isEditing()) {
+                      <input id="company-name-field" formControlName="companyName" />
+                    } @else {
+                      <input
+                        id="company-name-field"
+                        [value]="formatFallback(document.companyName)"
+                        readOnly
+                        aria-readonly="true"
+                        tabindex="-1"
+                      />
+                    }
                   </div>
                 </label>
                 <label class="field lockedField">
@@ -262,19 +281,24 @@ const emptySendMessageForm: SendMessageFormState = {
                     <input [value]="formatFallback(document.uploadedAt)" readOnly disabled tabindex="-1" />
                   </div>
                 </label>
-                <label class="field editableField formFull">
+                <label class="field editableField formFull" for="description-field">
                   <span>Descrizione</span>
                   <div class="control">
                     @if (fieldOrigin(document, "description"); as origin) {
                       <mvp-field-origin class="tall" [origin]="origin" />
                     }
-                    <textarea
-                      rows="3"
-                      formControlName="description"
-                      [readOnly]="!isEditing()"
-                      [attr.aria-readonly]="!isEditing()"
-                      [attr.tabindex]="isEditing() ? null : -1"
-                    ></textarea>
+                    @if (isEditing()) {
+                      <textarea id="description-field" rows="3" formControlName="description"></textarea>
+                    } @else {
+                      <textarea
+                        id="description-field"
+                        rows="3"
+                        [value]="formatFallback(document.description)"
+                        readOnly
+                        aria-readonly="true"
+                        tabindex="-1"
+                      ></textarea>
+                    }
                   </div>
                 </label>
                 <!-- Un campo solo: l'email compariva due volte, una in sola
@@ -426,7 +450,11 @@ const emptySendMessageForm: SendMessageFormState = {
                     [readOnly]="!isSendEditing()"
                     [attr.aria-readonly]="!isSendEditing()"
                     [attr.tabindex]="isSendEditing() ? null : -1"
+                    [class.invalid]="sendFieldError('recipient')"
                   />
+                  @if (sendFieldError("recipient"); as message) {
+                    <span class="fieldError">{{ message }}</span>
+                  }
                 </label>
                 <label class="field editableField">
                   <span>Oggetto</span>
@@ -547,12 +575,12 @@ export class SubDocumentListComponent {
     documentDate: new FormControl("", { nonNullable: true }),
     documentType: new FormControl("", { nonNullable: true }),
     description: new FormControl("", { nonNullable: true }),
-    recipientEmail: new FormControl("", { nonNullable: true, validators: [Validators.email] }),
+    recipientEmail: new FormControl("", { nonNullable: true, validators: [emailValidator] }),
     fiscalCode: new FormControl("", { nonNullable: true, validators: [codiceFiscaleValidator] }),
     employeeId: new FormControl("", { nonNullable: true })
   });
   protected readonly sendForm = new FormGroup({
-    recipient: new FormControl("", { nonNullable: true }),
+    recipient: new FormControl("", { nonNullable: true, validators: [emailValidator] }),
     subject: new FormControl("", { nonNullable: true }),
     body: new FormControl("", { nonNullable: true })
   });
@@ -615,6 +643,21 @@ export class SubDocumentListComponent {
 
     if (control.errors?.["codiceFiscale"]) {
       return "Il codice fiscale non supera il controllo di validità formale.";
+    }
+
+    return null;
+  }
+
+  /** Come fieldError, ma per il form del messaggio di invio (RF95-OB/UC-58). */
+  protected sendFieldError(name: "recipient"): string | null {
+    const control = this.sendForm.get(name);
+
+    if (!control || !control.touched || control.valid) {
+      return null;
+    }
+
+    if (control.errors?.["email"]) {
+      return "Formato e-mail non valido.";
     }
 
     return null;
@@ -728,6 +771,11 @@ export class SubDocumentListComponent {
   }
 
   protected saveSendMessage(document: SubDocument): void {
+    if (this.sendForm.invalid) {
+      this.sendForm.markAllAsTouched();
+      return;
+    }
+
     const formValue = this.sendForm.getRawValue();
 
     this.saveSendMessageRequested.emit({
@@ -746,6 +794,11 @@ export class SubDocumentListComponent {
 
   protected documentDateDisplay(document: SubDocument): string {
     return formatDateForDisplay(document.documentDate);
+  }
+
+  /** RF101-OB: "Non disponibile" invece di un campo vuoto quando manca. */
+  protected employeeNameDisplay(document: SubDocument): string {
+    return formatFallback(compactEmployeeName(document));
   }
 
   protected copyRecipientEmail(email: string): void {

@@ -35,6 +35,7 @@ final class OriginalDocumentRecord
         public readonly bool $workflowCompleted,
         public readonly ?string $workflowExecutionArn,
         public readonly ?string $errorMessage,
+        public readonly ?string $originalFilename = null,
     ) {}
 
     public function hasManualUploadMetadata(): bool

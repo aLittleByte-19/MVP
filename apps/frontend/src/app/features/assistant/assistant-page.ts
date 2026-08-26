@@ -148,6 +148,7 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
       </mvp-section>
 
       <mvp-section id="assistant-metrics" title="Qualità della generazione">
+        <a actions class="downloadLink" [href]="vm.metricsReportExportUrl">Esporta report</a>
         <div
           class="filters"
           role="search"
@@ -200,7 +201,7 @@ import { AssistantPageViewModel } from "./assistant-page.view-model";
       </mvp-section>
     </section>
   `,
-  styleUrls: ["../../shared/styles/page.css", "../../shared/styles/field.css"],
+  styleUrls: ["../../shared/styles/page.css", "../../shared/styles/field.css", "../../shared/styles/link-button.css"],
   styles: [
     `
     .filters {

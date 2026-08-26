@@ -202,6 +202,40 @@ export class AlittlebyteMVPAPIService {
   }
 
 /**
+ * @summary Export the AI Assistant metrics as a summary PDF report
+ */
+ exportAssistantMetricsReport( options?: HttpClientBodyOptions): Observable<Blob>;
+ exportAssistantMetricsReport( options?: HttpClientEventOptions): Observable<HttpEvent<Blob>>;
+ exportAssistantMetricsReport( options?: HttpClientResponseOptions): Observable<AngularHttpResponse<Blob>>;
+  exportAssistantMetricsReport(
+     options?: HttpClientObserveOptions): Observable<Blob | HttpEvent<Blob> | AngularHttpResponse<Blob>> {
+    if (options?.observe === 'events') {
+      return this.http.get(
+      `/api/v1/assistant/metrics/export`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',}
+    ) as Observable<HttpEvent<Blob>>;
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.get(
+      `/api/v1/assistant/metrics/export`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',}
+    ) as Observable<AngularHttpResponse<Blob>>;
+    }
+
+    return this.http.get(
+      `/api/v1/assistant/metrics/export`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',}
+    ) as Observable<Blob>;
+  }
+
+/**
  * @summary List the tenant communication drafts, optionally filtered
  */
  listMvpCommunications<TData = ListCommunicationsResponse>(params?: ListMvpCommunicationsParams, options?: HttpClientBodyOptions): Observable<TData>;
@@ -1130,6 +1164,40 @@ if(uploadMvpDocumentBody.year !== undefined && uploadMvpDocumentBody.year !== nu
 
     return this.http.get(
       `/api/v1/documents/${subDocument}/preview`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'body',}
+    ) as Observable<Blob>;
+  }
+
+/**
+ * @summary Preview the complete, non-split original document (UC-40.2)
+ */
+ previewMvpOriginalDocument(subDocument: number, options?: HttpClientBodyOptions): Observable<Blob>;
+ previewMvpOriginalDocument(subDocument: number, options?: HttpClientEventOptions): Observable<HttpEvent<Blob>>;
+ previewMvpOriginalDocument(subDocument: number, options?: HttpClientResponseOptions): Observable<AngularHttpResponse<Blob>>;
+  previewMvpOriginalDocument(
+    subDocument: number, options?: HttpClientObserveOptions): Observable<Blob | HttpEvent<Blob> | AngularHttpResponse<Blob>> {
+    if (options?.observe === 'events') {
+      return this.http.get(
+      `/api/v1/documents/${subDocument}/original-preview`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'events',}
+    ) as Observable<HttpEvent<Blob>>;
+    }
+
+    if (options?.observe === 'response') {
+      return this.http.get(
+      `/api/v1/documents/${subDocument}/original-preview`,{
+        responseType: 'blob',
+    ...(options as Omit<NonNullable<typeof options>, 'observe'>),
+        observe: 'response',}
+    ) as Observable<AngularHttpResponse<Blob>>;
+    }
+
+    return this.http.get(
+      `/api/v1/documents/${subDocument}/original-preview`,{
         responseType: 'blob',
     ...(options as Omit<NonNullable<typeof options>, 'observe'>),
         observe: 'body',}
