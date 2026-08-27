@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal, untracked } from "@angular/core";
-import { retry } from "rxjs";
+import { type Subscription, retry } from "rxjs";
 import { AlittlebyteMVPAPIService } from "../../../api/generated/mvp-api";
 import type { Metric, MvpState, SubDocument } from "../../../api/generated/model";
 import { getApiErrorMessage } from "../errors/api-error";
@@ -41,6 +41,7 @@ export class MvpStateStore {
   private readonly _filteredAssistantState = signal<MvpState["assistant"] | null>(null);
   private readonly _filteredAssistantLoading = signal(false);
   private readonly _filteredAssistantError = signal<string | null>(null);
+  private filteredAssistantMetricsSubscription: Subscription | null = null;
 
   readonly state = this._state.asReadonly();
   readonly loading = this._loading.asReadonly();
@@ -126,27 +127,30 @@ export class MvpStateStore {
 
   /**
    * Ricarica solo la fetta AI Assistant della sezione Metriche, filtrata
-   * (RF38-OB). Stessa guardia anti-doppia-richiesta di `reload()`, ma su
-   * `_state` separato: non tocca cio' che Overview e Co-Pilot leggono da
-   * `state()`.
+   * (RF38-OB), su `_state` separato: non tocca cio' che Overview e Co-Pilot
+   * leggono da `state()`.
+   *
+   * Annulla la richiesta filtrata precedente ancora in volo prima di
+   * avviarne una nuova (stesso schema di `AssistantPageViewModel.reload()`
+   * per lo storico) invece di ignorare la nuova richiesta come faceva prima:
+   * un cambio di filtro mentre la risposta al cambio precedente non e'
+   * ancora arrivata non deve andare perso, altrimenti il pannello resta
+   * fermo su un filtro che i controlli non mostrano piu'.
    *
    * Tutto il corpo gira dentro `untracked()`: viene chiamato da un
    * `effect()` sul componente (l'unico modo per farlo scattare ad ogni
-   * cambio filtro), e senza `untracked()` la lettura di
-   * `_filteredAssistantLoading()` nella guardia diventerebbe una dipendenza
-   * di quell'effect — che poi la riscrive lui stesso subito dopo, innescando
-   * un ciclo di richieste che non si ferma mai.
+   * cambio filtro), e una futura lettura di segnale aggiunta qui dentro
+   * senza `untracked()` diventerebbe una dipendenza di quell'effect — la
+   * stessa causa del ciclo di richieste che non si fermava mai, gia' visto
+   * su questo stesso metodo.
    */
   reloadFilteredAssistantMetrics(filters: AssistantMetricsFilters): void {
     untracked(() => {
-      if (this._filteredAssistantLoading()) {
-        return;
-      }
-
+      this.filteredAssistantMetricsSubscription?.unsubscribe();
       this._filteredAssistantLoading.set(true);
       this._filteredAssistantError.set(null);
 
-      this.api
+      this.filteredAssistantMetricsSubscription = this.api
         .getMvpState({
           tone: filters.tone ?? undefined,
           style: filters.style ?? undefined,

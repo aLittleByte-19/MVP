@@ -298,6 +298,18 @@ export class GeneratedCommunicationPreviewComponent {
 
   private readonly syncedDraftId = signal<number | null>(null);
 
+  /**
+   * Ultimo contenuto (id, titolo, corpo) con cui il form di modifica e'
+   * stato sincronizzato: distingue un vero cambio di bozza — o un salvataggio
+   * che ne cambia davvero il testo — da un nuovo riferimento con contenuto
+   * identico. `previewDraft()` nel ViewModel ricalcola un oggetto nuovo ad
+   * ogni mutazione dello storico ovunque nella pagina (un preferito su
+   * un'altra voce, un'eliminazione), non solo quando questa bozza cambia
+   * davvero: senza il confronto sul contenuto, una modifica non salvata
+   * sparirebbe non appena l'utente compie un'azione qualsiasi altrove.
+   */
+  private lastSyncedDraft: { id: number | null; title: string; body: string } | null = null;
+
   constructor() {
     this.commentControl.valueChanges.subscribe((value) => {
       this.commentLength.set(value.length);
@@ -335,12 +347,28 @@ export class GeneratedCommunicationPreviewComponent {
       }
     });
 
-    // Quando la bozza mostrata cambia (nuova selezione o aggiornamento che
-    // arriva dallo stream) il form torna in sola lettura sui valori correnti:
-    // una modifica non salvata non deve sopravvivere a una rigenerazione.
+    // Quando la bozza mostrata cambia davvero (nuova selezione, un
+    // salvataggio che ne aggiorna il testo, o un aggiornamento che arriva
+    // dallo stream durante una rigenerazione) il form torna in sola lettura
+    // sui valori correnti: una modifica non salvata non deve sopravvivere a
+    // una rigenerazione. Ma un nuovo riferimento con lo STESSO contenuto —
+    // prodotto da una mutazione qualunque altrove nella pagina — non deve
+    // toccare un form che l'utente sta scrivendo in questo momento.
     effect(() => {
       const currentDraft = this.draft();
-      this.form.setValue({ title: currentDraft?.title ?? "", body: currentDraft?.body ?? "" });
+      const snapshot = { id: currentDraft?.id ?? null, title: currentDraft?.title ?? "", body: currentDraft?.body ?? "" };
+      const unchanged =
+        this.lastSyncedDraft !== null &&
+        this.lastSyncedDraft.id === snapshot.id &&
+        this.lastSyncedDraft.title === snapshot.title &&
+        this.lastSyncedDraft.body === snapshot.body;
+
+      if (unchanged) {
+        return;
+      }
+
+      this.lastSyncedDraft = snapshot;
+      this.form.setValue({ title: snapshot.title, body: snapshot.body });
       this.isEditing.set(false);
     });
   }

@@ -125,6 +125,17 @@ export class CommunicationGeneratorPanelComponent {
   protected readonly styles = communicationStyles;
   protected readonly isConfiguringName = signal(false);
   protected readonly configNameControl = new FormControl("", { nonNullable: true });
+
+  /**
+   * Numero di configurazioni all'ultimo giro dell'effect qui sotto: distingue
+   * un salvataggio riuscito (l'elenco si allunga) da un nuovo riferimento con
+   * lo stesso conteggio. `promptConfigurations` e' un pass-through dello
+   * stato condiviso, che il backend rimpiazza per intero ad ogni mutazione
+   * della pagina (un voto, un preferito, un'eliminazione altrove): senza
+   * questo confronto, digitare un nome qui e compiere una qualsiasi di quelle
+   * azioni cancellerebbe il nome appena scritto.
+   */
+  private lastPromptConfigurationCount: number | null = null;
   protected readonly form = new FormGroup({
     prompt: new FormControl(
       "Scrivi una comunicazione interna per informare i dipendenti che la nuova area documentale NEXUM è disponibile. Spiega cosa cambia, dove trovare i documenti e perché la consultazione diventa più semplice.",
@@ -146,11 +157,21 @@ export class CommunicationGeneratorPanelComponent {
     });
 
     // Il salvataggio (UC-19) e' confermato dal genitore tramite lo stato
-    // aggiornato: quando l'elenco cambia (nuova configurazione salvata) il
-    // modulo del nome si richiude da solo. In caso di errore l'elenco non
-    // cambia, quindi il modulo resta aperto con il messaggio visibile.
+    // aggiornato: quando l'elenco SI ALLUNGA (nuova configurazione salvata)
+    // il modulo del nome si richiude da solo. In caso di errore l'elenco non
+    // cambia, quindi il modulo resta aperto con il messaggio visibile. Un
+    // nuovo riferimento a parita' di conteggio (una mutazione qualsiasi
+    // altrove nella pagina) non deve richiuderlo, altrimenti un nome ancora
+    // in scrittura sparirebbe senza che l'utente abbia salvato nulla.
     effect(() => {
-      this.promptConfigurations();
+      const count = this.promptConfigurations().length;
+      const grew = this.lastPromptConfigurationCount !== null && count > this.lastPromptConfigurationCount;
+      this.lastPromptConfigurationCount = count;
+
+      if (!grew) {
+        return;
+      }
+
       this.isConfiguringName.set(false);
       this.configNameControl.reset("");
     });

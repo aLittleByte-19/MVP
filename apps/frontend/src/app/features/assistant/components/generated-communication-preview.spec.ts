@@ -231,6 +231,41 @@ describe("GeneratedCommunicationPreviewComponent", () => {
     expect(component["form"].getRawValue().title).toBe("Nuova area documentale");
   });
 
+  it("non perde una modifica in corso quando arriva un nuovo riferimento con lo stesso contenuto", () => {
+    // `previewDraft()` nel ViewModel ricalcola un oggetto nuovo ad ogni
+    // mutazione dello storico ovunque nella pagina (un preferito su un'altra
+    // voce, un'eliminazione), non solo quando questa bozza cambia davvero:
+    // senza il confronto sul contenuto, una modifica non salvata sparirebbe
+    // non appena l'utente compie un'azione qualsiasi altrove.
+    const current = draft();
+    const fixture = render(current);
+    const component = fixture.componentInstance;
+
+    component["startEdit"](current);
+    component["form"].patchValue({ title: "Titolo in scrittura" });
+
+    fixture.componentRef.setInput("draft", { ...current });
+    fixture.detectChanges();
+
+    expect(component["isEditing"]()).toBe(true);
+    expect(component["form"].getRawValue().title).toBe("Titolo in scrittura");
+  });
+
+  it("esce dalla modifica quando la bozza cambia davvero, anche con lo stesso id (es. dopo un salvataggio)", () => {
+    const current = draft();
+    const fixture = render(current);
+    const component = fixture.componentInstance;
+
+    component["startEdit"](current);
+    component["form"].patchValue({ title: "Titolo in scrittura" });
+
+    fixture.componentRef.setInput("draft", { ...current, title: "Titolo salvato" });
+    fixture.detectChanges();
+
+    expect(component["isEditing"]()).toBe(false);
+    expect(component["form"].getRawValue().title).toBe("Titolo salvato");
+  });
+
   it("non salva un form invalido e marca i campi", () => {
     const fixture = render(draft());
     const component = fixture.componentInstance;

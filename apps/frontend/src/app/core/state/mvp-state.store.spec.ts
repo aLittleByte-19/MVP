@@ -193,15 +193,21 @@ describe("MvpStateStore", () => {
     expect(store.filteredAssistantError()).toBeNull();
   });
 
-  it("ignora una richiesta di fetta filtrata mentre una e' gia' in volo", () => {
-    const inFlight = new Subject<MvpState>();
-    getMvpState.mockReturnValue(inFlight);
+  it("annulla la richiesta di fetta filtrata precedente ancora in volo: una risposta tardiva non sovrascrive quella nuova", () => {
+    // Un secondo cambio di filtro prima che il primo abbia risposto non deve
+    // andare perso (RF38-OB): la richiesta precedente viene annullata, non
+    // ignorata, cosi' il pannello finisce per riflettere l'ultimo filtro
+    // scelto e non uno intermedio gia' superato.
+    const stale = new Subject<MvpState>();
+    const freshState = stateWith([{ key: "assistant.total", value: 9, label: "Contenuti generati" }], []);
+    getMvpState.mockReturnValueOnce(stale).mockReturnValueOnce(of(freshState));
 
-    store.reloadFilteredAssistantMetrics({});
-    store.reloadFilteredAssistantMetrics({});
-    inFlight.next(stateWith([], []));
+    store.reloadFilteredAssistantMetrics({ tone: "Tecnico" });
+    store.reloadFilteredAssistantMetrics({ tone: "Empatico" });
+    stale.next(stateWith([], []));
 
-    expect(getMvpState).toHaveBeenCalledTimes(1);
+    expect(getMvpState).toHaveBeenCalledTimes(2);
+    expect(store.filteredAssistantState()?.metrics).toEqual(freshState.assistant.metrics);
     expect(store.filteredAssistantLoading()).toBe(false);
   });
 

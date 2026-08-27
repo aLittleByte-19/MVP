@@ -152,12 +152,43 @@ describe("SubDocumentListComponent", () => {
   });
 
   it("chiude il messaggio quando si passa a un altro documento", () => {
-    const { component } = render(subDocument());
+    const { component, fixture } = render(subDocument());
     component.isSendOpen.set(true);
 
-    component.resetForm(subDocument({ id: "sub-2" }));
+    fixture.componentRef.setInput("documentItem", subDocument({ id: "sub-2" }));
+    fixture.detectChanges();
 
     expect(component.isSendOpen()).toBe(false);
+  });
+
+  it("non perde una modifica in corso quando il documento arriva con un nuovo riferimento ma lo stesso id", () => {
+    // `documentItem` e' un computed che il backend ricrea ad ogni fetch: una
+    // mutazione qualunque altrove nella pagina (un altro documento
+    // revisionato) produce un nuovo oggetto anche per QUESTO documento, non
+    // un vero cambio di selezione. Prima della correzione questo azzerava le
+    // modifiche non salvate.
+    const document = subDocument();
+    const { component, fixture } = render(document);
+    component.isEditing.set(true);
+    component.form.patchValue({ employeeName: "Bozza in corso" });
+
+    fixture.componentRef.setInput("documentItem", subDocument({ ...document }));
+    fixture.detectChanges();
+
+    expect(component.form.get("employeeName")?.value).toBe("Bozza in corso");
+    expect(component.isEditing()).toBe(true);
+  });
+
+  it("risincronizza il form quando il documento cambia davvero, anche se in modifica", () => {
+    const { component, fixture } = render(subDocument());
+    component.isEditing.set(true);
+    component.form.patchValue({ companyName: "Bozza abbandonata" });
+
+    fixture.componentRef.setInput("documentItem", subDocument({ id: "sub-2", companyName: "Altra Azienda SpA" }));
+    fixture.detectChanges();
+
+    expect(component.form.get("companyName")?.value).toBe("Altra Azienda SpA");
+    expect(component.isEditing()).toBe(false);
   });
 
   it("annulla soltanto la modifica del messaggio di invio", () => {

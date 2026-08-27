@@ -593,7 +593,7 @@ export class SubDocumentListComponent {
     // (`previewStatus`), cosicché questo componente resti "dumb" — riceve
     // stato, non lo produce interrogando un servizio per conto proprio.
     effect(() => {
-      this.resetForm(this.documentItem());
+      this.syncFormsWithDocument(this.documentItem());
     });
 
     // Evidenzia il campo segnalato dal backend (UC-55/UC-69) invece di un
@@ -743,15 +743,42 @@ export class SubDocumentListComponent {
   }
 
   /**
-   * Riporta i due moduli sui dati del documento.
+   * Risincronizza i due moduli quando il documento sorgente cambia
+   * davvero (id diverso), non ad ogni nuovo riferimento con lo stesso id:
+   * `documentItem` arriva da un `computed` che il backend ricrea ad ogni
+   * fetch, quindi una mutazione qualsiasi altrove nella pagina (un altro
+   * documento revisionato, un altro upload) produce un nuovo oggetto anche
+   * per QUESTO documento. Risincronizzare comunque cancellerebbe in
+   * silenzio le modifiche non ancora salvate di chi sta scrivendo.
    *
    * Il pannello del messaggio si chiude solo passando a un altro documento:
    * ogni salvataggio fa arrivare la scheda aggiornata e quindi ripassa di qui,
    * e chiudendo sempre il pannello spariva sotto le mani di chi aveva appena
    * confermato il testo.
    */
-  protected resetForm(document: SubDocument | null): void {
+  private syncFormsWithDocument(document: SubDocument | null): void {
     const changedDocument = (document?.id ?? null) !== this.shownDocumentId;
+    this.shownDocumentId = document?.id ?? null;
+
+    if (!changedDocument) {
+      return;
+    }
+
+    this.form.setValue(toReviewForm(document));
+    this.form.markAsUntouched();
+    this.isEditing.set(false);
+    this.sendForm.setValue(toSendMessageForm(document));
+    this.isSendEditing.set(false);
+    this.isSendOpen.set(false);
+  }
+
+  /**
+   * "Annulla": scarta le modifiche e ripristina i valori correnti del
+   * documento, anche se il suo id non e' cambiato — e' esattamente cio' che
+   * l'utente ha chiesto cliccando, a differenza della risincronizzazione
+   * automatica in {@link syncFormsWithDocument}.
+   */
+  protected resetForm(document: SubDocument | null): void {
     this.shownDocumentId = document?.id ?? null;
 
     this.form.setValue(toReviewForm(document));
@@ -759,10 +786,6 @@ export class SubDocumentListComponent {
     this.isEditing.set(false);
     this.sendForm.setValue(toSendMessageForm(document));
     this.isSendEditing.set(false);
-
-    if (changedDocument) {
-      this.isSendOpen.set(false);
-    }
   }
 
   protected cancelSendMessageEdit(document: SubDocument): void {

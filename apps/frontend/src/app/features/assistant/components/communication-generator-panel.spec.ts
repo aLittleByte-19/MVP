@@ -119,6 +119,26 @@ describe("CommunicationGeneratorPanelComponent", () => {
     expect(component["isConfiguringName"]()).toBe(false);
   });
 
+  it("non richiude il modulo del nome per un nuovo riferimento con lo stesso numero di configurazioni", () => {
+    // Lo stato condiviso viene rimpiazzato per intero ad ogni mutazione della
+    // pagina (un voto, un preferito, un'eliminazione altrove): un nuovo
+    // riferimento a parita' di conteggio non e' un salvataggio riuscito e non
+    // deve cancellare un nome ancora in scrittura.
+    const initial = [
+      { id: 1, name: "Prima config", prompt: "Un prompt qualsiasi", tone: "Chiaro e diretto", style: "Testo informativo" }
+    ];
+    const fixture = render({ promptConfigurations: initial });
+    const component = fixture.componentInstance;
+    component["isConfiguringName"].set(true);
+    component["configNameControl"].setValue("Nome in scrittura");
+
+    fixture.componentRef.setInput("promptConfigurations", [...initial]);
+    fixture.detectChanges();
+
+    expect(component["isConfiguringName"]()).toBe(true);
+    expect(component["configNameControl"].value).toBe("Nome in scrittura");
+  });
+
   it("applica i valori di prefill ricevuti dal genitore (riuso di una configurazione salvata, UC-19)", () => {
     const fixture = render();
 
