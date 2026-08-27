@@ -4,6 +4,7 @@ use App\Mvp\Documents\Application\UseCases\ReviewDocumentService;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Events\SubDocumentExtractedDataCorrected;
 use App\Mvp\Documents\Domain\Events\SubDocumentManuallyValidated;
+use App\Mvp\Documents\Domain\Exceptions\DocumentNotAuthorizedException;
 use App\Mvp\Documents\Domain\Exceptions\MissingExtractedDataException;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Support\Identity\Actor;
@@ -15,7 +16,7 @@ use Tests\DomainUnit\Documents\Fakes\RecordingDocumentEventDispatcher;
  */
 function fakeReviewActor(): Actor
 {
-    return new Actor('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
+    return new Actor('user-1', 'operator@example.test', 'Operator', 'tenant-test', ['mvp-operator']);
 }
 
 test('updateExtractedData saves the corrected fields and dispatches SubDocumentExtractedDataCorrected', function () {
@@ -59,6 +60,35 @@ test('una correzione non declassa la scheda che una persona aveva gia\' conferma
 
     expect($status)->toBe('manually_validated')
         ->and($documents->findSubDocument(10)->reviewStatus())->toBe(ReviewStatus::ManuallyValidated);
+});
+
+test('updateExtractedData refuses a sub-document outside the actor tenant scope', function () {
+    // Difesa in profondita' (vedi il docblock della classe): il controllo
+    // HTTP (AuthorizesDocuments) protegge solo chi lo chiama, questo
+    // verifica che il caso d'uso resti sicuro anche da solo.
+    $documents = new InMemoryDocumentRepository;
+    $documents->seedOriginal(1);
+    $documents->seedSubDocument(10, 1);
+    $events = new RecordingDocumentEventDispatcher;
+    $intruder = new Actor('user-2', 'other@example.test', 'Other', 'altro-tenant', ['mvp-operator']);
+
+    expect(fn () => (new ReviewDocumentService($documents, $events))
+        ->updateExtractedData(10, ['company_name' => 'Corretta Srl'], markAsValidated: false, actor: $intruder))
+        ->toThrow(DocumentNotAuthorizedException::class)
+        ->and($events->events())->toBeEmpty();
+});
+
+test('markReviewed refuses a sub-document outside the actor tenant scope', function () {
+    $documents = new InMemoryDocumentRepository;
+    $documents->seedOriginal(1);
+    $documents->seedSubDocument(10, 1);
+    $documents->saveExtractedData(10, ExtractedDataChanges::none()->withCompanyName('Acme Srl'));
+    $events = new RecordingDocumentEventDispatcher;
+    $intruder = new Actor('user-2', 'other@example.test', 'Other', 'altro-tenant', ['mvp-operator']);
+
+    expect(fn () => (new ReviewDocumentService($documents, $events))->markReviewed(10, $intruder))
+        ->toThrow(DocumentNotAuthorizedException::class)
+        ->and($events->events())->toBeEmpty();
 });
 
 test('markReviewed refuses a sub-document without extracted data', function () {

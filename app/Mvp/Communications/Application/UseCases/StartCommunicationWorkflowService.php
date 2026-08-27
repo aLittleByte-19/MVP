@@ -6,6 +6,7 @@ use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Domain\Events\CommunicationRegenerationRequested;
 use App\Mvp\Communications\Domain\Events\CommunicationWorkflowStarted;
 use App\Mvp\Communications\Domain\Events\CommunicationWorkflowStartFailed;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationNotAuthorizedException;
 use App\Mvp\Communications\Domain\Ports\Inbound\StartCommunicationWorkflowUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
@@ -140,9 +141,22 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
         }
     }
 
-    public function regenerate(int $communicationId, ?Actor $actor, ?string $correlationId, ?string $requestId): void
+    /**
+     * Difesa in profondita' (vedi il docblock di CommunicationDraftService):
+     * a differenza di favorite/save/discard/update qui non serve un lock —
+     * non c'e' un controllo di stato concorrente da proteggere, il lock su
+     * `start()` (chiamato subito dopo) resta la difesa contro un doppio
+     * avvio — ma il controllo tenant sì, visto che l'`Actor` e' gia' in mano
+     * e prima non veniva usato per verificarlo.
+     */
+    public function regenerate(int $communicationId, Actor $actor, ?string $correlationId, ?string $requestId): void
     {
         $communication = $this->communications->findCommunication($communicationId);
+
+        if ($communication->tenantId !== $actor->tenantId) {
+            throw new CommunicationNotAuthorizedException;
+        }
+
         $oldCoverPath = $communication->coverImagePath();
 
         $communication->regenerate();

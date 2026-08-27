@@ -62,7 +62,12 @@ test('start document workflow starts a Step Functions execution and stores metad
         ->and($document->s3Bucket())->toBe('mvp-documents-local')
         ->and($document->s3Key())->toBe('documents/originals/test.pdf')
         ->and($workflowEngine->lastCall()['input']['s3_bucket'])->toBe('mvp-documents-local')
-        ->and($events->hasDispatched(DocumentWorkflowStarted::class))->toBeTrue();
+        ->and($events->hasDispatched(DocumentWorkflowStarted::class))->toBeTrue()
+        // Il fake distingue una lettura con lock da una senza (vedi il suo
+        // docblock): senza questo assert, un regresso che tornasse a
+        // findOriginalDocument() (perdendo il lock che evita il doppio
+        // avvio del workflow) non farebbe fallire nessun test.
+        ->and($documents->forUpdateReadCount(1))->toBe(1);
 });
 
 test('start document workflow does not start the same processing execution twice', function () {
@@ -75,7 +80,8 @@ test('start document workflow does not start the same processing execution twice
 
     mvpDomainStartDocumentWorkflowService($documents, $workflowEngine, new RecordingDocumentEventDispatcher)->start(1, null, null);
 
-    expect($workflowEngine->lastCall())->toBeNull();
+    expect($workflowEngine->lastCall())->toBeNull()
+        ->and($documents->forUpdateReadCount(1))->toBe(1);
 });
 
 test('start document workflow rejects incomplete runtime configuration', function () {

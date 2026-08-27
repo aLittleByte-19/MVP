@@ -13,6 +13,7 @@ use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 use App\Mvp\Communications\Domain\Ports\Inbound\StartCommunicationWorkflowUseCase;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Enums\SendStatus;
+use App\Mvp\Support\Identity\Actor;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use App\Mvp\Workflow\Services\WorkflowTaskRunner;
 use App\Mvp\Workflow\Support\WorkflowContext;
@@ -2092,7 +2093,8 @@ test('regenerating a communication replaces text and cover with a new variant', 
         ->andReturn('arn:aws:states:eu-north-1:000000000000:execution:mvp-communication-pipeline:test');
     app()->instance(WorkflowEnginePort::class, $engine);
 
-    app(StartCommunicationWorkflowUseCase::class)->regenerate($communication->id, null, null, null);
+    $actor = new Actor('mvp-local-user', 'operator@example.test', 'Operator', $communication->tenant_id, ['mvp-operator']);
+    app(StartCommunicationWorkflowUseCase::class)->regenerate($communication->id, $actor, null, null);
 
     $regenerated = $communication->fresh();
 
@@ -2359,11 +2361,16 @@ test('the export refuses to promise an attachment the storage does not have', fu
     $subDocument = SubDocument::factory()->pending()->confirmed()->create();
     ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
 
-    $this->get("/api/v1/documents/{$subDocument->id}/send-export")
+    // requestId/correlationId, non solo error.code: e' cio' che la
+    // centralizzazione dell'errore in bootstrap/app.php doveva garantire
+    // (prima SendMessageController li costruiva a mano senza questi campi).
+    $response = $this->get("/api/v1/documents/{$subDocument->id}/send-export")
         ->assertNotFound()
         ->assertJsonPath('error.code', 'attachment_unavailable');
 
-    expect($subDocument->refresh()->send_status)->toBe(SendStatus::Pending);
+    expect($response->json('error.requestId'))->not->toBeNull()
+        ->and($response->json('error.correlationId'))->not->toBeNull()
+        ->and($subDocument->refresh()->send_status)->toBe(SendStatus::Pending);
 });
 
 test('the preview shows the same pages the download would give', function () {
@@ -2390,9 +2397,11 @@ test('the export is refused until a person has confirmed the extracted data', fu
     ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
     mvpStoreSubDocumentFile($subDocument);
 
-    $this->get("/api/v1/documents/{$subDocument->id}/send-export")
+    $response = $this->get("/api/v1/documents/{$subDocument->id}/send-export")
         ->assertStatus(422)
         ->assertJsonPath('error.code', 'review_not_confirmed');
 
-    expect($subDocument->refresh()->send_status)->toBe(SendStatus::Pending);
+    expect($response->json('error.requestId'))->not->toBeNull()
+        ->and($response->json('error.correlationId'))->not->toBeNull()
+        ->and($subDocument->refresh()->send_status)->toBe(SendStatus::Pending);
 });

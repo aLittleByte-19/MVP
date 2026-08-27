@@ -5,6 +5,8 @@ use App\Mvp\Communications\Domain\Enums\CommunicationGenerationStatus;
 use App\Mvp\Communications\Domain\Events\CommunicationRegenerationRequested;
 use App\Mvp\Communications\Domain\Events\CommunicationWorkflowStarted;
 use App\Mvp\Communications\Domain\Events\CommunicationWorkflowStartFailed;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationNotAuthorizedException;
+use App\Mvp\Support\Identity\Actor;
 use App\Mvp\Workflow\Support\WorkflowContext;
 use Tests\DomainUnit\Communications\Fakes\FakeClock;
 use Tests\DomainUnit\Communications\Fakes\FakeCommunicationCoverStorage;
@@ -13,6 +15,16 @@ use Tests\DomainUnit\Communications\Fakes\FakeWorkflowEngine;
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 use Tests\DomainUnit\Communications\Fakes\PassthroughTransactionManager;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
+
+/**
+ * Funzione locale (non condivisa fra file): con `--parallel` ogni worker
+ * Paratest carica solo un sottoinsieme dei file di test, vedi lo stesso
+ * commento in DeleteCommunicationServiceTest.php.
+ */
+function fakeRegenerateActor(): Actor
+{
+    return new Actor('user-1', 'operator@example.test', 'Operator', 'tenant-1', ['mvp-operator']);
+}
 
 /**
  * Test di dominio puro (nessun bootstrap Laravel/DB/AWS, vedi ADR 0010): ARN
@@ -56,7 +68,12 @@ test('start communication workflow starts a Step Functions execution', function 
     expect($communication->generationStatus())->toBe(CommunicationGenerationStatus::Processing)
         ->and($communication->workflowExecutionArn())->toBe('arn:aws:states:eu-north-1:000000000000:execution:fake:test')
         ->and($workflowEngine->lastCall()['input']['task_queue_url'])->toBe('http://localstack:4566/000000000000/mvp-communications')
-        ->and($events->hasDispatched(CommunicationWorkflowStarted::class))->toBeTrue();
+        ->and($events->hasDispatched(CommunicationWorkflowStarted::class))->toBeTrue()
+        // Il fake distingue una lettura con lock da una senza (vedi il suo
+        // docblock): senza questo assert, un regresso che tornasse a
+        // findCommunication() (perdendo il lock che evita il doppio avvio
+        // del workflow) non farebbe fallire nessun test.
+        ->and($communications->forUpdateReadCount(1))->toBe(1);
 });
 
 test('start communication workflow does not start the same processing execution twice', function () {
@@ -69,7 +86,8 @@ test('start communication workflow does not start the same processing execution 
 
     mvpStartCommunicationWorkflowService($communications, $workflowEngine, new RecordingEventDispatcher)->start(1, null, null);
 
-    expect($workflowEngine->lastCall())->toBeNull();
+    expect($workflowEngine->lastCall())->toBeNull()
+        ->and($communications->forUpdateReadCount(1))->toBe(1);
 });
 
 test('start communication workflow rejects incomplete runtime configuration', function () {
@@ -108,9 +126,25 @@ test('regenerate deletes the previous cover and restarts the workflow', function
     $coverStorage->store('communications/covers/1/old.png', 'vecchia-copertina');
 
     mvpStartCommunicationWorkflowService($communications, $workflowEngine, $events, $coverStorage)
-        ->regenerate(1, null, null, null);
+        ->regenerate(1, fakeRegenerateActor(), null, null);
 
     expect($coverStorage->deletedPaths())->toBe(['communications/covers/1/old.png'])
         ->and($events->hasDispatched(CommunicationRegenerationRequested::class))->toBeTrue()
         ->and($events->hasDispatched(CommunicationWorkflowStarted::class))->toBeTrue();
+});
+
+test('regenerate refuses a communication outside the actor tenant scope', function () {
+    // Difesa in profondita' (vedi il docblock della classe): il controllo
+    // HTTP (AuthorizesCommunications) protegge solo chi lo chiama, questo
+    // verifica che il caso d'uso resti sicuro anche da solo.
+    $communications = new InMemoryCommunicationRepository;
+    $communications->seed(1, ['generation_status' => 'completed']);
+    $workflowEngine = new FakeWorkflowEngine;
+    $events = new RecordingEventDispatcher;
+    $intruder = new Actor('user-2', 'other@example.test', 'Other', 'altro-tenant', ['mvp-operator']);
+
+    expect(fn () => mvpStartCommunicationWorkflowService($communications, $workflowEngine, $events)->regenerate(1, $intruder, null, null))
+        ->toThrow(CommunicationNotAuthorizedException::class)
+        ->and($events->events())->toBeEmpty()
+        ->and($workflowEngine->lastCall())->toBeNull();
 });

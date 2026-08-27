@@ -37,6 +37,16 @@ final class InMemoryDocumentRepository implements DocumentRepository
     private int $nextSubDocumentId = 1;
 
     /**
+     * Conteggio delle letture passate da `findOriginalDocumentForUpdate()`
+     * per id: stesso motivo di `InMemoryCommunicationRepository`, distingue
+     * nei test una lettura con lock da una senza (StartDocumentWorkflowService
+     * usa il lock per il controllo "e' gia' in corso?").
+     *
+     * @var array<int, int>
+     */
+    private array $forUpdateReadCounts = [];
+
+    /**
      * @param  array<string, mixed>  $attributes
      */
     public function seedOriginal(int $id, array $attributes = []): void
@@ -73,7 +83,15 @@ final class InMemoryDocumentRepository implements DocumentRepository
 
     public function findOriginalDocumentForUpdate(int $id): OriginalDocument
     {
+        $this->forUpdateReadCounts[$id] = ($this->forUpdateReadCounts[$id] ?? 0) + 1;
+
         return $this->findOriginalDocument($id);
+    }
+
+    /** Quante volte `findOriginalDocumentForUpdate()` e' stata chiamata per questo id. */
+    public function forUpdateReadCount(int $id): int
+    {
+        return $this->forUpdateReadCounts[$id] ?? 0;
     }
 
     public function updateOriginalDocument(int $id, OriginalDocumentChanges $changes): void

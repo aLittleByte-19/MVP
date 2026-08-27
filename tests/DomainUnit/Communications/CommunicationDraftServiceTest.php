@@ -37,7 +37,12 @@ test('favorite marks the draft and dispatches CommunicationDraftFavorited', func
     (new CommunicationDraftService($repository, $events, new PassthroughTransactionManager))->favorite(1, fakeActor());
 
     expect($repository->findCommunication(1)->isFavorite())->toBeTrue()
-        ->and($events->hasDispatched(CommunicationDraftFavorited::class))->toBeTrue();
+        ->and($events->hasDispatched(CommunicationDraftFavorited::class))->toBeTrue()
+        // Il fake distingue una lettura con lock da una senza (vedi il suo
+        // docblock): senza questo assert, un regresso che tornasse a
+        // findCommunication() (perdendo il lock pessimistico) non farebbe
+        // fallire nessun test.
+        ->and($repository->forUpdateReadCount(1))->toBe(1);
 });
 
 test('favorite refuses an already favorite draft', function () {
@@ -58,7 +63,8 @@ test('save approves a draft and dispatches CommunicationDraftApproved', function
     (new CommunicationDraftService($repository, $events, new PassthroughTransactionManager))->save(1, fakeActor());
 
     expect($repository->findCommunication(1)->status()->value)->toBe('approved')
-        ->and($events->hasDispatched(CommunicationDraftApproved::class))->toBeTrue();
+        ->and($events->hasDispatched(CommunicationDraftApproved::class))->toBeTrue()
+        ->and($repository->forUpdateReadCount(1))->toBe(1);
 });
 
 test('save refuses a draft that is not in draft status', function () {
@@ -78,7 +84,8 @@ test('discard marks the draft discarded and dispatches CommunicationDraftDiscard
     (new CommunicationDraftService($repository, $events, new PassthroughTransactionManager))->discard(1, fakeActor());
 
     expect($repository->findCommunication(1)->status()->value)->toBe('discarded')
-        ->and($events->hasDispatched(CommunicationDraftDiscarded::class))->toBeTrue();
+        ->and($events->hasDispatched(CommunicationDraftDiscarded::class))->toBeTrue()
+        ->and($repository->forUpdateReadCount(1))->toBe(1);
 });
 
 test('discard refuses an already discarded draft', function () {
@@ -116,6 +123,38 @@ test('favorite refuses a draft outside the actor tenant scope', function () {
     $events = new RecordingEventDispatcher;
 
     expect(fn () => (new CommunicationDraftService($repository, $events, new PassthroughTransactionManager))->favorite(1, fakeIntruderActor()))
+        ->toThrow(CommunicationNotAuthorizedException::class)
+        ->and($events->events())->toBeEmpty();
+});
+
+test('unfavorite refuses a draft outside the actor tenant scope', function () {
+    $repository = new InMemoryCommunicationRepository;
+    $repository->seed(1, ['is_favorite' => true]);
+    $events = new RecordingEventDispatcher;
+
+    expect(fn () => (new CommunicationDraftService($repository, $events, new PassthroughTransactionManager))->unfavorite(1, fakeIntruderActor()))
+        ->toThrow(CommunicationNotAuthorizedException::class)
+        ->and($events->events())->toBeEmpty()
+        ->and($repository->forUpdateReadCount(1))->toBe(1);
+});
+
+test('update refuses a draft outside the actor tenant scope', function () {
+    $repository = new InMemoryCommunicationRepository;
+    $repository->seed(1, ['status' => 'draft']);
+    $events = new RecordingEventDispatcher;
+
+    expect(fn () => (new CommunicationDraftService($repository, $events, new PassthroughTransactionManager))->update(1, 'Titolo', 'Corpo', fakeIntruderActor()))
+        ->toThrow(CommunicationNotAuthorizedException::class)
+        ->and($events->events())->toBeEmpty()
+        ->and($repository->forUpdateReadCount(1))->toBe(1);
+});
+
+test('discard refuses a draft outside the actor tenant scope', function () {
+    $repository = new InMemoryCommunicationRepository;
+    $repository->seed(1, ['status' => 'draft']);
+    $events = new RecordingEventDispatcher;
+
+    expect(fn () => (new CommunicationDraftService($repository, $events, new PassthroughTransactionManager))->discard(1, fakeIntruderActor()))
         ->toThrow(CommunicationNotAuthorizedException::class)
         ->and($events->events())->toBeEmpty();
 });

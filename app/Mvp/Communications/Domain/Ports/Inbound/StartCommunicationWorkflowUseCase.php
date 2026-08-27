@@ -10,6 +10,8 @@ interface StartCommunicationWorkflowUseCase
 
     /**
      * Azzera testo e copertina generati e rilancia la pipeline sulla stessa riga.
+     * `Actor` obbligatorio (non piu' nullable): serve al controllo di
+     * ownership del tenant, non solo al payload dell'evento dispatchato.
      */
-    public function regenerate(int $communicationId, ?Actor $actor, ?string $correlationId, ?string $requestId): void;
+    public function regenerate(int $communicationId, Actor $actor, ?string $correlationId, ?string $requestId): void;
 }

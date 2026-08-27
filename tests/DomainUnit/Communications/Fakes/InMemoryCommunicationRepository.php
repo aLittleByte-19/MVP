@@ -24,6 +24,19 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
     private int $nextId = 1;
 
     /**
+     * Conteggio delle letture passate da `findCommunicationForUpdate()` per
+     * id: distingue nei test una lettura con lock da una senza, cosa che le
+     * due implementazioni identiche qui sotto altrimenti nasconderebbero — un
+     * futuro regresso che tornasse a `findCommunication()` (rimuovendo il
+     * lock pessimistico che protegge dalla race condition scarto/approvazione,
+     * vedi CommunicationDraftService) non farebbe fallire nessun test senza
+     * questo contatore.
+     *
+     * @var array<int, int>
+     */
+    private array $forUpdateReadCounts = [];
+
+    /**
      * @param  array<string, mixed>  $attributes
      */
     public function seed(int $id, array $attributes = []): void
@@ -51,7 +64,15 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
 
     public function findCommunicationForUpdate(int $id): Communication
     {
+        $this->forUpdateReadCounts[$id] = ($this->forUpdateReadCounts[$id] ?? 0) + 1;
+
         return $this->findCommunication($id);
+    }
+
+    /** Quante volte `findCommunicationForUpdate()` e' stata chiamata per questo id. */
+    public function forUpdateReadCount(int $id): int
+    {
+        return $this->forUpdateReadCounts[$id] ?? 0;
     }
 
     public function updateCommunication(int $id, CommunicationChanges $changes): void

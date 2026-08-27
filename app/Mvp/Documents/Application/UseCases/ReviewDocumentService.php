@@ -5,6 +5,7 @@ namespace App\Mvp\Documents\Application\UseCases;
 use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Documents\Domain\Events\SubDocumentExtractedDataCorrected;
 use App\Mvp\Documents\Domain\Events\SubDocumentManuallyValidated;
+use App\Mvp\Documents\Domain\Exceptions\DocumentNotAuthorizedException;
 use App\Mvp\Documents\Domain\Exceptions\MissingExtractedDataException;
 use App\Mvp\Documents\Domain\Ports\Inbound\ReviewDocumentUseCase;
 use App\Mvp\Documents\Domain\Ports\Outbound\DocumentEventDispatcherPort;
@@ -12,6 +13,12 @@ use App\Mvp\Documents\Domain\Ports\Outbound\DocumentRepository;
 use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Support\Identity\Actor;
 
+/**
+ * Difesa in profondita' sul tenant su entrambi i metodi (vedi il docblock di
+ * CommunicationDraftService per il principio): a differenza degli altri
+ * casi d'uso del modulo Documents (DeleteDocumentService,
+ * PreviewDocumentService, SendMessageService), questa classe non la aveva.
+ */
 class ReviewDocumentService implements ReviewDocumentUseCase
 {
     public function __construct(
@@ -19,8 +26,10 @@ class ReviewDocumentService implements ReviewDocumentUseCase
         private readonly DocumentEventDispatcherPort $events,
     ) {}
 
-    public function updateExtractedData(int $subDocumentId, array $fieldUpdates, bool $markAsValidated, ?Actor $actor): string
+    public function updateExtractedData(int $subDocumentId, array $fieldUpdates, bool $markAsValidated, Actor $actor): string
     {
+        $this->assertOwnership($subDocumentId, $actor);
+
         if ($fieldUpdates !== [] || ! $this->documents->subDocumentHasExtractedData($subDocumentId)) {
             $this->documents->saveExtractedData($subDocumentId, ExtractedDataChanges::fromRawFields($fieldUpdates));
         }
@@ -46,8 +55,10 @@ class ReviewDocumentService implements ReviewDocumentUseCase
         return $reviewStatus->value;
     }
 
-    public function markReviewed(int $subDocumentId, ?Actor $actor): void
+    public function markReviewed(int $subDocumentId, Actor $actor): void
     {
+        $this->assertOwnership($subDocumentId, $actor);
+
         if (! $this->documents->subDocumentHasExtractedData($subDocumentId)) {
             throw new MissingExtractedDataException;
         }
@@ -57,5 +68,15 @@ class ReviewDocumentService implements ReviewDocumentUseCase
         $this->documents->saveSubDocument($subDocument);
 
         $this->events->dispatch(new SubDocumentManuallyValidated($subDocumentId, $actor));
+    }
+
+    private function assertOwnership(int $subDocumentId, Actor $actor): void
+    {
+        $subDocument = $this->documents->findSubDocument($subDocumentId);
+        $original = $this->documents->findOriginalDocument($subDocument->originalDocumentId);
+
+        if ($original->tenantId !== $actor->tenantId) {
+            throw new DocumentNotAuthorizedException;
+        }
     }
 }

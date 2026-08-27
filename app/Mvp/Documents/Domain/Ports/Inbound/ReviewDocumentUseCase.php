@@ -15,10 +15,10 @@ interface ReviewDocumentUseCase
      * @param  array<string, mixed>  $fieldUpdates  Colonne di extracted_data gia' mappate (snake_case).
      * @return string Il nuovo review_status.
      */
-    public function updateExtractedData(int $subDocumentId, array $fieldUpdates, bool $markAsValidated, ?Actor $actor): string;
+    public function updateExtractedData(int $subDocumentId, array $fieldUpdates, bool $markAsValidated, Actor $actor): string;
 
     /**
      * @throws MissingExtractedDataException se non ci sono dati estratti da validare.
      */
-    public function markReviewed(int $subDocumentId, ?Actor $actor): void;
+    public function markReviewed(int $subDocumentId, Actor $actor): void;
 }
