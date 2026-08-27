@@ -3,6 +3,7 @@
 use App\Mvp\Communications\Application\UseCases\UpdateCommunicationCoverService;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverRemoved;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverReplaced;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationNotAuthorizedException;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationNotEditableException;
 use App\Mvp\Support\Identity\Actor;
 use Tests\DomainUnit\Communications\Fakes\FakeCommunicationCoverStorage;
@@ -79,5 +80,34 @@ test('remove refuses to touch the cover of a discarded communication', function 
 
     expect(fn () => $service->remove(1, fakeUpdateCoverActor()))
         ->toThrow(CommunicationNotEditableException::class)
+        ->and($events->events())->toBeEmpty();
+});
+
+test('update refuses a communication outside the actor tenant scope', function () {
+    // Difesa in profondita': il controllo HTTP (AuthorizesCommunications)
+    // protegge solo chi lo chiama, questo verifica che il caso d'uso resti
+    // sicuro anche da solo.
+    $repository = new InMemoryCommunicationRepository;
+    $repository->seed(1);
+    $events = new RecordingEventDispatcher;
+    $intruder = new Actor('user-2', 'other@example.test', 'Other', 'altro-tenant', ['mvp-operator']);
+
+    $service = new UpdateCommunicationCoverService($repository, new FakeCommunicationCoverStorage, $events, new FakeUniqueIdGenerator, 'communications/covers');
+
+    expect(fn () => $service->update(1, 'bytes', 'image/png', 10, $intruder))
+        ->toThrow(CommunicationNotAuthorizedException::class)
+        ->and($events->events())->toBeEmpty();
+});
+
+test('remove refuses a communication outside the actor tenant scope', function () {
+    $repository = new InMemoryCommunicationRepository;
+    $repository->seed(1);
+    $events = new RecordingEventDispatcher;
+    $intruder = new Actor('user-2', 'other@example.test', 'Other', 'altro-tenant', ['mvp-operator']);
+
+    $service = new UpdateCommunicationCoverService($repository, new FakeCommunicationCoverStorage, $events, new FakeUniqueIdGenerator, 'communications/covers');
+
+    expect(fn () => $service->remove(1, $intruder))
+        ->toThrow(CommunicationNotAuthorizedException::class)
         ->and($events->events())->toBeEmpty();
 });

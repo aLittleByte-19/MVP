@@ -6,8 +6,6 @@ use App\Http\Controllers\Api\V1\Concerns\AuthorizesDocuments;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesActor;
 use App\Http\Requests\UpdateSendMessageRequest;
 use App\Models\SubDocument;
-use App\Mvp\Documents\Domain\Exceptions\SendMessageAttachmentUnavailableException;
-use App\Mvp\Documents\Domain\Exceptions\SendMessageNotConfirmedException;
 use App\Mvp\Documents\Domain\Ports\Inbound\SendMessageUseCase;
 use App\Mvp\Support\MvpStateService;
 use Illuminate\Http\JsonResponse;
@@ -17,28 +15,23 @@ use Illuminate\Http\Response;
 /**
  * Adapter primario HTTP: messaggio di invio precompilato. Traduce le
  * richieste nel caso d'uso tramite la sua porta primaria (vedi ADR 0010).
+ *
+ * SendMessageNotConfirmedException/SendMessageAttachmentUnavailableException
+ * non sono catturate qui: risalgono al gestore centralizzato in
+ * bootstrap/app.php, come ogni altro errore di dominio — cosi' la risposta
+ * porta sempre `requestId`/`correlationId`, che un `response()->json()`
+ * costruito a mano qui dentro non includerebbe.
  */
 class SendMessageController
 {
     use AuthorizesDocuments, ResolvesActor;
 
-    public function sendPreview(Request $request, SubDocument $subDocument, SendMessageUseCase $sendMessage): Response|JsonResponse
+    public function sendPreview(Request $request, SubDocument $subDocument, SendMessageUseCase $sendMessage): Response
     {
         $actor = $this->actor($request);
         $this->authorizeSubDocument($subDocument, $actor);
 
-        try {
-            $rendered = $sendMessage->preview($subDocument->id, $actor);
-        } catch (SendMessageNotConfirmedException $exception) {
-            return response()->json([
-                'error' => [
-                    'code' => 'review_not_confirmed',
-                    'message' => $exception->getMessage(),
-                ],
-            ], 422);
-        } catch (SendMessageAttachmentUnavailableException $exception) {
-            return $this->attachmentUnavailable($exception);
-        }
+        $rendered = $sendMessage->preview($subDocument->id, $actor);
 
         return response($rendered->pdf, 200, [
             'Content-Type' => 'application/pdf',
@@ -46,23 +39,12 @@ class SendMessageController
         ]);
     }
 
-    public function sendExport(Request $request, SubDocument $subDocument, SendMessageUseCase $sendMessage): Response|JsonResponse
+    public function sendExport(Request $request, SubDocument $subDocument, SendMessageUseCase $sendMessage): Response
     {
         $actor = $this->actor($request);
         $this->authorizeSubDocument($subDocument, $actor);
 
-        try {
-            $rendered = $sendMessage->export($subDocument->id, $actor);
-        } catch (SendMessageNotConfirmedException $exception) {
-            return response()->json([
-                'error' => [
-                    'code' => 'review_not_confirmed',
-                    'message' => $exception->getMessage(),
-                ],
-            ], 422);
-        } catch (SendMessageAttachmentUnavailableException $exception) {
-            return $this->attachmentUnavailable($exception);
-        }
+        $rendered = $sendMessage->export($subDocument->id, $actor);
 
         return response($rendered->pdf, 200, [
             'Content-Type' => 'application/pdf',
@@ -87,15 +69,5 @@ class SendMessageController
             'document' => $state->document($subDocument->fresh()),
             'state' => $state->forActor($actor),
         ]);
-    }
-
-    private function attachmentUnavailable(SendMessageAttachmentUnavailableException $exception): JsonResponse
-    {
-        return response()->json([
-            'error' => [
-                'code' => 'attachment_unavailable',
-                'message' => $exception->getMessage(),
-            ],
-        ], 404);
     }
 }

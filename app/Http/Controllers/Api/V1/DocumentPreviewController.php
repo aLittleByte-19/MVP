@@ -34,7 +34,7 @@ class DocumentPreviewController
 
         return response($document->bytes, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.str_replace('"', '', $document->filename).'"',
+            'Content-Disposition' => 'inline; filename="'.$this->sanitizeFilename($document->filename).'"',
         ]);
     }
 
@@ -58,7 +58,26 @@ class DocumentPreviewController
 
         return response($document->bytes, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.str_replace('"', '', $document->filename).'"',
+            'Content-Disposition' => 'inline; filename="'.$this->sanitizeFilename($document->filename).'"',
         ]);
+    }
+
+    /**
+     * A differenza di `str_replace('"', ...)` (rimuoveva solo le virgolette),
+     * toglie anche i caratteri di controllo (compresi CR/LF) dal nome file
+     * prima di scriverlo nell'header `Content-Disposition` — la stessa
+     * classe di caratteri che renderebbe un header manipolabile. Non usa
+     * `Str::slug()` come DompdfCommunicationPdfRenderer/SendMessageService:
+     * quei due costruiscono un nome sintetico da un titolo, qui il nome
+     * arriva dal file caricato dall'utente (puo' avere spazi/underscore
+     * legittimi, vedi UploadDocumentRequest) e uno slug lo snaturerebbe
+     * senza un guadagno di sicurezza — CR/LF e virgolette sono gia' gli
+     * unici caratteri rilevanti per un header HTTP.
+     */
+    private function sanitizeFilename(string $filename): string
+    {
+        $safe = preg_replace('/[\x00-\x1F\x7F"]/', '', $filename);
+
+        return $safe !== null && $safe !== '' ? $safe : 'documento.pdf';
     }
 }

@@ -38,6 +38,13 @@ class EloquentDocumentRepository implements DocumentRepository
         return OriginalDocumentEntity::fromRecord($this->toOriginalDocumentRecord(OriginalDocument::query()->findOrFail($id)));
     }
 
+    public function findOriginalDocumentForUpdate(int $id): OriginalDocumentEntity
+    {
+        return OriginalDocumentEntity::fromRecord($this->toOriginalDocumentRecord(
+            OriginalDocument::query()->lockForUpdate()->findOrFail($id),
+        ));
+    }
+
     public function updateOriginalDocument(int $id, OriginalDocumentChanges $changes): void
     {
         OriginalDocument::query()->whereKey($id)->firstOrFail()->update($this->snakeCaseKeys($changes->toArray()));

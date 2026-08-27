@@ -11,6 +11,7 @@ use Tests\DomainUnit\Communications\Fakes\FakeCommunicationCoverStorage;
 use Tests\DomainUnit\Communications\Fakes\FakeUniqueIdGenerator;
 use Tests\DomainUnit\Communications\Fakes\FakeWorkflowEngine;
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
+use Tests\DomainUnit\Communications\Fakes\PassthroughTransactionManager;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
 
 /**
@@ -36,6 +37,7 @@ function mvpStartCommunicationWorkflowService(
         new WorkflowContext,
         new FakeClock(new DateTimeImmutable('2026-01-01T00:00:00Z')),
         new FakeUniqueIdGenerator,
+        new PassthroughTransactionManager,
         $stateMachineArn,
         $taskQueueUrl,
     );

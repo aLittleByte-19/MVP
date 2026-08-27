@@ -3,6 +3,7 @@
 use App\Mvp\Communications\Application\UseCases\RateCommunicationService;
 use App\Mvp\Communications\Domain\Events\CommunicationRated;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationAlreadyRatedException;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationNotAuthorizedException;
 use App\Mvp\Support\Identity\Actor;
 use Tests\DomainUnit\Communications\Fakes\FakeClock;
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
@@ -56,4 +57,19 @@ test('rate normalizes a blank comment to no comment', function () {
     $dispatched = $events->events()[0];
 
     expect($dispatched->hasComment)->toBeFalse();
+});
+
+test('rate refuses a communication outside the actor tenant scope', function () {
+    // Difesa in profondita': il controllo HTTP (AuthorizesCommunications)
+    // protegge solo chi lo chiama, questo verifica che il caso d'uso resti
+    // sicuro anche da solo.
+    $repository = new InMemoryCommunicationRepository;
+    $repository->seed(1, ['rating' => null]);
+    $events = new RecordingEventDispatcher;
+    $clock = new FakeClock(new DateTimeImmutable);
+    $intruder = new Actor('user-2', 'other@example.test', 'Other', 'altro-tenant', ['mvp-operator']);
+
+    expect(fn () => (new RateCommunicationService($repository, $events, $clock, new PassthroughTransactionManager))->rate(1, 5, null, $intruder))
+        ->toThrow(CommunicationNotAuthorizedException::class)
+        ->and($events->events())->toBeEmpty();
 });

@@ -6,6 +6,7 @@ use App\Mvp\Communications\Domain\Events\CommunicationDraftDiscarded;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftFavorited;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationAlreadyDiscardedException;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationAlreadyFavoritedException;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationNotAuthorizedException;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationNotDraftException;
 use App\Mvp\Support\Identity\Actor;
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
@@ -87,4 +88,34 @@ test('discard refuses an already discarded draft', function () {
 
     expect(fn () => (new CommunicationDraftService($repository, $events, new PassthroughTransactionManager))->discard(1, fakeActor()))
         ->toThrow(CommunicationAlreadyDiscardedException::class);
+});
+
+function fakeIntruderActor(): Actor
+{
+    return new Actor('user-2', 'other@example.test', 'Other', 'altro-tenant', ['mvp-operator']);
+}
+
+/**
+ * Difesa in profondita' (vedi il docblock della classe): il controllo HTTP
+ * (AuthorizesCommunications) protegge solo chi lo chiama, questi test
+ * verificano che il caso d'uso applicativo resti sicuro anche da solo.
+ */
+test('save refuses a draft outside the actor tenant scope', function () {
+    $repository = new InMemoryCommunicationRepository;
+    $repository->seed(1, ['status' => 'draft']);
+    $events = new RecordingEventDispatcher;
+
+    expect(fn () => (new CommunicationDraftService($repository, $events, new PassthroughTransactionManager))->save(1, fakeIntruderActor()))
+        ->toThrow(CommunicationNotAuthorizedException::class)
+        ->and($events->events())->toBeEmpty();
+});
+
+test('favorite refuses a draft outside the actor tenant scope', function () {
+    $repository = new InMemoryCommunicationRepository;
+    $repository->seed(1, ['is_favorite' => false]);
+    $events = new RecordingEventDispatcher;
+
+    expect(fn () => (new CommunicationDraftService($repository, $events, new PassthroughTransactionManager))->favorite(1, fakeIntruderActor()))
+        ->toThrow(CommunicationNotAuthorizedException::class)
+        ->and($events->events())->toBeEmpty();
 });

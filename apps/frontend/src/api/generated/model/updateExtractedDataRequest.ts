@@ -25,6 +25,7 @@ export interface UpdateExtractedDataRequest {
   /** @nullable */
   documentDate?: string | null;
   /**
+     * Una delle sei tipologie fisse (cedolino, CU, comunicazione, documento da firmare, lettera, altro), oppure — solo se il sotto-documento ha gia' quella classificazione dall'estrazione AI — il valore libero assegnato dal classificatore Bedrock (UC-43): un "Salva" senza toccare il campo non deve rompersi su un documento gia' classificato fuori enum. Non e' un OpenAPI `enum` perche' quella seconda eccezione lo rende dipendente dal record, non un insieme fisso di valori validi per ogni richiesta.
      * @maxLength 200
      * @nullable
      */

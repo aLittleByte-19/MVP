@@ -4,6 +4,7 @@ namespace App\Mvp\Communications\Application\UseCases;
 
 use App\Mvp\Communications\Domain\Events\CommunicationCoverRemoved;
 use App\Mvp\Communications\Domain\Events\CommunicationCoverReplaced;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationNotAuthorizedException;
 use App\Mvp\Communications\Domain\Exceptions\CommunicationNotEditableException;
 use App\Mvp\Communications\Domain\Ports\Inbound\UpdateCommunicationCoverUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
@@ -32,6 +33,13 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
     public function update(int $communicationId, string $bytes, string $mime, int $size, Actor $actor): void
     {
         $communication = $this->communications->findCommunication($communicationId);
+
+        // Difesa in profondita': stesso controllo gia' fatto a livello HTTP
+        // da AuthorizesCommunications (vedi il docblock di CommunicationDraftService).
+        if ($communication->tenantId !== $actor->tenantId) {
+            throw new CommunicationNotAuthorizedException;
+        }
+
         $oldCoverPath = $communication->coverImagePath();
 
         if (! $communication->isEditable()) {
@@ -54,6 +62,13 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
     public function remove(int $communicationId, Actor $actor): void
     {
         $communication = $this->communications->findCommunication($communicationId);
+
+        // Difesa in profondita': stesso controllo gia' fatto a livello HTTP
+        // da AuthorizesCommunications (vedi il docblock di CommunicationDraftService).
+        if ($communication->tenantId !== $actor->tenantId) {
+            throw new CommunicationNotAuthorizedException;
+        }
+
         $oldCoverPath = $communication->coverImagePath();
 
         $communication->removeCover();

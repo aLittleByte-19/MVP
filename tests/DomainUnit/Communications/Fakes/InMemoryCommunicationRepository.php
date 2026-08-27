@@ -111,7 +111,12 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
     {
         return [
             'id' => $id,
-            'tenant_id' => 'tenant-test',
+            // Allineato al tenant dell'attore usato da tutti i test di
+            // questa cartella (vedi i vari fakeActor()/tenant-1): un
+            // controllo di ownership aggiunto da un caso d'uso confronta
+            // questo valore contro Actor::tenantId, e un default diverso
+            // farebbe fallire ogni test che non lo seminasse esplicitamente.
+            'tenant_id' => 'tenant-1',
             'prompt' => 'Prompt di test',
             'tone' => 'Chiaro e diretto',
             'style' => 'Testo informativo',

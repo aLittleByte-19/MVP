@@ -672,6 +672,8 @@ paths:
             text/event-stream:
               schema:
                 type: string
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
   /api/v1/documents/{subDocument}:
@@ -688,6 +690,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeleteDocumentResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
   /api/v1/documents/{subDocument}/extracted-data:
@@ -751,6 +755,8 @@ paths:
               schema:
                 type: string
                 format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
   /api/v1/documents/{subDocument}/original-preview:
@@ -768,6 +774,8 @@ paths:
               schema:
                 type: string
                 format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
   /api/v1/documents/{subDocument}/send-preview:
@@ -785,8 +793,16 @@ paths:
               schema:
                 type: string
                 format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "422":
+          description: The extracted data for this sub-document has not been confirmed yet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /api/v1/documents/{subDocument}/send-export:
     get:
       summary: Export the precompiled send message for a sub-document as a downloadable PDF
@@ -802,8 +818,16 @@ paths:
               schema:
                 type: string
                 format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "422":
+          description: The extracted data for this sub-document has not been confirmed yet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /api/v1/documents/{subDocument}/send-message:
     put:
       summary: Correct the precompiled send message fields for a sub-document
@@ -1203,6 +1227,15 @@ components:
           type: [string, "null"]
           format: date
         documentType:
+          description: >
+            Una delle sei tipologie fisse (cedolino, CU, comunicazione,
+            documento da firmare, lettera, altro), oppure — solo se il
+            sotto-documento ha gia' quella classificazione dall'estrazione AI
+            — il valore libero assegnato dal classificatore Bedrock (UC-43):
+            un "Salva" senza toccare il campo non deve rompersi su un
+            documento gia' classificato fuori enum. Non e' un OpenAPI `enum`
+            perche' quella seconda eccezione lo rende dipendente dal record,
+            non un insieme fisso di valori validi per ogni richiesta.
           type: [string, "null"]
           maxLength: 200
         description:

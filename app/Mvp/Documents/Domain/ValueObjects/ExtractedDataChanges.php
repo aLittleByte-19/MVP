@@ -11,6 +11,32 @@ namespace App\Mvp\Documents\Domain\ValueObjects;
  */
 final class ExtractedDataChanges
 {
+    /**
+     * Le uniche chiavi che {@see self::fromRawFields()} accetta: i campi
+     * corretti a mano dalla revisione umana (UC-9bis/UC-52), non tutto cio'
+     * che questa classe sa rappresentare — `fieldConfidences`/`aiPayload`
+     * sono scritti solo dal percorso di estrazione AI, tramite i rispettivi
+     * `with*()`, mai da un payload HTTP grezzo. Oggi l'unico chiamante
+     * (DocumentReviewController) filtra gia' a monte esattamente questi
+     * campi: la whitelist e' una difesa in profondita' per un futuro
+     * chiamante che passasse un array piu' ampio, non una correzione di un
+     * problema osservato.
+     *
+     * @var list<string>
+     */
+    private const REVIEWABLE_FIELDS = [
+        'employeeFirstName',
+        'employeeLastName',
+        'companyName',
+        'documentDate',
+        'documentType',
+        'description',
+        'confidenceScore',
+        'recipientEmail',
+        'fiscalCode',
+        'employeeId',
+    ];
+
     /** @var array<string, mixed> */
     private array $attributes = [];
 
@@ -27,13 +53,22 @@ final class ExtractedDataChanges
      * di conversione da array grezzo, non un pattern da riusare altrove.
      *
      * @param  array<string, mixed>  $fieldUpdates
+     *
+     * @throws \InvalidArgumentException se una chiave non e' fra i campi
+     *         correggibili manualmente (vedi {@see self::REVIEWABLE_FIELDS}).
      */
     public static function fromRawFields(array $fieldUpdates): self
     {
         $instance = new self;
 
         foreach ($fieldUpdates as $key => $value) {
-            $instance->attributes[self::toCamelCase($key)] = $value;
+            $camelKey = self::toCamelCase($key);
+
+            if (! in_array($camelKey, self::REVIEWABLE_FIELDS, true)) {
+                throw new \InvalidArgumentException("Campo non correggibile manualmente: {$key}.");
+            }
+
+            $instance->attributes[$camelKey] = $value;
         }
 
         return $instance;

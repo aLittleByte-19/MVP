@@ -309,6 +309,7 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(WorkflowContext::class),
                 $app->make(ClockInterface::class),
                 $app->make(UniqueIdGeneratorPort::class),
+                $app->make(TransactionManagerPort::class),
                 (string) config('services.workflow.state_machine_arn'),
                 $taskQueueUrl,
                 (bool) config('services.textract.enabled'),
@@ -379,6 +380,7 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(WorkflowContext::class),
                 $app->make(ClockInterface::class),
                 $app->make(UniqueIdGeneratorPort::class),
+                $app->make(TransactionManagerPort::class),
                 (string) config('services.workflow.communications_state_machine_arn'),
                 (string) config('services.workflow.communications_task_queue_url'),
             );

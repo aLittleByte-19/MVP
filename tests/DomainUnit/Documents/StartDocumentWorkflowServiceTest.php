@@ -9,6 +9,7 @@ use Tests\DomainUnit\Documents\Fakes\FakeClock;
 use Tests\DomainUnit\Documents\Fakes\FakeUniqueIdGenerator;
 use Tests\DomainUnit\Documents\Fakes\FakeWorkflowEngine;
 use Tests\DomainUnit\Documents\Fakes\InMemoryDocumentRepository;
+use Tests\DomainUnit\Documents\Fakes\PassthroughTransactionManager;
 use Tests\DomainUnit\Documents\Fakes\RecordingDocumentEventDispatcher;
 
 /**
@@ -36,6 +37,7 @@ function mvpDomainStartDocumentWorkflowService(
         new WorkflowContext,
         new FakeClock(new DateTimeImmutable('2026-01-01T00:00:00Z')),
         new FakeUniqueIdGenerator,
+        new PassthroughTransactionManager,
         $stateMachineArn,
         $taskQueueUrl,
         $textractEnabled,

@@ -3,6 +3,7 @@
 namespace App\Mvp\Communications\Application\UseCases;
 
 use App\Mvp\Communications\Domain\Events\CommunicationRated;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationNotAuthorizedException;
 use App\Mvp\Communications\Domain\Ports\Inbound\RateCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
@@ -26,6 +27,13 @@ class RateCommunicationService implements RateCommunicationUseCase
 
         $this->transactions->run(function () use ($communicationId, $rating, $normalizedComment, $actor): void {
             $communication = $this->communications->findCommunicationForUpdate($communicationId);
+
+            // Difesa in profondita': stesso controllo gia' fatto a livello HTTP
+            // da AuthorizesCommunications (vedi il docblock di CommunicationDraftService).
+            if ($communication->tenantId !== $actor->tenantId) {
+                throw new CommunicationNotAuthorizedException;
+            }
+
             $communication->rate($rating, $normalizedComment, $actor->id, $this->clock->now());
             $this->communications->saveCommunication($communication);
         });

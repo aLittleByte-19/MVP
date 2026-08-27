@@ -810,6 +810,26 @@ test('operator can preview a processed sub-document PDF', function () {
     expect($response->getContent())->toBe('contenuto-documento');
 });
 
+test('sub-document preview strips control characters from the filename header', function () {
+    // Difesa in profondita' sull'header Content-Disposition: un CR/LF (o
+    // altro carattere di controllo) nel nome file caricato non deve arrivare
+    // intatto nell'header, che PHP altrimenti rifiuta di inviare del tutto.
+    Storage::fake('s3');
+    config(['mvp.documents.storage_disk' => 's3']);
+
+    $originalDocument = OriginalDocument::factory()->create(['original_filename' => "malicious\r\nX-Injected: header.pdf"]);
+    $subDocument = SubDocument::factory()->create(['original_document_id' => $originalDocument->id]);
+    Storage::disk('s3')->put($subDocument->file_path, 'contenuto-documento');
+
+    $response = $this->get("/api/v1/documents/{$subDocument->id}/preview")->assertOk();
+
+    $disposition = $response->headers->get('Content-Disposition');
+
+    expect($disposition)->not->toContain("\r")
+        ->and($disposition)->not->toContain("\n")
+        ->and($disposition)->toContain('maliciousX-Injected: header.pdf');
+});
+
 test('sub-document preview returns 404 when the file is missing', function () {
     Storage::fake('s3');
     config(['mvp.documents.storage_disk' => 's3']);
@@ -886,6 +906,38 @@ test('original document preview rejects cross tenant access', function () {
     ])->get("/api/v1/documents/{$subDocument->id}/original-preview")
         ->assertForbidden()
         ->assertJsonPath('error.code', 'forbidden');
+});
+
+test('document processing stream rejects cross tenant access', function () {
+    config(['mvp.identity.mode' => 'trusted_headers']);
+    $originalDocument = OriginalDocument::factory()->create();
+
+    $this->withHeaders([
+        'Accept' => 'application/json',
+        'X-Mvp-User-Id' => 'operator-b',
+        'X-Mvp-User-Email' => 'operator-b@example.test',
+        'X-Mvp-Tenant-Id' => 'another-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
+    ])->get("/api/v1/documents/{$originalDocument->id}/stream")
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
+});
+
+test('delete sub-document endpoint rejects cross tenant access', function () {
+    config(['mvp.identity.mode' => 'trusted_headers']);
+    $subDocument = SubDocument::factory()->create();
+
+    $this->withHeaders([
+        'Accept' => 'application/json',
+        'X-Mvp-User-Id' => 'operator-b',
+        'X-Mvp-User-Email' => 'operator-b@example.test',
+        'X-Mvp-Tenant-Id' => 'another-tenant',
+        'X-Mvp-Roles' => 'mvp-operator',
+    ])->deleteJson("/api/v1/documents/{$subDocument->id}")
+        ->assertForbidden()
+        ->assertJsonPath('error.code', 'forbidden');
+
+    expect(SubDocument::query()->whereKey($subDocument->id)->exists())->toBeTrue();
 });
 
 test('send message correction rejects an invalid recipient email (RF95-OB/UC-58)', function () {

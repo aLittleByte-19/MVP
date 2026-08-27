@@ -39,6 +39,15 @@ interface DocumentRepository
 
     public function findOriginalDocument(int $id): OriginalDocument;
 
+    /**
+     * Come {@see self::findOriginalDocument()}, ma con un lock pessimistico
+     * sulla riga: serve a rendere atomico un controllo "e' gia' in corso?"
+     * seguito da una scrittura (es. l'avvio del workflow, StartDocumentWorkflowService),
+     * cosi' due richieste quasi simultanee non superino entrambe il controllo
+     * e avviino due esecuzioni per lo stesso documento.
+     */
+    public function findOriginalDocumentForUpdate(int $id): OriginalDocument;
+
     public function updateOriginalDocument(int $id, OriginalDocumentChanges $changes): void;
 
     /**

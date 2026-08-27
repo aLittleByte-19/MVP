@@ -4,6 +4,7 @@ use App\Models\Communication;
 use App\Models\ExtractedData;
 use App\Models\PromptConfiguration;
 use App\Models\SubDocument;
+use App\Mvp\Documents\Domain\Enums\ReviewStatus;
 use App\Mvp\Workflow\Ports\Outbound\WorkflowEnginePort;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -297,6 +298,35 @@ test('POST /api/v1/communications/{communication}/rating con payload invalido ri
         $response->json(),
         '/api/v1/communications/{communication}/rating',
         'post',
+        '422',
+    );
+});
+
+test('GET /api/v1/documents/{subDocument}/send-export con allegato mancante rispetta il contratto per il 404', function () {
+    Storage::fake('s3');
+    $subDocument = SubDocument::factory()->pending()->confirmed()->create();
+    ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
+
+    $response = $this->getJson("/api/v1/documents/{$subDocument->id}/send-export")->assertNotFound();
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/documents/{subDocument}/send-export',
+        'get',
+        '404',
+    );
+});
+
+test('GET /api/v1/documents/{subDocument}/send-export senza revisione confermata rispetta il contratto per il 422', function () {
+    $subDocument = SubDocument::factory()->pending()->create(['review_status' => ReviewStatus::AutoValidated]);
+    ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
+
+    $response = $this->getJson("/api/v1/documents/{$subDocument->id}/send-export")->assertStatus(422);
+
+    OpenApiSpec::assertResponseMatchesContract(
+        $response->json(),
+        '/api/v1/documents/{subDocument}/send-export',
+        'get',
         '422',
     );
 });

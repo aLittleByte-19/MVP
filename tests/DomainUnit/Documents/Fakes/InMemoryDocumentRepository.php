@@ -71,6 +71,11 @@ final class InMemoryDocumentRepository implements DocumentRepository
         return OriginalDocument::fromRecord($this->toOriginalRecord($this->originals[$id]));
     }
 
+    public function findOriginalDocumentForUpdate(int $id): OriginalDocument
+    {
+        return $this->findOriginalDocument($id);
+    }
+
     public function updateOriginalDocument(int $id, OriginalDocumentChanges $changes): void
     {
         if (! isset($this->originals[$id])) {

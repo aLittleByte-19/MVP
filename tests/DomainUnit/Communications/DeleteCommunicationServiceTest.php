@@ -2,6 +2,7 @@
 
 use App\Mvp\Communications\Application\UseCases\DeleteCommunicationService;
 use App\Mvp\Communications\Domain\Events\CommunicationDeleted;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationNotAuthorizedException;
 use App\Mvp\Support\Identity\Actor;
 use Psr\Log\NullLogger;
 use Tests\DomainUnit\Communications\Fakes\FakeCommunicationCoverStorage;
@@ -57,4 +58,20 @@ test('delete succeeds and still dispatches CommunicationDeleted when storage cle
 
     expect(fn () => $repository->findCommunication(1))->toThrow(RuntimeException::class)
         ->and($events->hasDispatched(CommunicationDeleted::class))->toBeTrue();
+});
+
+test('delete refuses a communication outside the actor tenant scope', function () {
+    // Difesa in profondita': il controllo HTTP (AuthorizesCommunications)
+    // protegge solo chi lo chiama, questo verifica che il caso d'uso resti
+    // sicuro anche da solo.
+    $repository = new InMemoryCommunicationRepository;
+    $repository->seed(1);
+    $storage = new FakeCommunicationCoverStorage;
+    $events = new RecordingEventDispatcher;
+    $intruder = new Actor('user-2', 'other@example.test', 'Other', 'altro-tenant', ['mvp-operator']);
+
+    expect(fn () => (new DeleteCommunicationService($repository, $storage, $events, new NullLogger))->delete(1, $intruder))
+        ->toThrow(CommunicationNotAuthorizedException::class)
+        ->and($events->events())->toBeEmpty()
+        ->and(fn () => $repository->findCommunication(1))->not->toThrow(RuntimeException::class);
 });

@@ -3,6 +3,7 @@
 namespace App\Mvp\Communications\Application\UseCases;
 
 use App\Mvp\Communications\Domain\Events\CommunicationDeleted;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationNotAuthorizedException;
 use App\Mvp\Communications\Domain\Ports\Inbound\DeleteCommunicationUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationCoverStoragePort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
@@ -22,6 +23,12 @@ class DeleteCommunicationService implements DeleteCommunicationUseCase
     public function delete(int $communicationId, Actor $actor): void
     {
         $communication = $this->communications->findCommunication($communicationId);
+
+        // Difesa in profondita': stesso controllo gia' fatto a livello HTTP
+        // da AuthorizesCommunications (vedi il docblock di CommunicationDraftService).
+        if ($communication->tenantId !== $actor->tenantId) {
+            throw new CommunicationNotAuthorizedException;
+        }
 
         $this->communications->deleteCommunication($communicationId);
 
