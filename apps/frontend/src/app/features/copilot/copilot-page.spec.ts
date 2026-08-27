@@ -130,6 +130,23 @@ describe("CopilotPage", () => {
     expect(page["vm"].activeFilters()).toEqual({ search: "rossi" });
   }));
 
+  it("cambiare pagina avvia una sola ricerca, non due", () => {
+    // vm.reload() legge currentPage() al suo interno: senza untracked(),
+    // quella lettura diventerebbe una dipendenza nascosta dell'effect che
+    // chiama reload() (che apposta non legge currentPage() direttamente,
+    // per non farlo scattare due volte a cambio pagina), e ogni click su
+    // "pagina successiva" scatenerebbe una seconda ricerca ridondante.
+    workflow["searchDocuments"].mockReturnValue(of({ items: [subDocument("sub-1")], total: 25, page: 1, perPage: 10 }));
+    const fixture = TestBed.createComponent(CopilotPage);
+    fixture.detectChanges();
+    workflow["searchDocuments"].mockClear();
+
+    fixture.componentInstance["vm"].goToPage(2);
+    fixture.detectChanges();
+
+    expect(workflow["searchDocuments"]).toHaveBeenCalledTimes(1);
+  });
+
   it("azzera i filtri del form", () => {
     const page = createPage();
     page["filterForm"].controls.search.setValue("rossi");

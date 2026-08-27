@@ -310,6 +310,9 @@ export class GeneratedCommunicationPreviewComponent {
    */
   private lastSyncedDraft: { id: number | null; title: string; body: string } | null = null;
 
+  /** Ultimo id per cui il passo di conferma scarto e' stato chiuso, vedi il commento sull'effect qui sotto. */
+  private lastConfirmDiscardDraftId: number | null = null;
+
   constructor() {
     this.commentControl.valueChanges.subscribe((value) => {
       this.commentLength.set(value.length);
@@ -318,11 +321,20 @@ export class GeneratedCommunicationPreviewComponent {
       }
     });
 
-    // Il passo di conferma e' locale alla bozza mostrata: qualunque
-    // cambiamento della bozza in anteprima (nuova selezione, aggiornamento
-    // durante una rigenerazione, ecc.) non deve lasciarlo aperto.
+    // Il passo di conferma e' locale alla bozza mostrata: si chiude solo
+    // quando la bozza in anteprima cambia DAVVERO (id diverso, nuova
+    // selezione). Un nuovo riferimento con lo stesso id — prodotto da una
+    // mutazione qualunque altrove nella pagina, stesso motivo dei due
+    // effect qui sotto — non deve chiudere una conferma appena aperta
+    // dall'utente.
     effect(() => {
-      this.draft();
+      const draftId = this.draft()?.id ?? null;
+
+      if (draftId === this.lastConfirmDiscardDraftId) {
+        return;
+      }
+
+      this.lastConfirmDiscardDraftId = draftId;
       this.isConfirmingDiscard.set(false);
     });
 

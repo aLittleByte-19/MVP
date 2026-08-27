@@ -1,4 +1,4 @@
-import { type Signal, type WritableSignal, computed, signal } from "@angular/core";
+import { type Signal, type WritableSignal, computed, signal, untracked } from "@angular/core";
 import { type Subscription, finalize } from "rxjs";
 import type {
   SubDocument,
@@ -200,15 +200,24 @@ export class CopilotPageViewModel {
    * non solo un setter. Annulla la ricerca precedente ancora in volo prima di
    * avviarne una nuova, cosi' una risposta arrivata in ritardo non sovrascrive
    * mai un risultato piu' recente.
+   *
+   * Il corpo gira dentro `untracked()`: `CopilotPage` chiama questo metodo da
+   * un `effect()` che legge solo `store.documents()`/`vm.activeFilters()`
+   * apposta, per non far ripartire la lettura due volte ad ogni cambio
+   * pagina (`goToPage()` la richiama gia' da se') — ma senza `untracked()`
+   * la lettura di `currentPage()` qui sotto diventerebbe comunque una
+   * dipendenza nascosta di quell'effect, vanificando l'esclusione voluta.
    */
   reload(): void {
-    this.searchSubscription?.unsubscribe();
-    this.searchSubscription = this.workflow
-      .searchDocuments(this.activeFilters(), this.currentPage(), this.pageSize)
-      .subscribe({
-        next: (page) => this.setFilteredDocuments(page),
-        error: (error: unknown) => this.handleDocumentsError(error)
-      });
+    untracked(() => {
+      this.searchSubscription?.unsubscribe();
+      this.searchSubscription = this.workflow
+        .searchDocuments(this.activeFilters(), this.currentPage(), this.pageSize)
+        .subscribe({
+          next: (page) => this.setFilteredDocuments(page),
+          error: (error: unknown) => this.handleDocumentsError(error)
+        });
+    });
   }
 
   /**

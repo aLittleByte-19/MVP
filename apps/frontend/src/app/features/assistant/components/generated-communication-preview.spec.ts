@@ -107,6 +107,22 @@ describe("GeneratedCommunicationPreviewComponent", () => {
     expect(component["commentControl"].value).toBe("Salvato");
   });
 
+  it("non chiude la conferma di scarto per un nuovo riferimento con lo stesso id", () => {
+    // Stesso principio dei due effect di sincronizzazione qui sopra: una
+    // mutazione qualunque altrove nella pagina produce un nuovo oggetto
+    // `draft` con lo stesso id, e non deve chiudere una conferma che
+    // l'utente ha appena aperto cliccando "Scarta bozza".
+    const current = draft();
+    const fixture = render(current);
+    const component = fixture.componentInstance;
+    component["isConfirmingDiscard"].set(true);
+
+    fixture.componentRef.setInput("draft", { ...current });
+    fixture.detectChanges();
+
+    expect(component["isConfirmingDiscard"]()).toBe(true);
+  });
+
   it("emette il file scelto e resetta il campo", () => {
     const fixture = render(draft());
     const files: File[] = [];
