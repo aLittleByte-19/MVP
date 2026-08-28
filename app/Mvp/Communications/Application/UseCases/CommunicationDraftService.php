@@ -2,6 +2,7 @@
 
 namespace App\Mvp\Communications\Application\UseCases;
 
+use App\Mvp\Communications\Domain\Entities\Communication;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftApproved;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftDiscarded;
 use App\Mvp\Communications\Domain\Events\CommunicationDraftEdited;
@@ -11,7 +12,6 @@ use App\Mvp\Communications\Domain\Exceptions\CommunicationNotAuthorizedException
 use App\Mvp\Communications\Domain\Ports\Inbound\CommunicationDraftUseCase;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationEventDispatcherPort;
 use App\Mvp\Communications\Domain\Ports\Outbound\CommunicationRepository;
-use App\Mvp\Communications\Domain\Entities\Communication;
 use App\Mvp\Support\Identity\Actor;
 use App\Mvp\Support\Persistence\TransactionManagerPort;
 

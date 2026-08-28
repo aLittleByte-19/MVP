@@ -55,7 +55,7 @@ final class ExtractedDataChanges
      * @param  array<string, mixed>  $fieldUpdates
      *
      * @throws \InvalidArgumentException se una chiave non e' fra i campi
-     *         correggibili manualmente (vedi {@see self::REVIEWABLE_FIELDS}).
+     *                                   correggibili manualmente (vedi {@see self::REVIEWABLE_FIELDS}).
      */
     public static function fromRawFields(array $fieldUpdates): self
     {
