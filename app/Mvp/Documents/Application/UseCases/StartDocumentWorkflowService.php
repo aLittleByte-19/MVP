@@ -17,21 +17,14 @@ use Psr\Clock\ClockInterface;
 
 /**
  * Applicazione: avvia l'esecuzione Step Functions della pipeline documentale
- * per un documento gia' persistito. Sostituisce DocumentWorkflowService:
- * stessa logica (guard di configurazione, idempotenza, tracciamento
- * fallimenti), orchestrata attraverso le porte del dominio invece che
- * Eloquent/SfnClient diretti.
+ * per un documento gia' persistito.
  *
  * I parametri di configurazione (ARN, code, flag Textract, disco/bucket
- * documentale) sono risolti una volta sola nel service provider e passati
- * al costruttore, invece di leggere `config()` qui dentro — stesso pattern
- * gia' usato per la soglia di confidenza di ExtractSubDocumentFieldsService
- * e per il prefisso di storage di UpdateCommunicationCoverService/
- * GenerateCommunicationCoverService (vedi ADR 0010).
+ * documentale) sono risolti una volta nel service provider e passati al
+ * costruttore, invece di leggere `config()` qui (ADR 0010).
  *
- * `WorkflowContext` e' una classe pura (nessuna dipendenza da Illuminate,
- * vedi il suo docblock): `start()` e' istanziabile ed eseguibile in un test
- * Pest puro, vedi StartDocumentWorkflowServiceTest.
+ * `WorkflowContext` e' una classe pura: `start()` e' istanziabile ed
+ * eseguibile in un test Pest puro (vedi StartDocumentWorkflowServiceTest).
  */
 class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
 {
@@ -53,11 +46,9 @@ class StartDocumentWorkflowService implements StartDocumentWorkflowUseCase
 
     /**
      * Stesso lock pessimistico di StartCommunicationWorkflowService::start()
-     * e per lo stesso motivo: senza, due richieste quasi simultanee possono
+     * e per lo stesso motivo: senza, due richieste quasi simultanee potrebbero
      * superare entrambe il controllo "e' gia' in corso?" e avviare due
-     * esecuzioni Step Functions per lo stesso documento. Vedi il docblock di
-     * quel metodo per il motivo per cui la chiamata di rete resta dentro la
-     * transazione e gli eventi vengono dispatchati solo dopo che ha commesso.
+     * esecuzioni Step Functions per lo stesso documento.
      */
     public function start(int $documentId, ?string $correlationId, ?string $requestId): void
     {

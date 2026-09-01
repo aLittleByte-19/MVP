@@ -4,10 +4,7 @@ use App\Mvp\Communications\Application\UseCases\PollCommunicationProgressService
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 
 /**
- * Test di dominio puro (nessun bootstrap Laravel/DB). Prima il polling SSE
- * di CommunicationStreamController::stream() interrogava Eloquent
- * direttamente a ogni iterazione del loop: ora legge tramite
- * PollCommunicationProgressUseCase.
+ * Test di dominio puro (nessun bootstrap Laravel/DB).
  */
 test('poll reports generation and cover status alongside the generated content', function () {
     $repository = new InMemoryCommunicationRepository;

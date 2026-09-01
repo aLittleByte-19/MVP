@@ -1,10 +1,4 @@
-/**
- * Le due segnalazioni in linea (ADR 0012).
- *
- * `.warning` era ricopiata in quattro fogli e `.errorNote` in due, sempre
- * identiche. Non sono l'`attention-note`, che e' un blocco di pagina: queste
- * stanno dentro un modulo, accanto al controllo a cui si riferiscono.
- */
+/** Segnalazioni in linea (ADR 0012), diverse da `attention-note` (blocco di pagina): stanno dentro un modulo, accanto al controllo. */
 
 .warning,
 .errorNote {

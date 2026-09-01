@@ -33,12 +33,8 @@ class MvpStateService
     }
 
     /**
-     * I filtri (RF38-OB..RF41-OB) valgono solo qui: tono e stile non
-     * esistono sui documenti del Co-Pilot, quindi copilotState() non ne
-     * prende — filtrare solo meta' della sezione Metriche con lo stesso
-     * controllo sarebbe piu' incoerente che utile. Applicati una sola volta
-     * su $baseQuery, propagano a tutto cio' che ne clona (totale, bozze,
-     * valutate, media voto, storico, feedback recenti).
+     * I filtri (RF38-OB..RF41-OB) si applicano solo qui, mai a copilotState():
+     * tono e stile non esistono sui documenti del Co-Pilot.
      *
      * @return array<string, mixed>
      */
@@ -52,18 +48,13 @@ class MvpStateService
         $drafts = (clone $baseQuery)->where('status', CommunicationStatus::Draft)->count();
         $rated = (clone $baseQuery)->whereNotNull('rating')->count();
         $averageRating = (clone $baseQuery)->whereNotNull('rating')->avg('rating');
-        // Una bozza entra nello storico solo dopo un salvataggio esplicito
-        // (UC-9): finche' resta draft, o dopo uno scarto (UC-7), non deve
-        // comparire qui, e' l'operatore a decidere cosa fissare nello storico.
+        // Una bozza entra nello storico solo dopo un salvataggio esplicito (UC-9).
         $history = (clone $baseQuery)
             ->where('status', CommunicationStatus::Approved)
             ->latest()
             ->limit(10)
             ->get();
-        // Preset di prompt salvati (UC-19): elenco limitato, non soggetto ai
-        // filtri di questa sezione (non hanno una data di riferimento sul
-        // contenuto), pensato per un riuso rapido dal form di generazione,
-        // non come archivio ricercabile.
+        // Preset di prompt (UC-19): elenco fisso, non soggetto ai filtri.
         $promptConfigurationsQuery = PromptConfiguration::query()->where('tenant_id', $actor->tenantId);
         $promptConfigurationsCount = (clone $promptConfigurationsQuery)->count();
         $promptConfigurations = (clone $promptConfigurationsQuery)->latest()->limit(20)->get();
@@ -79,11 +70,7 @@ class MvpStateService
             // presentazione e puo' cambiare senza rompere chi seleziona la
             // metrica (vedi overview-page, che ne mostra solo alcune).
             'metrics' => [
-                // L'ordine e' quello in cui le schede riempiono il mosaico del
-                // pannello: tutte e quattro larghe a coppie, due file piene
-                // nella griglia a quattro colonne (vedi la stessa nota in
-                // copilotState() qui sotto, dove l'ordine non e' solo
-                // simmetrico per estetica ma necessario a chiudere le righe).
+                // Ordine pensato per riempire la griglia a coppie senza righe spaiate.
                 [
                     'key' => 'assistant.total',
                     'value' => $total,
@@ -104,8 +91,7 @@ class MvpStateService
                     'label' => 'Bozze valutate',
                 ],
                 [
-                    // Nessuna serie: e' una media, non un conteggio di elementi
-                    // entrati, quindi un flusso giornaliero non la descrive.
+                    // Nessuna serie: e' una media, non un conteggio di ingressi.
                     'key' => 'assistant.rating_average',
                     'value' => $averageRating === null ? '—' : number_format((float) $averageRating, 1, '.', ''),
                     'unit' => '/ 5',
@@ -164,18 +150,10 @@ class MvpStateService
     }
 
     /**
-     * Conteggio giornaliero degli ultimi sette giorni, dal piu' vecchio al piu'
-     * recente e con gli zeri espliciti sui giorni senza elementi.
-     *
-     * E' un **flusso di ingresso**, non la storia dello stock: dice quanti
-     * elementi sono *entrati* in quello stato ogni giorno, non come il totale
-     * e' variato. Ricostruire lo stock richiederebbe snapshot giornalieri, che
-     * il modello dati non conserva. La distinzione va mantenuta anche nella UI:
-     * accanto a "23 in attesa" si legge "3 nuovi oggi", mai "+3 rispetto a ieri".
-     *
-     * Il raggruppamento avviene in PHP invece che con una funzione di data SQL
-     * perche' deve valere su PostgreSQL e su SQLite (suite di test) senza
-     * dialetti diversi; i volumi di una finestra di sette giorni lo consentono.
+     * Conteggio giornaliero degli ultimi 7 giorni (zeri espliciti sui giorni
+     * vuoti): e' un flusso di ingresso, non lo stock ("3 nuovi oggi", non
+     * "+3 rispetto a ieri"), perche' il modello dati non ha snapshot storici.
+     * Raggruppato in PHP, non SQL, per restare compatibile fra Postgres e SQLite.
      *
      * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>  $query
      * @return list<int>
@@ -201,10 +179,7 @@ class MvpStateService
 
     /**
      * Durate in secondi delle corse concluse negli ultimi sette giorni.
-     *
-     * La differenza fra i due istanti si calcola in PHP e non con una funzione
-     * di data SQL, per la stessa ragione di `dailySeries`: deve valere su
-     * PostgreSQL e su SQLite senza dialetti diversi.
+     * Differenza calcolata in PHP per la stessa ragione di `dailySeries`.
      *
      * @param  Builder<OriginalDocument>|Builder<Communication>  $query
      * @return list<float>
@@ -238,26 +213,11 @@ class MvpStateService
     }
 
     /**
-     * UC-56.4: percentuale di sotto-documenti in cui nome, cognome ed email
-     * del destinatario coincidono ancora con quanto l'AI aveva letto alla
-     * prima estrazione — cioe' nessuno li ha corretti a mano da allora.
-     *
-     * Il confronto e' con `ai_payload`, lo snapshot immutabile scritto una
-     * sola volta da ExtractSubDocumentFieldsService e mai piu' toccato da
-     * una correzione manuale (che scrive solo le colonne tipizzate): e' un
-     * confronto per-campo specifico al destinatario, non una lettura dello
-     * stato dell'intero sotto-documento (che copilot.auto_classified da'
-     * gia', ma sull'insieme di tutti i campi chiave, non solo questi tre).
-     *
-     * Un sotto-documento senza `ai_payload` (elaborato prima che questo
-     * snapshot esistesse) non e' confrontabile e resta fuori dal
-     * denominatore, non viene contato ne' come corretto ne' come sbagliato.
-     *
-     * Un `ai_payload` con tutti e tre i campi a `null` (l'AI non ha
-     * riconosciuto nulla del destinatario) non conta come corrispondenza
-     * anche se le colonne correnti sono anch'esse tutte `null`: coincidenza
-     * di due assenze non e' un riconoscimento riuscito, e' l'AI che non ha
-     * letto nulla.
+     * UC-56.4: percentuale di sotto-documenti dove nome, cognome ed email del
+     * destinatario coincidono ancora con `ai_payload` (lo snapshot immutabile
+     * della prima estrazione), cioe' nessuno li ha corretti a mano da allora.
+     * Chi non ha `ai_payload` resta fuori dal denominatore; tre `null` contro
+     * tre `null` non conta come corrispondenza (due assenze, non un match).
      *
      * @return array<string, mixed>
      */
@@ -314,9 +274,7 @@ class MvpStateService
     }
 
     /**
-     * Scheda di una durata media: sotto il minuto e mezzo si legge in secondi,
-     * oltre in minuti con un decimale. Un "312 s" e' un numero che va convertito
-     * a mente, e un "0,4 min" e' una precisione che la misura non ha.
+     * Sotto il minuto e mezzo si legge in secondi, oltre in minuti con un decimale.
      *
      * @return array<string, mixed>
      */
@@ -379,29 +337,18 @@ class MvpStateService
         $autoValidated = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::AutoValidated)->count();
         $manuallyValidated = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::ManuallyValidated)->count();
         $validated = $autoValidated + $manuallyValidated;
-        // Un sotto-documento nasce a NeedsReview per default, prima ancora che
-        // la sua estrazione giri (vedi ProcessDocumentService, che crea la riga
-        // e solo dopo la estrae): in un documento multi-destinatario, mentre un
-        // segmento successivo aspetta il proprio turno, sta a NeedsReview per
-        // un motivo che non ha niente a che fare con la confidenza. Un
-        // ExtractedData esiste solo dopo che l'estrazione e' davvero girata
-        // (Quarantined la cancella, gli altri esiti la scrivono), quindi
-        // `whereHas('extractedData')` seleziona solo chi e' stato valutato
-        // per davvero — la stessa distinzione che regola il denominatore di
-        // copilot.auto_classified qui sotto.
+        // Un sotto-documento nasce a NeedsReview di default, prima ancora che
+        // l'estrazione giri: `whereHas('extractedData')` esclude chi non e'
+        // stato ancora valutato per davvero, non solo chi e' sotto soglia.
         $needsReview = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::NeedsReview)->whereHas('extractedData')->count();
         $evaluatedCount = $ofTenant(SubDocument::query())->whereHas('extractedData')->count();
         $quarantined = $ofTenant(SubDocument::query())->where('review_status', ReviewStatus::Quarantined)->count();
 
         return [
             'metrics' => [
-                // L'ordine e' quello in cui le schede riempiono il mosaico del
-                // pannello: prima le due strette (un conteggio, una durata
-                // media), poi le tre larghe a quota, cosi' la griglia a
-                // quattro colonne si chiude senza celle vuote (vedi il
-                // commento sull'ordine in copilot-page.view-model.ts). In
-                // fondo le voci che il pannello non mostra — restano nel
-                // contratto perche' la Overview le legge.
+                // Ordine pensato per riempire la griglia a quattro colonne senza
+                // celle vuote (vedi copilot-page.view-model.ts); in fondo le
+                // voci che il pannello non mostra, lette solo dalla Overview.
                 [
                     'key' => 'copilot.documents',
                     'value' => $originalCount,
@@ -414,11 +361,8 @@ class MvpStateService
                     $this->workflowDurations(OriginalDocument::query()->where('tenant_id', $actor->tenantId)),
                 ),
                 [
-                    // Media delle confidenze OCR dichiarate da Textract: dice
-                    // quanto e' leggibile cio' che arriva, e la soglia accanto
-                    // dice oltre quale valore il sistema valida da solo. Non
-                    // compare nel pannello Co-Pilot (fuori da UC-56), ma resta
-                    // nel contratto perche' la Overview la legge.
+                    // Fuori dal pannello Co-Pilot (fuori da UC-56), ma resta nel
+                    // contratto perche' la Overview la legge.
                     'key' => 'copilot.ocr_confidence',
                     'value' => $this->averageDecimal((clone $documentsOfTenant)->whereNotNull('ocr_confidence_avg')->avg('ocr_confidence_avg')),
                     'unit' => '%',
@@ -426,32 +370,19 @@ class MvpStateService
                     'label' => 'Confidenza media OCR',
                 ],
                 [
-                    // UC-56.2: percentuale di classificazioni corrette senza
-                    // alcun intervento manuale — un sotto-documento resta
-                    // AutoValidated solo finche' nessuno lo salva a mano
-                    // (vedi ReviewDocumentService::updateExtractedData). Il
-                    // denominatore e' $validated (auto + manuale), non
-                    // l'intero $subDocumentCount: un sotto-documento ancora da
-                    // revisionare non e' "classificato male", e' una
-                    // classificazione non ancora conclusa (e in un documento
-                    // multi-destinatario puo' anche non essere ancora stato
-                    // estratto affatto — vedi ProcessDocumentService, dove
-                    // ogni segmento nasce a needs_review finche' la sua
-                    // estrazione non gira); includerlo diluirebbe la quota con
-                    // casi che non sono ne' un successo ne' un fallimento
-                    // dell'automazione.
+                    // UC-56.2: denominatore $validated (auto + manuale), non
+                    // $subDocumentCount — un sotto-documento ancora da
+                    // revisionare non e' "classificato male", diluirebbe la
+                    // quota con casi che non sono ne' successo ne' fallimento.
                     'key' => 'copilot.auto_classified',
                     'value' => $autoValidated,
                     'outOf' => $validated,
                     'label' => 'Classificazioni corrette senza intervento',
                 ],
                 [
-                    // UC-56.3: conteggio e percentuale (tramite outOf) dei
-                    // sotto-documenti sotto la soglia di confidenza. Il
-                    // denominatore e' $evaluatedCount, non $subDocumentCount:
-                    // un sotto-documento non ancora estratto non e' "sopra
-                    // soglia", e' semplicemente senza una confidenza da
-                    // confrontare (vedi il commento su $needsReview qui sopra).
+                    // UC-56.3: denominatore $evaluatedCount, non $subDocumentCount
+                    // — un sotto-documento non ancora estratto non e' "sopra
+                    // soglia", e' senza una confidenza da confrontare.
                     'key' => 'copilot.needs_review',
                     'value' => $needsReview,
                     'outOf' => $evaluatedCount,
@@ -519,12 +450,10 @@ class MvpStateService
     }
 
     /**
-     * URL relativo dell'endpoint di serving: vedi la nota in
-     * DocumentController::store sul mixed-content dietro Traefik.
-     *
-     * Il percorso non cambia quando la copertina viene sostituita, quindi porta
-     * una versione derivata dalla chiave dell'oggetto: senza, il browser
-     * continuerebbe a mostrare l'immagine precedente finche' la cache non scade.
+     * URL relativo (vedi la nota in DocumentController::store sul mixed-content
+     * dietro Traefik), con `v` derivato dalla chiave dell'oggetto: il percorso
+     * non cambia quando la copertina viene sostituita, senza il browser
+     * mostrerebbe quella vecchia finche' la cache non scade.
      */
     public function coverImageUrl(Communication $communication): ?string
     {
@@ -539,13 +468,9 @@ class MvpStateService
     }
 
     /**
-     * Campi la cui confidenza sta sotto la propria soglia.
-     *
-     * La decisione sta qui e non nella SPA perche' le soglie sono conoscenza di
-     * dominio, e non sono una sola: il codice fiscale ne ha una piu' alta,
-     * perche' identifica la persona (vedi ADR 0013). Un campo senza confidenza nota
-     * non entra nell'elenco: non e' stato rintracciato, il che non e' una prova
-     * che sia stato letto male.
+     * Campi la cui confidenza sta sotto la propria soglia (il codice fiscale ne
+     * ha una piu' alta, identifica la persona — ADR 0013). Un campo senza
+     * confidenza nota non entra nell'elenco: non rintracciato non e' letto male.
      *
      * @param  array<string, float|null>|null  $fieldConfidences
      * @return list<string>

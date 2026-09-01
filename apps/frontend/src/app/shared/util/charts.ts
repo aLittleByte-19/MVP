@@ -1,10 +1,4 @@
-/**
- * Geometria dei grafici delle schede metrica.
- *
- * Sta fuori dai componenti perche' e' aritmetica pura — coordinate dentro un
- * viewBox — e come tale si prova senza montare nulla. I componenti si limitano
- * a chiamarla e a metterne il risultato dentro un `<svg>`.
- */
+/** Geometria dei grafici delle schede metrica: aritmetica pura, testabile senza montare nulla. */
 
 /** Una barra della serie giornaliera, gia' collocata nel viewBox. */
 export interface Bar {
@@ -16,14 +10,7 @@ export interface Bar {
   readonly isLast: boolean;
 }
 
-/**
- * Barre di una serie, una per giorno.
- *
- * Le barre hanno tutte la stessa larghezza e sono separate da un vuoto
- * proporzionale: con sette valori la lettura e' "questi sono i giorni", non
- * "questa e' una curva". Un valore a zero conserva un filo di altezza, cosi'
- * il giorno esiste anche quando non e' successo nulla.
- */
+/** Barre di uguale larghezza e vuoto proporzionale (letture come giorni distinti, non una curva); un valore a zero conserva un filo di altezza. */
 export function dailyBars(series: readonly number[], width: number, height: number): Bar[] {
   if (series.length === 0) {
     return [];
@@ -57,14 +44,7 @@ export interface RingArc {
   readonly offset: number;
 }
 
-/**
- * Archi di un anello segmentato, uno per parte.
- *
- * Ogni arco e' un cerchio intero con un tratteggio che ne lascia visibile solo
- * la propria fetta, spostata dall'offset: e' il modo di disegnare una corona
- * segmentata con elementi SVG di base, senza calcolare archi a mano ne'
- * dipendere da una libreria.
- */
+/** Ogni arco e' un cerchio intero con tratteggio che ne lascia visibile solo la propria fetta, spostata dall'offset: corona segmentata senza libreria SVG esterna. */
 export function ringArcs(
   parts: readonly { label: string; value: number; tone?: string }[],
   radius: number

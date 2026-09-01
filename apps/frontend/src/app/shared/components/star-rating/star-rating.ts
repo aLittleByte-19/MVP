@@ -4,21 +4,8 @@ import { ChangeDetectionStrategy, Component, computed, input, output, signal } f
 const STARS = [1, 2, 3, 4, 5] as const;
 
 /**
- * Valutazione a stelle.
- *
- * Era il carattere `★` dentro cinque `<button>` senza nome accessibile: uno
- * screen reader annunciava cinque pulsanti indistinguibili, il glifo cambiava
- * disegno da un sistema all'altro, e i colori (#d1d5db e #fbbf24) erano scritti
- * a mano, quindi identici in tema scuro.
- *
- * Ora e' un gruppo di radio, che e' il pattern che l'ARIA APG indica per una
- * scala a valori discreti: le frecce scorrono i punteggi, il gruppo ha un nome,
- * e ogni valore ne ha uno proprio ("3 stelle su 5"). Il disegno e' un SVG, cosi'
- * la forma non dipende dal sistema.
- *
- * Il contorno resta visibile in entrambi gli stati e il pieno si aggiunge: chi
- * non distingue i colori legge comunque quante stelle sono riempite, come
- * chiede SC 1.4.1.
+ * Valutazione a stelle: gruppo di radio (pattern ARIA APG per scala a valori discreti), non `<button>` sciolti.
+ * Il contorno resta visibile in entrambi gli stati e il pieno si aggiunge, cosi' chi non distingue i colori legge comunque il punteggio (SC 1.4.1).
  */
 @Component({
   selector: "mvp-star-rating",

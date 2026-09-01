@@ -9,8 +9,7 @@ use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 
 /**
  * Modifiche da applicare a una Communication, costruite un campo alla volta
- * invece che come array associativo con chiavi a stringa (vedi ADR 0010 e
- * OriginalDocumentChanges, incluso il criterio per le chiavi camelCase).
+ * invece che come array associativo con chiavi a stringa (ADR 0010).
  */
 final class CommunicationChanges
 {

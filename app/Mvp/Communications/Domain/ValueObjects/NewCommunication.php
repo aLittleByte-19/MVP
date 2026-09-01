@@ -9,8 +9,7 @@ use App\Mvp\Communications\Domain\Enums\CoverImageStatus;
 /**
  * Dati per creare una nuova Communication. A differenza di
  * CommunicationChanges (aggiornamento parziale), qui tutti i campi sono
- * noti al momento della creazione: un costruttore semplice basta (vedi
- * ADR 0010 e NewOriginalDocument, stesso pattern sul lato Documents).
+ * noti al momento della creazione: un costruttore semplice basta (ADR 0010).
  */
 final class NewCommunication
 {

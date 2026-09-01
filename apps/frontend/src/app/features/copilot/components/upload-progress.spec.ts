@@ -2,12 +2,7 @@ import { TestBed } from "@angular/core/testing";
 import type { DocumentUploadPhase } from "../data/document-workflow.service";
 import { UploadProgressComponent } from "./upload-progress";
 
-/**
- * L'adattatore fra le fasi della pipeline documentale e l'avanzamento per
- * tappe. Le fasi arrivano dagli eventi reali dello stream SSE, quindi la
- * mappatura non e' cosmetica: se sbaglia, l'interfaccia racconta uno stato
- * che il documento non ha.
- */
+/** Verifica che ogni fase dello stream SSE cada sulla tappa giusta. */
 describe("UploadProgressComponent", () => {
   function render(phase: DocumentUploadPhase | null): HTMLElement {
     const fixture = TestBed.createComponent(UploadProgressComponent);
@@ -31,8 +26,6 @@ describe("UploadProgressComponent", () => {
   });
 
   it("chiude l'avanzamento sull'ultima tappa invece di lasciarla in corso", () => {
-    // Arrivare all'ultima tappa vuol dire che la corsa e' finita: mostrarla
-    // "in corso" teneva l'avanzamento per sempre a un passo dalla fine.
     const host = render("completed");
 
     expect(currentStage(host)).toBeNull();
@@ -47,8 +40,6 @@ describe("UploadProgressComponent", () => {
   });
 
   it("resta sull'estrazione quando l'elaborazione tarda, segnalandolo", () => {
-    // `still_running` non e' una tappa: il documento e' fermo dov'era, da piu'
-    // tempo del previsto, e la lavorazione prosegue in background.
     const host = render("still_running");
 
     expect(currentStage(host)).toBe("Estrazione campi");

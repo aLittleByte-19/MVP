@@ -6,9 +6,7 @@ use Tests\DomainUnit\Communications\Fakes\FakeCommunicationCoverStorage;
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 
 /**
- * Test di dominio puro (nessun bootstrap Laravel/DB). Prima il controller
- * chiamava Storage::disk() direttamente, bypassando CommunicationCoverStoragePort:
- * ora l'I/O passa da DownloadCommunicationCoverUseCase, testabile in isolamento.
+ * Test di dominio puro (nessun bootstrap Laravel/DB).
  */
 test('download returns the stored bytes and mime of the cover', function () {
     $repository = new InMemoryCommunicationRepository;

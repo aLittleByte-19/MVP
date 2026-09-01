@@ -24,9 +24,7 @@ class FinalizeCommunicationService implements FinalizeCommunicationUseCase
         $communication = $this->communications->findCommunication($communicationId);
 
         // Idempotenza verso la ridelivery del task workflow: una comunicazione
-        // gia' completata non deve ri-emettere CommunicationWorkflowCompleted
-        // (vedi CommunicationWorkflowTaskHandler e il trattamento analogo su
-        // ProcessDocumentService).
+        // gia' completata non deve ri-emettere CommunicationWorkflowCompleted.
         if ($communication->generationStatus() === CommunicationGenerationStatus::Completed) {
             return ['event' => 'CommunicationPipelineCompleted', 'coverStatus' => $communication->coverStatus()->value, 'skipped' => true];
         }
@@ -35,10 +33,7 @@ class FinalizeCommunicationService implements FinalizeCommunicationUseCase
 
         // La copertina resta pending/processing solo se il task e' stato
         // saltato dal ramo di degrado dell'ASL (timeout o worker caduto): va
-        // chiusa qui, altrimenti la SPA continuerebbe ad aspettarla. Stesso
-        // evento CommunicationCoverDegraded usato da
-        // GenerateCommunicationCoverService::degrade() — prima la coppia
-        // audit+metrica era duplicata in entrambi i punti (vedi ADR 0010).
+        // chiusa qui, altrimenti la SPA continuerebbe ad aspettarla.
         if (in_array($coverStatus, [CoverImageStatus::Pending, CoverImageStatus::Processing], true)) {
             $warning = 'Copertina AI non disponibile: generazione interrotta.';
             $communication->degradeCover($warning);

@@ -10,10 +10,8 @@ use Tests\DomainUnit\Communications\Fakes\InMemoryPromptConfigurationRepository;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
 
 /**
- * Test di dominio puro (nessun bootstrap Laravel/DB/AWS). Funzione locale
- * (non condivisa fra file): con `--parallel` ogni worker Paratest carica solo
- * un sottoinsieme dei file di test, quindi una funzione globale dichiarata
- * altrove puo' non essere disponibile nello stesso processo.
+ * Funzione locale (non condivisa fra file): con `--parallel` ogni worker
+ * Paratest carica solo un sottoinsieme dei file di test.
  */
 function fakePromptConfigurationActor(): Actor
 {

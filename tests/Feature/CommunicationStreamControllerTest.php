@@ -4,16 +4,9 @@ use App\Exceptions\AiServiceException;
 use App\Models\Communication;
 
 /**
- * Lo stream SSE dell'avanzamento della generazione.
- *
- * Il corpo del ciclo non gira mai qui: `assertOk()`/`assertForbidden()`/
- * `assertJsonPath()` leggono solo status/header della StreamedResponse,
- * senza invocare `sendContent()` (lo fa solo `TestResponse::streamedContent()`,
- * non usato in questo file). Nessun guard di test nel controller: un test
- * che vuole davvero il contenuto dello stream deve legare un fake dietro
- * PollCommunicationProgressUseCase che restituisce uno stato terminale al
- * primo poll, cosi' il loop esce dal suo stesso ramo Completed/Failed invece
- * di girare fino al timeout di 300s.
+ * Lo stream SSE dell'avanzamento della generazione. Il corpo del ciclo non
+ * gira mai qui: `assertOk()`/`assertForbidden()`/`assertJsonPath()` leggono
+ * solo status/header, senza invocare `sendContent()`.
  */
 test('the stream opens with the headers required by server sent events', function () {
     $communication = Communication::factory()->create();

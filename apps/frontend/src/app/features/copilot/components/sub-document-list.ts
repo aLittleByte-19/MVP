@@ -113,10 +113,7 @@ const emptySendMessageForm: SendMessageFormState = {
                 <span>Anteprima non ancora disponibile per questo documento.</span>
               }
               @if (document.originalPreviewUrl) {
-                <!-- Indipendente dallo stato dell'anteprima splittata (RF56-OB,
-                     UC-40.2): resta raggiungibile anche quando lo split non è
-                     disponibile, perché è proprio in quel caso che serve come
-                     alternativa. -->
+                <!-- Indipendente dallo stato dell'anteprima splittata (RF56-OB, UC-40.2). -->
                 <a class="previewLink" [href]="document.originalPreviewUrl" target="_blank" rel="noreferrer">
                   Documento originale
                 </a>
@@ -150,10 +147,7 @@ const emptySendMessageForm: SendMessageFormState = {
               <p class="errorNote">{{ reviewError() }}</p>
             }
 
-            <!-- Non e' un <form>: il pannello non si invia. Per quasi tutto il
-                 tempo e' in sola lettura, e un form senza comando di invio e'
-                 una promessa che l'elemento non mantiene. Il salvataggio e'
-                 un comando esplicito. -->
+            <!-- Non e' un <form>: resta per lo piu' in sola lettura, il salvataggio e' un comando esplicito. -->
             <div
               [formGroup]="form"
               class="inspectorForm"
@@ -301,10 +295,6 @@ const emptySendMessageForm: SendMessageFormState = {
                     }
                   </div>
                 </label>
-                <!-- Un campo solo: l'email compariva due volte, una in sola
-                     lettura con il comando di copia e una modificabile, sullo
-                     stesso valore. Il comando resta, accanto al campo che si
-                     puo' anche correggere. -->
                 <label class="field editableField">
                   <span>Email destinatario</span>
                   <div class="withAction">
@@ -543,9 +533,8 @@ export class SubDocumentListComponent {
 
   protected readonly formatFallback = formatFallback;
   protected readonly capitalizeFirst = capitalizeFirst;
-  // Il classificatore AI non e' vincolato alle 6 tipologie fisse (UC-43): se il
-  // documento ha gia' un valore fuori enum, lo si aggiunge come opzione extra
-  // cosi' la select lo mostra selezionato invece di apparire vuota.
+  // Il classificatore non e' vincolato alle 6 tipologie fisse (UC-43): un valore fuori
+  // enum si aggiunge come opzione extra cosi' la select lo mostra selezionato.
   protected readonly documentTypeOptions = computed<string[]>(() => {
     const current = this.documentItem()?.documentType ?? "";
     return current && !this.isPredefinedDocumentType(current)
@@ -559,10 +548,7 @@ export class SubDocumentListComponent {
   private shownDocumentId: string | null = null;
   protected readonly isSendEditing = signal(false);
   protected readonly copiedEmail = signal(false);
-  // L'URL dell'anteprima e' una risorsa same-origin generata dal backend; va
-  // marcato come SafeResourceUrl, altrimenti Angular blocca il binding su
-  // <iframe [src]> ("unsafe value in a resource URL context") e l'anteprima
-  // resta vuota.
+  // Va marcato SafeResourceUrl o Angular blocca il binding su <iframe [src]>.
   protected readonly previewSrc = computed<SafeResourceUrl | null>(() => {
     const url = this.documentItem()?.previewUrl;
     return url ? this.sanitizer.bypassSecurityTrustResourceUrl(url) : null;
@@ -588,17 +574,12 @@ export class SubDocumentListComponent {
   private readonly sanitizer = inject(DomSanitizer);
 
   constructor() {
-    // La raggiungibilità dell'anteprima è una fetch, non presentazione: vive
-    // in CopilotPageViewModel.loadPreviewStatus() e arriva qui come input
-    // (`previewStatus`), cosicché questo componente resti "dumb" — riceve
-    // stato, non lo produce interrogando un servizio per conto proprio.
     effect(() => {
       this.syncFormsWithDocument(this.documentItem());
     });
 
-    // Evidenzia il campo segnalato dal backend (UC-55/UC-69) invece di un
-    // banner generico: rimuove prima i vecchi errori "backend" residui, poi
-    // riapplica quelli correnti (l'oggetto arriva nuovo ad ogni tentativo).
+    // Evidenzia il campo segnalato dal backend (UC-55/UC-69): rimuove i vecchi errori
+    // "backend" residui, poi riapplica quelli correnti.
     effect(() => {
       const errors = this.fieldErrors();
 
@@ -663,42 +644,7 @@ export class SubDocumentListComponent {
     return null;
   }
 
-  /**
-   * Il messaggio si prepara solo su un documento che una persona ha confermato.
-   *
-   * Bastava la validazione automatica, e su un'estrazione limpida il comando
-   * era attivo senza che nessuno avesse letto la scheda. Ma quel messaggio
-   * porta il nome di un dipendente su un documento che gli verra' consegnato:
-   * la soglia dice che il testo era leggibile, non che il documento sia il suo.
-   * Chiude la questione aperta 3 dell'ADR 0012 dalla parte della conferma
-   * umana, che e' la sola a costare un secondo e a valere una firma.
-   */
-  /**
-   * Contrassegno del campo estratto, a destra dell'etichetta.
-   *
-   * L'evidenziazione dei campi passa dal colore — azzurro, verde o ambra a
-   * seconda di come il dato e' stato stabilito — e SC 1.4.1 chiede che quella
-   * stessa informazione arrivi anche per altra via. Il glifo e' quello che
-   * l'etichetta di stato usa gia' per lo stesso tono, cosi' la riga della
-   * tabella e la scheda parlano la stessa lingua. Resta `aria-hidden`: chi
-   * legge con uno screen reader ha il campo "Stato revisione" e la sola
-   * lettura marcata su ogni controllo.
-   */
-  /**
-   * Da dove viene il dato di un singolo campo.
-   *
-   * Tre casi distinti, che prima collassavano tutti sullo stato del
-   * sotto-documento:
-   *
-   * - il campo e' stato toccato in questa sessione (`dirty`): il valore lo ha
-   *   scritto l'operatore, e lo dice la penna anche prima del salvataggio;
-   * - il campo e' vuoto: non c'e' alcuna provenienza da dichiarare, e le
-   *   scintille su una casella vuota affermavano che l'AI avesse estratto un
-   *   nulla;
-   * - altrimenti vale lo stato del sotto-documento, che e' quanto il contratto
-   *   sa dire (questione aperta 2 dell'ADR 0012: non c'e' una provenienza per
-   *   campo persistita).
-   */
+  /** Origine del campo: manuale se toccato in sessione, nulla se vuoto, altrimenti quella del documento. */
   protected fieldOrigin(documentItem: SubDocument, controlName: string): FieldOrigin | null {
     const control = this.form.get(controlName);
 
@@ -734,6 +680,7 @@ export class SubDocumentListComponent {
   }
 
 
+  /** Richiede conferma umana, non solo validazione automatica (ADR 0012, questione 3). */
   protected canPrepareMessage(documentItem: SubDocument): boolean {
     return documentItem.reviewStatus === "manually_validated";
   }
@@ -742,20 +689,7 @@ export class SubDocumentListComponent {
     return (DOCUMENT_TYPE_OPTIONS as readonly string[]).includes(value);
   }
 
-  /**
-   * Risincronizza i due moduli quando il documento sorgente cambia
-   * davvero (id diverso), non ad ogni nuovo riferimento con lo stesso id:
-   * `documentItem` arriva da un `computed` che il backend ricrea ad ogni
-   * fetch, quindi una mutazione qualsiasi altrove nella pagina (un altro
-   * documento revisionato, un altro upload) produce un nuovo oggetto anche
-   * per QUESTO documento. Risincronizzare comunque cancellerebbe in
-   * silenzio le modifiche non ancora salvate di chi sta scrivendo.
-   *
-   * Il pannello del messaggio si chiude solo passando a un altro documento:
-   * ogni salvataggio fa arrivare la scheda aggiornata e quindi ripassa di qui,
-   * e chiudendo sempre il pannello spariva sotto le mani di chi aveva appena
-   * confermato il testo.
-   */
+  /** Risincronizza solo su id diverso: un nuovo riferimento a parita' di id cancellerebbe modifiche non salvate. */
   private syncFormsWithDocument(document: SubDocument | null): void {
     const changedDocument = (document?.id ?? null) !== this.shownDocumentId;
     this.shownDocumentId = document?.id ?? null;
@@ -772,12 +706,7 @@ export class SubDocumentListComponent {
     this.isSendOpen.set(false);
   }
 
-  /**
-   * "Annulla": scarta le modifiche e ripristina i valori correnti del
-   * documento, anche se il suo id non e' cambiato — e' esattamente cio' che
-   * l'utente ha chiesto cliccando, a differenza della risincronizzazione
-   * automatica in {@link syncFormsWithDocument}.
-   */
+  /** A differenza di {@link syncFormsWithDocument}, ripristina anche a parita' di id. */
   protected resetForm(document: SubDocument | null): void {
     this.shownDocumentId = document?.id ?? null;
 

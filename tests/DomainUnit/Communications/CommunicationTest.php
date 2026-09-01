@@ -17,11 +17,8 @@ use App\Mvp\Communications\Domain\ValueObjects\GeneratedCommunicationImage;
 use App\Mvp\Communications\Domain\ValueObjects\GeneratedCommunicationText;
 
 /**
- * Test di dominio puro sull'entità stessa (nessun bootstrap Laravel/DB),
- * indipendente da qualsiasi caso d'uso — Progetto A (modello ricco) Fase 2,
- * vedi ADR 0010. Assorbe anche i test di CommunicationDraftBuilder
- * (ritirato: la sua unica invariante, "la copertina non precede il testo",
- * ora vive su applyGeneratedCover()).
+ * Test di dominio puro sull'entita' stessa (nessun bootstrap Laravel/DB),
+ * indipendente da qualsiasi caso d'uso (ADR 0010).
  */
 function fakeCommunicationRecord(array $overrides = []): CommunicationRecord
 {

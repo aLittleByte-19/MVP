@@ -10,13 +10,12 @@ use App\Mvp\Documents\Domain\ValueObjects\SubDocumentRecord;
 /**
  * Entità (non solo VO): a differenza di SubDocumentRecord (proiezione di
  * sola lettura), governa le proprie transizioni di reviewStatus e sendStatus
- * invece di lasciare a ogni caso d'uso il compito di scriverle a mano —
- * spike del Progetto A (modello ricco), vedi ADR 0010.
+ * invece di lasciarle scrivere a mano da ogni caso d'uso (ADR 0010).
  *
  * Gli override di invio restano fuori: quel flusso (SendMessageService)
  * legge lo stato tramite SendMessageContext, una proiezione cross-aggregato
- * (unisce SubDocument+ExtractedData+OriginalDocument per comporre il
- * messaggio) che non ha una casa naturale qui — vedi ADR 0010.
+ * che unisce SubDocument+ExtractedData+OriginalDocument e non ha una casa
+ * naturale qui.
  */
 final class SubDocument
 {

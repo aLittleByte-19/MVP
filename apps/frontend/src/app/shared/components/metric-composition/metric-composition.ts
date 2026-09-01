@@ -8,16 +8,8 @@ export interface CompositionSlice {
 }
 
 /**
- * Barra segmentata di una partizione completa.
- *
- * Serve dove i conteggi affiancati nascondono le proporzioni: gli stati di
- * revisione o di invio sono una partizione dei sotto-documenti, quindi la
- * domanda utile non e' "quanti sono da verificare" (gia' risposta da una
- * scheda) ma "quanta parte del totale rappresentano".
- *
- * Le fette usano una scala monocromatica derivata dal colore primario, non
- * colori di stato: il verde e il rosso qui suggerirebbero un giudizio che una
- * composizione non esprime.
+ * Barra segmentata di una partizione completa: mostra le proporzioni, non solo i conteggi.
+ * Scala monocromatica derivata dal colore primario, non colori di stato: verde/rosso suggerirebbero un giudizio.
  */
 @Component({
   selector: "mvp-metric-composition",

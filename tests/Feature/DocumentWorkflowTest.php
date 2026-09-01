@@ -11,13 +11,10 @@ use App\Mvp\Workflow\Services\WorkflowTaskRunner;
 use Mockery\MockInterface;
 
 /**
- * Testa StartDocumentWorkflowService (adapter secondario WorkflowEnginePort
- * mockato, resto reale) invece del vecchio DocumentWorkflowService: stessa
- * copertura, ma al confine della porta invece che dell'SDK AWS diretto.
- * Risolto tramite la porta primaria, non la classe concreta: la
+ * Testa StartDocumentWorkflowService con solo l'adapter secondario
+ * WorkflowEnginePort mockato, risolto tramite la porta primaria: la
  * configurazione (ARN, coda, disco/bucket) e' risolta nel binding del
- * service provider, che rilegge `config()` a ogni resolve() — la classe
- * concreta non legge piu' `config()` internamente (vedi ADR 0010).
+ * service provider, che rilegge `config()` a ogni resolve() (vedi ADR 0010).
  */
 function mvpStartDocumentWorkflowService(?MockInterface $workflowEngine = null): StartDocumentWorkflowUseCase
 {

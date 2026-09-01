@@ -9,21 +9,16 @@ use App\Mvp\Documents\Domain\ValueObjects\OriginalDocumentRecord;
 /**
  * Entità (non solo VO): governa le proprie transizioni di processingStatus
  * invece di lasciare a ogni caso d'uso il compito di scrivere lo stato
- * giusto a mano — Progetto A (modello ricco) Fase 1, vedi ADR 0010.
+ * giusto a mano (ADR 0010).
  *
- * A differenza di SubDocument (Fase 0), qui l'invariante non è "transizione
- * valida sì/no" ma "questi campi si muovono sempre insieme": prima di questa
- * entità, tre punti diversi (StartDocumentWorkflowService, RunOcrService,
- * ProcessDocumentService) impostavano `processingStatus = Failed` con set di
- * campi collegati (workflowFailedAt, workflowFailureReason) diversi e
- * incoerenti fra loro — mascherato dal fatto che
- * DocumentWorkflowTaskHandler::onFailure() li completava comunque come rete
- * di sicurezza. `fail()` consolida quel comportamento in un solo posto.
+ * L'invariante non è "transizione valida si'/no" ma "questi campi si
+ * muovono sempre insieme": `fail()` consolida in un solo posto
+ * processingStatus, workflowFailedAt e workflowFailureReason.
  *
  * Deliberatamente NON governa i campi OCR (ocrText/ocrPages/
- * ocrConfidenceAvg/textractJobId): RunOcrService li scrive ancora con
- * OriginalDocumentChanges grezzo per il proprio percorso di successo — non
- * sono una "transizione di stato", solo dati letti dal gateway OCR.
+ * ocrConfidenceAvg/textractJobId): RunOcrService li scrive con
+ * OriginalDocumentChanges grezzo — non sono una transizione di stato, solo
+ * dati letti dal gateway OCR.
  */
 final class OriginalDocument
 {

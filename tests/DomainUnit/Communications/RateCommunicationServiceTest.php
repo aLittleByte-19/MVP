@@ -31,7 +31,12 @@ test('rate persists the rating with the injected clock and dispatches Communicat
         ->rate(1, 5, 'Ottima bozza.', fakeRateCommunicationActor());
 
     expect($repository->findCommunication(1)->rating())->toBe(5)
-        ->and($events->hasDispatched(CommunicationRated::class))->toBeTrue();
+        ->and($events->hasDispatched(CommunicationRated::class))->toBeTrue()
+        // Il fake distingue una lettura con lock da una senza (vedi il suo
+        // docblock): senza questo assert, un regresso che tornasse a
+        // findCommunication() (perdendo il lock pessimistico) non farebbe
+        // fallire nessun test.
+        ->and($repository->forUpdateReadCount(1))->toBe(1);
 });
 
 test('rate refuses a communication already rated', function () {
@@ -42,7 +47,8 @@ test('rate refuses a communication already rated', function () {
 
     expect(fn () => (new RateCommunicationService($repository, $events, $clock, new PassthroughTransactionManager))->rate(1, 5, null, fakeRateCommunicationActor()))
         ->toThrow(CommunicationAlreadyRatedException::class)
-        ->and($events->events())->toBeEmpty();
+        ->and($events->events())->toBeEmpty()
+        ->and($repository->forUpdateReadCount(1))->toBe(1);
 });
 
 test('rate normalizes a blank comment to no comment', function () {
@@ -71,5 +77,6 @@ test('rate refuses a communication outside the actor tenant scope', function () 
 
     expect(fn () => (new RateCommunicationService($repository, $events, $clock, new PassthroughTransactionManager))->rate(1, 5, null, $intruder))
         ->toThrow(CommunicationNotAuthorizedException::class)
-        ->and($events->events())->toBeEmpty();
+        ->and($events->events())->toBeEmpty()
+        ->and($repository->forUpdateReadCount(1))->toBe(1);
 });

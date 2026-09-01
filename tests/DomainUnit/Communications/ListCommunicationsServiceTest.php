@@ -5,8 +5,7 @@ use App\Mvp\Communications\Domain\ValueObjects\CommunicationListFilters;
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 
 /**
- * Test di dominio puro (nessun bootstrap Laravel/DB/AWS). ListCommunicationsService
- * non dipende da AuditLogger/MetricsRecorder: e' gia' testabile cosi' com'e'.
+ * Test di dominio puro (nessun bootstrap Laravel/DB/AWS).
  */
 test('list delegates straight to the repository, unchanged', function () {
     $service = new ListCommunicationsService(new InMemoryCommunicationRepository);

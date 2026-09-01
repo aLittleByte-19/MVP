@@ -64,10 +64,8 @@ function mvpAssertWellFormedPdf(string $bytes): void
 
 function mvpMockWorkflowStart(object $test): void
 {
-    // Prima, l'intero DocumentWorkflowService era mockato: il suo guard di
-    // configurazione non veniva mai eseguito. Ora si mocka solo la porta
-    // secondaria (WorkflowEnginePort): StartDocumentWorkflowService gira per
-    // davvero, quindi la configurazione minima deve essere presente.
+    // Si mocka solo la porta secondaria (WorkflowEnginePort): StartDocumentWorkflowService
+    // gira per davvero, quindi la configurazione minima deve essere presente.
     config([
         'services.workflow.state_machine_arn' => config('services.workflow.state_machine_arn') ?: 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-document-pipeline',
         'services.workflow.task_queue_url' => config('services.workflow.task_queue_url') ?: 'http://localstack:4566/000000000000/mvp-documents',
@@ -91,10 +89,8 @@ function mvpMockWorkflowNotStarted(): void
 
 function mvpMockCommunicationWorkflowStart(object $test): void
 {
-    // Prima, l'intero CommunicationWorkflowService era mockato: il suo guard
-    // di configurazione non veniva mai eseguito. Ora si mocka solo la porta
-    // secondaria (WorkflowEnginePort): StartCommunicationWorkflowService gira
-    // per davvero, quindi la configurazione minima deve essere presente.
+    // Si mocka solo la porta secondaria (WorkflowEnginePort): StartCommunicationWorkflowService
+    // gira per davvero, quindi la configurazione minima deve essere presente.
     config([
         'services.workflow.communications_state_machine_arn' => config('services.workflow.communications_state_machine_arn') ?: 'arn:aws:states:eu-north-1:000000000000:stateMachine:mvp-communication-pipeline',
         'services.workflow.communications_task_queue_url' => config('services.workflow.communications_task_queue_url') ?: 'http://localstack:4566/000000000000/mvp-communications',
@@ -111,9 +107,7 @@ function mvpMockCommunicationWorkflowStart(object $test): void
 function mvpMockCommunicationWorkflowRegenerate(object $test): void
 {
     // A differenza di start(), regenerate() puo' incontrare una copertina
-    // gia' presente e la elimina davvero tramite la porta secondaria: prima
-    // l'intero servizio era mockato e questa chiamata di storage restava
-    // invisibile al test.
+    // gia' presente e la elimina davvero tramite la porta secondaria.
     Storage::fake('s3');
 
     mvpMockCommunicationWorkflowStart($test);
@@ -191,8 +185,7 @@ test('ai assistant generation is accepted and delegated to the communication pip
     expect(Communication::query()->count())->toBe(1)
         ->and($communication->prompt)->toBe('Comunicazione interna sulla nuova area documentale.')
         // Il workflow reale (solo la porta secondaria e' mockata) porta lo
-        // stato a Processing dopo l'avvio: prima l'intero servizio era
-        // mockato e questo passaggio restava invisibile al test.
+        // stato a Processing dopo l'avvio.
         ->and($communication->generation_status)->toBe(CommunicationGenerationStatus::Processing)
         ->and($communication->tenant_id)->toBe('mvp-local-tenant')
         ->and(AuditEvent::query()->where('event_type', 'mvp-communication-generation-requested')->count())->toBe(1);
@@ -2361,9 +2354,8 @@ test('the export refuses to promise an attachment the storage does not have', fu
     $subDocument = SubDocument::factory()->pending()->confirmed()->create();
     ExtractedData::factory()->create(['sub_document_id' => $subDocument->id]);
 
-    // requestId/correlationId, non solo error.code: e' cio' che la
-    // centralizzazione dell'errore in bootstrap/app.php doveva garantire
-    // (prima SendMessageController li costruiva a mano senza questi campi).
+    // requestId/correlationId, non solo error.code: garantiti dalla
+    // centralizzazione dell'errore in bootstrap/app.php.
     $response = $this->get("/api/v1/documents/{$subDocument->id}/send-export")
         ->assertNotFound()
         ->assertJsonPath('error.code', 'attachment_unavailable');

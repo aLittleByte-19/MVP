@@ -10,22 +10,8 @@ export interface ProgressStage {
 type StageState = "done" | "current" | "pending" | "failed";
 
 /**
- * Avanzamento per tappe di una pipeline asincrona.
- *
- * Sostituisce la barra a percentuali: quelle erano una tabella fissa
- * fase → numero (20, 40, 60, 85, 100) che non corrispondeva ad alcuna misura —
- * un documento "al 60%" non era a sei decimi di nulla. Le tappe invece sono gli
- * stati reali che arrivano dallo stream SSE, quindi la stessa informazione
- * viene mostrata senza inventare una quantità.
- *
- * `slow` non è una tappa ma un'annotazione su quella corrente: la pipeline sta
- * ancora nello stesso stato, solo da più tempo del previsto.
- *
- * Accanto alle tappe scorre il tempo trascorso. Senza, un'attesa lunga è
- * indistinguibile da un blocco: la tappa resta la stessa e nulla si muove.
- * Il contatore è `aria-hidden` perché un valore che cambia ogni secondo dentro
- * una regione live coprirebbe qualunque altro annuncio; per chi ascolta
- * restano il messaggio di lentezza e lo stato delle tappe.
+ * Avanzamento per tappe reali (dallo stream SSE), non una percentuale inventata senza misura corrispondente.
+ * `slow` non e' una tappa ma un'annotazione sulla corrente. Il contatore del tempo trascorso e' `aria-hidden`: un valore che cambia ogni secondo in una regione live coprirebbe ogni altro annuncio.
  */
 @Component({
   selector: "mvp-stage-progress",
@@ -82,12 +68,7 @@ export class StageProgressComponent {
   /** Istante di partenza della corsa in corso. */
   private startedAt: number | null = null;
 
-  /**
-   * Come stava la corsa al giro precedente, per accorgersi che ne e' cominciata
-   * un'altra. Il solo `currentId` non basta: fra una generazione e la
-   * successiva non torna a `null`, e il cronometro proseguiva dalla corsa
-   * prima, dichiarando «in corso da 2 min» su una partita un secondo fa.
-   */
+  /** Il solo `currentId` non basta per accorgersi di una nuova corsa: fra una generazione e la successiva non torna a `null`. */
   private lastIndex = -1;
 
   private wasFinished = false;

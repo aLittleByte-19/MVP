@@ -15,16 +15,9 @@ import { scrollToElement } from "../../shared/util/scroll";
 import { OverviewPageViewModel } from "./overview-page.view-model";
 
 /**
- * View della Overview: nessuna logica di business qui, solo collante col
- * template e procacciamento delle dipendenze via `inject()` per costruire
- * {@link OverviewPageViewModel}. Il template legge esclusivamente `vm.*`:
- * errore, caricamento e ricarica sono pass-through esposti dal ViewModel,
- * come in Copilot e Assistant (ADR 0011). Unica eccezione: l'`effect()` nel
- * costruttore, che richiede un injection context che il ViewModel non ha
- * per costruzione — legge `vm.pendingScrollTarget()` e, quando non è
- * nullo, esegue lo scroll con `scrollToElement` (l'unica operazione DOM
- * richiesta dal ViewModel) e azzera il segnale. Il ViewModel *chiede* lo
- * scroll dopo la navigazione, non lo esegue né chiama mai la View.
+ * View della Overview: solo collante col template, costruisce
+ * {@link OverviewPageViewModel}. Il template legge solo `vm.*` (ADR 0011). L'`effect()`
+ * nel costruttore e' l'eccezione MVVM: legge `vm.pendingScrollTarget()` ed esegue lo scroll.
  */
 @Component({
   selector: "mvp-overview-page",

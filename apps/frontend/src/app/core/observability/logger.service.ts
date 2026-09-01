@@ -12,14 +12,7 @@ export interface LogContext {
   [key: string]: unknown;
 }
 
-/**
- * Logger frontend strutturato e volutamente parco.
- *
- * Principi (Google SRE / OWASP ASVS): segnali diagnostici utili senza rumore e
- * senza mai registrare dati sensibili. Il logger riceve solo metadati tecnici
- * (endpoint, stato HTTP, correlation id): non si passano mai token, header di
- * autenticazione, PII o corpi di richiesta/risposta.
- */
+/** Logger strutturato: solo metadati tecnici (endpoint, stato HTTP, correlation id), mai token/PII/corpi di richiesta. */
 @Injectable({ providedIn: "root" })
 export class LoggerService {
   info(message: string, context: LogContext = {}): void {

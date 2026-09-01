@@ -12,10 +12,9 @@ use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
 
 /**
- * Test di dominio puro (nessun bootstrap Laravel/DB/AWS, vedi refactory.md
- * Compito 3 punto 2). Il prefisso di storage e' passato al costruttore
- * invece che letto da config() dentro la classe, proprio per restare
- * istanziabile qui senza container.
+ * Test di dominio puro (nessun bootstrap Laravel/DB/AWS). Il prefisso di
+ * storage e' passato al costruttore invece che letto da config(), per
+ * restare istanziabile qui senza container.
  */
 test('generate stores the image and dispatches CommunicationCoverGenerated', function () {
     $repository = new InMemoryCommunicationRepository;

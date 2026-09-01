@@ -13,12 +13,10 @@ use Tests\DomainUnit\Documents\Fakes\PassthroughTransactionManager;
 use Tests\DomainUnit\Documents\Fakes\RecordingDocumentEventDispatcher;
 
 /**
- * Test di dominio puro (nessun bootstrap Laravel/DB/AWS, vedi refactory.md
- * Compito 3 punto 2). Prima questa logica viveva dentro ProcessDocumentService
- * (480 righe, mescolata a Fpdi/storage_path()): separata perche' l'estrazione
- * per destinatario e' un'operazione a se' stante — non solo un dettaglio
- * interno dello split — e non ha bisogno di manipolazione PDF per essere
- * testata (vedi ADR 0010).
+ * Test di dominio puro (nessun bootstrap Laravel/DB/AWS). L'estrazione per
+ * destinatario e' un'operazione a se' stante, non solo un dettaglio interno
+ * dello split, e non ha bisogno di manipolazione PDF per essere testata
+ * (ADR 0010).
  */
 function extractSubDocumentFieldsService(
     InMemoryDocumentRepository $documents,

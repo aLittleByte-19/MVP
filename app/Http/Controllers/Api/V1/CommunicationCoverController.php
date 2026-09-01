@@ -20,12 +20,8 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Adapter primario HTTP: immagine di copertina della comunicazione
- * (sostituzione manuale, rimozione e download). L'audit della mutazione
- * passa da CommunicationCoverReplaced/CommunicationCoverRemoved (dispatchati
- * da UpdateCommunicationCoverService), stesso schema delle altre azioni sul
- * dominio — non piu' scritto qui direttamente. Il download passa dalla porta
- * primaria DownloadCommunicationCoverUseCase, stesso schema di
- * DocumentPreviewController.
+ * (sostituzione manuale, rimozione e download). L'audit passa dagli eventi di
+ * dominio (CommunicationCoverReplaced/Removed), non scritto qui direttamente.
  */
 class CommunicationCoverController
 {

@@ -31,11 +31,7 @@ function communication(overrides: Partial<Communication> = {}): Communication {
   };
 }
 
-/**
- * Test di dominio puro sul ViewModel (nessun bootstrap Angular/TestBed):
- * AssistantPageViewModel si costruisce con `new`, come qualunque classe
- * TypeScript — prova diretta che qui MVVM non è solo nominale.
- */
+/** Test di dominio puro sul ViewModel (nessun bootstrap Angular/TestBed): si costruisce con `new`. */
 describe("AssistantPageViewModel", () => {
   const draftForm: CommunicationDraftForm = {
     prompt: "Avvisa il personale della nuova area documentale",

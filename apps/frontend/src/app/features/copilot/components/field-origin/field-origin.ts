@@ -12,26 +12,9 @@ const LABELS: Record<FieldOrigin, string> = {
 };
 
 /**
- * Indicatore della provenienza del dato, dentro la casella e a sinistra.
- *
- * Stava accanto all'etichetta come glifo tipografico, ripetuto su tredici
- * campi e decifrabile solo tornando a una legenda in cima al pannello. Dentro
- * la casella diventa parte del campo: un separatore verticale lo stacca dal
- * valore, e il colore che porta e' quello dello stato — arancione sotto
- * soglia, teal sopra, verde dopo la conferma umana.
- *
- * Il nome accessibile e' dentro un `srOnly`: il componente vive dentro la
- * `<label>` del campo, quindi lo screen reader legge "Nome e cognome, estratto
- * dall'AI" come una cosa sola. Il `title` da' la stessa informazione col
- * passaggio del mouse, per chi vede l'icona e non la riconosce.
- *
- * L'origine e' quella del singolo campo: il contratto porta la confidenza di
- * ciascun campo e l'elenco di quelli sotto la propria soglia (ADR 0013), quindi
- * dentro lo stesso documento una casella puo' essere teal e quella accanto
- * arancione. Chiude la questione aperta 2 dell'ADR 0012.
- *
- * Quando la confidenza e' nota il suggerimento la riporta: dire "da verificare"
- * senza dire quanto e' un giudizio senza la sua misura.
+ * Indicatore della provenienza del dato, dentro la casella. Il nome accessibile e'
+ * in `srOnly` (il componente vive dentro la `<label>` del campo, quindi lo screen
+ * reader legge "Nome e cognome, estratto dall'AI" come una cosa sola).
  */
 @Component({
   selector: "mvp-field-origin",
@@ -91,12 +74,8 @@ export function originForReviewStatus(reviewStatus: string | undefined): FieldOr
 }
 
 /**
- * Campi estratti a cui corrisponde un controllo del pannello, per chiave del
- * contratto. Il nominativo ne raccoglie due, perche' la casella e' una sola.
- *
- * Tipologia e descrizione non compaiono: il modello le compone invece di
- * copiarle dal foglio, quindi non hanno una riga OCR da cui farle venire e
- * nemmeno una confidenza propria (ADR 0013).
+ * Campi estratti a cui corrisponde un controllo del pannello, per chiave del contratto.
+ * Tipologia e descrizione non compaiono: il modello le compone, senza confidenza propria (ADR 0013).
  */
 export const EXTRACTED_FIELD_KEYS: Record<string, readonly string[] | undefined> = {
   employeeName: ["employee_first_name", "employee_last_name"],
@@ -116,18 +95,9 @@ interface DocumentOriginSource {
 }
 
 /**
- * Provenienza del singolo campo, non piu' dell'intero sotto-documento.
- *
- * Chiude la questione aperta 2 dell'ADR 0012: il contratto ora porta la
- * confidenza di ogni campo e l'elenco di quelli sotto la propria soglia, quindi
- * dentro un documento in revisione si vede *quale* dato e' dubbio invece di
- * vedere tredici caselle tutte uguali.
- *
- * La conferma manuale vale per tutto il sotto-documento e prevale: quando
- * l'operatore ha validato, i campi portano il suo segno, non piu' quello
- * dell'AI. Un documento elaborato prima del dettaglio per riga non ha nulla da
- * dire sui singoli campi e ricade sullo stato complessivo, che e' il
- * comportamento precedente.
+ * Provenienza del singolo campo (ADR 0012, questione 2), non piu' dell'intero
+ * sotto-documento. La conferma manuale prevale su tutto il sotto-documento; senza
+ * confidenze per campo ricade sullo stato complessivo.
  */
 export function originForField(
   documentItem: DocumentOriginSource,

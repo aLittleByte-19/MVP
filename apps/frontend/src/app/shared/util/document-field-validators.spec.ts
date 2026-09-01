@@ -5,14 +5,7 @@ import {
   isValidCodiceFiscale
 } from "./document-field-validators";
 
-/**
- * Il codice fiscale e' il dato su cui si regge l'identificazione del
- * destinatario, cioe' l'obiettivo dichiarato dal committente: un checksum
- * sbagliato qui vale un documento consegnato alla persona sbagliata.
- *
- * I codici usati come fixture hanno il carattere di controllo calcolato a
- * parte con le tabelle ufficiali, non con la funzione sotto test.
- */
+/** Carattere di controllo calcolato a parte con le tabelle ufficiali, non con la funzione sotto test. */
 const VALID_CODES = ["RSSMRA85M01H501Q", "BNCLRA90A41F205I", "VRDGPP70T10L219Z", "MRTNNA92E45G273A"];
 
 describe("isValidCodiceFiscale", () => {

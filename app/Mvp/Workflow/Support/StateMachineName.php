@@ -5,17 +5,9 @@ namespace App\Mvp\Workflow\Support;
 use Illuminate\Support\Str;
 
 /**
- * Nome breve di una state machine a partire dal suo ARN.
- *
- * Era duplicato come metodo privato identico in StartDocumentWorkflowService e
- * StartCommunicationWorkflowService; serve ora anche a WorkflowTaskRunner, che
- * deve etichettare i fallimenti di task con la stessa `state_machine` usata dai
- * due casi d'uso di avvio — altrimenti la stessa metrica esce con insiemi di
- * label diversi e le query che filtrano per state_machine non vedono meta' dei
- * fallimenti.
- *
- * Sta in Workflow\Support, infrastruttura condivisa fra i due domini (ADR 0010):
- * una funzione pura sul formato di un ARN, non una porta.
+ * Nome breve di una state machine a partire dal suo ARN. Condiviso fra i casi
+ * d'uso di avvio e WorkflowTaskRunner: senza la stessa label `state_machine`
+ * su avvii e fallimenti di task, le query che filtrano per essa ne perdono meta'.
  */
 final class StateMachineName
 {

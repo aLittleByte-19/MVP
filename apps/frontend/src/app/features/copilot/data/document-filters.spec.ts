@@ -3,13 +3,7 @@ import { ReactiveFormsModule } from "@angular/forms";
 import { TestBed } from "@angular/core/testing";
 import { createDocumentFilterForm, toDocumentFilters } from "./document-filters";
 
-/**
- * Host minimale che replica i binding reali della barra filtri: i due campi
- * numerici devono passare da un `input[type=number]`, perche' e' li' che
- * Angular applica NumberValueAccessor e scrive un `number` nel controllo.
- * Un test che impostasse i valori solo via `setValue` non riprodurrebbe il
- * problema che questa suite deve impedire.
- */
+/** Host minimale coi binding reali: i campi numerici devono passare da `input[type=number]` (NumberValueAccessor). */
 @Component({
   standalone: true,
   imports: [ReactiveFormsModule],
@@ -62,8 +56,6 @@ describe("filtri dello storico documenti", () => {
   it("mappa la soglia digitata senza sollevare, anche se il controllo contiene un numero", () => {
     typeInto("threshold", "80");
 
-    // Il valore scritto da NumberValueAccessor e' un number: e' la regressione
-    // che questa asserzione protegge (prima qui si chiamava .trim()).
     expect(typeof host.form.controls.confidenceThreshold.value).toBe("number");
     expect(() => toDocumentFilters(host.form.value)).not.toThrow();
     expect(toDocumentFilters(host.form.value)).toEqual({

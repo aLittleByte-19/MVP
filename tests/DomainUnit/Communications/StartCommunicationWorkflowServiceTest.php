@@ -18,8 +18,7 @@ use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
 
 /**
  * Funzione locale (non condivisa fra file): con `--parallel` ogni worker
- * Paratest carica solo un sottoinsieme dei file di test, vedi lo stesso
- * commento in DeleteCommunicationServiceTest.php.
+ * Paratest carica solo un sottoinsieme dei file di test.
  */
 function fakeRegenerateActor(): Actor
 {
@@ -27,11 +26,8 @@ function fakeRegenerateActor(): Actor
 }
 
 /**
- * Test di dominio puro (nessun bootstrap Laravel/DB/AWS, vedi ADR 0010): ARN
- * e coda sono passati al costruttore invece che letti da config() dentro la
- * classe, e WorkflowContext non tocca piu' la facade Log (vedi il suo
- * docblock) — le due cose insieme rendono start()/regenerate() istanziabili
- * ed eseguibili qui, non solo il costruttore.
+ * Test di dominio puro (nessun bootstrap Laravel/DB/AWS, ADR 0010): ARN e
+ * coda sono passati al costruttore invece che letti da config().
  */
 function mvpStartCommunicationWorkflowService(
     InMemoryCommunicationRepository $communications,
@@ -69,10 +65,8 @@ test('start communication workflow starts a Step Functions execution', function 
         ->and($communication->workflowExecutionArn())->toBe('arn:aws:states:eu-north-1:000000000000:execution:fake:test')
         ->and($workflowEngine->lastCall()['input']['task_queue_url'])->toBe('http://localstack:4566/000000000000/mvp-communications')
         ->and($events->hasDispatched(CommunicationWorkflowStarted::class))->toBeTrue()
-        // Il fake distingue una lettura con lock da una senza (vedi il suo
-        // docblock): senza questo assert, un regresso che tornasse a
-        // findCommunication() (perdendo il lock che evita il doppio avvio
-        // del workflow) non farebbe fallire nessun test.
+        // Senza questo assert, un regresso che perdesse il lock (doppio
+        // avvio del workflow) non farebbe fallire nessun test.
         ->and($communications->forUpdateReadCount(1))->toBe(1);
 });
 
@@ -134,9 +128,8 @@ test('regenerate deletes the previous cover and restarts the workflow', function
 });
 
 test('regenerate refuses a communication outside the actor tenant scope', function () {
-    // Difesa in profondita' (vedi il docblock della classe): il controllo
-    // HTTP (AuthorizesCommunications) protegge solo chi lo chiama, questo
-    // verifica che il caso d'uso resti sicuro anche da solo.
+    // Difesa in profondita': il controllo HTTP protegge solo chi lo chiama,
+    // questo verifica che il caso d'uso resti sicuro anche da solo.
     $communications = new InMemoryCommunicationRepository;
     $communications->seed(1, ['generation_status' => 'completed']);
     $workflowEngine = new FakeWorkflowEngine;

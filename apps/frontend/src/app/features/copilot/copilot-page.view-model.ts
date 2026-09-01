@@ -17,15 +17,7 @@ import {
   type DocumentUploadPhase
 } from "./data/document-workflow.service";
 
-/**
- * Metriche che il pannello non mostra come schede a sé.
- *
- * `validated` e `quarantined` sono le parti della ripartizione disegnata
- * dalla scheda degli esiti, e come priorità vivono nella Overview;
- * `sub_documents` è il totale su cui si misurano le quote e come conteggio
- * isolato non aggiunge nulla. `ocr_confidence` non risponde a nessun UC-56,
- * ma resta nel contratto perché la Overview la legge (`copilotQuality`).
- */
+/** Metriche che il pannello non mostra come schede a se': gia' coperte da altre schede o dalla Overview. */
 const HIDDEN_KEYS = [
   "copilot.ocr_confidence",
   "copilot.validated",
@@ -33,34 +25,14 @@ const HIDDEN_KEYS = [
   "copilot.sub_documents"
 ];
 
-/**
- * Righe per pagina dello storico. Dieci: la tabella resta leggibile senza
- * scorrere, e il dettaglio del documento sotto resta raggiungibile.
- */
+/** Righe per pagina dello storico: la tabella resta leggibile senza scorrere. */
 const DOCUMENTS_PER_PAGE = 10;
 
 /**
- * ViewModel (Presentation Model, Fowler) del Co-Pilot documentale: non tocca
- * il DOM né l'infrastruttura di rendering di Angular (niente `@Component`,
- * `inject()`, decoratori, injection context) — le dipendenze arrivano dal
- * costruttore, non da `inject()`, quindi la classe è istanziabile con `new`
- * e testabile senza `TestBed`. Usa `signal`/`computed` come primitiva
- * reattiva di piattaforma (analogo a `INotifyPropertyChanged` in WPF), non
- * come parte del motore di rendering — la distinzione conta: è quello che
- * rende la classe testabile senza avviare Angular, non "zero import da
- * `@angular/core`".
- *
- * `CopilotPage` (la View) resta l'unico punto accoppiato ad Angular: si
- * procura le dipendenze con `inject()` e costruisce questa istanza. Il
- * template legge solo `vm.*` — anche `error`/`loading`/`metrics`, pass-through
- * sullo store condiviso, non `store.*` direttamente.
- *
- * `effect()`/`takeUntilDestroyed()` restano nella View perché richiedono un
- * injection context che questa classe non ha per costruzione, ma gli effect
- * si limitano a leggere i segnali sorgente e chiamare `reload()`/
- * `loadPreviewStatus()`: la chiamata vera e propria — inclusa la fetch di
- * anteprima, che altrimenti finirebbe in un componente figlio — vive qui,
- * come per ogni altra azione del VM.
+ * ViewModel (Presentation Model) del Co-Pilot documentale: nessuna dipendenza da Angular
+ * rendering, istanziabile con `new` e testabile senza `TestBed`. `CopilotPage` (la View)
+ * costruisce l'istanza e legge solo `vm.*`; gli `effect()` restano nella View (injection
+ * context) ma delegano subito a `reload()`/`loadPreviewStatus()` qui.
  */
 export class CopilotPageViewModel {
   readonly selectedDocumentId: WritableSignal<string | null> = signal(null);
@@ -72,14 +44,7 @@ export class CopilotPageViewModel {
   });
   readonly selectedDocumentIdForList: Signal<string | null> = computed(() => this.selectedDocument()?.id ?? null);
 
-  /**
-   * Raggiungibilità dell'anteprima del documento selezionato: verifica il
-   * content-type prima che il dettaglio monti l'iframe (l'endpoint può
-   * rispondere col PDF, 404 se assente o 503 se lo storage non è
-   * raggiungibile). Segue la stessa selezione, non un elenco a parte:
-   * `loadPreviewStatus()` la richiede di nuovo a ogni cambio di
-   * `selectedDocument`, come `reload()` per lo storico.
-   */
+  /** Raggiungibilita' dell'anteprima: verifica il content-type prima che il dettaglio monti l'iframe. */
   readonly previewStatus: WritableSignal<DocumentPreviewStatus> = signal("idle");
   readonly isUploading = signal(false);
   readonly uploadStatus = signal("Nessun caricamento in corso.");
@@ -96,11 +61,6 @@ export class CopilotPageViewModel {
   readonly filteredDocuments: WritableSignal<SubDocument[]> = signal([]);
   readonly documentsError: WritableSignal<string | null> = signal(null);
 
-  /**
-   * Paginazione dello storico. Prima esisteva solo lato backend, che rispondeva
-   * con i primi quaranta risultati mentre la vista ne scartava il totale: oltre
-   * il quarantesimo i documenti sparivano senza che nulla lo segnalasse.
-   */
   readonly currentPage: WritableSignal<number> = signal(1);
   readonly totalDocuments: WritableSignal<number> = signal(0);
   readonly pageSize = DOCUMENTS_PER_PAGE;
@@ -120,48 +80,30 @@ export class CopilotPageViewModel {
   );
 
   /**
-   * Forma e ingombro di ciascuna scheda del pannello: le tre schede a quota
-   * sono larghe, perché portano un anello e una legenda da leggere; le due
-   * strette (un conteggio, una durata media) restano a una cella. Il
-   * conteggio delle celle non basta da solo: la griglia CSS riempie le righe
-   * nell'ordine con cui il backend le manda (vedi `metrics` qui sopra), senza
-   * ricomporle per colmare i vuoti — due strette (due celle) seguite da tre
-   * larghe (sei celle) chiudono ordinatamente due righe da quattro; un ordine
-   * diverso, anche a parità di celle totali, può lasciare una cella vuota a
-   * metà riga. L'ordine delle schede lo decide `MvpStateService::copilotState`
-   * proprio per questo.
+   * L'ordine qui deve seguire quello con cui il backend manda le metriche
+   * (`MvpStateService::copilotState`): la griglia CSS riempie le righe in
+   * quell'ordine senza ricomporle, quindi un ordine diverso puo' lasciare
+   * una cella vuota a meta' riga.
    */
   readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => ({
     "copilot.documents": { kind: "trend" },
     "copilot.processing_seconds": { kind: "trend" },
-    // UC-56.2: percentuale di classificazioni corrette senza intervento
-    // manuale. Il denominatore e' solo chi e' arrivato a una validazione
-    // (automatica o manuale): chi e' ancora da revisionare o in quarantena
-    // non e' incluso, ne' nel resto ne' nel totale — non e' una
-    // classificazione conclusa (backend: MvpStateService::copilotState).
-    // Il resto e' quindi solo chi e' stato validato a mano: gia' risolto,
-    // non un'urgenza.
+    // UC-56.2: denominatore solo chi ha una validazione conclusa (chi e' ancora
+    // da revisionare o in quarantena non conta).
     "copilot.auto_classified": {
       kind: "share",
       span: 2,
       restTone: "neutral",
       restNoun: "validati a mano"
     },
-    // UC-56.3: conteggio e percentuale sotto la soglia di confidenza. Il
-    // resto include anche i documenti in quarantena, che non hanno mai
-    // ricevuto un punteggio di confidenza da confrontare con la soglia
-    // (ExtractSubDocumentFieldsService li mette in quarantena prima del
-    // confronto): "sopra soglia" sarebbe falso per loro.
+    // UC-56.3: il resto include anche la quarantena, mai arrivata a un punteggio di confidenza.
     "copilot.needs_review": {
       kind: "share",
       span: 2,
       restTone: "neutral",
       restNoun: "non da revisionare"
     },
-    // UC-56.4: destinatario ancora quello letto dall'AI, mai corretto a mano.
-    // Il resto non e' sempre "corretto a mano": include anche i casi in cui
-    // l'AI non aveva riconosciuto nulla da confermare (vedi il guard su
-    // aiRecognizedSomething in recipientAutoMatchMetric).
+    // UC-56.4: il resto non e' sempre "corretto a mano" (vedi guard aiRecognizedSomething).
     "copilot.recipient_auto_matched": {
       kind: "share",
       span: 2,
@@ -196,17 +138,9 @@ export class CopilotPageViewModel {
   }
 
   /**
-   * Rilettura dello storico documenti: stessa forma di upload/deleteDocument/...,
-   * non solo un setter. Annulla la ricerca precedente ancora in volo prima di
-   * avviarne una nuova, cosi' una risposta arrivata in ritardo non sovrascrive
-   * mai un risultato piu' recente.
-   *
-   * Il corpo gira dentro `untracked()`: `CopilotPage` chiama questo metodo da
-   * un `effect()` che legge solo `store.documents()`/`vm.activeFilters()`
-   * apposta, per non far ripartire la lettura due volte ad ogni cambio
-   * pagina (`goToPage()` la richiama gia' da se') — ma senza `untracked()`
-   * la lettura di `currentPage()` qui sotto diventerebbe comunque una
-   * dipendenza nascosta di quell'effect, vanificando l'esclusione voluta.
+   * `untracked()` perche' l'effect che chiama questo metodo legge solo `store.documents()`/
+   * `activeFilters()` apposta (per non ripartire due volte a ogni cambio pagina); senza,
+   * la lettura di `currentPage()` qui sotto diventerebbe una dipendenza nascosta di quell'effect.
    */
   reload(): void {
     untracked(() => {
@@ -220,12 +154,6 @@ export class CopilotPageViewModel {
     });
   }
 
-  /**
-   * Richiede di nuovo la raggiungibilità dell'anteprima: stessa forma di
-   * `reload()`, sul documento selezionato invece che sullo storico. Annulla
-   * la richiesta precedente ancora in volo, così una risposta tardiva su un
-   * documento ormai deselezionato non sovrascrive lo stato di quello corrente.
-   */
   loadPreviewStatus(previewUrl: string | null): void {
     this.previewSubscription?.unsubscribe();
 
@@ -240,23 +168,12 @@ export class CopilotPageViewModel {
       .subscribe((status) => this.previewStatus.set(status));
   }
 
-  /**
-   * Ricarica lo stato condiviso, che è ciò che il pulsante "Riprova"
-   * dell'errore di pagina deve rifare. Distinto da `reload()`, che rilegge il
-   * storico documenti: confonderli lascerebbe lo stato globale in errore
-   * pur avendo ricaricato l'elenco.
-   */
+  /** Distinto da `reload()`: ricarica lo stato globale (pulsante "Riprova"), non lo storico documenti. */
   reloadState(): void {
     this.store.reload();
   }
 
-  /**
-   * Chiamato dalla View alla distruzione del componente (via `DestroyRef`):
-   * annulla solo la ricerca in lettura, non le azioni di scrittura (upload,
-   * delete, ...) — quelle devono completare lato server anche se l'utente
-   * ha gia' navigato altrove, esattamente come si aspetta di vederle
-   * riflesse al ritorno sulla pagina.
-   */
+  /** Annulla solo la ricerca in lettura: le scritture in corso devono completare anche fuori pagina. */
   destroy(): void {
     this.searchSubscription?.unsubscribe();
     this.previewSubscription?.unsubscribe();

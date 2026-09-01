@@ -23,13 +23,7 @@ function subDocument(id: string): SubDocument {
   };
 }
 
-/**
- * Test della View (Component Angular): copre solo il collante col template
- * e il cablaggio che richiede un injection context (effect(),
- * takeUntilDestroyed()) — non richiede TestBed per costruire il
- * ViewModel. La logica di dominio (upload, revisione, eliminazione...) è
- * testata senza Angular in copilot-page.view-model.spec.ts.
- */
+/** Test della View: copre solo il collante col template e gli effect(). Il dominio e' in copilot-page.view-model.spec.ts. */
 describe("CopilotPage", () => {
   let documents: ReturnType<typeof signal<SubDocument[]>>;
   let error: ReturnType<typeof signal<string | null>>;
@@ -131,11 +125,6 @@ describe("CopilotPage", () => {
   }));
 
   it("cambiare pagina avvia una sola ricerca, non due", () => {
-    // vm.reload() legge currentPage() al suo interno: senza untracked(),
-    // quella lettura diventerebbe una dipendenza nascosta dell'effect che
-    // chiama reload() (che apposta non legge currentPage() direttamente,
-    // per non farlo scattare due volte a cambio pagina), e ogni click su
-    // "pagina successiva" scatenerebbe una seconda ricerca ridondante.
     workflow["searchDocuments"].mockReturnValue(of({ items: [subDocument("sub-1")], total: 25, page: 1, perPage: 10 }));
     const fixture = TestBed.createComponent(CopilotPage);
     fixture.detectChanges();

@@ -231,8 +231,6 @@ describe("DocumentWorkflowService", () => {
     });
 
     it("chiude lo stream quando il chiamante annulla la sottoscrizione", () => {
-      // Senza questo, cambiare pagina durante l'elaborazione lascerebbe
-      // aperta una connessione SSE per ogni upload avviato.
       const subscription = service.upload(file).subscribe();
 
       subscription.unsubscribe();
@@ -296,8 +294,6 @@ describe("DocumentWorkflowService", () => {
       service.searchDocuments(filters, 2, 10).subscribe((result) => (received = result));
 
       expect(api.listMvpDocuments).toHaveBeenCalledWith({ ...filters, page: 2, perPage: 10 });
-      // Il totale serve alla vista per sapere quante pagine esistono: prima
-      // veniva scartato, e oltre la prima pagina i documenti sparivano.
       expect(received).toEqual({ items, total: 42, page: 2, perPage: 10 });
     });
 

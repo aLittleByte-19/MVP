@@ -20,34 +20,14 @@ use App\Mvp\Communications\Domain\ValueObjects\GeneratedCommunicationImage;
 use App\Mvp\Communications\Domain\ValueObjects\GeneratedCommunicationText;
 
 /**
- * Entità (non solo VO): governa le proprie transizioni invece di lasciare a
- * ogni caso d'uso il compito di scrivere lo stato giusto a mano — Progetto A
- * (modello ricco) Fase 2, vedi ADR 0010. Stesso pattern dell'entità
- * equivalente sul dominio Documents (Fasi 0/1): ciascun metodo verifica la
- * propria guardia e accumula il delta in un {@see CommunicationChanges}
- * interno, letto dall'adapter di persistenza.
+ * Entità ricca (non un VO): ogni metodo verifica la propria guardia e
+ * accumula il delta in {@see CommunicationChanges}, letto dall'adapter di
+ * persistenza (ADR 0010).
  *
- * Assorbe anche l'invariante che prima viveva in
- * `CommunicationDraftBuilder` ("la copertina non può precedere il testo",
- * {@see CoverPrecedesTextException}): non aveva senso mantenere due
- * rappresentazioni separate della stessa regola — un VO usa e getta e
- * un'entità — quando l'aggregato è lo stesso e la regola non attraversa
- * confini di aggregato.
- *
- * `startGeneration()`/`failGeneration()`/`completeGeneration()` consolidano
- * lo stesso tipo di scrittura compound trovata sul dominio Documents
- * (`generationStatus`+`workflowFailedAt`+`workflowFailureReason`+
- * `errorMessage` prima impostati in modo diverso e incoerente da
- * `StartCommunicationWorkflowService` e
- * `CommunicationWorkflowTaskHandler::onFailure()`).
- *
- * Deliberatamente NON governa: il marcatore transitorio
- * `coverStatus = Processing` scritto da `GenerateCommunicationCoverService`
- * prima della chiamata AI (nessun campo collegato, stesso trattamento
- * riservato altrove ai marcatori transitori senza campi collegati);
- * l'`errorMessage` scritto da `GenerateCommunicationTextService` nei propri
- * rami di errore (un singolo campo, poi riconciliato dal fallback di
- * `failGeneration()` quando il workflow chiama `onFailure()`).
+ * Non governa: il marcatore transitorio `coverStatus = Processing` scritto
+ * da GenerateCommunicationCoverService prima della chiamata AI, ne'
+ * l'`errorMessage` scritto da GenerateCommunicationTextService nei propri
+ * rami di errore (riconciliato poi da failGeneration()).
  */
 final class Communication
 {

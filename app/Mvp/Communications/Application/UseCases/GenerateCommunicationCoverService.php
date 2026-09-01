@@ -67,10 +67,8 @@ class GenerateCommunicationCoverService implements GenerateCommunicationCoverUse
             return ['skipped' => false, 'coverStatus' => CoverImageStatus::Failed->value];
         }
 
-        // L'invariante (il testo precede la copertina) e' verificata qui,
-        // fuori dal try/catch di storage: se scattasse indicherebbe un bug
-        // di ordinamento del workflow, non un errore di storage da
-        // degradare silenziosamente.
+        // Fuori dal try/catch di storage: se scatta e' un bug di ordinamento
+        // del workflow, non un errore di storage da degradare.
         if (! $communication->hasGeneratedText()) {
             throw new CoverPrecedesTextException;
         }

@@ -56,10 +56,9 @@ class SendMessageService implements SendMessageUseCase
         $this->assertActorOwnsSubDocument($subDocumentId, $actor);
         $subDocument = $this->documents->findSubDocument($subDocumentId);
 
-        // Il download e' il momento in cui il documento esce dal sistema: prima
-        // di allora i dati estratti devono essere passati sotto gli occhi di
-        // una persona. Il pannello tiene spento il comando, ma l'API si puo'
-        // chiamare anche senza il pannello.
+        // Il download e' il momento in cui il documento esce dal sistema: richiede
+        // revisione manuale gia' avvenuta, anche quando l'API e' chiamata senza il
+        // pannello (che tiene comunque spento il comando).
         if ($subDocument->reviewStatus() !== ReviewStatus::ManuallyValidated) {
             throw new SendMessageNotConfirmedException;
         }

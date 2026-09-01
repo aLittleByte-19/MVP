@@ -56,8 +56,6 @@ describe("CommunicationGeneratorPanelComponent", () => {
     const element = render({ isGenerating: true, phase: "generating-text", status: "Testo in corso" })
       .nativeElement as HTMLElement;
 
-    // L'etichetta non cambia mentre il comando lavora: lo stato lo dice
-    // `aria-busy`, non una parola diversa al posto di quella cercata.
     const submit = element.querySelector<HTMLButtonElement>('button[type="submit"]');
 
     expect(submit?.disabled).toBe(true);
@@ -120,10 +118,6 @@ describe("CommunicationGeneratorPanelComponent", () => {
   });
 
   it("non richiude il modulo del nome per un nuovo riferimento con lo stesso numero di configurazioni", () => {
-    // Lo stato condiviso viene rimpiazzato per intero ad ogni mutazione della
-    // pagina (un voto, un preferito, un'eliminazione altrove): un nuovo
-    // riferimento a parita' di conteggio non e' un salvataggio riuscito e non
-    // deve cancellare un nome ancora in scrittura.
     const initial = [
       { id: 1, name: "Prima config", prompt: "Un prompt qualsiasi", tone: "Chiaro e diretto", style: "Testo informativo" }
     ];

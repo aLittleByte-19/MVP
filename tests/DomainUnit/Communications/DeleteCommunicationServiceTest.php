@@ -10,10 +10,8 @@ use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
 
 /**
- * Test di dominio puro (nessun bootstrap Laravel/DB/AWS). Funzione locale
- * (non condivisa fra file): con `--parallel` ogni worker Paratest carica solo
- * un sottoinsieme dei file di test, quindi una funzione globale dichiarata
- * altrove puo' non essere disponibile nello stesso processo.
+ * Funzione locale (non condivisa fra file): con `--parallel` ogni worker
+ * Paratest carica solo un sottoinsieme dei file di test.
  */
 function fakeDeleteCommunicationActor(): Actor
 {
@@ -61,9 +59,7 @@ test('delete succeeds and still dispatches CommunicationDeleted when storage cle
 });
 
 test('delete refuses a communication outside the actor tenant scope', function () {
-    // Difesa in profondita': il controllo HTTP (AuthorizesCommunications)
-    // protegge solo chi lo chiama, questo verifica che il caso d'uso resti
-    // sicuro anche da solo.
+    // Difesa in profondita': il controllo HTTP protegge solo chi lo chiama.
     $repository = new InMemoryCommunicationRepository;
     $repository->seed(1);
     $storage = new FakeCommunicationCoverStorage;

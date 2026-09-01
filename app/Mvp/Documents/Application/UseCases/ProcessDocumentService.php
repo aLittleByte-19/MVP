@@ -26,14 +26,11 @@ use setasign\Fpdi\Fpdi;
 /**
  * Applicazione: divide un documento originale nei suoi destinatari (Bedrock)
  * e avvia, per ciascuno, l'estrazione campi tramite
- * ExtractSubDocumentFieldsUseCase (prima la stessa logica viveva qui:
- * separata perche' l'estrazione per destinatario e' un'operazione a se'
- * stante, non solo un dettaglio interno dello split — vedi ADR 0010).
- * Sostituisce DocumentProcessingService::process(): stessa logica, ma
- * orchestrata attraverso le porte del dominio invece che Eloquent/Storage
- * diretti. La manipolazione PDF (Fpdi) e i file temporanei restano qui:
- * sono dettagli di libreria senza alternativa in valutazione, non un
- * collaboratore da isolare dietro una porta (vedi ADR 0010).
+ * ExtractSubDocumentFieldsUseCase — separata perche' l'estrazione per
+ * destinatario e' un'operazione a se' stante, non solo un dettaglio interno
+ * dello split (ADR 0010). La manipolazione PDF (Fpdi) e i file temporanei
+ * restano qui: sono dettagli di libreria senza alternativa in valutazione,
+ * non un collaboratore da isolare dietro una porta.
  */
 class ProcessDocumentService implements ProcessDocumentUseCase
 {

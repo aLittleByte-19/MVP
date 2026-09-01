@@ -3,12 +3,7 @@ import { TestBed } from "@angular/core/testing";
 import { SelectFieldComponent } from "./select-field/select-field";
 import { TextAreaFieldComponent } from "./textarea-field/textarea-field";
 
-/**
- * I due campi condivisi dei form. Quello che va garantito e' l'aggancio fra
- * `<label>` e controllo: senza un id coerente il campo resta senza etichetta
- * per uno screen reader, e la CI ha un gate di accessibilita' che se ne accorge
- * solo a pagina montata, quindi tardi.
- */
+/** Verifica l'aggancio fra `<label>` e controllo: senza un id coerente il campo resta senza etichetta per uno screen reader. */
 describe("SelectFieldComponent", () => {
   function render(inputs: Record<string, unknown>) {
     const fixture = TestBed.createComponent(SelectFieldComponent);

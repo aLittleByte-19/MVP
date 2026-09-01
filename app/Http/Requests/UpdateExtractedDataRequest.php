@@ -11,11 +11,8 @@ class UpdateExtractedDataRequest extends FormRequest
 {
     /**
      * Tipologie ammesse per "documentType" (UC-43) — tenere allineate alla
-     * descrizione del campo `documentType` nello schema
-     * UpdateExtractedDataRequest in openapi/v1 (non un `enum` OpenAPI:
-     * {@see self::allowedDocumentTypes()} ammette anche un valore fuori da
-     * queste sei se gia' presente sul record, quindi l'insieme valido
-     * dipende dalla richiesta e non e' esprimibile come enum fisso).
+     * descrizione del campo `documentType` nello schema UpdateExtractedDataRequest
+     * in openapi/v1 (vedi {@see self::allowedDocumentTypes()} per l'eccezione).
      */
     public const DOCUMENT_TYPES = ['cedolino', 'CU', 'comunicazione', 'documento da firmare', 'lettera', 'altro'];
 

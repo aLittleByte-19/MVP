@@ -289,10 +289,9 @@ class AppServiceProvider extends ServiceProvider
 
         // Documents: porta primaria -> caso d'uso applicativo.
         $this->app->bind(UploadDocumentUseCase::class, UploadDocumentService::class);
-        // Configurazione della pipeline (ARN, coda, flag Textract, disco/bucket
-        // documentale) risolta qui (confine container) invece che con config()
-        // dentro la classe applicativa, cosi' StartDocumentWorkflowService resta
-        // istanziabile in un test Pest puro senza bootstrap Laravel.
+        // Configurazione della pipeline risolta qui (confine container), cosi'
+        // StartDocumentWorkflowService resta istanziabile in un test Pest puro
+        // senza bootstrap Laravel.
         $this->app->bind(StartDocumentWorkflowUseCase::class, function ($app) {
             $disk = (string) config('mvp.documents.storage_disk', config('filesystems.default'));
             $configuredTaskQueueUrl = (string) config('services.workflow.task_queue_url');
@@ -321,10 +320,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(ListDocumentsUseCase::class, ListDocumentsService::class);
         $this->app->bind(DeleteDocumentUseCase::class, DeleteDocumentService::class);
         $this->app->bind(RunOcrUseCase::class, RunOcrService::class);
-        // Soglia di confidenza risolta qui (confine container) invece che con
-        // config() dentro la classe applicativa, cosi' ExtractSubDocumentFieldsService
-        // resta istanziabile in un test Pest puro senza bootstrap Laravel
-        // (vedi refactory.md, Compito 3 punto 2).
+        // Soglia di confidenza risolta qui (confine container), cosi'
+        // ExtractSubDocumentFieldsService resta istanziabile in un test Pest
+        // puro senza bootstrap Laravel.
         $this->app->bind(ExtractSubDocumentFieldsUseCase::class, function ($app) {
             return new ExtractSubDocumentFieldsService(
                 $app->make(DocumentRepository::class),
@@ -368,9 +366,9 @@ class AppServiceProvider extends ServiceProvider
 
         // Communications: porta primaria -> caso d'uso applicativo.
         $this->app->bind(GenerateCommunicationUseCase::class, GenerateCommunicationService::class);
-        // ARN e coda della pipeline risolti qui (confine container) invece che
-        // con config() dentro la classe applicativa, cosi' StartCommunicationWorkflowService
-        // resta istanziabile in un test Pest puro senza bootstrap Laravel.
+        // ARN e coda risolti qui (confine container), cosi'
+        // StartCommunicationWorkflowService resta istanziabile in un test Pest
+        // puro senza bootstrap Laravel.
         $this->app->bind(StartCommunicationWorkflowUseCase::class, function ($app) {
             return new StartCommunicationWorkflowService(
                 $app->make(CommunicationRepository::class),
@@ -395,11 +393,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(FinalizeCommunicationUseCase::class, FinalizeCommunicationService::class);
         $this->app->bind(DownloadCommunicationCoverUseCase::class, DownloadCommunicationCoverService::class);
 
-        // Il prefisso di storage delle copertine e' l'unico parametro di
-        // configurazione di cui questi due casi d'uso hanno bisogno: lo
-        // risolviamo qui (confine container) invece che con config() dentro
-        // la classe applicativa, cosi' restano istanziabili in un test Pest
-        // puro senza bootstrap Laravel (vedi refactory.md, Compito 3 punto 2).
+        // Prefisso di storage delle copertine risolto qui (confine container),
+        // cosi' questi due casi d'uso restano istanziabili in un test Pest
+        // puro senza bootstrap Laravel.
         $this->app->bind(UpdateCommunicationCoverUseCase::class, function ($app) {
             return new UpdateCommunicationCoverService(
                 $app->make(CommunicationRepository::class),

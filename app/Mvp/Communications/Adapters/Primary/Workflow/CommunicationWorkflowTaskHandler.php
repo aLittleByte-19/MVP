@@ -12,14 +12,9 @@ use Psr\Clock\ClockInterface;
 
 /**
  * Adapter primario guidato da Step Functions/SQS: traduce ogni task di
- * callback nella chiamata al caso d'uso corrispondente tramite la sua porta
- * primaria. Nessuna regola di business qui — solo dispatch per tipo di task
- * e traduzione del risultato nella forma che il runner si aspetta. Risolve e
- * aggiorna l'aggregato Communication attraverso {@see CommunicationRepository}
- * (la stessa porta secondaria usata dai casi d'uso), non attraverso Eloquent
- * diretto: implementa il contratto condiviso WorkflowTaskHandler passando
- * solo {@see WorkflowSubject} (id + tenant) al runner, che resta cosi'
- * domain-agnostic.
+ * callback nella chiamata al caso d'uso corrispondente. Nessuna regola di
+ * business qui — solo dispatch per tipo di task. Passa al runner solo
+ * {@see WorkflowSubject} (id + tenant), che resta cosi' domain-agnostic.
  */
 class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
 {
@@ -67,11 +62,9 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
 
         $communication = $this->communications->findCommunication($communicationId);
 
-        // Difesa in profondita': l'autorizzazione vera vive al bordo HTTP
-        // (i messaggi di workflow sono generati dalla pipeline stessa, non
-        // da input utente diretto), ma se il tenantId nel messaggio non
-        // corrisponde a quello della comunicazione e' un segnale di
-        // messaggio corrotto o malformato che non va eseguito silenziosamente.
+        // Difesa in profondita': l'autorizzazione vera vive al bordo HTTP, ma un
+        // tenantId nel messaggio che non corrisponde e' un segnale di messaggio
+        // corrotto da non eseguire silenziosamente.
         $tenantId = $message['tenantId'] ?? $message['tenant_id'] ?? null;
 
         if ($tenantId !== null && $communication->tenantId !== $tenantId) {
@@ -141,10 +134,8 @@ class CommunicationWorkflowTaskHandler implements WorkflowTaskHandler
     {
         $communication = $this->communications->findCommunication($subject->id);
 
-        // Il caso d'uso ha gia' scritto un messaggio comprensibile per
-        // l'operatore (vedi GenerateCommunicationTextService); questo e'
-        // solo il fallback per i task che possono fallire prima che il caso
-        // d'uso stesso arrivi a scriverne uno.
+        // Fallback per i task che falliscono prima che il caso d'uso scriva un
+        // messaggio d'errore comprensibile per l'operatore.
         $communication->failGeneration($communication->errorMessage() ?: $e->getMessage(), $e->getMessage(), $this->clock->now());
         $this->communications->saveCommunication($communication);
     }

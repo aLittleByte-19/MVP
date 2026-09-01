@@ -34,8 +34,7 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
     {
         $communication = $this->communications->findCommunication($communicationId);
 
-        // Difesa in profondita': stesso controllo gia' fatto a livello HTTP
-        // da AuthorizesCommunications (vedi il docblock di CommunicationDraftService).
+        // Difesa in profondita': stesso controllo gia' fatto a livello HTTP.
         if ($communication->tenantId !== $actor->tenantId) {
             throw new CommunicationNotAuthorizedException;
         }
@@ -63,8 +62,7 @@ class UpdateCommunicationCoverService implements UpdateCommunicationCoverUseCase
     {
         $communication = $this->communications->findCommunication($communicationId);
 
-        // Difesa in profondita': stesso controllo gia' fatto a livello HTTP
-        // da AuthorizesCommunications (vedi il docblock di CommunicationDraftService).
+        // Difesa in profondita': stesso controllo gia' fatto a livello HTTP.
         if ($communication->tenantId !== $actor->tenantId) {
             throw new CommunicationNotAuthorizedException;
         }

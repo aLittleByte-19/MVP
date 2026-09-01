@@ -6,11 +6,8 @@ namespace App\Mvp\Workflow\Support;
  * Correlation ids carried through a use case execution (HTTP request or SQS
  * task message). Puro contenitore di stato, nessuna dipendenza da Illuminate:
  * istanziabile con `new` in un test di dominio puro. Il tagging dei log
- * (`Log::withContext()`) non vive più qui — per l'HTTP è già ridondante
- * (`App\Http\Middleware\CorrelateRequests` lo fa per ogni richiesta, stesse
- * chiavi `request_id`/`correlation_id`); per il worker SQS, che non ha quel
- * middleware, la stessa chiamata vive ora in `ConsumeWorkflowTasks` (adapter
- * primario, può legittimamente toccare la facade).
+ * (`Log::withContext()`) vive negli adapter primari (`CorrelateRequests` per
+ * l'HTTP, `ConsumeWorkflowTasks` per il worker SQS), non qui.
  */
 class WorkflowContext
 {

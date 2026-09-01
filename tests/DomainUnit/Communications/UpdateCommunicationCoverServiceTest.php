@@ -12,10 +12,7 @@ use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
 
 /**
- * Test di dominio puro (nessun bootstrap Laravel/DB). Prima update()/remove()
- * non dispatchavano alcun evento: l'audit veniva scritto direttamente nel
- * controller HTTP, un'asimmetria rispetto a ogni altra azione del dominio
- * (vedi ADR 0010).
+ * Test di dominio puro (nessun bootstrap Laravel/DB).
  */
 function fakeUpdateCoverActor(): Actor
 {
@@ -84,9 +81,7 @@ test('remove refuses to touch the cover of a discarded communication', function 
 });
 
 test('update refuses a communication outside the actor tenant scope', function () {
-    // Difesa in profondita': il controllo HTTP (AuthorizesCommunications)
-    // protegge solo chi lo chiama, questo verifica che il caso d'uso resti
-    // sicuro anche da solo.
+    // Difesa in profondita': il controllo HTTP protegge solo chi lo chiama.
     $repository = new InMemoryCommunicationRepository;
     $repository->seed(1);
     $events = new RecordingEventDispatcher;

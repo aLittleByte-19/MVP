@@ -17,13 +17,9 @@ use App\Mvp\Support\Persistence\TransactionManagerPort;
 
 /**
  * Ogni metodo ricontrolla il tenant dell'attore contro quello della
- * comunicazione caricata (vedi {@see self::assertOwnership()}), oltre al
- * controllo gia' fatto in AuthorizesCommunications a livello HTTP: quel
- * controllo protegge solo chi lo chiama, un caso d'uso applicativo dovrebbe
- * restare sicuro anche invocato da un adapter primario futuro che se ne
- * dimentichi (stesso principio gia' applicato in DeleteDocumentService/
- * PreviewDocumentService per i documenti, e in PromptConfigurationService
- * per le configurazioni di prompt).
+ * comunicazione caricata ({@see self::assertOwnership()}): il controllo
+ * HTTP protegge solo chi lo chiama, il caso d'uso deve restare sicuro anche
+ * invocato da un adapter primario futuro che se ne dimentichi.
  */
 class CommunicationDraftService implements CommunicationDraftUseCase
 {
@@ -70,12 +66,10 @@ class CommunicationDraftService implements CommunicationDraftUseCase
     }
 
     /**
-     * Lock pessimistico sulla riga (come favorite()/unfavorite()): senza,
-     * un `discard()` e un `save()` concorrenti sulla stessa bozza leggono
-     * entrambi lo stato prima che l'altro scriva, superano entrambi il
-     * proprio controllo di stato in `Communication::approve()`/`discard()`
-     * e l'ultimo che scrive vince — una bozza appena scartata puo' finire
-     * "approvata" per puro timing, bypassando l'invariante di dominio.
+     * Lock pessimistico sulla riga (come favorite()/unfavorite()): senza, un
+     * `discard()` e un `save()` concorrenti potrebbero superare entrambi il
+     * proprio controllo di stato e l'ultimo che scrive vince — una bozza
+     * appena scartata puo' finire "approvata" per puro timing.
      */
     public function save(int $communicationId, Actor $actor): void
     {

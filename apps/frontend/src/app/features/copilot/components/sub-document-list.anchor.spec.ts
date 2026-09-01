@@ -3,14 +3,8 @@ import type { SubDocument } from "../../../../api/generated/model";
 import { SubDocumentListComponent } from "./sub-document-list";
 
 /**
- * Spec a se' stante perche' rende il template vero: sub-document-list.spec.ts
- * lo sostituisce con una stringa vuota per provare la sola classe.
- *
- * Difende una scelta che sembra arbitraria e non lo e': l'ancora dello
- * scorrimento sta sulla sezione interna e non sull'host del componente, perche'
- * l'host ha `display: contents` e quindi non genera alcun box. Con l'id li'
- * sopra, `scrollIntoView` non aveva nulla verso cui scorrere e il comando
- * "Consulta" non muoveva la pagina.
+ * Spec a se' stante perche' rende il template vero (sub-document-list.spec.ts lo svuota).
+ * L'ancora sta sulla sezione interna, non sull'host: l'host ha `display: contents` e non genera un box.
  */
 describe("ancora dello scorrimento del dettaglio", () => {
   function documento(): SubDocument {

@@ -3,13 +3,8 @@ import type { SubDocumentSendStatus } from "../../../../api/generated/model";
 import type { ConfidenceCriterion, DocumentFilters } from "./document-workflow.service";
 
 /**
- * Form dei filtri dello storico documenti (UC-35..UC-38).
- *
- * I due campi legati a un `input[type=number]` sono tipizzati `number | null`
- * perche' e' quello che ci scrive dentro Angular tramite NumberValueAccessor:
- * tiparli come stringa fa fallire a runtime qualunque operazione testuale sul
- * valore, e l'eccezione, sollevata dentro il next handler di `valueChanges`,
- * chiude la sottoscrizione e disattiva in silenzio l'intera barra dei filtri.
+ * Form dei filtri dello storico documenti (UC-35..UC-38). I campi `number` sono
+ * tipizzati `number | null` perche' e' quello che NumberValueAccessor ci scrive.
  */
 export function createDocumentFilterForm() {
   return new FormGroup({
@@ -24,11 +19,7 @@ export function createDocumentFilterForm() {
 
 export type DocumentFilterFormValue = Partial<ReturnType<typeof createDocumentFilterForm>["value"]>;
 
-/**
- * Converte i valori del form nei criteri inviati all'API, scartando quelli
- * vuoti. Totale per costruzione: nessun ramo puo' sollevare, cosi' un valore
- * inatteso non puo' piu' spegnere lo stream dei filtri.
- */
+/** Converte i valori del form nei criteri API, scartando quelli vuoti. Nessun ramo solleva. */
 export function toDocumentFilters(value: DocumentFilterFormValue): DocumentFilters {
   const filters: DocumentFilters = {};
 

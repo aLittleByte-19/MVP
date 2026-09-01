@@ -5,12 +5,7 @@ import {
 } from "../../../shared/components/stage-progress/stage-progress";
 import type { CommunicationGenerationPhase } from "../assistant.model";
 
-/**
- * Tappe della pipeline di generazione, nell'ordine reale: il testo arriva
- * prima della copertina, che se manca non invalida la bozza. Sono gli stati
- * emessi dallo stream SSE (vedi AssistantService), non una scala inventata —
- * la barra precedente li mappava su percentuali fisse (25, 55, 85, 90, 100).
- */
+/** Tappe della pipeline di generazione, nell'ordine reale in cui lo stream SSE le emette. */
 const STAGES: readonly ProgressStage[] = [
   { id: "queued", label: "In coda" },
   { id: "generating-text", label: "Testo" },

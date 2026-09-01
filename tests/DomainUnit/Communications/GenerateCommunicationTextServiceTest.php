@@ -11,9 +11,9 @@ use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
 
 /**
- * Test di dominio puro (nessun bootstrap Laravel/DB/AWS, vedi refactory.md
- * Compito 3 punto 2 e ADR 0010): il caso d'uso e' istanziato direttamente,
- * con adapter di test che implementano le porte secondarie in memoria.
+ * Test di dominio puro (nessun bootstrap Laravel/DB/AWS, ADR 0010): il caso
+ * d'uso e' istanziato direttamente, con adapter di test che implementano le
+ * porte secondarie in memoria.
  */
 test('generate persists the AI output and dispatches CommunicationTextGenerated', function () {
     $repository = new InMemoryCommunicationRepository;

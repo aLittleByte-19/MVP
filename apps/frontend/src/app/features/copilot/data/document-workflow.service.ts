@@ -98,14 +98,7 @@ export class DocumentWorkflowService {
   private readonly store = inject(MvpStateStore);
   private readonly sse = inject(SseClient);
 
-  /**
-   * Carica il documento e segue lo stream di elaborazione (Server-Sent Events).
-   * La prima emissione corrisponde alla conferma dell'upload (POST risolto), le
-   * successive agli eventi di elaborazione. Lo stream viene chiuso alla
-   * conclusione o all'annullamento della sottoscrizione (nessun leak di
-   * connessioni). Nessun fallback automatico: in caso di errore lo stato
-   * documentale viene solo ricaricato per riflettere la situazione reale.
-   */
+  /** Carica il file e segue lo stream SSE di elaborazione, chiuso a conclusione o annullamento. */
   upload(file: File, metadata: DocumentUploadMetadata = {}): Observable<DocumentUploadProgress> {
     return new Observable<DocumentUploadProgress>((observer) => {
       let closeStream: (() => void) | null = null;
@@ -221,16 +214,7 @@ export class DocumentWorkflowService {
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 
-  /**
-   * Storico filtrato e impaginato (UC-35..UC-38): i criteri e la pagina
-   * viaggiano al backend, che resta l'unica autorita' sui dati. Anche senza
-   * filtri la lista arriva da qui, cosi' la vista ha una sola sorgente invece
-   * di due rappresentazioni.
-   *
-   * Restituisce la risposta intera e non i soli `items`: senza `total` la vista
-   * non puo' sapere quante pagine esistono, e prima di questa firma i risultati
-   * oltre la prima pagina sparivano senza che nulla lo segnalasse.
-   */
+  /** Storico filtrato e impaginato (UC-35..UC-38); restituisce anche `total`, non solo `items`. */
   searchDocuments(filters: DocumentFilters, page: number, perPage: number): Observable<DocumentPage> {
     return this.api
       .listMvpDocuments({

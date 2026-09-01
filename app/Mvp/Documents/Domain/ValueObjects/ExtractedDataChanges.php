@@ -13,14 +13,10 @@ final class ExtractedDataChanges
 {
     /**
      * Le uniche chiavi che {@see self::fromRawFields()} accetta: i campi
-     * corretti a mano dalla revisione umana (UC-9bis/UC-52), non tutto cio'
-     * che questa classe sa rappresentare — `fieldConfidences`/`aiPayload`
-     * sono scritti solo dal percorso di estrazione AI, tramite i rispettivi
-     * `with*()`, mai da un payload HTTP grezzo. Oggi l'unico chiamante
-     * (DocumentReviewController) filtra gia' a monte esattamente questi
-     * campi: la whitelist e' una difesa in profondita' per un futuro
-     * chiamante che passasse un array piu' ampio, non una correzione di un
-     * problema osservato.
+     * corretti a mano dalla revisione umana (UC-9bis/UC-52). `fieldConfidences`
+     * e `aiPayload` restano fuori: li scrive solo l'estrazione AI tramite i
+     * rispettivi `with*()`, mai un payload HTTP grezzo — difesa in profondita'
+     * anche se oggi l'unico chiamante filtra gia' a monte questi stessi campi.
      *
      * @var list<string>
      */

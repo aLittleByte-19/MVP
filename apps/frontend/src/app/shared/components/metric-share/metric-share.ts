@@ -7,17 +7,8 @@ const STROKE = 10;
 const RADIUS = (SIZE - STROKE) / 2;
 
 /**
- * Scheda di quota: quanta parte di un totale.
- *
- * L'anello porta la parte a posto, e il resto della circonferenza — non un
- * grigio neutro — porta cio' che manca: e' quello il numero su cui l'operatore
- * deve agire, e lasciarlo scolorito lo nasconderebbe. Al centro la
- * percentuale, di fianco i due conteggi per esteso, perche' "94%" senza "77 da
- * verificare" non dice quanto lavoro c'e' da fare.
- *
- * `restTone` distingue il residuo che chiede un intervento (rosso) da quello
- * che e' solo il complemento di una misura (grigio): le bozze ancora senza
- * voto non sono un guasto.
+ * Scheda di quota: il resto della circonferenza non e' un grigio neutro, e' cio' che manca — il numero su cui l'operatore deve agire.
+ * `restTone` distingue il residuo che chiede un intervento (rosso) da un semplice complemento di misura (grigio).
  */
 @Component({
   selector: "mvp-metric-share",

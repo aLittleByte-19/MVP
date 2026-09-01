@@ -5,10 +5,8 @@ namespace App\Mvp\Workflow\Ports\Outbound;
 /**
  * Porta secondaria condivisa fra i domini Documents e Communications: avvio
  * di un'esecuzione della macchina a stati che orchestra una pipeline
- * asincrona. Nessun riferimento a Step Functions o all'SDK AWS: prima di
- * questa porta, DocumentWorkflowService e CommunicationWorkflowService
- * avvolgevano SfnClient in modo quasi identico, in due classi separate (vedi
- * ADR 0010) — un solo adapter la implementa per entrambi.
+ * asincrona. Nessun riferimento a Step Functions o all'SDK AWS: un solo
+ * adapter la implementa per entrambi (vedi ADR 0010).
  */
 interface WorkflowEnginePort
 {

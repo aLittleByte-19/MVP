@@ -1,13 +1,8 @@
 import { HttpErrorResponse } from "@angular/common/http";
 
 /**
- * Traduce un errore qualsiasi in un messaggio leggibile per l'utente.
- *
- * Il backend risponde con l'envelope `{ error: { message, code, requestId,
- * correlationId, fields? } }`: si usa il `message` quando presente. Per errori
- * di validazione si preferisce il primo messaggio di campo (es. limite caratteri).
- * Non si espongono mai dettagli tecnici (stack, corpo grezzo) nei messaggi
- * mostrati a video, in linea con OWASP ASVS.
+ * Traduce un errore qualsiasi in un messaggio leggibile per l'utente, mai dettagli tecnici (stack, corpo grezzo).
+ * Per errori di validazione preferisce il primo messaggio di campo (es. limite caratteri) al messaggio generico dell'envelope.
  */
 export function getApiErrorMessage(error: unknown, fallback = "Operazione non disponibile."): string {
   if (error instanceof HttpErrorResponse) {
@@ -57,12 +52,7 @@ export function extractCorrelationId(error: unknown): string | null {
   return null;
 }
 
-/**
- * Estrae gli errori di validazione per-campo dall'envelope (`error.fields`,
- * popolato dal backend da `ValidationException::errors()`), per evidenziare
- * il campo incriminato invece di mostrare solo un messaggio generico
- * (UC-55/UC-69: "il sistema segnala il campo errato").
- */
+/** Errori di validazione per-campo da `error.fields` (popolato da `ValidationException::errors()`), UC-55/UC-69. */
 export function extractFieldErrors(error: unknown): Record<string, string> | null {
   if (!(error instanceof HttpErrorResponse)) {
     return null;

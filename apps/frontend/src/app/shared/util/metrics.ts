@@ -12,14 +12,7 @@ export interface FormattedMetric {
 /** Placeholder di un valore non disponibile: diverso da zero, che e' un dato. */
 export const NOT_AVAILABLE = "—";
 
-/**
- * Separatore delle migliaia italiano, applicato a mano invece che con `Intl`.
- *
- * Non e' preferenza stilistica: il runtime dei test non ha la locale it-IT
- * (build di Node senza ICU completo) e `toLocaleString("it-IT")` vi restituisce
- * "1284" invece di "1.284". Con una formattazione esplicita il numero e'
- * identico ovunque, e il test verifica davvero quello che l'utente vedra'.
- */
+/** Separatore delle migliaia applicato a mano: il runtime dei test non ha la locale it-IT, `toLocaleString` vi darebbe "1284". */
 export function formatCount(value: number): string {
   const negative = value < 0;
   const digits = Math.abs(Math.trunc(value)).toString();
@@ -29,17 +22,8 @@ export function formatCount(value: number): string {
 }
 
 /**
- * Formatta il valore di una metrica separando l'unita' dal numero.
- *
- * Il backend invia gia' una stringa per le medie (`4.3`, oppure `—` quando non
- * ce n'e' una) e un intero per i conteggi: qui si distingue solo la resa, senza
- * reinterpretare il dato. I conteggi passano da `formatCount` perche' `1284` va
- * letto `1.284` in italiano, e il separatore decimale diventa la virgola.
- *
- * L'unita' arriva dal contratto (campo `unit`). Prima era una tabella chiave →
- * unita' scritta qui, con dentro una sola metrica: alla seconda misura non
- * pura — secondi, minuti, percentuali — sarebbe andata fuori sincrono col
- * backend, che e' l'unico a sapere in che scala ha calcolato il valore.
+ * Formatta il valore di una metrica separando l'unita' dal numero, senza reinterpretare il dato.
+ * L'unita' arriva sempre dal campo `unit` del contratto: solo il backend sa in che scala ha calcolato il valore.
  */
 export function formatMetric(metric: Metric): FormattedMetric {
   const raw = metric.value;
@@ -57,13 +41,7 @@ export function formatMetric(metric: Metric): FormattedMetric {
   return { value: raw.replace(".", ","), unit };
 }
 
-/**
- * Elementi entrati oggi, cioe' l'ultimo punto della serie.
- *
- * `history` e' un flusso di ingresso, non la storia del totale (vedi lo schema
- * `Metric` in OpenAPI): va quindi presentato come "n nuovi oggi" e mai come
- * variazione del valore mostrato.
- */
+/** `history` e' un flusso di ingresso, non la storia del totale: va presentato come "n nuovi oggi", mai come variazione. */
 export function newToday(history: readonly number[] | undefined): number | null {
   if (!history || history.length === 0) {
     return null;
@@ -72,13 +50,7 @@ export function newToday(history: readonly number[] | undefined): number | null 
   return history[history.length - 1] ?? null;
 }
 
-/**
- * Punti di una polilinea che ricalca la serie, gia' scalati nel viewBox.
- *
- * Una serie piatta viene disegnata a meta' altezza invece che sul bordo: con
- * `max === min` la normalizzazione dividerebbe per zero, e una linea appoggiata
- * al fondo suggerirebbe uno zero che non c'e'.
- */
+/** Con `max === min` (serie piatta) disegna a meta' altezza invece che sul bordo: dividere per zero suggerirebbe uno zero inesistente. */
 export function sparklinePoints(
   history: readonly number[] | undefined,
   width: number,

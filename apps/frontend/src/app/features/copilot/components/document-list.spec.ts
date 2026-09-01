@@ -42,8 +42,6 @@ describe("DocumentListComponent", () => {
   });
 
   it("rispetta il messaggio di vuoto passato dal chiamante", () => {
-    // Lo storico filtrato deve poter dire "nessun risultato per questi filtri",
-    // che e' un'informazione diversa da "non hai ancora caricato niente".
     const element = render({ documents: [], emptyMessage: "Nessun documento per i filtri scelti." })
       .nativeElement as HTMLElement;
 
@@ -61,8 +59,6 @@ describe("DocumentListComponent", () => {
   });
 
   it("ripiega su un testo leggibile quando il dato non e' stato estratto", () => {
-    // Una cella vuota lascerebbe credere a un errore di caricamento: meglio
-    // dire esplicitamente che il dato manca.
     const element = render({
       documents: [subDocument({ employee: null, companyName: null, confidence: null })]
     }).nativeElement as HTMLElement;
@@ -80,9 +76,6 @@ describe("DocumentListComponent", () => {
   });
 
   it("abbrevia la validazione nella colonna e tiene l'etichetta del backend per lo scaricamento", () => {
-    // "Validato automaticamente" e' una frase: dentro una colonna larga un
-    // sesto di tabella andava a capo in mezzo alla parola, e sotto
-    // l'intestazione "Validazione" la sola qualificazione dice gia' tutto.
     const element = render({
       documents: [
         subDocument({
@@ -107,9 +100,6 @@ describe("DocumentListComponent", () => {
   });
 
   it("tiene nelle colonne i dati dell'analisi e nella prima cella il documento di partenza", () => {
-    // La riga si legge come un documento in lavorazione, non come un elenco di
-    // nove campi alla pari: azienda, nome del file e data del documento
-    // stanno sotto al destinatario.
     const element = render({ documents: [subDocument()] }).nativeElement as HTMLElement;
     const columns = [...element.querySelectorAll("thead th")].map((th) =>
       th.getAttribute("data-column")
@@ -132,8 +122,6 @@ describe("DocumentListComponent", () => {
   });
 
   it("distingue lo stato di scaricamento da quello di validazione", () => {
-    // Due domande diverse, due forme diverse: rettangolo per la revisione,
-    // pallino pieno o vuoto per il download.
     const element = render({
       documents: [subDocument({ sendStatus: "sent", sendStatusLabel: "Scaricato" })]
     }).nativeElement as HTMLElement;

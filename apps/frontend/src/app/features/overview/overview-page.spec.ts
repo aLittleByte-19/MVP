@@ -6,12 +6,7 @@ import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { OverviewPage } from "./overview-page";
 import { OverviewPageViewModel } from "./overview-page.view-model";
 
-/**
- * Test della View (Component Angular): copre solo il collante col template
- * — costruzione del ViewModel e rendering dei suoi segnali. La logica
- * (conteggi, navigazione) è testata senza Angular in
- * overview-page.view-model.spec.ts.
- */
+/** Test della View: copre solo il collante col template. Il dominio e' in overview-page.view-model.spec.ts. */
 describe("OverviewPage", () => {
   const state = signal<MvpState | null>(null);
   const loading = signal(false);

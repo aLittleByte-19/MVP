@@ -14,10 +14,8 @@ use App\Mvp\Documents\Domain\ValueObjects\ExtractedDataChanges;
 use App\Mvp\Support\Identity\Actor;
 
 /**
- * Difesa in profondita' sul tenant su entrambi i metodi (vedi il docblock di
- * CommunicationDraftService per il principio): a differenza degli altri
- * casi d'uso del modulo Documents (DeleteDocumentService,
- * PreviewDocumentService, SendMessageService), questa classe non la aveva.
+ * Difesa in profondita' sul tenant su entrambi i metodi (stesso principio
+ * del docblock di CommunicationDraftService).
  */
 class ReviewDocumentService implements ReviewDocumentUseCase
 {
@@ -40,10 +38,8 @@ class ReviewDocumentService implements ReviewDocumentUseCase
             $subDocument->markManuallyValidated();
         } elseif ($subDocument->reviewStatus() !== ReviewStatus::ManuallyValidated) {
             // Una correzione riporta in revisione cio' che aveva validato il
-            // sistema, non cio' che aveva confermato una persona: quei dati
-            // sono appena passati un'altra volta sotto i suoi occhi, e
-            // declassarli le avrebbe chiesto di confermare due volte la stessa
-            // scheda.
+            // sistema, non cio' che una persona ha gia' confermato —
+            // declassare quei dati la costringerebbe a confermarli due volte.
             $subDocument->markNeedsReview();
         }
 

@@ -1,11 +1,4 @@
-/**
- * Il collegamento che si comporta da azione (ADR 0012): apre l'anteprima o
- * scarica il file. Resta un `<a>` — ha un indirizzo e va apribile in una nuova
- * scheda — ma nella barra delle azioni deve pesare quanto un pulsante.
- *
- * L'altezza viene dal token dei controlli: a 38px stava sotto i 44px con cui
- * SC 2.5.8 misura comodo un bersaglio, e accanto a un pulsante si vedeva.
- */
+/** Collegamento-azione (ADR 0012): resta un `<a>`, ma pesa quanto un pulsante. Altezza dal token controlli per il bersaglio SC 2.5.8 (44px). */
 
 .previewLink,
 .downloadLink {

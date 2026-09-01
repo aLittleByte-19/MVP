@@ -2,12 +2,7 @@ import { TestBed } from "@angular/core/testing";
 import type { CommunicationGenerationPhase } from "../assistant.model";
 import { GenerationProgressComponent } from "./generation-progress";
 
-/**
- * L'adattatore fra le fasi della generazione e l'avanzamento per tappe. Le
- * fasi arrivano dagli eventi dello stream SSE dell'AI Assistant: qui si
- * verifica solo che ciascuna cada sulla tappa giusta, non una percentuale —
- * quelle erano una scala fissa che non misurava alcun avanzamento reale.
- */
+/** Verifica che ogni fase dello stream SSE cada sulla tappa giusta. */
 describe("GenerationProgressComponent", () => {
   function render(phase: CommunicationGenerationPhase | "idle" | null): HTMLElement {
     const fixture = TestBed.createComponent(GenerationProgressComponent);
@@ -40,8 +35,6 @@ describe("GenerationProgressComponent", () => {
   );
 
   it("resta sulla copertina quando la generazione tarda, segnalandolo", () => {
-    // `still_running` non e' una tappa: la pipeline e' ferma dov'era, da piu'
-    // tempo del previsto.
     const host = render("still_running");
 
     expect(currentStage(host)).toBe("Copertina");
@@ -54,8 +47,6 @@ describe("GenerationProgressComponent", () => {
     expect(failed.querySelector("li.failed .name")?.textContent?.trim()).toBe("Copertina");
     expect(failed.querySelector("li.current")).toBeNull();
 
-    // A generazione conclusa nessuna tappa resta in corso: l'ultima e'
-    // completata, non un passo ancora aperto.
     const completed = render("completed");
 
     expect(completed.querySelector("li.failed")).toBeNull();
@@ -64,8 +55,6 @@ describe("GenerationProgressComponent", () => {
   });
 
   it("la copertina mancante non invalida una bozza gia' leggibile", () => {
-    // Il testo precede la copertina: a quel punto la bozza e' consultabile,
-    // quindi la tappa del testo resta completata anche se la copertina fallisce.
     const host = render("failed");
     const done = Array.from(host.querySelectorAll("li.done .name")).map((node) =>
       node.textContent?.trim()

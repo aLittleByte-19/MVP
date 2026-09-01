@@ -8,11 +8,8 @@ import { formatFallback } from "../../../shared/util/formatters";
 
 /**
  * Elenco delle comunicazioni salvate nello storico: selezione per l'anteprima,
- * preferiti ed eliminazione con conferma.
- *
- * Lo stato della conferma non vive qui ma nel ViewModel della pagina, che lo
- * azzera al termine dell'eliminazione: il componente riceve quale riga sta
- * chiedendo conferma e si limita a dichiarare l'intenzione dell'utente.
+ * preferiti ed eliminazione con conferma. Lo stato della conferma vive nel
+ * ViewModel della pagina, non qui.
  */
 @Component({
   selector: "mvp-communication-history-list",

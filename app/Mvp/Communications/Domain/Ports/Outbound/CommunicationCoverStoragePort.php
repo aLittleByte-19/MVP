@@ -15,7 +15,7 @@ interface CommunicationCoverStoragePort
 
     /**
      * Best-effort: un oggetto orfano non deve far fallire l'operazione
-     * dell'operatore, l'adapter registra e prosegue (vedi CommunicationCoverService originale).
+     * dell'operatore, l'adapter registra e prosegue.
      */
     public function delete(string $path): void;
 

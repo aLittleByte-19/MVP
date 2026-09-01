@@ -3,16 +3,8 @@ import { LucideCircleCheck, LucideImage, LucideTriangleAlert } from "@lucide/ang
 import { formatCount } from "../../util/metrics";
 
 /**
- * Scheda di stato: un conteggio di guasti, dove conta prima il verdetto.
- *
- * Corse fallite e corse ferme oltre il tempo previsto non si leggono come gli
- * altri numeri: quasi sempre valgono zero, e uno zero grande quanto "412
- * documenti analizzati" chiede di fermarsi per capire che qui e' la notizia
- * buona. Il numero sta quindi dentro la frase — "2 da ricaricare", "nessuna in
- * ritardo" — accanto a un'icona che ne porta la forma, non il solo colore.
- *
- * `issueLabel` e `okLabel` appartengono alla metrica, non alla scheda: "2 da
- * riesaminare" e "2 senza copertina" chiedono due azioni diverse.
+ * Scheda di stato: un conteggio di guasti, dove conta prima il verdetto. Il numero sta dentro una frase ("2 da ricaricare"), accanto a un'icona, non il solo colore.
+ * `issueLabel`/`okLabel` appartengono alla metrica, non alla scheda: metriche diverse chiedono azioni diverse.
  */
 @Component({
   selector: "mvp-metric-status",

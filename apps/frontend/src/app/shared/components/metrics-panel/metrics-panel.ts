@@ -9,29 +9,14 @@ import { MetricShareComponent } from "../metric-share/metric-share";
 import { MetricStarsComponent } from "../metric-stars/metric-stars";
 import { MetricStatusComponent } from "../metric-status/metric-status";
 
-/**
- * Forma di scheda con cui rendere una metrica.
- *
- * Non e' una preferenza estetica ma il tipo di domanda a cui il numero
- * risponde: quanto e con che ritmo (`trend`), quanta parte di un totale
- * (`share`), dove cade dentro una scala nota (`gauge`), fra quali stati si
- * divide (`breakdown`), che voto ha preso (`stars`), se c'e' qualcosa da
- * guardare (`status`). Con una forma sola le schede di un pannello si
- * leggevano tutte uguali, e per capire che cosa si stesse guardando
- * bisognava ogni volta tornare all'etichetta.
- */
+/** Forma di scheda con cui rendere una metrica: non estetica, ma il tipo di domanda a cui il numero risponde (andamento, quota, scala, ripartizione, voto, stato). */
 export type MetricKind = "trend" | "share" | "gauge" | "status" | "breakdown" | "stars";
 
 /** Come la pagina che conosce il contesto vuole che una metrica sia resa. */
 export interface MetricPresentation {
   readonly kind?: MetricKind;
   readonly tone?: MetricTone;
-  /**
-   * Quante colonne occupa la scheda. Le forme che portano una legenda da
-   * leggere — la ripartizione — hanno bisogno di larghezza per restare
-   * leggibili; un verdetto di tre parole no. E' il mosaico a rendere il
-   * pannello una dashboard invece di una scacchiera.
-   */
+  /** Quante colonne occupa la scheda: le forme con una legenda da leggere hanno bisogno di piu' larghezza. */
   readonly span?: 1 | 2;
   /** Estremo della scala (`gauge`); di default cento. */
   readonly max?: number;

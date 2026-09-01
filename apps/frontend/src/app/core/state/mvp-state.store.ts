@@ -4,12 +4,7 @@ import { AlittlebyteMVPAPIService } from "../../../api/generated/mvp-api";
 import type { Metric, MvpState, SubDocument } from "../../../api/generated/model";
 import { getApiErrorMessage } from "../errors/api-error";
 
-/**
- * Filtri della sezione Metriche dell'AI Assistant (RF38-OB..RF41-OB). Tono e
- * stile non esistono sui documenti del Co-Pilot: valgono solo sulla fetta di
- * stato alimentata dall'AI Assistant, mai su `state`/`reload()`, condivisi
- * con Overview e Co-Pilot senza filtro.
- */
+/** Filtri della sezione Metriche AI Assistant (RF38-OB..RF41-OB); tono/stile non esistono sui documenti Co-Pilot. */
 export interface AssistantMetricsFilters {
   readonly tone?: string | null;
   readonly style?: string | null;
@@ -17,13 +12,7 @@ export interface AssistantMetricsFilters {
   readonly dateTo?: string | null;
 }
 
-/**
- * Sorgente unica dello stato applicativo (assistant + co-pilot), condivisa fra
- * tutte le viste. Essendo un singleton di root, lo stato sopravvive ai cambi di
- * rotta e il passaggio fra viste resta istantaneo. Le mutazioni (genera, upload,
- * revisione, eliminazione) rimpiazzano lo stato con quello autorevole restituito
- * dal backend.
- */
+/** Sorgente unica dello stato applicativo (assistant + co-pilot), condivisa fra tutte le viste. */
 @Injectable({ providedIn: "root" })
 export class MvpStateStore {
   private readonly api = inject(AlittlebyteMVPAPIService);
@@ -32,12 +21,7 @@ export class MvpStateStore {
   private readonly _loading = signal(false);
   private readonly _error = signal<string | null>(null);
 
-  /**
-   * Fetta di stato separata da `_state` per la sezione Metriche filtrata
-   * dell'AI Assistant (RF38-OB): `_state` resta la fotografia non filtrata
-   * che Overview e Co-Pilot condividono, cosi' applicare un filtro qui non
-   * cambia i numeri sotto i loro pannelli.
-   */
+  /** Separata da `_state` (RF38-OB): filtrare qui non deve toccare i numeri di Overview/Co-Pilot. */
   private readonly _filteredAssistantState = signal<MvpState["assistant"] | null>(null);
   private readonly _filteredAssistantLoading = signal(false);
   private readonly _filteredAssistantError = signal<string | null>(null);
@@ -58,27 +42,14 @@ export class MvpStateStore {
   readonly assistantMetrics = computed(() => this._state()?.assistant.metrics ?? []);
   readonly copilotMetrics = computed(() => this._state()?.copilot.metrics ?? []);
 
-  /**
-   * Valore di una metrica per chiave stabile. Le metriche sono conteggi
-   * calcolati dal backend sull'intero tenant: vanno lette da qui e non
-   * ricalcolate sugli elenchi, che sono finestre parziali (history 10,
-   * documents 40) e darebbero numeri sbagliati appena i dati crescono.
-   */
+  /** Le metriche sono conteggi sull'intero tenant: non vanno ricalcolate sugli elenchi, finestre parziali. */
   metric(key: string): number {
     const found = this.metricEntry(key);
 
     return typeof found?.value === "number" ? found.value : 0;
   }
 
-  /**
-   * Metrica completa per chiave, oppure `null` finche' lo stato non e' stato
-   * caricato o se la chiave non esiste.
-   *
-   * Distinto da `metric()`, che collassa l'assenza su `0`: una scheda che
-   * mostra `0` durante il caricamento afferma un dato che non ha ancora, ed e'
-   * esattamente cio' che i KPI della Overview facevano. Serve anche a leggere
-   * `history`, che il conteggio da solo non porta.
-   */
+  /** A differenza di `metric()`, non collassa l'assenza su `0`: una scheda in caricamento non deve mostrare un dato che non ha. */
   metricEntry(key: string): Metric | null {
     return (
       [...this.assistantMetrics(), ...this.copilotMetrics()].find((entry) => entry.key === key) ?? null
@@ -94,14 +65,7 @@ export class MvpStateStore {
     this.reload();
   }
 
-  /**
-   * Ricarica lo stato applicando una sola retry per errori temporanei.
-   *
-   * Ignora una chiamata mentre una richiesta e' gia' in volo (es. un doppio
-   * click su "Riprova"): senza questa guardia partirebbero due `GET /state`
-   * in parallelo, l'ultima risposta vincerebbe comunque ma la richiesta in
-   * piu' sarebbe sprecata — la stessa guardia che `loadOnce()` applica gia'.
-   */
+  /** Ignora una chiamata mentre una richiesta e' gia' in volo (es. doppio click su "Riprova"). */
   reload(): void {
     if (this._loading()) {
       return;
@@ -126,23 +90,9 @@ export class MvpStateStore {
   }
 
   /**
-   * Ricarica solo la fetta AI Assistant della sezione Metriche, filtrata
-   * (RF38-OB), su `_state` separato: non tocca cio' che Overview e Co-Pilot
-   * leggono da `state()`.
-   *
-   * Annulla la richiesta filtrata precedente ancora in volo prima di
-   * avviarne una nuova (stesso schema di `AssistantPageViewModel.reload()`
-   * per lo storico) invece di ignorare la nuova richiesta come faceva prima:
-   * un cambio di filtro mentre la risposta al cambio precedente non e'
-   * ancora arrivata non deve andare perso, altrimenti il pannello resta
-   * fermo su un filtro che i controlli non mostrano piu'.
-   *
-   * Tutto il corpo gira dentro `untracked()`: viene chiamato da un
-   * `effect()` sul componente (l'unico modo per farlo scattare ad ogni
-   * cambio filtro), e una futura lettura di segnale aggiunta qui dentro
-   * senza `untracked()` diventerebbe una dipendenza di quell'effect — la
-   * stessa causa del ciclo di richieste che non si fermava mai, gia' visto
-   * su questo stesso metodo.
+   * Fetta AI Assistant separata da `_state` (RF38-OB): filtrare qui non tocca Overview/Co-Pilot.
+   * Annulla la richiesta precedente ancora in volo invece di ignorare la nuova.
+   * `untracked()`: chiamato da un `effect()`, una lettura di segnale qui fuori diventerebbe una sua dipendenza e ricreerebbe il ciclo infinito gia' visto su questo metodo.
    */
   reloadFilteredAssistantMetrics(filters: AssistantMetricsFilters): void {
     untracked(() => {
@@ -176,10 +126,7 @@ export class MvpStateStore {
     this._state.set(state);
   }
 
-  /**
-   * Inserisce/aggiorna in testa un sotto-documento ricevuto dallo stream SSE,
-   * preservando il resto dello stato (aggiornamento incrementale dell'upload).
-   */
+  /** Inserisce/aggiorna in testa un sotto-documento dallo stream SSE, preservando il resto dello stato. */
   upsertDocument(document: SubDocument): void {
     this._state.update((current) => {
       if (!current) {

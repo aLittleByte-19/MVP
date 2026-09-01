@@ -125,10 +125,9 @@ class TextractOcrAdapter implements OcrGatewayPort
                 $pageBuckets[$page]['lines'][] = $text;
 
                 // La confidenza della singola riga viene conservata, non solo
-                // sommata nella media: e' cio' che permette di attribuire a
-                // ciascun campo estratto la leggibilita' del testo da cui
-                // proviene, invece della leggibilita' media della pagina
-                // (ADR 0013).
+                // sommata nella media: permette di attribuire a ciascun campo
+                // la leggibilita' del testo da cui proviene, invece della
+                // media di pagina (ADR 0013).
                 $pageBuckets[$page]['blocks'][] = [
                     'text' => $text,
                     'confidence' => $confidence,

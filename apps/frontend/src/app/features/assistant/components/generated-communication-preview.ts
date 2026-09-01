@@ -179,9 +179,7 @@ import {
                 <svg lucideX aria-hidden="true"></svg>
                 Annulla
               </button>
-              <!-- Il comando sta fuori dal form: l'attributo form lo lega
-                   comunque al suo invio, e la barra resta una sola invece di
-                   due divise dai metadati della bozza. -->
+              <!-- Fuori dal form: l'attributo form lo lega comunque all'invio. -->
               <button mvpButton type="submit" form="draftForm" [disabled]="isSaving() || form.invalid" [busy]="isSaving()">
                 <svg lucideSave aria-hidden="true"></svg>
                 Salva
@@ -298,16 +296,7 @@ export class GeneratedCommunicationPreviewComponent {
 
   private readonly syncedDraftId = signal<number | null>(null);
 
-  /**
-   * Ultimo contenuto (id, titolo, corpo) con cui il form di modifica e'
-   * stato sincronizzato: distingue un vero cambio di bozza — o un salvataggio
-   * che ne cambia davvero il testo — da un nuovo riferimento con contenuto
-   * identico. `previewDraft()` nel ViewModel ricalcola un oggetto nuovo ad
-   * ogni mutazione dello storico ovunque nella pagina (un preferito su
-   * un'altra voce, un'eliminazione), non solo quando questa bozza cambia
-   * davvero: senza il confronto sul contenuto, una modifica non salvata
-   * sparirebbe non appena l'utente compie un'azione qualsiasi altrove.
-   */
+  /** Ultimo contenuto sincronizzato: distingue un vero cambio bozza da un nuovo riferimento a contenuto identico. */
   private lastSyncedDraft: { id: number | null; title: string; body: string } | null = null;
 
   /** Ultimo id per cui il passo di conferma scarto e' stato chiuso, vedi il commento sull'effect qui sotto. */
@@ -321,12 +310,8 @@ export class GeneratedCommunicationPreviewComponent {
       }
     });
 
-    // Il passo di conferma e' locale alla bozza mostrata: si chiude solo
-    // quando la bozza in anteprima cambia DAVVERO (id diverso, nuova
-    // selezione). Un nuovo riferimento con lo stesso id — prodotto da una
-    // mutazione qualunque altrove nella pagina, stesso motivo dei due
-    // effect qui sotto — non deve chiudere una conferma appena aperta
-    // dall'utente.
+    // Si chiude solo su id diverso: un nuovo riferimento a parita' di id non deve
+    // chiudere una conferma appena aperta.
     effect(() => {
       const draftId = this.draft()?.id ?? null;
 
@@ -359,13 +344,8 @@ export class GeneratedCommunicationPreviewComponent {
       }
     });
 
-    // Quando la bozza mostrata cambia davvero (nuova selezione, un
-    // salvataggio che ne aggiorna il testo, o un aggiornamento che arriva
-    // dallo stream durante una rigenerazione) il form torna in sola lettura
-    // sui valori correnti: una modifica non salvata non deve sopravvivere a
-    // una rigenerazione. Ma un nuovo riferimento con lo STESSO contenuto —
-    // prodotto da una mutazione qualunque altrove nella pagina — non deve
-    // toccare un form che l'utente sta scrivendo in questo momento.
+    // Confronta il contenuto, non il riferimento: un nuovo oggetto a parita' di
+    // contenuto non deve toccare un form che l'utente sta scrivendo.
     effect(() => {
       const currentDraft = this.draft();
       const snapshot = { id: currentDraft?.id ?? null, title: currentDraft?.title ?? "", body: currentDraft?.body ?? "" };

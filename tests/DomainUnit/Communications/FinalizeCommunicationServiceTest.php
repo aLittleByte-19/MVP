@@ -8,10 +8,9 @@ use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
 
 /**
- * Test di dominio puro (nessun bootstrap Laravel/DB). Prima bloccato da
- * now() (facade Date): l'orologio iniettato (Psr\Clock\ClockInterface) lo
- * sblocca, ultimo dei blocchi rimasti dato che il servizio dispatcha gia'
- * eventi invece di chiamare AuditLogger/MetricsRecorder direttamente.
+ * Test di dominio puro (nessun bootstrap Laravel/DB): l'orologio iniettato
+ * (Psr\Clock\ClockInterface) rende il servizio testabile senza la facade
+ * Date.
  */
 test('finalize completes the workflow with the injected clock and dispatches CommunicationWorkflowCompleted', function () {
     $repository = new InMemoryCommunicationRepository;

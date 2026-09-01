@@ -22,30 +22,10 @@ import type {
 import { AssistantService, type CommunicationFilters } from "./data/assistant.service";
 
 /**
- * ViewModel (Presentation Model, Fowler) dell'AI Assistant: non tocca il
- * DOM né l'infrastruttura di rendering di Angular (niente `@Component`,
- * `inject()`, decoratori, injection context, `document`/`window` diretti)
- * — le dipendenze arrivano dal costruttore, non da `inject()`, quindi la
- * classe è istanziabile con `new` e testabile senza `TestBed`. Usa
- * `signal`/`computed` come primitiva reattiva di piattaforma (analogo a
- * `INotifyPropertyChanged` in WPF), non come parte del motore di
- * rendering — la distinzione conta: è quello che rende la classe
- * testabile senza avviare Angular, non "zero import da `@angular/core`".
- *
- * `AssistantPage` (la View) resta l'unico punto accoppiato ad Angular e al
- * DOM: si procura le dipendenze con `inject()` e costruisce questa istanza.
- * Il ViewModel non chiama mai la View: uno scroll richiesto scrive
- * `pendingScrollTarget`, un `effect()` nella View lo legge e chiama
- * `scrollToElement` (vedi `shared/util/scroll.ts`), poi lo azzera — lo
- * stesso schema di comunicazione unidirezionale (segnale osservato, mai
- * un riferimento alla View) di ogni altro stato esposto qui. Il template
- * legge solo `vm.*` — anche `error`/`loading`, pass-through sullo store
- * condiviso, non `store.*` direttamente.
- *
- * `effect()`/`takeUntilDestroyed()` restano nella View perché richiedono un
- * injection context che questa classe non ha per costruzione, ma l'effect si
- * limita a leggere i segnali sorgente e chiamare `reload()`: la chiamata di
- * ricerca vera e propria vive qui, come per ogni altra azione del VM.
+ * Presentation Model dell'AI Assistant: nessun `@Component`/`inject()`, solo
+ * `signal`/`computed` — istanziabile con `new`, testabile senza `TestBed`.
+ * Non chiama mai la View: uno scroll richiesto si scrive su
+ * `pendingScrollTarget` e la View lo consuma da un suo `effect()`.
  */
 export class AssistantPageViewModel {
   readonly phase: WritableSignal<CommunicationGenerationPhase | "idle"> = signal("idle");
@@ -101,13 +81,7 @@ export class AssistantPageViewModel {
   });
   readonly togglingFavoriteId: WritableSignal<number | null> = signal(null);
 
-  /**
-   * Uno scroll richiesto dal ViewModel: non un comando alla View, un fatto
-   * osservabile. La View lo consuma nel proprio `effect()` e lo azzera
-   * (`.set(null)`) subito dopo averlo eseguito — se non azzerasse, la stessa
-   * destinazione richiesta due volte di fila non ritriggerebbe l'`effect()`,
-   * che riscontra solo cambi di valore.
-   */
+  /** Scroll richiesto dalla View; azzerato dopo l'uso perché un effect() reagisce solo ai cambi di valore. */
   readonly pendingScrollTarget: WritableSignal<string | null> = signal(null);
 
   readonly previewDraft: Signal<GeneratedDraft | null> = computed(() => {
@@ -133,21 +107,12 @@ export class AssistantPageViewModel {
   readonly metricsFilters: WritableSignal<AssistantMetricsFilters> = signal({});
   readonly hasActiveMetricsFilters: Signal<boolean> = computed(() => Object.keys(this.metricsFilters()).length > 0);
 
-  /**
-   * Metriche descrittive del modulo, ricalcolate secondo `metricsFilters`.
-   * `assistant.drafts` è escluso: le bozze da valutare sono una priorità e
-   * vivono nella Overview, qui sono la parte "in bozza" della ripartizione
-   * sottostante.
-   */
+  /** `assistant.drafts` escluso: vive come priorità nella Overview, qui è solo la parte "in bozza" sotto. */
   readonly metrics = computed(() =>
     (this.store.filteredAssistantState()?.metrics ?? []).filter((metric) => metric.key !== "assistant.drafts")
   );
 
-  /**
-   * Forma e ingombro di ciascuna scheda: tutte larghe a coppie. Quattro
-   * schede da due celle fanno otto, multiplo di quattro richiesto dalla
-   * griglia (vedi metrics-panel.css) perché non restino righe spaiate.
-   */
+  /** Quattro schede da 2 celle: multiplo di 4 richiesto dalla griglia (metrics-panel.css), niente righe spaiate. */
   readonly metricsPresentation = computed<Record<string, MetricPresentation>>(() => ({
     "assistant.total": { kind: "trend", span: 2 },
     "assistant.prompt_configurations": { kind: "trend", span: 2 },
@@ -160,25 +125,15 @@ export class AssistantPageViewModel {
     "assistant.rating_average": { kind: "stars", span: 2, max: 5 }
   }));
 
-  /**
-   * UC-27.3: gli ultimi feedback con voto e commento testuale, ricalcolati
-   * secondo `metricsFilters` come il resto della sezione.
-   */
+  /** UC-27.3: ultimi feedback con voto e commento, filtrati come il resto della sezione. */
   readonly recentFeedback: Signal<Communication[]> = computed(
     () => this.store.filteredAssistantState()?.recentFeedback ?? []
   );
 
-  /**
-   * RF34-OB: export del report riepilogativo del pannello metriche in PDF.
-   * Percorso relativo: frontend e API sono stesso-origine dietro
-   * Traefik/edge-cdn, come per `previewUrl`/`exportUrl` delle comunicazioni.
-   */
+  /** RF34-OB: export PDF del report metriche. Percorso relativo, stesso-origine dietro Traefik/edge-cdn. */
   readonly metricsReportExportUrl = "/api/v1/assistant/metrics/export";
 
-  /**
-   * Composizione dello stato delle bozze: è la decisione presa su ciascuna,
-   * un'informazione che oggi non compare da nessuna parte nell'interfaccia.
-   */
+  /** Esito delle bozze: in bozza vs. decise (nessun'altra vista lo mostra oggi). */
   readonly draftComposition = computed<CompositionSlice[]>(() => {
     const metrics = this.store.filteredAssistantState()?.metrics ?? [];
     const valueOf = (key: string): number => {
@@ -218,12 +173,7 @@ export class AssistantPageViewModel {
     this.store.reloadFilteredAssistantMetrics(this.metricsFilters());
   }
 
-  /**
-   * Rilettura dello storico comunicazioni: stessa forma di generate/discard/...,
-   * non solo un setter. Annulla la ricerca precedente ancora in volo prima di
-   * avviarne una nuova, cosi' una risposta arrivata in ritardo non sovrascrive
-   * mai un risultato piu' recente.
-   */
+  /** Annulla la ricerca precedente ancora in volo, cosi' una risposta tardiva non sovrascrive quella nuova. */
   reload(): void {
     this.searchSubscription?.unsubscribe();
     this.searchSubscription = this.assistant.searchCommunications(this.activeFilters()).subscribe({
@@ -232,24 +182,13 @@ export class AssistantPageViewModel {
     });
   }
 
-  /**
-   * Ricarica lo stato condiviso e la sezione Metriche filtrata, che è ciò
-   * che il pulsante "Riprova" dell'errore di pagina deve rifare. Distinto da
-   * `reload()`, che rilegge lo storico comunicazioni: confonderli
-   * lascerebbe lo stato globale in errore pur avendo ricaricato l'elenco.
-   */
+  /** Per il pulsante "Riprova": ricarica stato condiviso + metriche filtrate, non lo storico (vedi reload()). */
   reloadState(): void {
     this.store.reload();
     this.refreshFilteredMetrics();
   }
 
-  /**
-   * Chiamato dalla View alla distruzione del componente (via `DestroyRef`):
-   * annulla solo la ricerca in lettura, non le azioni di scrittura (generate,
-   * discard, ...) — quelle devono completare lato server anche se l'utente
-   * ha gia' navigato altrove, esattamente come si aspetta di vederle
-   * riflesse al ritorno sulla pagina.
-   */
+  /** Annulla solo la ricerca in lettura; le scritture (generate, discard...) completano anche a pagina lasciata. */
   destroy(): void {
     this.searchSubscription?.unsubscribe();
   }
@@ -288,9 +227,7 @@ export class AssistantPageViewModel {
 
     this.phase.set("queued");
     this.status.set("Rigenerazione in corso.");
-    // Stesso id, non una nuova bozza: manteniamo la visuale sull'ultima
-    // versione (latestDraft) invece che sulla voce di storico selezionata,
-    // cosi' il testo e la copertina si aggiornano per gradi come in generate().
+    // Stesso id: resta su latestDraft cosi' testo/copertina si aggiornano per gradi come in generate().
     this.selectedDraftId.set(null);
     this.latestDraft.set(draft);
 

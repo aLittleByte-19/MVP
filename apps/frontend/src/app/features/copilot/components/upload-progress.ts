@@ -5,13 +5,7 @@ import {
 } from "../../../shared/components/stage-progress/stage-progress";
 import type { DocumentUploadPhase } from "../data/document-workflow.service";
 
-/**
- * Tappe della pipeline documentale, nell'ordine in cui l'elaborazione le
- * attraversa. Sono gli stati reali emessi dallo stream SSE (vedi
- * DocumentWorkflowService), non una scala inventata: la barra precedente
- * mappava le fasi su percentuali fisse (20, 40, 60, 85, 100) che non
- * misuravano alcun avanzamento effettivo.
- */
+/** Tappe della pipeline documentale, nell'ordine in cui lo stream SSE le emette. */
 const STAGES: readonly ProgressStage[] = [
   { id: "uploading", label: "Caricamento" },
   { id: "queued", label: "In coda" },
@@ -43,11 +37,7 @@ export class UploadProgressComponent {
 
   protected readonly stages = STAGES;
 
-  /**
-   * `still_running` e `failed` non sono tappe: la prima dice che la pipeline è
-   * ferma sull'estrazione da più tempo del previsto, la seconda che si è
-   * interrotta. Entrambe restano sulla tappa raggiunta.
-   */
+  /** `still_running` e `failed` non sono tappe: restano sulla tappa raggiunta (estrazione). */
   protected readonly currentId = computed<string | null>(() => {
     const phase = this.phase();
 

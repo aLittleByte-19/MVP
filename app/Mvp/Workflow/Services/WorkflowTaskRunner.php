@@ -97,11 +97,8 @@ class WorkflowTaskRunner
         }
 
         try {
-            // Ri-risolve il subject invece di un semplice refresh: tra il
-            // claim e l'esecuzione puo' essere passato tempo (worker
-            // riconquistato dopo uno stale claim), e il subject serve
-            // comunque aggiornato. Stesso numero di letture DB di prima,
-            // solo attraverso il repository di dominio invece di Eloquent.
+            // Ri-risolve invece di un refresh: tra il claim e l'esecuzione puo'
+            // essere passato tempo (worker riconquistato dopo uno stale claim).
             $subject = $handler->resolveSubject($message);
             $result = $handler->execute($taskType, $subject, $message);
             $status = ($result['skipped'] ?? false) ? 'skipped' : 'succeeded';

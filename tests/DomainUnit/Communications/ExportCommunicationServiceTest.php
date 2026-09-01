@@ -6,9 +6,7 @@ use Tests\DomainUnit\Communications\Fakes\FakeCommunicationPdfRenderer;
 use Tests\DomainUnit\Communications\Fakes\InMemoryCommunicationRepository;
 
 /**
- * Test di dominio puro (nessun bootstrap Laravel/DB/AWS). ExportCommunicationService
- * non dipende da AuditLogger/MetricsRecorder: e' gia' testabile cosi' com'e',
- * senza alcuna modifica di produzione.
+ * Test di dominio puro (nessun bootstrap Laravel/DB/AWS).
  */
 test('fingerprint and render refuse a communication not ready for export', function () {
     $repository = new InMemoryCommunicationRepository;

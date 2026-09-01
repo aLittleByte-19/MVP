@@ -6,11 +6,9 @@ namespace App\Mvp\Documents\Domain\Support;
  * Il messaggio precompilato che accompagna un sotto-documento: destinatario,
  * oggetto e corpo calcolati dai dati estratti (UC-51).
  *
- * Logica pura, senza dipendenze: la stessa bozza serve a chi la mostra
- * (`MvpStateService`, per l'anteprima nel pannello) e a chi la stampa
- * (`SendMessageService`, per il PDF). Erano due copie separate delle stesse
- * regole, e correggere l'oggetto in una sola avrebbe fatto promettere
- * all'anteprima un documento diverso da quello consegnato.
+ * Logica pura, senza dipendenze: la stessa bozza serve sia all'anteprima
+ * (`MvpStateService`) sia alla stampa (`SendMessageService`), cosi' le due
+ * non rischiano di promettere un oggetto diverso da quello poi consegnato.
  */
 final class SendMessageDraft
 {
@@ -26,15 +24,11 @@ final class SendMessageDraft
     }
 
     /**
-     * L'oggetto dice che cosa si riceve e a quando si riferisce.
-     *
-     * Diceva «Invio documento, cedolino paga»: nominava l'azione del mittente,
-     * che nella MVP non avviene (si scarica un PDF, non si spedisce nulla), e
-     * ripeteva su ogni documento della stessa persona una riga identica, che
-     * fra i propri file non si distingue da quella del mese prima. Il periodo
-     * di riferimento e' quello dichiarato al caricamento, autoritativo per
-     * UC-32 e per un cedolino il dato che lo identifica; in sua assenza vale la
-     * data del documento, e poi l'azienda.
+     * L'oggetto dice che cosa si riceve e a quando si riferisce, cosi' due
+     * documenti della stessa persona non si distinguono con una riga
+     * identica fra i propri file. Il periodo di riferimento e' quello
+     * dichiarato al caricamento (autoritativo per UC-32); in sua assenza
+     * vale la data del documento, poi l'azienda.
      */
     public static function subject(
         ?string $documentType,

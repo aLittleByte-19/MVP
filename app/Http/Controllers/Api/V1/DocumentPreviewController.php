@@ -63,16 +63,9 @@ class DocumentPreviewController
     }
 
     /**
-     * A differenza di `str_replace('"', ...)` (rimuoveva solo le virgolette),
-     * toglie anche i caratteri di controllo (compresi CR/LF) dal nome file
-     * prima di scriverlo nell'header `Content-Disposition` — la stessa
-     * classe di caratteri che renderebbe un header manipolabile. Non usa
-     * `Str::slug()` come DompdfCommunicationPdfRenderer/SendMessageService:
-     * quei due costruiscono un nome sintetico da un titolo, qui il nome
-     * arriva dal file caricato dall'utente (puo' avere spazi/underscore
-     * legittimi, vedi UploadDocumentRequest) e uno slug lo snaturerebbe
-     * senza un guadagno di sicurezza — CR/LF e virgolette sono gia' gli
-     * unici caratteri rilevanti per un header HTTP.
+     * Toglie virgolette e caratteri di controllo (CR/LF inclusi) prima di
+     * scrivere il nome nell'header `Content-Disposition`, senza `Str::slug()`:
+     * il nome arriva dal file caricato dall'utente e puo' avere spazi legittimi.
      */
     private function sanitizeFilename(string $filename): string
     {

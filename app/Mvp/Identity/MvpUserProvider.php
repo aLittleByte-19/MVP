@@ -9,14 +9,9 @@ use Illuminate\Contracts\Auth\UserProvider;
  * `MvpUser` non ha un archivio persistente da cui essere recuperato: ogni
  * richiesta lo ricostruisce da zero da config (`local`) o da header fidati
  * (`trusted_headers`), vedi `ResolveMvpIdentity`, che lo imposta direttamente
- * con `Auth::setUser()` — mai tramite risoluzione del provider. Prima di
- * questo provider, `config/auth.php` dichiarava `driver: eloquent` con
- * `MvpUser` come model: `MvpUser` non estende `Illuminate\Database\Eloquent\Model`,
- * quindi qualunque chiamata che avesse davvero risolto quel provider
- * (`Auth::check()` prima che il middleware giri, il password broker) sarebbe
- * fallita con un errore fatale poco leggibile (metodo Eloquent inesistente).
- * Questo provider rende esplicito che quella risoluzione non e' supportata,
- * con un errore chiaro invece di uno criptico.
+ * con `Auth::setUser()` — mai tramite risoluzione del provider. Questo
+ * provider rende esplicito che quella risoluzione non e' supportata, con un
+ * errore chiaro invece di un errore fatale Eloquent poco leggibile.
  */
 class MvpUserProvider implements UserProvider
 {

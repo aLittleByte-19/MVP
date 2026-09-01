@@ -9,21 +9,7 @@ import { StatusDotComponent } from "../../../shared/components/status-dot/status
 import { formatConfidence, formatDateForDisplay, formatFallback } from "../../../shared/util/formatters";
 import { getReviewStatusShortLabel, getReviewStatusTone } from "../../../shared/util/status";
 
-/**
- * Storico documenti analizzati.
- *
- * Le intestazioni lunghe portano un punto di sillabazione (`&shy;`): sono
- * parole sole, e in una colonna stretta il browser le spezzerebbe dove capita
- * — "CONFIDENZ/A" — senza segnare la rottura. Cosi' invece vanno a capo dove
- * si dividerebbero leggendo, con il trattino.
- *
- * Le colonne portano cio' che riguarda l'analisi — tipologia, quando e' stato
- * caricato, quanto e' affidabile l'estrazione, a che punto e' la revisione, se
- * e' stato scaricato — mentre il documento di partenza (destinatario, azienda,
- * nome del file, data del documento) sta tutto nella prima cella. Erano nove
- * colonne alla pari, e la confidenza ne aveva il 6%: la riga si leggeva come
- * un elenco di campi, non come un documento in lavorazione.
- */
+/** Storico documenti analizzati. Le intestazioni lunghe usano `&shy;` per andare a capo col trattino, non a caso. */
 @Component({
   selector: "mvp-document-list",
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -11,11 +11,8 @@ use App\Mvp\Support\Identity\Actor;
 
 /**
  * Porta primaria: mutazioni dirette sul contenuto/stato di una bozza gia'
- * esistente (preferiti, testo, storico). Raggruppate in una porta perche'
- * sono tutte transizioni semplici sullo stesso aggregato, invocate dallo
- * stesso adapter HTTP (CommunicationController) — distinte da generazione
- * (crea l'aggregato), cancellazione (distruttiva, con cleanup storage) ed
- * export (nessuna mutazione).
+ * esistente (preferiti, testo, storico). Distinta da generazione (crea
+ * l'aggregato), cancellazione (distruttiva) ed export (nessuna mutazione).
  */
 interface CommunicationDraftUseCase
 {

@@ -3,15 +3,7 @@ import { ChangeDetectionStrategy, Component, input, output } from "@angular/core
 /** Gravita' della segnalazione: cambia glifo e colore, mai il solo colore. */
 export type AttentionTone = "watch" | "alert";
 
-/**
- * Riga che segnala qualcosa su cui agire, con l'azione che la risolve.
- *
- * Esiste perche' una scheda metrica dice quanto, non cosa fare: "23 da
- * verificare" e' un numero, "23 documenti attendono revisione, il piu' vecchio
- * da 2 giorni" con un pulsante che porta alla coda e' un compito. Va mostrata
- * solo quando c'e' davvero qualcosa da fare, altrimenti diventa arredamento e
- * si smette di leggerla.
- */
+/** Riga che segnala qualcosa su cui agire, con l'azione che la risolve. Va mostrata solo quando c'e' davvero un compito, altrimenti si smette di leggerla. */
 @Component({
   selector: "mvp-attention-note",
   changeDetection: ChangeDetectionStrategy.OnPush,

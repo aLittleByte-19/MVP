@@ -19,21 +19,11 @@ import { AssistantService } from "./data/assistant.service";
 import { AssistantPageViewModel } from "./assistant-page.view-model";
 
 /**
- * View dell'AI Assistant: nessuna logica di business qui, solo collante
- * col template e procacciamento delle dipendenze via `inject()` per
- * costruire {@link AssistantPageViewModel}. Il template legge solo `vm.*`,
- * mai `store.*` direttamente. Le uniche eccezioni sono gli `effect()`/
- * `takeUntilDestroyed()` nel costruttore, che richiedono un injection
- * context che il ViewModel (Presentation Model) non ha per costruzione:
- * uno legge i segnali sorgente e chiama `vm.reload()`, che possiede la
- * vera chiamata di ricerca sullo storico; un altro legge
- * `vm.metricsFilters()` e chiama `vm.refreshFilteredMetrics()` per la
- * sezione Metriche (RF38-OB..RF41-OB, filtro separato da quello dello
- * storico); il terzo legge `vm.pendingScrollTarget()` e, quando non è
- * nullo, esegue lo scroll con `scrollToElement` (l'unica operazione DOM
- * richiesta dal ViewModel, che resta un'unità separata in
- * `shared/util/scroll.ts`) e azzera il segnale — il ViewModel *chiede* lo
- * scroll, non lo esegue né chiama mai la View direttamente.
+ * View dell'AI Assistant: solo collante col template, costruisce
+ * {@link AssistantPageViewModel}. Il template legge solo `vm.*`. Gli
+ * `effect()`/`takeUntilDestroyed()` nel costruttore sono l'eccezione MVVM
+ * documentata: il ViewModel non ha injection context, quindi leggono i
+ * segnali sorgente e delegano la logica vera al ViewModel.
  */
 @Component({
   selector: "mvp-assistant-page",
@@ -296,30 +286,18 @@ export class AssistantPage {
       )
       .subscribe((value) => this.vm.setMetricsFilters(value));
 
-    // Una sola sorgente per lo storico: i filtri e ogni mutazione dello stato
-    // (generazione, scarto, eliminazione, valutazione) rileggono dal backend.
-    // Eccezione documentata: l'effect() richiede un injection context che
-    // AssistantPageViewModel (classe pura) non ha per costruzione — legge
-    // solo i segnali sorgente, la chiamata di ricerca vera vive in vm.reload().
     effect(() => {
       this.store.history();
       this.vm.activeFilters();
       this.vm.reload();
     });
 
-    // Terza eccezione documentata, stessa forma delle altre due: legge
-    // `vm.metricsFilters()` e chiama `vm.refreshFilteredMetrics()`, che
-    // possiede la vera chiamata (in `MvpStateStore.reloadFilteredAssistantMetrics()`,
-    // scritta con `untracked()` apposta perché chiamata da qui non generi un
-    // ciclo di richieste).
     effect(() => {
       this.vm.metricsFilters();
       this.vm.refreshFilteredMetrics();
     });
 
-    // Altra eccezione documentata: il ViewModel non chiama mai la View,
-    // quindi lo scroll richiesto passa da un segnale osservato, non da un
-    // riferimento alla View.
+    // Il ViewModel non chiama mai la View: lo scroll richiesto passa da un segnale osservato.
     effect(() => {
       const target = this.vm.pendingScrollTarget();
 

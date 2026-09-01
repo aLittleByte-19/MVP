@@ -16,22 +16,15 @@ use App\Mvp\Documents\Domain\ValueObjects\SubDocumentPage;
 /**
  * Porta secondaria verso la persistenza dell'aggregato documentale
  * (OriginalDocument + SubDocument + ExtractedData). Nessun riferimento a
- * Eloquent: i metodi di lettura restituiscono value object di dominio
- * ({@see SubDocumentPage}) o entità che governano le proprie transizioni di
- * stato ({@see OriginalDocument}, {@see SubDocument} — Progetto A, modello
- * ricco, vedi ADR 0010); le scritture prendono value object di dominio
- * ({@see NewOriginalDocument}, {@see OriginalDocumentChanges},
- * {@see NewSubDocument}, {@see SubDocumentChanges},
- * {@see ExtractedDataChanges}) invece di array associativi con chiavi a
- * stringa: il nome della colonna DB resta un dettaglio di quelle classi
- * (Domain), non qualcosa che ogni caso d'uso deve scrivere a mano.
+ * Eloquent: le letture restituiscono entità che governano le proprie
+ * transizioni di stato ({@see OriginalDocument}, {@see SubDocument} —
+ * modello ricco, ADR 0010); le scritture prendono value object di dominio
+ * invece di array associativi, cosi' il nome della colonna DB resta un
+ * dettaglio di quelle classi.
  *
- * `paginateSubDocuments` restituisce solo identificativi e metadati di
- * paginazione: e' una scelta di perimetro esplicita (vedi ADR 0010) — la
- * ricerca/filtro e' la decisione che deve passare dalla porta, la forma di
- * presentazione HTTP (che richiede le relazioni Eloquent caricate per
- * `MvpStateService`, rimasta fuori perimetro) resta responsabilita'
- * dell'adapter primario, che ri-carica gli id restituiti qui.
+ * `paginateSubDocuments` restituisce solo id e metadati di paginazione: la
+ * presentazione HTTP (relazioni Eloquent per `MvpStateService`) resta fuori
+ * perimetro e ricarica gli id qui restituiti (ADR 0010).
  */
 interface DocumentRepository
 {
@@ -40,22 +33,19 @@ interface DocumentRepository
     public function findOriginalDocument(int $id): OriginalDocument;
 
     /**
-     * Come {@see self::findOriginalDocument()}, ma con un lock pessimistico
-     * sulla riga: serve a rendere atomico un controllo "e' gia' in corso?"
-     * seguito da una scrittura (es. l'avvio del workflow, StartDocumentWorkflowService),
-     * cosi' due richieste quasi simultanee non superino entrambe il controllo
-     * e avviino due esecuzioni per lo stesso documento.
+     * Come {@see self::findOriginalDocument()}, ma con lock pessimistico sulla
+     * riga: rende atomico il controllo "e' gia' in corso?" seguito da una
+     * scrittura (es. l'avvio del workflow), cosi' due richieste quasi
+     * simultanee non superino entrambe il controllo.
      */
     public function findOriginalDocumentForUpdate(int $id): OriginalDocument;
 
     public function updateOriginalDocument(int $id, OriginalDocumentChanges $changes): void;
 
     /**
-     * Persiste le modifiche accumulate sull'entità (vedi
-     * {@see OriginalDocument::pendingChanges()}). Coesiste con
-     * updateOriginalDocument()/OriginalDocumentChanges per le scritture che
-     * non passano da una transizione governata (es. i campi OCR, scritti da
-     * RunOcrService — vedi ADR 0010).
+     * Persiste le modifiche accumulate sull'entità ({@see OriginalDocument::pendingChanges()}).
+     * Coesiste con updateOriginalDocument() per le scritture che non passano
+     * da una transizione governata (es. i campi OCR, scritti da RunOcrService).
      */
     public function saveOriginalDocument(OriginalDocument $document): void;
 
@@ -66,11 +56,9 @@ interface DocumentRepository
     public function findSubDocument(int $id): SubDocument;
 
     /**
-     * Persiste le modifiche accumulate sull'entità (vedi
-     * {@see SubDocument::pendingChanges()}). Coesiste con
-     * updateSubDocument()/SubDocumentChanges per le scritture che non
-     * passano dall'entità (es. gli override di invio, gestiti da
-     * SendMessageService tramite SendMessageContext — vedi ADR 0010).
+     * Persiste le modifiche accumulate sull'entità ({@see SubDocument::pendingChanges()}).
+     * Coesiste con updateSubDocument() per le scritture che non passano
+     * dall'entità (es. gli override di invio via SendMessageContext).
      */
     public function saveSubDocument(SubDocument $subDocument): void;
 

@@ -21,13 +21,9 @@ use App\Mvp\Support\Persistence\TransactionManagerPort;
 use Psr\Log\LoggerInterface;
 
 /**
- * Applicazione: estrae i campi di un sotto-documento (destinatario) gia'
- * creato da uno split, un destinatario alla volta. Separata da
- * ProcessDocumentService (che orchestra split + Fpdi e chiama questa porta
- * per ciascun destinatario appena creato) — stessa logica di
- * DocumentProcessingService::extractAndSaveFields() prima del refactor
- * esagonale, ora isolata dalla manipolazione PDF che la rendeva
- * testabile solo insieme a quest'ultima (vedi ADR 0010).
+ * Estrae i campi di un sotto-documento (destinatario) gia' creato da uno
+ * split, un destinatario alla volta. Separata da ProcessDocumentService
+ * (split + Fpdi) per restare testabile senza manipolazione PDF (ADR 0010).
  */
 class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
 {
@@ -64,12 +60,10 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
         private readonly OcrRangeReader $ocrRange,
         private readonly TransactionManagerPort $tx,
         private readonly int $confidenceThreshold = 80,
-        // Il codice fiscale identifica la persona: un carattere letto male
-        // assegna il documento a un'altra, quindi ha una soglia piu' alta di
-        // quella generale. Non e' pero' il «mapping CF >= 99%» del Capitolato:
-        // quello e' un obiettivo di accuratezza misurato sulla popolazione, e
-        // portato a soglia per documento renderebbe irraggiungibile la
-        // validazione automatica — Textract legge un codice nitido a 97,7.
+        // Un carattere letto male nel codice fiscale assegna il documento a
+        // un'altra persona, quindi la soglia e' piu' alta della norma. Non e'
+        // il «CF >= 99%» del Capitolato (media di popolazione): per documento
+        // sarebbe irraggiungibile — Textract legge un codice nitido a 97,7.
         private readonly int $fiscalCodeConfidenceThreshold = 95,
     ) {}
 
@@ -176,18 +170,11 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
     }
 
     /**
-     * Punteggio del sotto-documento: la confidenza del suo campo chiave piu'
-     * debole.
-     *
-     * Il minimo e non la media, perche' un documento e' affidabile quanto il
-     * dato meno affidabile fra quelli che lo identificano: se il cognome del
-     * destinatario e' illeggibile non conta che l'azienda sia nitida, il
-     * documento rischia comunque di finire alla persona sbagliata.
-     *
-     * Un campo chiave assente vale zero. Un campo presente ma non rintracciabile
-     * fra le righe ricade sulla media di pagina: e' il caso della data quando il
-     * foglio la scrive in una forma che non riconosciamo, e in mancanza di
-     * meglio la leggibilita' complessiva resta la stima piu' onesta.
+     * Punteggio del sotto-documento: il minimo (non la media) dei suoi campi
+     * chiave, perche' il documento e' affidabile quanto il dato meno leggibile
+     * fra quelli che lo identificano. Campo assente = zero; campo presente ma
+     * non rintracciabile fra le righe OCR ricade sulla confidenza media di
+     * pagina.
      *
      * @param  array<string, mixed>  $aiFields
      * @param  array<string, float|null>  $fieldConfidences
@@ -267,12 +254,10 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
     }
 
     /**
-     * Esito della revisione: sopra soglia si valida da solo, salvo il codice
-     * fiscale, che ha una soglia propria e piu' alta.
-     *
-     * La soglia dedicata si applica solo quando un codice fiscale c'e' ed e'
-     * rintracciabile: un documento che non lo porta non deve essere penalizzato
-     * per un dato che non gli compete.
+     * Esito della revisione: sopra soglia si auto-valida, salvo il codice
+     * fiscale (soglia propria piu' alta) — si applica solo se il codice e'
+     * presente e rintracciabile, per non penalizzare i documenti che non lo
+     * portano.
      *
      * @param  array<string, float|null>  $fieldConfidences
      */
@@ -334,15 +319,11 @@ class ExtractSubDocumentFieldsService implements ExtractSubDocumentFieldsUseCase
     }
 
     /**
-     * Codice fiscale, email e matricola arrivano dal modello come qualunque
-     * altro campo, ma sono identificativi: un valore dalla forma sbagliata non
-     * e' un'estrazione imprecisa, e' un dato falso che l'operatore non ha modo
-     * di riconoscere come tale. Chi non supera il proprio controllo formale
-     * torna quindi a null — il campo resta vuoto e compilabile a mano, che e'
-     * il comportamento che aveva prima.
-     *
-     * La matricola non ha una forma dichiarata: varia da azienda ad azienda,
-     * quindi passa cosi' com'e'.
+     * Codice fiscale ed email sono identificativi: una forma sbagliata non e'
+     * un'estrazione imprecisa ma un dato falso che l'operatore non saprebbe
+     * riconoscere, quindi chi fallisce la validazione torna a null (campo
+     * vuoto, compilabile a mano). La matricola non ha una forma dichiarata e
+     * varia da azienda ad azienda, quindi passa cosi' com'e'.
      *
      * @param  array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, recipient_email: ?string, fiscal_code: ?string, employee_id: ?string, confidence_score: ?int}  $fields
      * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, recipient_email: ?string, fiscal_code: ?string, employee_id: ?string, confidence_score: ?int}

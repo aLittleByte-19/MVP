@@ -23,13 +23,7 @@ export function getReviewStatusTone(reviewStatus?: string, error?: string | null
   return "neutral";
 }
 
-/**
- * Etichetta dello stato di revisione nella forma breve, per la colonna di una
- * tabella. Quella del backend e' una frase — "Validato automaticamente" — che
- * in una colonna larga un ottavo di schermo va a capo in mezzo alla parola;
- * sotto l'intestazione "Validazione" la sola qualificazione dice gia' tutto.
- * La forma estesa resta dov'e' leggibile per intero, nell'ispettore.
- */
+/** Forma breve per una colonna stretta di tabella: la frase completa del backend andrebbe a capo. La forma estesa resta nell'ispettore. */
 export function getReviewStatusShortLabel(reviewStatus: string | undefined, fallback: string): string {
   switch (reviewStatus) {
     case "auto_validated":

@@ -126,15 +126,7 @@ export class CommunicationGeneratorPanelComponent {
   protected readonly isConfiguringName = signal(false);
   protected readonly configNameControl = new FormControl("", { nonNullable: true });
 
-  /**
-   * Numero di configurazioni all'ultimo giro dell'effect qui sotto: distingue
-   * un salvataggio riuscito (l'elenco si allunga) da un nuovo riferimento con
-   * lo stesso conteggio. `promptConfigurations` e' un pass-through dello
-   * stato condiviso, che il backend rimpiazza per intero ad ogni mutazione
-   * della pagina (un voto, un preferito, un'eliminazione altrove): senza
-   * questo confronto, digitare un nome qui e compiere una qualsiasi di quelle
-   * azioni cancellerebbe il nome appena scritto.
-   */
+  /** Distingue un salvataggio riuscito (elenco allungato) da un nuovo riferimento a parita' di conteggio. */
   private lastPromptConfigurationCount: number | null = null;
   protected readonly form = new FormGroup({
     prompt: new FormControl(
@@ -146,8 +138,7 @@ export class CommunicationGeneratorPanelComponent {
   });
 
   constructor() {
-    // Riuso di una configurazione salvata (UC-19): il genitore spinge i
-    // valori da fuori, qui li applichiamo al form.
+    // Riuso di una configurazione salvata (UC-19): il genitore spinge i valori da fuori.
     effect(() => {
       const values = this.prefill();
 
@@ -156,13 +147,8 @@ export class CommunicationGeneratorPanelComponent {
       }
     });
 
-    // Il salvataggio (UC-19) e' confermato dal genitore tramite lo stato
-    // aggiornato: quando l'elenco SI ALLUNGA (nuova configurazione salvata)
-    // il modulo del nome si richiude da solo. In caso di errore l'elenco non
-    // cambia, quindi il modulo resta aperto con il messaggio visibile. Un
-    // nuovo riferimento a parita' di conteggio (una mutazione qualsiasi
-    // altrove nella pagina) non deve richiuderlo, altrimenti un nome ancora
-    // in scrittura sparirebbe senza che l'utente abbia salvato nulla.
+    // Chiude il modulo nome solo se l'elenco si e' allungato (salvataggio riuscito, UC-19);
+    // un errore o una mutazione altrove nella pagina lo lascia aperto.
     effect(() => {
       const count = this.promptConfigurations().length;
       const grew = this.lastPromptConfigurationCount !== null && count > this.lastPromptConfigurationCount;
@@ -183,9 +169,7 @@ export class CommunicationGeneratorPanelComponent {
       return;
     }
 
-    // Avviare una nuova generazione chiude un eventuale salvataggio
-    // configurazione lasciato a meta': non ha senso restasse aperto sopra
-    // una bozza che nel frattempo cambia.
+    // Una nuova generazione chiude un salvataggio configurazione lasciato a meta'.
     this.isConfiguringName.set(false);
     this.configNameControl.reset("");
     this.generate.emit(this.form.getRawValue());

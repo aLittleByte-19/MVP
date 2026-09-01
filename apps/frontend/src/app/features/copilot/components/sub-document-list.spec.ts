@@ -130,9 +130,6 @@ describe("SubDocumentListComponent", () => {
   });
 
   it("annulla le modifiche e ripristina entrambi i form, senza chiudere il messaggio", () => {
-    // Il pannello del messaggio resta aperto: ogni salvataggio ripassa di qui
-    // con la scheda aggiornata, e chiuderlo lo faceva sparire sotto le mani di
-    // chi aveva appena confermato il testo.
     const document = subDocument();
     const { component } = render(document);
     component.isEditing.set(true);
@@ -162,11 +159,6 @@ describe("SubDocumentListComponent", () => {
   });
 
   it("non perde una modifica in corso quando il documento arriva con un nuovo riferimento ma lo stesso id", () => {
-    // `documentItem` e' un computed che il backend ricrea ad ogni fetch: una
-    // mutazione qualunque altrove nella pagina (un altro documento
-    // revisionato) produce un nuovo oggetto anche per QUESTO documento, non
-    // un vero cambio di selezione. Prima della correzione questo azzerava le
-    // modifiche non salvate.
     const document = subDocument();
     const { component, fixture } = render(document);
     component.isEditing.set(true);
@@ -386,9 +378,6 @@ describe("SubDocumentListComponent", () => {
   });
 
   it("non lascia preparare il messaggio finche' una persona non ha confermato i dati", () => {
-    // La validazione automatica dice che il testo era leggibile, non che il
-    // documento sia della persona a cui si sta per consegnarlo: il messaggio
-    // aspetta la conferma umana.
     const { component } = render(subDocument());
 
     for (const reviewStatus of ["needs_review", "quarantined", "auto_validated"] as const) {
@@ -398,11 +387,7 @@ describe("SubDocumentListComponent", () => {
     expect(component.canPrepareMessage(subDocument({ reviewStatus: "manually_validated" }))).toBe(true);
   });
 
-  /**
-   * Il `beforeEach` svuota il template per provare la classe senza montare
-   * l'intero pannello; la legenda pero' vive solo li', quindi questi due casi
-   * ripartono da un TestBed senza quella sostituzione.
-   */
+  /** La legenda vive solo nel template, che il `beforeEach` svuota: qui riparte da un TestBed pulito. */
   function renderLegend(document: SubDocument): string {
     TestBed.resetTestingModule();
 
@@ -417,12 +402,6 @@ describe("SubDocumentListComponent", () => {
   }
 
   it("elenca in cima tutti i segni che possono comparire sulle caselle", () => {
-    // SC 1.4.1: teal, verde e ambra dicono la provenienza, e la stessa cosa
-    // deve arrivare a chi quei colori non li distingue — qui con la forma
-    // dell'icona e con il testo che l'accompagna. La provenienza e' per campo,
-    // quindi nello stesso documento convivono il segno della buona confidenza e
-    // quello del dato da rivedere: la legenda li nomina entrambi invece di
-    // dichiarare lo stato complessivo della scheda.
     const legend = renderLegend(subDocument({ reviewStatus: "needs_review" }));
 
     expect(legend).toContain("Confidenza alta");
@@ -440,8 +419,6 @@ describe("SubDocumentListComponent", () => {
   });
 
   it("non dichiara alcuna provenienza su un campo vuoto", () => {
-    // Le scintille su una casella vuota affermavano che l'AI avesse estratto
-    // un nulla: i tre identificativi sono spesso assenti dal documento.
     const document = subDocument({ reviewStatus: "auto_validated", fiscalCode: null, employeeId: null });
     const { component } = render(document);
 

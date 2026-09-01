@@ -3,11 +3,7 @@ import type { Metric } from "../../../api/generated/model";
 import { MvpStateStore } from "../../core/state/mvp-state.store";
 import { OverviewPageViewModel } from "./overview-page.view-model";
 
-/**
- * Test di dominio puro sul ViewModel (nessun bootstrap Angular/TestBed):
- * OverviewPageViewModel si costruisce con `new`, come qualunque classe
- * TypeScript — prova diretta che qui MVVM non è solo nominale.
- */
+/** Test di dominio puro sul ViewModel (nessun bootstrap Angular/TestBed): si costruisce con `new`. */
 describe("OverviewPageViewModel", () => {
   let navigate: jest.Mock;
   let metricEntry: jest.Mock;
@@ -54,8 +50,6 @@ describe("OverviewPageViewModel", () => {
   }
 
   it("espone solo le tre metriche su cui si agisce", () => {
-    // I conteggi descrittivi vivono nelle pagine dei moduli: qui comparivano
-    // due volte, come priorità e dentro i pannelli sottostanti.
     const vm = createViewModel();
 
     expect(vm.priorities().map((priority) => priority.key)).toEqual([
@@ -66,7 +60,6 @@ describe("OverviewPageViewModel", () => {
   });
 
   it("lascia il valore a null finché lo stato non è caricato", () => {
-    // Uno zero durante il caricamento verrebbe letto come conteggio reale.
     const vm = createViewModel(jest.fn(() => null));
 
     expect(vm.priorities().every((priority) => priority.value === null)).toBe(true);
@@ -74,8 +67,6 @@ describe("OverviewPageViewModel", () => {
   });
 
   it("espone il conteggio, il suo ritmo e il rilievo", () => {
-    // Non una quota: qui il valore e' il residuo su cui agire, e mostrarlo
-    // come porzione direbbe che tutto il resto del corpus e' un problema.
     const vm = createViewModel();
     const review = vm.priorities()[0]!;
 
@@ -88,8 +79,6 @@ describe("OverviewPageViewModel", () => {
   it("formatta gli indicatori di qualità dei due moduli", () => {
     const vm = createViewModel();
 
-    // `numeric` accompagna il valore formattato: la scheda a scala deve
-    // collocarlo, e "4,3" non e' un numero.
     expect(vm.assistantQuality()).toEqual({
       label: "Media stelle",
       value: "4,3",
@@ -97,7 +86,6 @@ describe("OverviewPageViewModel", () => {
       numeric: 4.3,
       threshold: null
     });
-    // La soglia viaggia con la metrica: la scheda la disegna sulla scala.
     expect(vm.copilotQuality()).toEqual({
       label: "Confidenza media OCR",
       value: "92,4",

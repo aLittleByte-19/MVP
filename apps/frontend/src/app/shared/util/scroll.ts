@@ -1,14 +1,6 @@
 /**
- * Scorre fino all'elemento con l'id indicato, se presente, dopo il
- * prossimo frame. Unico punto della codebase che tocca il DOM per lo
- * scroll: i ViewModel (Presentation Model) non chiamano mai `document`/
- * `window` direttamente — ricevono questa funzione come dipendenza dal
- * Component (la View), che resta l'unico responsabile della resa visiva.
- *
- * Lo scorrimento e' morbido solo per chi non ha chiesto meno animazioni: con
- * `prefers-reduced-motion: reduce` il salto e' immediato, perche' uno
- * spostamento lungo e animato e' fra i movimenti che quella preferenza esiste
- * per evitare.
+ * Unico punto della codebase che tocca il DOM per lo scroll: i ViewModel non chiamano mai `document`/`window` direttamente.
+ * Con `prefers-reduced-motion: reduce` il salto e' immediato invece che animato.
  */
 export function scrollToElement(elementId: string): void {
   window.requestAnimationFrame(() => {

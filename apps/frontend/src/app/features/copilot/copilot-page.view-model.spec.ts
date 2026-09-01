@@ -21,11 +21,7 @@ function subDocument(id: string): SubDocument {
   };
 }
 
-/**
- * Test di dominio puro sul ViewModel (nessun bootstrap Angular/TestBed):
- * CopilotPageViewModel si costruisce con `new`, come qualunque classe
- * TypeScript — prova diretta che qui MVVM non è solo nominale.
- */
+/** Test di dominio puro sul ViewModel (nessun bootstrap Angular/TestBed): si costruisce con `new`. */
 describe("CopilotPageViewModel", () => {
   let workflow: Record<string, jest.Mock>;
   let reload: jest.Mock;
@@ -297,8 +293,6 @@ describe("CopilotPageViewModel", () => {
     }
 
     it("conta le pagine sul totale del backend, non sulle righe ricevute", () => {
-      // La vista riceve dieci righe ma l'elenco ne ha quarantadue: senza il
-      // totale i documenti oltre la prima pagina sparivano in silenzio.
       workflow["searchDocuments"].mockReturnValue(of(page([subDocument("sub-1")], 42)));
       const vm = createViewModel();
 
@@ -333,8 +327,6 @@ describe("CopilotPageViewModel", () => {
     });
 
     it("cambiare filtro riporta alla prima pagina", () => {
-      // Restare alla pagina cinque di un elenco che ora ne ha due mostrerebbe
-      // una tabella vuota senza spiegazione.
       workflow["searchDocuments"].mockReturnValue(of(page([subDocument("sub-1")], 100)));
       const vm = createViewModel();
       vm.reload();

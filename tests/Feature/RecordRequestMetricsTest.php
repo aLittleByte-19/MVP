@@ -20,11 +20,8 @@ test('a request emits request-count, latency and error-rate metrics', function (
 });
 
 test('a request that fails validation is still recorded (listener sees the exception-translated response)', function () {
-    // Prima era un middleware: un'eccezione lanciata da $next($request) (qui,
-    // ValidationException) saltava tutto il codice dopo quella chiamata, e la
-    // richiesta spariva senza lasciare traccia — proprio il caso che Errors
-    // dovrebbe intercettare. Da RequestHandled (ADR 0015) la risposta e' gia'
-    // stata tradotta dall'exception handler, quindi arriva sempre.
+    // RequestHandled (ADR 0015) arriva dopo che l'exception handler ha gia'
+    // tradotto la ValidationException in risposta, quindi il listener la vede sempre.
     $metrics = Mockery::mock(EmfMetricsRecorder::class);
     $metrics->shouldReceive('put')->once();
     app()->instance(EmfMetricsRecorder::class, $metrics);

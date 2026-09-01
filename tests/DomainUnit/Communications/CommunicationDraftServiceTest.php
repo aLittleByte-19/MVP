@@ -14,9 +14,8 @@ use Tests\DomainUnit\Communications\Fakes\PassthroughTransactionManager;
 use Tests\DomainUnit\Communications\Fakes\RecordingEventDispatcher;
 
 /**
- * Test di dominio puro (nessun bootstrap Laravel/DB/AWS, vedi refactory.md
- * Compito 3 punto 2): Actor e' un value object di dominio, costruibile
- * senza autenticazione/middleware reali.
+ * Test di dominio puro (nessun bootstrap Laravel/DB/AWS): Actor e' un value
+ * object di dominio, costruibile senza autenticazione/middleware reali.
  */
 function fakeActor(): Actor
 {
@@ -38,10 +37,8 @@ test('favorite marks the draft and dispatches CommunicationDraftFavorited', func
 
     expect($repository->findCommunication(1)->isFavorite())->toBeTrue()
         ->and($events->hasDispatched(CommunicationDraftFavorited::class))->toBeTrue()
-        // Il fake distingue una lettura con lock da una senza (vedi il suo
-        // docblock): senza questo assert, un regresso che tornasse a
-        // findCommunication() (perdendo il lock pessimistico) non farebbe
-        // fallire nessun test.
+        // Senza questo assert, un regresso che perdesse il lock pessimistico
+        // non farebbe fallire nessun test.
         ->and($repository->forUpdateReadCount(1))->toBe(1);
 });
 
@@ -103,9 +100,8 @@ function fakeIntruderActor(): Actor
 }
 
 /**
- * Difesa in profondita' (vedi il docblock della classe): il controllo HTTP
- * (AuthorizesCommunications) protegge solo chi lo chiama, questi test
- * verificano che il caso d'uso applicativo resti sicuro anche da solo.
+ * Difesa in profondita': il controllo HTTP protegge solo chi lo chiama,
+ * questi test verificano che il caso d'uso resti sicuro anche da solo.
  */
 test('save refuses a draft outside the actor tenant scope', function () {
     $repository = new InMemoryCommunicationRepository;

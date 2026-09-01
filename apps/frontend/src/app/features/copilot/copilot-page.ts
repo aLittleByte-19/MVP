@@ -32,16 +32,10 @@ const MONTHS = [
 ];
 
 /**
- * View del Co-Pilot documentale: nessuna logica di business qui, solo
- * collante col template e procacciamento delle dipendenze via `inject()`
- * per costruire {@link CopilotPageViewModel} (Presentation Model, Fowler).
- * Il template legge solo `vm.*`, mai `store.*` direttamente. Le uniche
- * eccezioni sono gli `effect()`/`takeUntilDestroyed()` nel costruttore, che
- * richiedono un injection context che il ViewModel (classe pura) non ha
- * per costruzione — ciascuno si limita a leggere i segnali sorgente e
- * chiamare `vm.reload()`/`vm.loadPreviewStatus()`, che possiedono la vera
- * logica (anche `mvp-sub-document-list`, sotto, resta un componente
- * "dumb": riceve `previewStatus` come input, non lo produce).
+ * View del Co-Pilot documentale: solo collante col template, costruisce
+ * {@link CopilotPageViewModel}. Il template legge solo `vm.*`. Gli
+ * `effect()`/`takeUntilDestroyed()` nel costruttore sono l'eccezione MVVM
+ * documentata: leggono i segnali sorgente e delegano al ViewModel.
  */
 @Component({
   selector: "mvp-copilot-page",
@@ -234,24 +228,14 @@ export class CopilotPage {
       )
       .subscribe((value) => this.vm.setActiveFilters(toDocumentFilters(value)));
 
-    // Una sola sorgente per l'elenco: i filtri e ogni mutazione dello stato
-    // (upload, revisione, eliminazione) provocano una rilettura dal backend.
-    // Eccezione documentata: l'effect() richiede un injection context che
-    // CopilotPageViewModel (classe pura) non ha per costruzione — legge solo
-    // i segnali sorgente, la chiamata di ricerca vera vive in vm.reload().
-    //
-    // Non legge `vm.currentPage()` di proposito: `vm.goToPage()` chiama
-    // `reload()` da se', e se questo effect osservasse anche la pagina la
-    // rilettura partirebbe due volte a ogni cambio pagina. Chi tocca
-    // paginazione o filtri deve tenere a mente questo accoppiamento implicito.
+    // Non legge vm.currentPage() apposta: vm.goToPage() richiama reload() da se',
+    // e osservare anche la pagina qui la farebbe partire due volte.
     effect(() => {
       this.store.documents();
       this.vm.activeFilters();
       this.vm.reload();
     });
 
-    // Stessa eccezione documentata sopra: la fetch vera vive in
-    // vm.loadPreviewStatus(), qui si legge solo il documento selezionato.
     effect(() => {
       const document = this.vm.selectedDocument();
       this.vm.loadPreviewStatus(document?.previewUrl ?? null);
@@ -261,16 +245,8 @@ export class CopilotPage {
   }
 
   /**
-   * Apre il dettaglio e ci porta la pagina.
-   *
-   * Lo scorrimento sta qui e non nel ViewModel: la View e' l'unica responsabile
-   * della resa visiva (ADR 0011), e il dettaglio sta sotto lo storico, che con
-   * dieci righe e i filtri sopra puo' restare tutto fuori dallo schermo.
-   *
-   * L'ancora e' sulla `mvp-section` dentro il pannello, non sull'host di
-   * `mvp-sub-document-list`: quell'host ha `display: contents`, quindi non
-   * genera alcun box e `scrollIntoView` non ha nulla verso cui scorrere. La
-   * sezione invece e' una griglia e porta gia' il proprio `scroll-margin-top`.
+   * L'ancora e' sulla `mvp-section`, non sull'host di `mvp-sub-document-list`:
+   * quell'host ha `display: contents` e non genera un box da scorrere.
    */
   protected selectDocument(documentId: string | null): void {
     this.vm.selectDocument(documentId);

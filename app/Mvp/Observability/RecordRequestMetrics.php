@@ -7,13 +7,9 @@ use Illuminate\Foundation\Http\Events\RequestHandled;
 /**
  * Emette una riga di metrica EMF per richiesta (numero, latenza, errori).
  * Ascolta RequestHandled invece di essere un middleware: un'eccezione che
- * risale la pipeline (validazione, autorizzazione, 500 non gestito) non
- * farebbe mai eseguire il codice dopo $next($request) in un middleware — il
- * Kernel HTTP traduce l'eccezione in risposta FUORI dalla pipeline. RequestHandled
- * viene invece dispatchato da Kernel::handle() dopo quella traduzione, quindi
- * $event->response ha sempre lo status code finale davvero inviato al client,
- * incluso quello di una richiesta fallita — il caso che la metrica Errors deve
- * proprio catturare. Vedi ADR 0015.
+ * risale la pipeline non eseguirebbe mai il codice dopo $next($request), mentre
+ * RequestHandled arriva dopo che il Kernel l'ha gia' tradotta in risposta, cosi'
+ * $event->response ha sempre lo status finale — anche quello di un errore. Vedi ADR 0015.
  */
 class RecordRequestMetrics
 {

@@ -24,8 +24,7 @@ class DeleteCommunicationService implements DeleteCommunicationUseCase
     {
         $communication = $this->communications->findCommunication($communicationId);
 
-        // Difesa in profondita': stesso controllo gia' fatto a livello HTTP
-        // da AuthorizesCommunications (vedi il docblock di CommunicationDraftService).
+        // Difesa in profondita': stesso controllo gia' fatto a livello HTTP.
         if ($communication->tenantId !== $actor->tenantId) {
             throw new CommunicationNotAuthorizedException;
         }
@@ -35,11 +34,9 @@ class DeleteCommunicationService implements DeleteCommunicationUseCase
         $coverImagePath = $communication->coverImagePath();
 
         if ($coverImagePath !== null) {
-            // Il record e' gia' rimosso dal DB a questo punto: un guasto di
-            // storage non deve far fallire un'eliminazione che dal punto di
-            // vista dell'utente e' gia' avvenuta — resta solo un file orfano,
-            // ripulibile in un secondo momento, non un riferimento pendente
-            // (vedi ADR 0010, stesso trattamento di DeleteDocumentService).
+            // Il record e' gia' rimosso dal DB: un guasto di storage non deve
+            // far fallire un'eliminazione gia' avvenuta dal punto di vista
+            // dell'utente — resta solo un file orfano, ripulibile dopo.
             try {
                 $this->coverStorage->delete($coverImagePath);
             } catch (\Throwable $e) {

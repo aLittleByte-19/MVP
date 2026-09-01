@@ -32,13 +32,7 @@ function communication(overrides: Partial<Communication> = {}): Communication {
   };
 }
 
-/**
- * Test della View (Component Angular): copre solo il collante col template
- * e il cablaggio che richiede un injection context (effect(),
- * takeUntilDestroyed()) — non richiede TestBed per costruire il
- * ViewModel. La logica di dominio (generazione, valutazione, storico...)
- * è testata senza Angular in assistant-page.view-model.spec.ts.
- */
+/** Test della View: copre solo il collante col template e gli effect(). Il dominio e' in assistant-page.view-model.spec.ts. */
 describe("AssistantPage", () => {
   let history: ReturnType<typeof signal<Communication[]>>;
   let error: ReturnType<typeof signal<string | null>>;

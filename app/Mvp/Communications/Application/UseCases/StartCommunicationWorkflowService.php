@@ -20,20 +20,11 @@ use App\Mvp\Workflow\Support\WorkflowContext;
 use Psr\Clock\ClockInterface;
 
 /**
- * Applicazione: avvia (o rilancia, per rigenerazione) l'esecuzione Step
- * Functions della pipeline comunicazioni. Sostituisce
- * CommunicationWorkflowService: stessa logica, orchestrata attraverso le
- * porte del dominio invece che Eloquent/SfnClient diretti.
+ * Avvia (o rilancia, per rigenerazione) l'esecuzione Step Functions della
+ * pipeline comunicazioni.
  *
  * ARN e coda sono risolti una volta sola nel service provider e passati al
- * costruttore, invece di leggere `config()` qui dentro — stesso pattern
- * gia' usato per la soglia di confidenza di ExtractSubDocumentFieldsService
- * e per il prefisso di storage di UpdateCommunicationCoverService/
- * GenerateCommunicationCoverService (vedi ADR 0010).
- *
- * `WorkflowContext` e' una classe pura (nessuna dipendenza da Illuminate,
- * vedi il suo docblock): `start()`/`regenerate()` sono istanziabili ed
- * eseguibili in un test Pest puro, vedi StartCommunicationWorkflowServiceTest.
+ * costruttore invece di leggere `config()` qui (ADR 0010).
  */
 class StartCommunicationWorkflowService implements StartCommunicationWorkflowUseCase
 {
@@ -51,23 +42,15 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
     ) {}
 
     /**
-     * Il controllo "e' gia' in corso?" e la scrittura che lo rende vero
-     * girano dentro lo stesso lock pessimistico sulla riga
-     * (`findCommunicationForUpdate`, come CommunicationDraftService::save()):
-     * senza, due richieste quasi simultanee (un doppio invio, un retry che si
-     * sovrappone) potevano superare entrambe il controllo e avviare due
-     * esecuzioni Step Functions per la stessa comunicazione, una delle quali
-     * resta orfana e non tracciata.
+     * Lock pessimistico su `findCommunicationForUpdate`: senza, due richieste
+     * quasi simultanee potrebbero superare entrambe il controllo "gia' in
+     * corso?" e avviare due esecuzioni Step Functions per la stessa
+     * comunicazione.
      *
-     * La chiamata di rete a Step Functions resta dentro la transazione (non
-     * e' il pattern ideale — terrebbe il lock per la durata della chiamata —
-     * ma per il volume di questa pipeline e' un compromesso corretto e molto
-     * piu' sicuro dell'assenza totale di lock). Gli eventi di dominio restano
-     * dispatchati DOPO che la transazione ha commesso (stesso schema di
-     * favorite()/unfavorite()): se venissero dispatchati da dentro la
-     * closure e poi si rilanciasse l'eccezione dal ramo di fallimento, la
-     * transazione andrebbe in rollback e annullerebbe anche il salvataggio
-     * dello stato "fallito" che quel ramo ha appena scritto.
+     * Gli eventi vengono dispatchati DOPO il commit della transazione: se
+     * scattassero dentro la closure e poi si rilanciasse l'eccezione dal
+     * ramo di fallimento, il rollback annullerebbe anche lo stato "fallito"
+     * appena scritto.
      */
     public function start(int $communicationId, ?string $correlationId, ?string $requestId): void
     {
@@ -142,12 +125,9 @@ class StartCommunicationWorkflowService implements StartCommunicationWorkflowUse
     }
 
     /**
-     * Difesa in profondita' (vedi il docblock di CommunicationDraftService):
-     * a differenza di favorite/save/discard/update qui non serve un lock —
-     * non c'e' un controllo di stato concorrente da proteggere, il lock su
-     * `start()` (chiamato subito dopo) resta la difesa contro un doppio
-     * avvio — ma il controllo tenant sì, visto che l'`Actor` e' gia' in mano
-     * e prima non veniva usato per verificarlo.
+     * Nessun lock necessario qui: `start()`, chiamato subito dopo, e' gia'
+     * la difesa contro un doppio avvio. Il controllo tenant invece serve,
+     * visto che l'Actor e' gia' disponibile qui.
      */
     public function regenerate(int $communicationId, Actor $actor, ?string $correlationId, ?string $requestId): void
     {

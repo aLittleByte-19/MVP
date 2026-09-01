@@ -3,14 +3,11 @@
 namespace App\Mvp\Communications\Domain\ValueObjects;
 
 /**
- * Proiezione di dominio di una Communication. Nessun riferimento a Eloquent:
- * e' il tipo che CommunicationRepository restituisce ai casi d'uso, non il
- * model. Non e' un doppione ridondante di Communication: e' il contratto di
- * idratazione condiviso fra Communication::fromRecord() consumato
- * dall'adapter reale (EloquentCommunicationRepository) *e* dal fake usato
- * nei test di dominio puro (InMemoryCommunicationRepository) — entrambi
- * costruiscono lo stesso Record per idratare l'entita', senza che il
- * dominio sappia quale dei due lo sta chiamando.
+ * Proiezione di dominio di una Communication, restituita da
+ * CommunicationRepository ai casi d'uso — nessun riferimento a Eloquent.
+ * E' il contratto di idratazione condiviso fra Communication::fromRecord()
+ * e sia l'adapter reale (EloquentCommunicationRepository) che il fake dei
+ * test (InMemoryCommunicationRepository).
  */
 final class CommunicationRecord
 {

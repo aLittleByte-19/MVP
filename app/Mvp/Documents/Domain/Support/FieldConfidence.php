@@ -5,19 +5,15 @@ namespace App\Mvp\Documents\Domain\Support;
 /**
  * Attribuisce a un campo estratto la confidenza OCR del testo da cui proviene.
  *
- * La media di pagina non serve allo scopo: una pagina di cedolino e' quasi
- * tutta contorno — intestazioni di tabella, etichette, note — che l'OCR legge
- * quasi perfettamente, mentre i campi che contano sono poche righe. Mediando,
- * il contorno domina, e un cognome illeggibile in mezzo a una pagina nitida
- * non abbassa il punteggio abbastanza da mandare il documento in revisione.
- *
- * Qui il valore restituito dal modello viene invece cercato fra le righe OCR:
- * la confidenza del campo e' quella della riga che lo contiene. Il fatto stesso
- * che il valore non si trovi e' un'informazione: o e' un campo derivato, che il
- * modello normalizza invece di trascrivere, oppure non compare nel documento.
+ * Non la media di pagina: un cedolino e' quasi tutto contorno letto quasi
+ * perfettamente, quindi un cognome illeggibile in mezzo a una pagina nitida
+ * non abbasserebbe abbastanza il punteggio da mandare il documento in
+ * revisione. Il valore del modello viene invece cercato fra le righe OCR: se
+ * non si trova, e' un campo derivato (che il modello normalizza) oppure
+ * assente dal documento.
  *
  * Logica pura, senza dipendenze: si prova senza Textract e senza database
- * (vedi ADR 0013).
+ * (ADR 0013).
  */
 final class FieldConfidence
 {
@@ -30,10 +26,8 @@ final class FieldConfidence
     /**
      * Cerca il valore fra le righe OCR e ne restituisce la confidenza.
      *
-     * Prima prova la corrispondenza piena: se il valore compare per intero in
-     * una riga, quella riga e' la sua fonte e ne porta la confidenza. Se non
-     * compare per intero — succede quando il valore va a capo, per esempio una
-     * ragione sociale lunga — si ripiega sui singoli token e si prende il piu'
+     * Prova prima la corrispondenza piena; se il valore va a capo (es. una
+     * ragione sociale lunga) ripiega sui singoli token e prende il piu'
      * debole, perche' un campo vale quanto la sua parte meno leggibile.
      *
      * @param  array<int, array{text: string, confidence: float|null}>  $blocks
@@ -83,9 +77,8 @@ final class FieldConfidence
     /**
      * Confidenza della riga piu' leggibile fra quelle che contengono l'ago.
      *
-     * Si prende la migliore e non la peggiore perche' un valore che compare
-     * anche una sola volta in chiaro e' stato letto bene almeno li': le altre
-     * occorrenze non lo rendono meno affidabile.
+     * La migliore, non la peggiore: un valore letto bene anche una sola volta
+     * resta affidabile a prescindere dalle altre occorrenze.
      *
      * @param  array<int, array{text: string, confidence: float|null}>  $blocks
      */

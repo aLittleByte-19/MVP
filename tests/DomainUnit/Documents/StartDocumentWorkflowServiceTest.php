@@ -13,11 +13,10 @@ use Tests\DomainUnit\Documents\Fakes\PassthroughTransactionManager;
 use Tests\DomainUnit\Documents\Fakes\RecordingDocumentEventDispatcher;
 
 /**
- * Test di dominio puro (nessun bootstrap Laravel/DB/AWS, vedi ADR 0010): la
- * configurazione (ARN, coda, flag Textract, disco/bucket) e' passata al
- * costruttore invece che letta da config() dentro la classe, e WorkflowContext
- * non tocca piu' la facade Log (vedi il suo docblock) — le due cose insieme
- * rendono start() istanziabile ed eseguibile qui, non solo il costruttore.
+ * Test di dominio puro (nessun bootstrap Laravel/DB/AWS): la configurazione
+ * (ARN, coda, flag Textract, disco/bucket) e' passata al costruttore invece
+ * che letta da config() dentro la classe, e WorkflowContext non usa la
+ * facade Log — le due cose insieme rendono start() istanziabile qui.
  */
 function mvpDomainStartDocumentWorkflowService(
     InMemoryDocumentRepository $documents,

@@ -2,15 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, input } from "@angular/co
 import { starFills } from "../../util/charts";
 
 /**
- * Scheda di una media su stelle.
- *
- * Il numero da solo — "4,3" — chiede di ricordarsi che la scala arriva a
- * cinque; le stelle la mostrano. L'ultima si riempie per la frazione reale,
- * non arrotondata: e' proprio quel resto a distinguere un 4,3 da un 4,5, e
- * arrotondarlo butterebbe via l'unica cifra che stiamo misurando.
- *
- * Le stelle sono decorative (`aria-hidden`): il valore e' gia' scritto accanto
- * come testo, e farle leggere una per una sarebbe rumore.
+ * Scheda di una media su stelle: l'ultima si riempie per la frazione reale, non arrotondata, per distinguere un 4,3 da un 4,5.
+ * Le stelle sono decorative (`aria-hidden`): il valore e' gia' scritto accanto come testo.
  */
 @Component({
   selector: "mvp-metric-stars",

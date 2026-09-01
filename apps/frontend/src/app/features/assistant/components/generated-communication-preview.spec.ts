@@ -108,10 +108,6 @@ describe("GeneratedCommunicationPreviewComponent", () => {
   });
 
   it("non chiude la conferma di scarto per un nuovo riferimento con lo stesso id", () => {
-    // Stesso principio dei due effect di sincronizzazione qui sopra: una
-    // mutazione qualunque altrove nella pagina produce un nuovo oggetto
-    // `draft` con lo stesso id, e non deve chiudere una conferma che
-    // l'utente ha appena aperto cliccando "Scarta bozza".
     const current = draft();
     const fixture = render(current);
     const component = fixture.componentInstance;
@@ -248,11 +244,6 @@ describe("GeneratedCommunicationPreviewComponent", () => {
   });
 
   it("non perde una modifica in corso quando arriva un nuovo riferimento con lo stesso contenuto", () => {
-    // `previewDraft()` nel ViewModel ricalcola un oggetto nuovo ad ogni
-    // mutazione dello storico ovunque nella pagina (un preferito su un'altra
-    // voce, un'eliminazione), non solo quando questa bozza cambia davvero:
-    // senza il confronto sul contenuto, una modifica non salvata sparirebbe
-    // non appena l'utente compie un'azione qualsiasi altrove.
     const current = draft();
     const fixture = render(current);
     const component = fixture.componentInstance;

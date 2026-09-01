@@ -35,54 +35,27 @@ export interface PriorityMetric {
 }
 
 /**
- * ViewModel (Presentation Model, Fowler) della Overview: non tocca il DOM
- * né l'infrastruttura di rendering di Angular (niente `@Component`,
- * `inject()`, decoratori, injection context, `document`/`window` diretti)
- * — le dipendenze arrivano dal costruttore, non da `inject()`, quindi la
- * classe è istanziabile con `new` e testabile senza `TestBed`.
- * `OverviewPage` (la View) resta l'unico punto accoppiato ad Angular e al
- * DOM: si procura le dipendenze con `inject()` e costruisce questa istanza.
- * Il ViewModel non chiama mai la View: uno scroll richiesto dopo la
- * navigazione scrive `pendingScrollTarget`, un `effect()` nella View lo
- * legge e chiama `scrollToElement` (vedi `shared/util/scroll.ts`), poi lo
- * azzera.
- *
- * `error`, `loading` e `reload()` sono pass-through sullo store: il template
- * legge solo `vm.*`, come già fanno Copilot e Assistant (ADR 0011). Prima
- * questa era l'unica pagina che raggiungeva lo store dal markup.
+ * ViewModel (Presentation Model) della Overview: nessuna dipendenza da Angular
+ * rendering, istanziabile con `new`. `OverviewPage` costruisce l'istanza e legge
+ * solo `vm.*` (ADR 0011). Il ViewModel non chiama mai la View: uno scroll
+ * richiesto scrive `pendingScrollTarget`, che un `effect()` nella View consuma.
  */
 export class OverviewPageViewModel {
   readonly communications: Signal<MvpState["assistant"]["history"]> = computed(() => this.store.history());
   readonly error: Signal<string | null> = computed(() => this.store.error());
   readonly loading: Signal<boolean> = computed(() => this.store.loading());
 
-  /**
-   * Le tre metriche su cui si agisce, non un riassunto di tutte.
-   *
-   * I conteggi descrittivi vivono nelle pagine dei rispettivi moduli: qui
-   * comparivano gli stessi valori due volte, una come priorità e una nei
-   * pannelli sottostanti, e una terza volta dentro Co-Pilot.
-   */
+  /** Le tre metriche su cui si agisce, non un riassunto di tutte. */
   readonly priorities: Signal<PriorityMetric[]> = computed(() => [
     this.priority("copilot.needs_review", "Da verificare", "watch"),
     this.priority("copilot.quarantined", "In quarantena", "alert"),
     this.priority("assistant.drafts", "Bozze da valutare", "neutral")
   ]);
 
-  /**
-   * Un solo indicatore di qualità per modulo, con rimando alla pagina che ne
-   * porta il dettaglio: è la ripetizione voluta fra sintesi e dettaglio, non
-   * la copia dei conteggi che questa pagina mostrava prima.
-   */
   readonly assistantQuality: Signal<QualityMetric | null> = computed(() =>
     this.quality("assistant.rating_average")
   );
 
-  /**
-   * La confidenza media dell'OCR al posto del conteggio dei campi sopra soglia:
-   * è una misura su una scala, quindi si può disegnare come la media stelle
-   * accanto, e i due riquadri smettono di essere due cose diverse affiancate.
-   */
   readonly copilotQuality: Signal<QualityMetric | null> = computed(() =>
     this.quality("copilot.ocr_confidence")
   );
@@ -94,13 +67,7 @@ export class OverviewPageViewModel {
     return typeof entry?.value === "number" ? entry.value : 0;
   });
 
-  /**
-   * Uno scroll richiesto dal ViewModel: non un comando alla View, un fatto
-   * osservabile. La View lo consuma nel proprio `effect()` e lo azzera
-   * (`.set(null)`) subito dopo averlo eseguito — se non azzerasse, la stessa
-   * destinazione richiesta due volte di fila non ritriggerebbe l'`effect()`,
-   * che riscontra solo cambi di valore.
-   */
+  /** La View lo azzera dopo averlo consumato: senza reset, la stessa destinazione due volte di fila non ritriggera l'effect. */
   readonly pendingScrollTarget: WritableSignal<string | null> = signal(null);
 
   constructor(

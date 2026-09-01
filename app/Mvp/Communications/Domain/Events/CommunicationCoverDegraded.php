@@ -4,9 +4,7 @@ namespace App\Mvp\Communications\Domain\Events;
 
 /**
  * Emesso sia dal passo generate_cover (fallimento del modello/storage) sia
- * da finalize (copertina rimasta pending/processing per timeout): prima
- * dell'introduzione di questo evento la stessa coppia audit+metrica era
- * duplicata in entrambi i punti (vedi ADR 0010).
+ * da finalize (copertina rimasta pending/processing per timeout).
  */
 final class CommunicationCoverDegraded
 {

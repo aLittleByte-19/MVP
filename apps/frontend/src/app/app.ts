@@ -140,9 +140,7 @@ export class AppComponent {
       )
       .subscribe((event) => this.syncActiveView(event.urlAfterRedirects));
 
-    // Il pulsante "torna su" e' utile solo quando c'e' contenuto sopra la
-    // viewport: lo si mostra oltre una soglia di scroll (listener passivo,
-    // throttling per non gravare sul rendering).
+    // Listener passivo con throttling per non gravare sul rendering.
     fromEvent(window, "scroll", { passive: true })
       .pipe(auditTime(120), takeUntilDestroyed())
       .subscribe(() => {
@@ -167,14 +165,7 @@ export class AppComponent {
     return targetId === undefined ? `/${view}` : `/${view}#${targetId}`;
   }
 
-  /**
-   * Le voci di navigazione sono collegamenti, non pulsanti: portano a rotte
-   * distinte e a sezioni di pagina, quindi devono avere un indirizzo, essere
-   * annunciate come link e apribili in una nuova scheda. Il click semplice
-   * resta gestito dal router — niente ricaricamento della SPA — mentre quello
-   * con un modificatore o con un tasto diverso dal primario viene lasciato al
-   * browser, che sa gia' cosa farne.
-   */
+  /** Il click semplice resta gestito dal router (niente ricaricamento SPA); click modificato o non primario va lasciato al browser. */
   protected onNavigate(event: MouseEvent, view: MvpView, targetId?: string): void {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
       return;
@@ -197,17 +188,8 @@ export class AppComponent {
   }
 
   /**
-   * Sezione corrente nella sidebar.
-   *
-   * Sostituisce l'IntersectionObserver con una banda fissa a un quinto del
-   * viewport: quella banda le ultime sezioni non la raggiungevano mai, perche'
-   * il documento finisce prima che il loro titolo possa risalirci, e restavano
-   * quindi senza evidenziazione per tutta la pagina. Qui la regola e' invece
-   * "l'ultima sezione il cui inizio e' gia' passato", che a fine pagina si
-   * ferma comunque sull'ultima: nessuna posizione di scroll resta scoperta.
-   *
-   * A fondo pagina vince l'ultima sezione anche se breve — con lo scroll
-   * esaurito nulla puo' piu' portarla oltre la soglia.
+   * Sezione corrente nella sidebar: banda fissa a un quinto del viewport, non IntersectionObserver.
+   * Regola: "l'ultima sezione il cui inizio e' gia' passato", che a fine pagina si ferma comunque sull'ultima.
    */
   private updateActiveChild(knownIds?: readonly string[]): void {
     const ids = knownIds ?? this.activeChildIds();

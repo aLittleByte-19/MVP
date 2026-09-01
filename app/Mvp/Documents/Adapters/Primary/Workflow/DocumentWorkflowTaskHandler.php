@@ -12,17 +12,12 @@ use Psr\Clock\ClockInterface;
 
 /**
  * Adapter primario guidato da Step Functions/SQS (invece che da HTTP):
- * traduce ogni task di callback nella chiamata al caso d'uso corrispondente
- * tramite la sua porta primaria, e traduce il risultato nella forma che il
- * runner si aspetta. Nessuna regola di business qui: l'idempotenza verso la
- * ridelivery del task ("documento gia' completato") vive nei singoli casi
- * d'uso (RunOcrService, ProcessDocumentService), non in questo adapter —
- * ciascuno la segnala nel proprio valore di ritorno invece che con una
- * guardia centralizzata qui. Risolve e aggiorna l'aggregato documentale
- * attraverso {@see DocumentRepository} (la stessa porta secondaria usata dai
- * casi d'uso), non attraverso Eloquent diretto: implementa il contratto
- * condiviso WorkflowTaskHandler passando solo {@see WorkflowSubject} (id +
- * tenant) al runner, che resta cosi' domain-agnostic.
+ * traduce ogni task di callback nella chiamata al caso d'uso corrispondente,
+ * e il risultato nella forma che il runner si aspetta. Nessuna regola di
+ * business qui: l'idempotenza verso la ridelivery ("documento gia'
+ * completato") vive nei singoli casi d'uso, non in questo adapter. Passa al
+ * runner solo {@see WorkflowSubject} (id + tenant), che resta cosi'
+ * domain-agnostic.
  */
 class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
 {
@@ -70,11 +65,9 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
 
         $document = $this->documents->findOriginalDocument($documentId);
 
-        // Difesa in profondita': l'autorizzazione vera vive al bordo HTTP
-        // (i messaggi di workflow sono generati dalla pipeline stessa, non
-        // da input utente diretto), ma se il tenantId nel messaggio non
-        // corrisponde a quello del documento e' un segnale di messaggio
-        // corrotto o malformato che non va eseguito silenziosamente.
+        // Difesa in profondita': i messaggi arrivano dalla pipeline stessa, non
+        // da input utente diretto, ma un tenantId che non corrisponde al
+        // documento e' un segnale di messaggio corrotto da non eseguire.
         $tenantId = $message['tenantId'] ?? $message['tenant_id'] ?? null;
 
         if ($tenantId !== null && $document->tenantId !== $tenantId) {
@@ -103,10 +96,8 @@ class DocumentWorkflowTaskHandler implements WorkflowTaskHandler
     {
         $document = $this->documents->findOriginalDocument($subject->id);
 
-        // Il caso d'uso ha gia' scritto un messaggio comprensibile per
-        // l'operatore (vedi RunOcrService/ProcessDocumentService); questo e'
-        // solo il fallback per i task che possono fallire prima che il caso
-        // d'uso stesso arrivi a scriverne uno (es. errori di dispatch).
+        // Fallback per i task che falliscono prima che il caso d'uso scriva
+        // un messaggio comprensibile (vedi RunOcrService/ProcessDocumentService).
         $document->fail($document->errorMessage() ?: $e->getMessage(), $e->getMessage(), $this->clock->now());
         $this->documents->saveOriginalDocument($document);
     }

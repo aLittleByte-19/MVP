@@ -2,16 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, input } from "@angular/co
 import type { MetricTone } from "../../util/metrics";
 
 /**
- * Scheda di misura su scala: un valore che vive dentro un intervallo noto.
- *
- * Una confidenza media e una media stelle non sono conteggi: "98,5" e "412"
- * hanno lo stesso aspetto ma il primo ha un massimo, e senza vederlo il numero
- * non dice se sia alto o basso. La scala lo mostra, e la tacca segna la soglia
- * oltre la quale il sistema decide da solo — l'unico punto in cui il valore
- * cambia il comportamento dell'applicativo.
- *
- * Il valore arriva gia' formattato (`formatMetric`), mentre `numeric` serve
- * solo a posizionare il riempimento: la scheda non riformatta il dato.
+ * Scheda di misura su scala: un valore che vive dentro un intervallo noto, con una tacca per la soglia di decisione automatica.
+ * Il valore arriva gia' formattato (`formatMetric`); `numeric` serve solo a posizionare il riempimento.
  */
 @Component({
   selector: "mvp-metric-gauge",

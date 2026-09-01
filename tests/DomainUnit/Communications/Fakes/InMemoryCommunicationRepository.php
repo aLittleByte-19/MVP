@@ -12,9 +12,7 @@ use App\Mvp\Communications\Domain\ValueObjects\NewCommunication;
 
 /**
  * Adapter secondario di test: implementa CommunicationRepository in memoria,
- * senza Eloquent ne' database. Dimostra la promessa di ADR 0010 ("i casi
- * d'uso diventano testabili passando mock delle porte, non fake HTTP o
- * LocalStack") con un adapter vero, non un mock generico.
+ * senza Eloquent ne' database (ADR 0010).
  */
 final class InMemoryCommunicationRepository implements CommunicationRepository
 {
@@ -24,13 +22,9 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
     private int $nextId = 1;
 
     /**
-     * Conteggio delle letture passate da `findCommunicationForUpdate()` per
-     * id: distingue nei test una lettura con lock da una senza, cosa che le
-     * due implementazioni identiche qui sotto altrimenti nasconderebbero — un
-     * futuro regresso che tornasse a `findCommunication()` (rimuovendo il
-     * lock pessimistico che protegge dalla race condition scarto/approvazione,
-     * vedi CommunicationDraftService) non farebbe fallire nessun test senza
-     * questo contatore.
+     * Conteggio delle letture da `findCommunicationForUpdate()` per id:
+     * distingue nei test una lettura con lock da una senza, cosa che le due
+     * implementazioni identiche sotto altrimenti nasconderebbero.
      *
      * @var array<int, int>
      */
@@ -113,10 +107,8 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
     {
         $normalized = [];
 
-        // CommunicationChanges usa chiavi camelCase (vedi ADR 0010): questo
-        // fake imita la stessa conversione che l'adapter Eloquent applica
-        // prima di scrivere, per restare fedele alle righe (snake_case)
-        // seminate da seed().
+        // CommunicationChanges usa chiavi camelCase (ADR 0010): questo fake
+        // imita la stessa conversione applicata dall'adapter Eloquent.
         foreach ($attributes as $key => $value) {
             $snakeKey = strtolower((string) preg_replace('/(?<!^)[A-Z]/', '_$0', $key));
             $normalized[$snakeKey] = $value instanceof \BackedEnum ? $value->value : $value;
@@ -132,11 +124,9 @@ final class InMemoryCommunicationRepository implements CommunicationRepository
     {
         return [
             'id' => $id,
-            // Allineato al tenant dell'attore usato da tutti i test di
-            // questa cartella (vedi i vari fakeActor()/tenant-1): un
-            // controllo di ownership aggiunto da un caso d'uso confronta
-            // questo valore contro Actor::tenantId, e un default diverso
-            // farebbe fallire ogni test che non lo seminasse esplicitamente.
+            // Allineato al tenant usato da tutti i test di questa cartella:
+            // un default diverso farebbe fallire ogni test che non lo
+            // seminasse esplicitamente.
             'tenant_id' => 'tenant-1',
             'prompt' => 'Prompt di test',
             'tone' => 'Chiaro e diretto',

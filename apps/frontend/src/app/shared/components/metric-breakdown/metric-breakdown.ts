@@ -13,17 +13,8 @@ const STROKE = 12;
 const RADIUS = (SIZE - STROKE) / 2;
 
 /**
- * Scheda di ripartizione: come si divide un insieme fra gli stati in cui si
- * trova.
- *
- * Sostituisce la quota a due colori ("94% verificati"): una percentuale sola
- * schiaccia in un unico numero cose che l'operatore tratta in modo diverso —
- * cio' che aspetta una revisione, cio' che il sistema ha validato da solo, cio'
- * che una persona ha confermato. L'anello le tiene distinte e la legenda dice
- * quante sono.
- *
- * I colori arrivano dal contratto, non da una tabella qui: gli stati di dominio
- * dichiarano gia' il proprio tono.
+ * Scheda di ripartizione: una percentuale sola schiaccerebbe in un unico numero stati che l'operatore tratta in modo diverso.
+ * I colori arrivano dal contratto, non da una tabella qui: gli stati di dominio dichiarano gia' il proprio tono.
  */
 @Component({
   selector: "mvp-metric-breakdown",

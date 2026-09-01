@@ -6,22 +6,8 @@ const WIDTH = 220;
 const HEIGHT = 46;
 
 /**
- * Scheda di andamento: un conteggio e i sette giorni che l'hanno prodotto.
- *
- * E' una delle forme di scheda metrica (vedi `metrics-panel`): questa risponde
- * a "quanto, e con che ritmo?". I giorni sono barre e non una linea perche' la
- * serie e' un flusso di ingressi — sette misure distinte, non un valore che
- * scorre — e una spezzata suggerirebbe fra un giorno e l'altro un passaggio
- * continuo che non esiste. L'ultima barra e' oggi, ed e' l'unica in evidenza.
- *
- * Coppia `dl/dt/dd` invece di due elementi affiancati: lo screen reader legge
- * "Documenti analizzati: 128" come una cosa sola, mentre prima riceveva due
- * stringhe scollegate. L'ordine nel DOM e' etichetta -> valore, quello di
- * lettura; l'inversione visiva sta nel CSS, cosi' la resa non cambia.
- *
- * Il valore `null` e' distinto dallo zero: durante il caricamento e in errore
- * la scheda non mostra un numero, perche' uno zero verrebbe letto come dato
- * reale (era il difetto dei tre KPI dell'Overview).
+ * Scheda di andamento: un conteggio e i sette giorni che l'hanno prodotto, come barre (flusso di ingressi distinti, non una curva continua).
+ * Coppia `dl/dt/dd` cosi' lo screen reader legge etichetta e valore come una cosa sola. Il `null` resta distinto dallo zero: durante caricamento/errore uno zero sarebbe letto come dato reale.
  */
 @Component({
   selector: "mvp-metric-card",

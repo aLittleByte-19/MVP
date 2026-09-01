@@ -3,17 +3,8 @@ import { ChangeDetectionStrategy, Component, input } from "@angular/core";
 export type ButtonVariant = "primary" | "secondary" | "icon";
 
 /**
- * Pulsante dell'app applicato come attributo su un `<button>` nativo
- * (`<button mvpButton variant="secondary">`). Cosi' restano nativi tipo,
- * stato disabilitato, attributi ARIA ed eventi, mentre la variante guida lo
- * stile sull'host.
- *
- * `busy` segnala che il comando e' in corso senza toccarne l'etichetta. Prima
- * ogni pulsante riscriveva la propria — "Salvataggio", "Salvataggio…",
- * "Salvataggio in corso…", "Invio in corso…" — e il comando cambiava nome
- * mentre lo si guardava: chi torna sulla pagina non ritrova la parola che
- * aveva cercato, e la larghezza salta a meta' clic. `aria-busy` dice la stessa
- * cosa alle tecnologie assistive.
+ * Pulsante applicato come attributo su un `<button>` nativo, cosi' restano nativi tipo, disabled, ARIA ed eventi mentre la variante guida solo lo stile.
+ * `busy` segnala il comando in corso senza toccarne l'etichetta, cosi' la larghezza non salta a meta' clic; `aria-busy` dice la stessa cosa alle tecnologie assistive.
  */
 @Component({
   // eslint-disable-next-line @angular-eslint/component-selector

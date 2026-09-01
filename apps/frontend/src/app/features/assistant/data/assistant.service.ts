@@ -47,12 +47,9 @@ export interface CommunicationFilters {
 }
 
 /**
- * Generazione assistita di comunicazioni HR e valutazione delle bozze. La
- * richiesta viene accettata subito e la pipeline lavora in modo asincrono: il
- * testo arriva per primo, la copertina dopo. Una copertina non disponibile non
- * invalida la comunicazione, viene solo segnalata. Nessun fallback automatico:
- * in caso di errore lo stato viene ricaricato per riflettere la situazione
- * reale. Le risposte aggiornano lo store con lo stato autorevole del backend.
+ * Generazione assistita di comunicazioni HR e valutazione delle bozze: la
+ * pipeline lavora in modo asincrono, il testo arriva per primo, la copertina dopo.
+ * Una copertina non disponibile non invalida la comunicazione, viene solo segnalata.
  */
 @Injectable({ providedIn: "root" })
 export class AssistantService {
@@ -230,11 +227,7 @@ export class AssistantService {
       .pipe(tap((response) => this.store.setState(response.state)));
   }
 
-  /**
-   * Storico filtrato (UC-15..UC-18): i criteri viaggiano al backend, che resta
-   * l'unica autorita' sui dati. Comprende le sole bozze salvate esplicitamente,
-   * come lo storico di `state.assistant.history`.
-   */
+  /** Storico filtrato (UC-15..UC-18): solo le bozze salvate esplicitamente, come `state.assistant.history`. */
   searchCommunications(filters: CommunicationFilters): Observable<Communication[]> {
     return this.api
       .listMvpCommunications({
