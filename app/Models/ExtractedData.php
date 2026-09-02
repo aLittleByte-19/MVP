@@ -1,0 +1,66 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
+
+/**
+ * @property int $id
+ * @property int $sub_document_id
+ * @property string|null $employee_first_name
+ * @property string|null $employee_last_name
+ * @property string|null $company_name
+ * @property Carbon|null $document_date
+ * @property string|null $document_type
+ * @property string|null $description
+ * @property string|null $recipient_email
+ * @property int|null $confidence_score
+ * @property array<string, float|null>|null $field_confidences
+ * @property array<string, mixed>|null $ai_payload
+ * @property SubDocument|null $subDocument
+ */
+class ExtractedData extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'sub_document_id',
+        'employee_first_name',
+        'employee_last_name',
+        'company_name',
+        'recipient_email',
+        'fiscal_code',
+        'employee_id',
+        'document_date',
+        'document_type',
+        'description',
+        'recipient_email',
+        'confidence_score',
+        'field_confidences',
+        'ai_payload',
+    ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'document_date' => 'date',
+            'confidence_score' => 'integer',
+            'field_confidences' => 'array',
+            'ai_payload' => 'array',
+        ];
+    }
+
+    /**
+     * @return BelongsTo<SubDocument, $this>
+     */
+    public function subDocument(): BelongsTo
+    {
+        return $this->belongsTo(SubDocument::class);
+    }
+}

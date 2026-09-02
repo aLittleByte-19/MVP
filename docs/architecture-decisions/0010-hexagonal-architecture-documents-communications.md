@@ -1,0 +1,1134 @@
+# ADR 0010: Architettura esagonale (ports & adapters) per i domini Documents e Communications
+
+Status: Accepted, implemented
+Date: 2026-08-07
+
+## Context
+
+Il backend (Laravel 12 / PHP 8.4, API-only) è organizzato **per dominio applicativo**, non per
+livello tecnico: `app/Mvp/{Ai,Ocr,Documents,Communications,Workflow,Identity,Audit,Observability,
+Support}`. `docs/IMPLEMENTATION_OVERVIEW.md` descrive questa organizzazione come "buona
+separazione controller→service" e la valuta "Solido per MVP" — questo ADR non nasce quindi per
+correggere un problema già segnalato in quel documento, ma per rendere esplicita e verificabile
+una proprietà che oggi esiste solo per convenzione, non per costruzione: **le regole di business
+sono già mescolate con Eloquent, con l'SDK AWS e con HTTP dentro le stesse classi**, e questa
+mescolanza non è vietata da nessun meccanismo, solo scoraggiata dall'uso.
+
+Evidenza concreta della mescolanza, raccolta dal codice attuale:
+
+- `App\Http\Controllers\Api\V1\DocumentController::index()` costruisce direttamente query Eloquent
+  con `whereHas()` annidate per implementare quattro criteri di filtro (UC-35..UC-38), incluso un
+  operatore di confidenza calcolato inline (`$operator = ... === 'above' ? '>=' : '<'`).
+- `DocumentController::stream()` implementa un intero loop di polling SSE (`while (!
+  connection_aborted())`, `sleep(1)`, diffing per evitare eventi duplicati) dentro il controller:
+  ~100 righe di logica applicativa nel livello HTTP.
+- `App\Http\Controllers\Api\V1\CommunicationController::favorite()`/`unfavorite()` implementano
+  una regola di dominio ("preferito già impostato → 422") direttamente nel controller, non in un
+  caso d'uso o in una policy.
+- `CommunicationController::destroy()` risolve il disco di storage e chiama
+  `Storage::disk($disk)->delete($coverPath)` direttamente nel controller.
+- `App\Mvp\Documents\Services\DocumentProcessingService`, `App\Mvp\Communications\Services\
+  CommunicationWorkflowService` e i due `WorkflowTaskHandler` (`DocumentWorkflowTaskHandler`,
+  `CommunicationWorkflowTaskHandler`) combinano nella stessa classe: query/scritture Eloquent,
+  chiamate dirette all'SDK AWS (`BedrockService`, `TextractService`, o `Aws\Sfn\SfnClient`
+  iniettato senza wrapper), regole di business e side-effect infrastrutturali (audit, metriche,
+  storage).
+- `App\Mvp\Observability\PrometheusExporter::render()` calcola gauge interrogando direttamente
+  `Communication`, `OriginalDocument`, `SubDocument` via Eloquent dentro una classe nominalmente
+  "di osservabilità".
+- Nessun binding in `App\Providers\AppServiceProvider::register()` lega un'interfaccia a
+  un'implementazione: ogni servizio di dominio e ogni client AWS è bindato come singleton della
+  **classe concreta**. Il codice applicativo digita (type-hint) sempre la classe concreta
+  (`BedrockService`, `TextractService`, `SfnClient`), mai un'astrazione definita dal dominio.
+
+Il progetto ha già, isolati e non generalizzati, tre elementi che vanno nella direzione giusta:
+
+1. **`App\Mvp\Workflow\Contracts\WorkflowTaskHandler`**: un'interfaccia reale con due
+   implementazioni di produzione (`DocumentWorkflowTaskHandler`, `CommunicationWorkflowTaskHandler`),
+   selezionate a runtime da `WorkflowTaskRegistry::for(string $taskType)` e invocate da
+   `WorkflowTaskRunner`, che resta agnostico rispetto al dominio specifico (dedup, claim, audit,
+   metriche sono generici; solo `execute()` varia per implementazione). È l'unico punto della
+   codebase dove esiste già una vera porta con adapter intercambiabili.
+2. **`BedrockService`/`TextractService`**: isolano tutte le chiamate all'SDK AWS verso Bedrock e
+   Textract, traducono le eccezioni AWS in eccezioni applicative con messaggio utente. Sono
+   adapter nella sostanza, ma non nella forma: sono classi concrete, non implementazioni di
+   un'interfaccia di dominio, e vengono digitate direttamente da chi le usa
+   (`DocumentProcessingService`, `CommunicationWorkflowTaskHandler`, ecc.).
+3. **Middleware HTTP** (`mvp.identity`, `mvp.authorize`, `throttle`): una Chain of Responsibility
+   reale a livello di trasporto, ortogonale a questo refactor — resta invariata, agisce prima che
+   la richiesta raggiunga l'adapter primario.
+
+Il numero di integrazioni esterne da isolare è concreto e non ipotetico: due client Bedrock
+(testo + immagine, regioni potenzialmente diverse), Textract, due macchine a stati Step Functions
+(pipeline documenti e pipeline comunicazioni, entrambe con pattern callback/task-token), due coppie
+di code SQS con DLQ, SSM Parameter Store e Secrets Manager per il bootstrap di configurazione.
+`docs/architecture/final-architecture.md` dichiara come obiettivo che l'applicazione "parli con i
+servizi AWS, reali o emulati, senza cambiare codice": oggi questo è vero solo a livello di
+*endpoint/credenziali* (stessa classe concreta, configurazione diversa), non a livello di
+*adapter sostituibile* — un cambio di provider LLM richiederebbe oggi di modificare `BedrockService`
+e ogni sua chiamata, non di aggiungere un nuovo binding dietro un'interfaccia esistente.
+
+A questo si aggiunge un vincolo specifico di questo contesto (progetto universitario, valutazione
+in sede di colloquio orale): la struttura deve reggere a domande di approfondimento su *perché*
+ogni confine esiste, non solo dimostrare che i nomi dei pattern compaiono nel codice.
+
+## Decision
+
+Adottare l'**architettura esagonale (ports & adapters)** in forma rigorosa, applicando la
+**Dependency Rule**: le dipendenze del codice sorgente puntano sempre verso l'interno, dagli
+adapter verso il dominio astratto — mai il contrario.
+
+- Il **dominio** (core: entità, regole di business, porte) non importa `Illuminate\*`, Eloquent,
+  l'SDK AWS o HTTP. È testabile con Pest puro, senza bootstrap del framework.
+- Il dominio definisce due famiglie di porte:
+  - **porte primarie** (inbound): contratti dei casi d'uso, invocati dall'esterno;
+  - **porte secondarie** (outbound): contratti verso persistenza e servizi esterni.
+- L'**applicazione** implementa le porte primarie orchestrando il dominio **esclusivamente**
+  attraverso le porte secondarie — mai un accesso diretto a un model Eloquent, mai una chiamata
+  diretta a un client AWS.
+- Gli **adapter primari** (inbound) traducono un ingresso esterno in una chiamata a un caso d'uso
+  tramite la sua porta primaria: **Controller HTTP**, **comandi Artisan**, e — punto specifico di
+  questo progetto — i **`WorkflowTaskHandler`**, che sono adapter primari guidati da Step
+  Functions/SQS invece che da HTTP. Generalizzare `WorkflowTaskHandler` a "adapter primario"
+  invece che a "gestore di task" è la mossa concettuale centrale di questo ADR: non introduce un
+  meccanismo nuovo, rinomina e generalizza uno già in produzione.
+- Gli **adapter secondari** (outbound) implementano le porte verso persistenza (repository
+  Eloquent) e verso servizi esterni (wrapper Bedrock, Textract, Step Functions, storage) —
+  bindati porta→adapter nel service provider.
+
+### Perimetro applicato
+
+La struttura esagonale rigorosa si applica ai **due domini applicativi principali**: `Documents`
+(Co-Pilot CdL) e `Communications` (AI Assistant). `Identity`, `Audit`, `Observability`, `Support`
+e l'infrastruttura condivisa di `Workflow` **restano infrastruttura trasversale**, non
+riorganizzata in porte/adapter proprie, per una ragione precisa e non per pigrizia: nessuna di
+queste ha oggi (né si prevede abbia nell'MVP) un'implementazione alternativa da rendere
+sostituibile — non esiste un secondo backend di audit, un secondo sistema di metriche, un secondo
+loader di configurazione. Introdurre una porta per un collaboratore che non varierà mai è
+esattamente il pattern-name-dropping decorativo che questo refactor deve evitare (vedi Vincoli
+nel brief originale: "non creare porte per valori scalari o dettagli che non varieranno"). I casi
+d'uso dei due domini principali continuano a dipendere direttamente da `AuditLogger` e
+`MetricsRecorder` come servizi di infrastruttura condivisa, non come porte di dominio — è una
+scelta di perimetro esplicita, motivata qui per non doverla rigiustificare in sede di colloquio.
+
+`App\Mvp\Workflow\Contracts\WorkflowTaskHandler` resta dov'è (infrastruttura condivisa), ma cambia
+ruolo concettuale: da "contratto di gestione task" a "porta primaria di dominio invocata da un
+adapter guidato da Step Functions". Le sue due implementazioni (`DocumentWorkflowTaskHandler`,
+`CommunicationWorkflowTaskHandler`) migrano dentro i rispettivi domini come adapter primari, e al
+loro interno smettono di toccare Eloquent/SDK direttamente: delegano ai casi d'uso di dominio
+tramite le stesse porte primarie usate dai Controller HTTP dello stesso dominio.
+
+`App\Mvp\Support\MvpStateService` è un'eccezione di natura diversa dalle precedenti, e va nominata
+come tale invece di infilarla nello stesso cesto di Identity/Audit/Observability: non è
+infrastruttura senza bisogno di sostituibilità, è un **read model** (CQRS-lite). Le *scritture* sui
+due domini principali passano sempre dalle porte primarie e dai casi d'uso applicativi, senza
+eccezioni. Le *letture* destinate a comporre la UI (`GET /state`, le liste, gli endpoint di
+streaming) sono invece intenzionalmente servite da `MvpStateService`, che interroga Eloquent
+direttamente e assembla lo shape JSON già pronto per il frontend (conteggi cross-entità, join fra
+`SubDocument`/`OriginalDocument`/`ExtractedData`, formattazione di presentazione). Passare queste
+letture attraverso `DocumentRepository`/`CommunicationRepository` non le renderebbe più "esagonali"
+in un senso che conta: quei repository esistono per servire i casi d'uso di scrittura con
+value object di dominio, non per proiettare uno shape di presentazione ottimizzato per una singola
+schermata — usarli per questo accoppierebbe la porta di persistenza del dominio ai bisogni di
+visualizzazione del frontend, il problema opposto a quello che l'esagonale vuole risolvere. La
+separazione lettura/scrittura è quindi una scelta esplicita, non un buco lasciato aperto.
+
+## Struttura di package (come implementata)
+
+I Controller HTTP restano in `app/Http/Controllers/Api/V1/` (convenzione Laravel per il
+routing): non sono stati spostati sotto `app/Mvp/*/Adapters/`, ma sono comunque adapter primari
+nella sostanza — traducono la richiesta in una chiamata a una porta primaria, nessuna regola di
+dominio al loro interno. Gli adapter primari guidati da Step Functions/SQS (`WorkflowTaskHandler`)
+vivono invece sotto `Adapters/Primary/Workflow/`, dentro il rispettivo dominio. La sotto-cartella
+per gli adapter primari si chiama `Primary` (non `Inbound`, come nella versione proposta
+inizialmente) per restare simmetrica con `Outbound`, ed evitare l'ambiguità con `Domain/Ports/Inbound`.
+
+```
+app/Mvp/Documents/
+├── Domain/
+│   ├── Ports/
+│   │   ├── Inbound/                   # porte primarie — un'interfaccia per caso d'uso
+│   │   │   ├── UploadDocumentUseCase.php
+│   │   │   ├── StartDocumentWorkflowUseCase.php
+│   │   │   ├── ListDocumentsUseCase.php
+│   │   │   ├── DeleteDocumentUseCase.php
+│   │   │   ├── RunOcrUseCase.php                   # invocata dal workflow (task Textract)
+│   │   │   ├── ProcessDocumentUseCase.php          # invocata dal workflow (task Bedrock)
+│   │   │   ├── FinalizeDocumentWorkflowUseCase.php
+│   │   │   ├── ReviewDocumentUseCase.php
+│   │   │   └── SendMessageUseCase.php
+│   │   └── Outbound/                  # porte secondarie
+│   │       ├── DocumentRepository.php
+│   │       ├── OcrGatewayPort.php                  # implementata da TextractOcrAdapter
+│   │       ├── DocumentAiGatewayPort.php           # implementata da BedrockDocumentAiAdapter
+│   │       ├── DocumentStoragePort.php
+│   │       ├── SendMessageRendererPort.php
+│   │       └── DocumentEventDispatcherPort.php
+│   ├── ValueObjects/                  # proiezioni di dominio, nessun riferimento a Eloquent
+│   ├── Events/                        # 11 eventi di dominio (Observer, vedi tabella pattern)
+│   ├── Commands/                      # UploadDocumentCommand, ...
+│   └── Exceptions/                    # MissingExtractedDataException, ...
+├── Application/
+│   ├── UseCases/                      # implementano le porte primarie, orchestrano via porte secondarie
+│   │   ├── UploadDocumentService.php
+│   │   ├── StartDocumentWorkflowService.php
+│   │   ├── ListDocumentsService.php
+│   │   └── ...
+│   └── Listeners/                     # 11 listener: un evento -> audit/metriche
+└── Adapters/
+    ├── Primary/
+    │   └── Workflow/DocumentWorkflowTaskHandler.php # adapter primario: Step Functions → caso d'uso
+    └── Outbound/
+        ├── Persistence/EloquentDocumentRepository.php
+        ├── Ocr/TextractOcrAdapter.php               # implementa OcrGatewayPort
+        ├── Ai/BedrockDocumentAiAdapter.php           # implementa DocumentAiGatewayPort
+        ├── Storage/FlysystemDocumentStorageAdapter.php
+        ├── Pdf/DompdfSendMessageRenderer.php
+        └── Events/LaravelDocumentEventDispatcher.php
+
+app/Mvp/Communications/
+├── Domain/
+│   ├── Ports/{Inbound,Outbound}/      # GenerateCommunicationUseCase, StartCommunicationWorkflowUseCase,
+│   │                                   # CommunicationDraftUseCase, DeleteCommunicationUseCase,
+│   │                                   # UpdateCommunicationCoverUseCase, RateCommunicationUseCase,
+│   │                                   # ExportCommunicationUseCase, PromptConfigurationUseCase,
+│   │                                   # GenerateCommunicationTextUseCase, GenerateCommunicationCoverUseCase,
+│   │                                   # FinalizeCommunicationUseCase, ListCommunicationsUseCase;
+│   │                                   # CommunicationRepository, CommunicationAiGatewayPort,
+│   │                                   # CommunicationPdfRendererPort, CommunicationCoverStoragePort,
+│   │                                   # PromptConfigurationRepository, CommunicationEventDispatcherPort
+│   ├── ValueObjects/                  # ..., CommunicationDraftBuilder (Builder, vedi tabella pattern)
+│   ├── Events/                        # 14 eventi di dominio (Observer, vedi tabella pattern)
+│   ├── Commands/, Exceptions/
+├── Application/
+│   ├── UseCases/
+│   └── Listeners/                     # 14 listener: un evento -> audit/metriche
+└── Adapters/
+    ├── Primary/Workflow/CommunicationWorkflowTaskHandler.php
+    └── Outbound/{Persistence,Ai,Pdf,Storage,Events}/
+
+app/Mvp/Workflow/                       # invariato: infrastruttura condivisa, non ridisegnata
+├── Contracts/WorkflowTaskHandler.php   # ora descritto come porta primaria "guidata da workflow"
+├── Ports/Outbound/WorkflowEnginePort.php  # astrae l'avvio di un'esecuzione Step Functions,
+│                                           # prima duplicato quasi identico in
+│                                           # DocumentWorkflowService e CommunicationWorkflowService
+│                                           # (entrambi iniettavano SfnClient direttamente).
+│                                           # Un solo adapter implementa la porta per entrambi i domini.
+├── Adapters/Outbound/SfnWorkflowEngineAdapter.php
+└── Services/{WorkflowTaskRegistry,WorkflowTaskRunner,WorkflowTaskHeartbeat}.php
+```
+
+Nota su `WorkflowEnginePort`: è l'unica porta condivisa fra i due domini. Non è
+un'eccezione al perimetro deciso sopra — non riguarda Audit/Observability/Identity/Support, ma
+elimina una duplicazione reale già presente (due classi che avvolgono `SfnClient` nello stesso
+modo) spostandola in un unico punto, coerente con "Workflow" come infrastruttura condivisa alle
+due pipeline (`docs/architecture/repository-structure.md` lo descrive già così).
+
+Terminologia: sempre "dominio / applicazione / adapter primario / adapter secondario / porta
+primaria / porta secondaria". Mai "livello", "layer", "tier".
+
+## Verifica di conformità
+
+La Dependency Rule deve essere verificabile automaticamente, non solo rispettata per disciplina:
+un controllo statico (script CI, ad es. basato su `nikic/php-parser` o un tool tipo Deptrac) deve
+fallire se un file sotto `app/Mvp/{Documents,Communications}/Domain/` importa un namespace
+`Illuminate\*`, `Aws\*` o un model Eloquent. Questo è ciò che distingue questo refactor da un
+riordino di cartelle: la regressione verso il mixing attuale diventa un errore di build, non un
+richiamo in code review.
+
+## Design pattern individuati (Compito 2bis)
+
+Per ciascuno: dove si applica, quale problema risolve *in quel punto specifico*, cosa succederebbe
+senza. Solo pattern con un adapter/porta/collaboratore reale dietro — nessuno è nominato per
+completare l'elenco della specifica tecnica.
+
+| Pattern | Categoria | Dove | Problema che risolve *lì* | Senza |
+|---|---|---|---|---|
+| **Adapter** | Strutturale | `EloquentDocumentRepository`, `BedrockDocumentAiAdapter`, `TextractOcrAdapter`, `SfnWorkflowEngineAdapter`, e gli equivalenti in Communications | Isola il dominio dalla forma specifica di Eloquent/SDK AWS: il caso d'uso parla con `DocumentRepository`, non con `SubDocument::query()`. È il pattern costitutivo dell'esagonale stesso. | Il dominio dipenderebbe da Eloquent/AWS direttamente (situazione attuale); nessun test di dominio senza bootstrap Laravel + credenziali AWS/LocalStack. |
+| **Strategy** | Comportamentale | `WorkflowTaskHandler`, già esistente, generalizzato a porta primaria con adapter selezionato da `WorkflowTaskRegistry::for($taskType)` | `WorkflowTaskRunner` resta agnostico rispetto al dominio (dedup/claim/audit/metriche uguali per tutti); solo il passo di business varia. | `WorkflowTaskRunner` avrebbe bisogno di un `match`/`if` sul tipo di dominio, violando la Dependency Rule (l'infrastruttura di workflow dovrebbe conoscere i dettagli di Documents/Communications). |
+| **Facade** | Strutturale | I servizi applicativi (`SubmitDocumentUploadService`, `GenerateCommunicationService`, ...) offrono all'adapter primario un solo metodo pubblico che coordina più porte secondarie | Il Controller/`WorkflowTaskHandler` non deve sapere quanti collaboratori servono per soddisfare un caso d'uso (repository + gateway AI + storage + regola di dominio). | Il Controller orchestrerebbe direttamente 4-5 servizi (è la situazione odierna in `DocumentController`/`CommunicationController`). |
+| **Factory Method** | Creazionale | `WorkflowTaskRegistry::for(string $taskType): WorkflowTaskHandler` (già esistente, riletto in chiave esagonale come selettore dell'adapter primario corretto per tipo di task) | Centralizza la selezione dell'implementazione a runtime in un solo punto, senza che il chiamante (`WorkflowTaskRunner`) conosca le classi concrete. | Il runner dovrebbe istanziare/selezionare l'handler con logica propria, duplicata ad ogni punto di invocazione. |
+| **Builder** | Creazionale | `CommunicationDraftBuilder` (`Communications/Domain/ValueObjects/`), usato da `GenerateCommunicationTextService` e `GenerateCommunicationCoverService`: assembla il contenuto della bozza attraverso i passi asincroni (`generate_text` → `generate_cover`), rifiutando esplicitamente `withGeneratedCover()` se il testo non è ancora stato generato (`CoverPrecedesTextException`) | Prima lo stato parziale valido ad ogni fase era implicito nei rami dei singoli `Application Service`. Il Builder esplicita l'invariante ("dopo `generate_text` titolo e corpo sono impostati, la copertina no", richiesto perché `generate_cover` usa `image_prompt` scritto dal passo testuale) invece di lasciarlo dedotto dal codice. | Lo stato intermedio valido resta implicito e verificabile solo leggendo ogni `Service`; un nuovo passo aggiunto fuori ordine produce uno stato incoerente senza che nulla lo impedisca. |
+| **Singleton** | Creazionale | Binding dei client AWS e degli adapter nel service provider — invariato nella sostanza, ma ora bindato **all'interfaccia di porta**, non alla classe concreta | I client AWS restano condivisi (costruzione costosa, connection reuse); il binding diventa il punto in cui si sceglie *quale* adapter soddisfa la porta. | Nessun punto unico di sostituzione: cambiare adapter richiederebbe cercare e modificare ogni type-hint concreto nella codebase (situazione attuale). |
+| **Observer** | Comportamentale | Applicato simmetricamente a entrambi i domini, porte separate (non condivise: gli eventi sono specifici del dominio). Communications: 19 eventi (`Communications/Domain/Events/`) via `CommunicationEventDispatcherPort` → `LaravelCommunicationEventDispatcher`, 19 listener (copre anche `DeleteCommunicationService`, `RateCommunicationService`, `PromptConfigurationService`, `StartCommunicationWorkflowService`, `UpdateCommunicationCoverService`). Documents: 13 eventi (`Documents/Domain/Events/`) via `DocumentEventDispatcherPort` → `LaravelDocumentEventDispatcher`, 13 listener, su `ProcessDocumentService`, `DeleteDocumentService`, `ReviewDocumentService`, `SendMessageService`, `FinalizeDocumentWorkflowService`, `StartDocumentWorkflowService` | Prima le chiamate ad audit/metriche erano sparse manualmente in ogni `Application Service`: la coppia audit+metrica per "copertina degradata" (Communications) era duplicata due volte (degrado da errore modello/storage e degrado da timeout in `finalize`) — con l'evento unico quella duplicazione sparisce. | Ogni nuova reazione a un evento (es. una notifica futura) richiederebbe toccare ogni caso d'uso che genera quell'evento, invece di aggiungere un listener. |
+| **Command** | Comportamentale | Ogni caso d'uso applicativo è una classe dedicata a una porta primaria, coerente con la forma già usata da `WorkflowTaskHandler::execute()` | Un caso d'uso = una porta primaria = una responsabilità, testabile in isolamento passando mock delle porte secondarie. | I casi d'uso resterebbero metodi dentro service "fat" con più responsabilità (situazione precedente di `DocumentProcessingService`, `CommunicationWorkflowService`). |
+
+Nota di onestà su Command: l'idea originale ("un caso d'uso = una classe con un solo metodo
+pubblico") non regge alla lettera per le porte che raggruppano transizioni sullo stesso aggregato
+— `CommunicationDraftUseCase` ne ha cinque (`favorite/unfavorite/update/save/discard`),
+`UpdateCommunicationCoverUseCase` e `StartCommunicationWorkflowUseCase` ne hanno due ciascuna. È
+una scelta esplicita (raggruppare transizioni correlate sullo stesso aggregato invece di una
+classe per transizione), non un Command puro: se in sede di discussione viene chiesto "dov'è il
+Command pattern", la risposta onesta è che si applica a metà dei casi d'uso, non a tutti.
+
+Nota di onestà sui casi d'uso pass-through: `ListDocumentsService`/`ListCommunicationsService`
+sono una riga che delega al repository (`return $this->documents->paginateSubDocuments(...)`), con
+tanto di interfaccia (`ListDocumentsUseCase`) e fake dedicato nei test. Non c'è nessuna regola di
+business da isolare lì dentro — l'argomento per tenerli comunque come classe è **uniformità del
+confine**: ogni porta primaria ha sempre un caso d'uso dietro, mai un controller che chiama
+`DocumentRepository` direttamente, così chi legge il codice non deve ricordare quali endpoint
+"fanno eccezione". Non è un argomento di sostituibilità (non c'è nulla da sostituire in una riga di
+delega) — se in sede di discussione viene chiesto perché esiste una classe per un pass-through, la
+risposta onesta è questa, non "incapsula logica di dominio".
+
+Nota di onestà sulla sostituibilità degli adapter: ogni porta secondaria di questo perimetro ha
+oggi **un solo** adapter di produzione (`BedrockDocumentAiAdapter`, `TextractOcrAdapter`,
+`SfnWorkflowEngineAdapter`, `EloquentDocumentRepository`/`EloquentCommunicationRepository`, ecc.).
+L'argomento solido per l'esagonale qui non è "possiamo cambiare provider Bedrock/Textract senza
+toccare i casi d'uso" — nessuno lo ha mai fatto, sarebbe una promessa non verificata. L'argomento
+dimostrato è la **testabilità**: ogni porta ha anche un secondo implementatore reale, il fake usato
+nei test di dominio (`FakeDocumentAiGateway`, `InMemoryDocumentRepository`, `FakeWorkflowEngine`,
+...) — stesso binding concettuale di un secondo adapter di produzione, mai esercitato con un
+provider AWS diverso ma esercitato davvero ad ogni test. Se in sede di discussione si chiede di
+"dimostrare" la sostituibilità con un secondo provider reale, la risposta onesta è che non è mai
+stata costruita: è strutturalmente possibile (stesso binding, stessa interfaccia), non provata.
+
+Pattern valutati e **scartati esplicitamente** (nessuna finzione che "andrebbero comunque bene"):
+
+- **Proxy** (caching/circuit-breaking davanti al gateway Bedrock/Textract): **scartato**. L'ADR
+  0005 ("Nessun fallback automatico dei servizi AI") vieta esplicitamente di mascherare un
+  fallimento di servizio AI con un comportamento sostitutivo — un circuit breaker che interrompe
+  o devia le chiamate contraddirebbe direttamente quella decisione. Un Proxy qui sarebbe
+  pattern-name-dropping in conflitto con un ADR già accettato, non un miglioramento architetturale.
+  Riconsiderarlo richiederebbe prima riaprire esplicitamente l'ADR 0005, non è nello scope di
+  questo refactor.
+- **Abstract Factory**: **scartato**. Non esiste nel progetto una famiglia di adapter correlati
+  che debba essere creata coerentemente insieme (es. "tutti gli adapter per il provider LocalStack"
+  vs "tutti gli adapter per AWS reale" non sono in realtà famiglie diverse: sono la stessa classe
+  con endpoint/credenziali diversi, per scelta esplicita di ADR 0004). Il Factory Method già
+  presente (`WorkflowTaskRegistry`) copre l'unico bisogno di selezione reale.
+
+## Consequences
+
+- I due domini principali (Documents, Communications) diventano testabili senza bootstrap
+  Laravel/DB/AWS per la parte di dominio e applicazione: i test dei casi d'uso passano mock delle
+  interfacce di porta, non fake HTTP o LocalStack.
+- Il numero di classi aumenta (un'interfaccia + un'implementazione per ogni porta, invece di un
+  service unico): è un costo esplicito e accettato in cambio della sostituibilità e della
+  testabilità, non un effetto collaterale.
+- Le liste paginate (`ListDocumentsUseCase`/`ListCommunicationsUseCase`) costano un round-trip in
+  più per richiesta: la porta primaria restituisce solo gli id della pagina corrente (VO
+  `SubDocumentPage`/`CommunicationPage`, nessun riferimento Eloquent), poi il Controller ricarica
+  gli stessi record con le relazioni necessarie per `MvpStateService` (vedi read model sopra) e li
+  riordina secondo l'ordine degli id restituiti dalla porta. Stesso pattern nel loop di polling SSE
+  (`DocumentController::stream()`/`CommunicationStreamController::stream()`): ogni iterazione legge
+  uno snapshot di dominio dalla porta di poll, poi ricarica dal modello Eloquent solo i
+  sotto-documenti nuovi da quest'ultimo giro. Accettato perché tiene la porta di lettura libera da
+  Eloquent senza duplicare lo shaping di `MvpStateService` in due punti: il costo è un secondo giro
+  di query per pagina/iterazione, non per singolo record.
+- I Controller e i `WorkflowTaskHandler` si riducono a traduzione pura (richiesta → chiamata al
+  caso d'uso → risposta): le regole oggi nei controller (favorite idempotente, filtri
+  documento, transizione one-way di `send_status`) migrano nei casi d'uso.
+- `DocumentController::store()`/`CommunicationController::store()` orchestrano comunque due porte
+  primarie in sequenza (`upload`/`generate`, poi `startWorkflow->start()`): un residuo di logica
+  applicativa nell'adapter, dello stesso tipo che questo ADR dichiara di aver spostato altrove.
+  Deliberatamente non fuso in un unico caso d'uso "carica e avvia": `StartDocumentWorkflowUseCase`/
+  `StartCommunicationWorkflowUseCase` devono restare invocabili da soli — `regenerate()` in
+  `CommunicationController` chiama `startWorkflow->regenerate()` senza mai passare da `generate()`.
+  Fondere i due punti di ingresso in un solo caso d'uso comprometterebbe questo riuso per chiudere
+  un'eccezione piccola: accettato come costo esplicito, non un buco non visto.
+- Il contratto OpenAPI pubblico e il comportamento osservabile (endpoint, payload, status HTTP)
+  **non cambiano**: è un refactor architetturale interno, non una riscrittura funzionale (vincolo
+  esplicito del brief).
+- Introduce un costo di manutenzione per la verifica di conformità (script/tool di controllo
+  dipendenze in CI) — accettato perché è ciò che rende la Dependency Rule reale invece che
+  convenzionale.
+- Identity/Audit/Observability/Support restano fuori scope: se in futuro uno di essi avrà bisogno
+  reale di un'implementazione alternativa, andrà aperto un nuovo ADR che estende il perimetro con
+  la stessa motivazione richiesta qui (non un'estensione automatica "già che ci siamo").
+
+## Alternatives considered
+
+- **Architettura a strati (layered/N-tier) esplicita** (Controller → Service → Repository →
+  Model): è, di fatto, ciò che il progetto ha già informalmente ("service layer per dominio",
+  come descritto in `IMPLEMENTATION_OVERVIEW.md` §5/§12) — e la mescolanza documentata sopra è
+  la prova che formalizzarla non basta a impedirla. Un'architettura a strati non impone una
+  direzione di dipendenza verificabile verso un nucleo astratto: uno "service" può legittimamente
+  dipendere da Eloquent e dall'SDK AWS senza violare nessuna regola del layering, perché il
+  layering vincola solo *chi può chiamare chi*, non *chi può conoscere cosa*. È esattamente il
+  meccanismo mancante che ha permesso il mixing attuale. Scartata perché non risolve il problema
+  che questo ADR affronta, lo rinomina.
+- **Non formalizzare nulla, mantenere la struttura per dominio attuale**: scartata perché non
+  offre alcun confine automaticamente verificabile e non risponde al requisito di dimostrare
+  comprensione reale di ports & adapters in sede di colloquio — l'organizzazione per dominio è
+  necessaria ma non sufficiente per l'esagonale.
+- **Estendere l'esagonale a tutti i domini fin da subito** (inclusi Identity/Audit/Observability/
+  Support): scartata per questo giro — nessuno di essi ha un bisogno di sostituibilità reale oggi;
+  estenderli comunque sarebbe introdurre porte "per simmetria" invece che per necessità, la stessa
+  cosa che il brief vieta esplicitamente per i pattern.
+
+## Implementation evidence
+
+Refactor completato per entrambi i domini del perimetro, dominio per dominio, con la suite Pest
+verde ad ogni passaggio (commit separati):
+
+- **Documents** (Co-Pilot CdL): porte, casi d'uso e adapter come da struttura sopra; Controller
+  (`DocumentController`, `DocumentReviewController`, `SendMessageController`) riscritti come
+  adapter primari sottili; `DocumentWorkflowTaskHandler` spostato in `Adapters/Primary/Workflow/`
+  e ridotto a dispatch verso le porte primarie del dominio.
+- **Communications** (AI Assistant): stessa struttura; `CommunicationController`,
+  `CommunicationCoverController`, `CommunicationRatingController`, `CommunicationExportController`,
+  `PromptConfigurationController` riscritti come adapter primari sottili; le precondizioni di
+  stato (bozza scartata, non pronta per l'export, rigenerazione non disponibile, ecc.), prima
+  verificate nel controller, sono migrate nei casi d'uso applicativi come eccezioni di dominio
+  (`Domain/Exceptions/*`), che l'adapter HTTP si limita a tradurre nello status code corretto.
+- `WorkflowEnginePort`/`SfnWorkflowEngineAdapter`: porta condivisa introdotta come previsto,
+  un solo adapter per entrambi i domini.
+- **Builder e Observer chiusi** (inizialmente solo "individuati" in questo ADR, non
+  implementati): `CommunicationDraftBuilder` in `Communications/Domain/ValueObjects/` esplicita
+  l'invariante testo-prima-di-copertina; 14 eventi di dominio in `Communications/Domain/Events/`
+  con altrettanti listener in `Communications/Application/Listeners/`, pubblicati tramite la
+  nuova porta `CommunicationEventDispatcherPort` (`LaravelCommunicationEventDispatcher`),
+  sostituiscono le chiamate dirette ad `AuditLogger`/`MetricsRecorder` sparse nei casi d'uso —
+  eliminando anche la duplicazione audit+metrica di "copertina degradata" fra
+  `GenerateCommunicationCoverService` e `FinalizeCommunicationService`. 307 test verdi confermano
+  che l'evento_type e il conteggio degli `AuditEvent` restano identici al comportamento
+  precedente.
+- Verifica di conformità automatica alla Dependency Rule: `scripts/ci/check-dependency-rule.sh`,
+  eseguito da `make verify-backend` e dal job `backend` della CI — fallisce se un file sotto
+  `app/Mvp/{Documents,Communications}/Domain/` referenzia `Illuminate\*`, `Aws\*` o
+  `App\Models\*`.
+- Comportamento osservabile preservato: contratto OpenAPI, status HTTP ed effetti sul DB
+  invariati (verificato da `OpenApiContractTest` e dalla suite Pest esistente).
+- `Identity`, `Audit`, `Observability`, `Support` e l'infrastruttura di `Workflow` non sono stati
+  toccati oltre a `WorkflowEnginePort`, come da perimetro deciso sopra.
+- **Test di dominio senza bootstrap Laravel** (richiesto dal brief originale, Compito 3 punto 2,
+  mai soddisfatto fino a questo punto): nuova suite Pest `tests/DomainUnit/` (nessun
+  `->extend(TestCase::class)` in `Pest.php`, quindi nessun boot del framework), con adapter di
+  test in `Fakes/` che implementano le porte secondarie in memoria — 17 test dimostrano che i casi
+  d'uso di Communications sono davvero istanziabili ed eseguibili con `new`, senza container, DB o
+  LocalStack. Per renderlo possibile, `GenerateCommunicationCoverService`/
+  `UpdateCommunicationCoverService` (prefisso di storage) e `ProcessDocumentService`
+  (soglia di confidenza, dominio Documents) hanno smesso di leggere `config()` internamente
+  — il valore e' risolto una volta sola nel service provider e passato al costruttore; allo stesso
+  modo `GenerateCommunicationCoverService` e `ProcessDocumentService` non usano piu' la facade
+  `Illuminate\Support\Facades\Log` ma un `Psr\Log\LoggerInterface` iniettato.
+- **Stesso trattamento su Documents** (Observer + test di dominio puro, replicati simmetricamente
+  da Communications): 11 eventi di dominio in `Documents/Domain/Events/` con altrettanti listener
+  in `Documents/Application/Listeners/`, pubblicati tramite la nuova porta
+  `DocumentEventDispatcherPort` (`LaravelDocumentEventDispatcher`, non condivisa con Communications
+  — gli eventi sono specifici del dominio, come le porte di persistenza). Sostituiscono le chiamate
+  dirette ad `AuditLogger`/`MetricsRecorder` in `ProcessDocumentService`, `DeleteDocumentService`,
+  `ReviewDocumentService`, `SendMessageService` e `FinalizeDocumentWorkflowService`. Resta fuori
+  per scelta esplicita, a specchio di quanto lasciato in Communications: `UploadDocumentService`
+  (un solo audit, come `GenerateCommunicationService`) — `StartDocumentWorkflowService` e' stato
+  convertito in un passo successivo, vedi punto sugli eventi dei casi d'uso di avvio pipeline sotto.
+  15 nuovi test in
+  `tests/DomainUnit/Documents/` (`ProcessDocumentService::extractAndSaveFields()`,
+  `DeleteDocumentService`, `ReviewDocumentService`, `SendMessageService`, `ListDocumentsService`,
+  `RunOcrService`) — `ProcessDocumentService::process()` resta fuori: manipola PDF reali via Fpdi e
+  chiama l'helper Laravel `storage_path()`, non testabile in isolamento per lo stesso motivo di
+  `FinalizeDocumentWorkflowService`/`StartDocumentWorkflowService` (helper `now()` → facade `Date`,
+  vedi trade-off sotto). 370 test verdi in totale (307 Feature/Unit preesistenti + 41 DomainUnit
+  Communications + 22 DomainUnit Documents), stesso conteggio Feature di prima: nessuna regressione
+  di comportamento.
+- **Asimmetria fra domini chiusa**: la prima passata su Communications (10 eventi) non copriva
+  `DeleteCommunicationService`, `RateCommunicationService`, `PromptConfigurationService`, mentre la
+  passata simmetrica su Documents copriva sia `DeleteDocumentService` che `ReviewDocumentService` —
+  un'incoerenza emersa dal fatto che lo scope si e' allargato in corsa, non una scelta deliberata.
+  Chiusa aggiungendo `CommunicationDeleted`, `CommunicationRated`, `PromptConfigurationSaved`,
+  `PromptConfigurationDeleted` (14 eventi Communications in totale) e due nuovi test
+  (`DeleteCommunicationServiceTest`, `PromptConfigurationServiceTest`). `RateCommunicationService`
+  restava bloccato da `now()` anche dopo la conversione ad evento — chiuso separatamente, vedi
+  punto sull'orologio PSR-20 sotto.
+- **Bug trovato scrivendo questi ultimi test**: due file riusavano una funzione helper globale
+  (`fakeActor()`) dichiarata in un terzo file, senza ridichiararla. Passava con `php artisan test`
+  seriale ma falliva con `--parallel`: Paratest distribuisce i file di test fra processi worker
+  separati, e una funzione globale dichiarata in un file non e' visibile in un altro se finiscono
+  su worker diversi. Corretto dando a ogni file la propria funzione locale, univoca per nome
+  (pattern gia' seguito correttamente in `tests/DomainUnit/Documents/`) — verificato rieseguendo
+  la suite intera con `--parallel`, non solo il sotto-insieme fallito.
+- **Orologio condiviso (`Psr\Clock\ClockInterface`, standard PSR-20)**: `RateCommunicationService`
+  era l'ultimo dei tre a non avere un test `DomainUnit`, bloccato da `now()` (facade `Date`,
+  richiede il container). Nessuna porta custom: come gia' fatto per `Psr\Log\LoggerInterface`, si
+  usa direttamente lo standard — un'interfaccia PSR non ha bisogno di essere reinventata come
+  porta di dominio. Un solo adapter (`App\Mvp\Support\Clock\SystemClock`) condiviso fra i due
+  domini, non uno per dominio: a differenza degli eventi (specifici del dominio per costruzione),
+  il tempo non ha semantica di dominio, quindi condividerlo non e' un'eccezione al perimetro
+  deciso sopra ma la stessa logica gia' applicata a `WorkflowEnginePort`. 3 nuovi test
+  (`RateCommunicationServiceTest`, con un `FakeClock` che restituisce un istante fisso).
+- **Stesso orologio esteso ai 4 casi d'uso rimasti bloccati da `now()`**: `FinalizeCommunicationService`
+  e `FinalizeDocumentWorkflowService` erano gia' completamente basati su eventi (nessuna dipendenza
+  diretta da `AuditLogger`/`MetricsRecorder`) — `now()` era l'ultimo ostacolo alla purezza. Con
+  `ClockInterface` iniettato diventano interamente testabili in isolamento: 4 nuovi test
+  (`FinalizeCommunicationServiceTest`, `FinalizeDocumentWorkflowServiceTest`, ciascuno con un
+  `FakeClock` locale al dominio). `StartCommunicationWorkflowService` e `StartDocumentWorkflowService`
+  hanno ricevuto lo stesso trattamento per coerenza (`now()` → `$this->clock->now()`), ma restano
+  bloccati per test di dominio puro da `AuditLogger`/`MetricsRecorder` diretti e da `config()`
+  pesante (vedi trade-off sotto) — nessun nuovo test `DomainUnit` per questi due, sarebbe
+  fittizio senza risolvere anche quei due blocchi.
+- **`StartCommunicationWorkflowService`/`StartDocumentWorkflowService` convertiti a eventi**:
+  ultimo punto della codebase con `AuditLogger`/`MetricsRecorder` chiamati direttamente da un
+  `Application Service` (a parte i due audit singoli lasciati per scelta, `GenerateCommunicationService`
+  e `UploadDocumentService`). Nuovi eventi: `CommunicationWorkflowStarted`,
+  `CommunicationWorkflowStartFailed`, `CommunicationRegenerationRequested` (17 eventi Communications
+  in totale) e `DocumentWorkflowStarted`, `DocumentWorkflowStartFailed` (13 eventi Documents in
+  totale), con i rispettivi listener. Non elimina il blocco di questi due casi d'uso per un test
+  `DomainUnit` — restano legati a `config()` (vedi trade-off sotto) — ma chiude l'ultima asimmetria
+  strutturale: ora ogni caso d'uso di entrambi i domini dispatcha eventi invece di chiamare
+  audit/metriche in modo diretto, senza eccezioni. Nessun nuovo test: nessuno dei due comportamenti
+  osservabili cambia, la copertura resta a livello Feature (`OpenApiContractTest` e la suite Pest
+  esistente).
+- **Fuga di dominio chiusa: `SendStatus` spostato da Communications a Documents**: l'enum viveva in
+  `Communications/Enums/SendStatus.php` ma era usato solo da `Documents` (`SendMessageService`,
+  `RecordSendMessageExported`, il modello `SubDocument`, `PrometheusExporter`,
+  `ListDocumentsRequest`) — zero usi reali dentro Communications. Una dipendenza diretta
+  Documents→Communications, mai dichiarata come eccezione da nessuna parte, e non intercettata da
+  `check-dependency-rule.sh` perché lo script controlla solo Illuminate/Aws/Models, non le
+  dipendenze incrociate fra i due domini principali. Spostato in `Documents/Enums/SendStatus.php`,
+  8 file aggiornati (import + factory + test). Nessun cambio di comportamento: stesso enum, stessi
+  valori, namespace corretto.
+- **`BedrockService` dietro `DocumentAiGatewayPort` anche per `pageBoundaryMarker()`/`formatUserError()`**:
+  `ProcessDocumentService` iniettava correttamente `DocumentAiGatewayPort` per le due operazioni di
+  dominio (`splitDocument`/`extractFields`), ma chiamava `BedrockService::pageBoundaryMarker()` e
+  `BedrockService::formatUserError()` come metodi statici della classe concreta — esattamente il
+  pattern che questo ADR (vedi "Evidenza concreta della mescolanza" sopra) dice di evitare. Aggiunti
+  i due metodi all'interfaccia `DocumentAiGatewayPort`, implementati da `BedrockDocumentAiAdapter`
+  (delega a `BedrockService`, dove la dipendenza concreta è corretta) e da `FakeDocumentAiGateway`
+  nei test. `ProcessDocumentService` non importa più `App\Mvp\Ai\BedrockService`. Fpdi e
+  `storage_path()` nella stessa classe restano l'eccezione dichiarata (vedi docblock della classe):
+  quella è manipolazione di libreria senza alternativa, questa era invece una porta già esistente
+  semplicemente non usata fino in fondo.
+- **Controller primari non toccano più Storage/Eloquent per anteprima e download**:
+  `DocumentPreviewController::preview()` e `CommunicationCoverController::coverImage()` facevano
+  `Storage::disk(...)->exists()/readStream()` direttamente nell'adapter primario — dichiarato come
+  "eccezione accettata (solo I/O di streaming)" nel docblock delle due classi, ma mai passato per
+  una porta esistente ne' salito in questo ADR. Aggiunte due porte primarie
+  (`PreviewDocumentUseCase`/`PreviewDocumentService`, `DownloadCommunicationCoverUseCase`/
+  `DownloadCommunicationCoverService`), un metodo `exists()` su entrambe le porte di storage
+  secondarie (`DocumentStoragePort`, `CommunicationCoverStoragePort`, gia' esistenti per altre
+  operazioni), e un metodo `read()` sulla porta di storage delle copertine (mancava, `read()` su
+  `DocumentStoragePort` c'era gia'). `SubDocumentRecord` guadagna `originalFilename` (gia' letto da
+  `findSendMessageContext` per lo stesso scopo, ora denormalizzato anche qui). Le risposte HTTP
+  passano da `StreamedResponse`+`fpassthru` a `Response` con i byte gia' letti — stessa
+  semplificazione gia' fatta altrove nel dominio (`RenderedSendMessage->pdf` e' una stringa, non uno
+  stream): per PDF/immagini delle dimensioni gestite da questa applicazione non è un problema di
+  memoria, ed evita di far attraversare un `resource` PHP grezzo attraverso un confine di porta. 5
+  nuovi test `DomainUnit` (`PreviewDocumentServiceTest`, `DownloadCommunicationCoverServiceTest`).
+  Comportamento HTTP osservabile invariato (stessi header, stesso corpo, stessi 404/503) —
+  verificato dai test Feature esistenti, aggiornati solo dove asserivano `streamedContent()` (il
+  tipo concreto di risposta e' cambiato, il contenuto no).
+- **Polling SSE spostato dietro una porta primaria**: `DocumentController::stream()` e
+  `CommunicationStreamController::stream()` interrogavano `OriginalDocument::query()->with([...])`/
+  `Communication::query()->find()` direttamente a ogni iterazione del loop `while
+  (!connection_aborted())` — l'esempio esplicitamente citato nella sezione "Evidenza concreta della
+  mescolanza" di questo stesso ADR, mai risolto nelle passate precedenti. Aggiunte due porte primarie
+  di sola lettura (`PollDocumentProgressUseCase`/`PollDocumentProgressService`,
+  `PollCommunicationProgressUseCase`/`PollCommunicationProgressService`) che restituiscono uno
+  snapshot di dominio (`DocumentProgressSnapshot`, `CommunicationProgressSnapshot`) ogni iterazione,
+  attraverso `DocumentRepository`/`CommunicationRepository`. `DocumentRepository` guadagna
+  `subDocumentIdsWithExtractedData()` (prima il controller caricava l'intero albero
+  `subDocuments.extractedData` a ogni poll e filtrava in PHP); `OriginalDocumentRecord` e
+  `CommunicationRecord` guadagnano `errorMessage` (e `CommunicationRecord` anche `coverError`), mai
+  esposti prima perche' letti solo dai controller via Eloquent diretto. Il controller resta
+  responsabile solo del protocollo SSE (loop, heartbeat, timeout, bookkeeping di cosa e' gia' stato
+  inviato a *questa* connessione — intrinsecamente legato al ciclo di vita di una singola risposta
+  HTTP, non una decisione di dominio) e ricarica l'Eloquent model solo nei punti che richiedono
+  `MvpStateService` (shaping del payload `document`/`cover`/`done`, gia' dichiarato fuori perimetro).
+  5 nuovi test `DomainUnit` (`PollDocumentProgressServiceTest`, `PollCommunicationProgressServiceTest`).
+  Nessun test Feature esisteva per questi due endpoint prima o dopo (il polling SSE non e' testabile
+  utilmente in Pest): verificato manualmente contro lo stack live per il percorso "risorsa non
+  trovata" di entrambi.
+- **`Str::uuid()` sostituito da `UniqueIdGeneratorPort` in 5 servizi applicativi**: ultimo residuo di
+  `Illuminate\Support\Str` nell'Application layer con un motivo reale per essere isolato (genera
+  entropia/casualita', non e' una trasformazione pura come `Str::slug()`/`Str::of()`, lasciati
+  intatti). Stessa logica del Clock PSR-20 (vedi sopra): nessuno standard PSR esiste per la
+  generazione di id univoci, quindi l'interfaccia e' definita in `App\Mvp\Support\Identifiers`
+  invece di riusarne una esterna, con un solo binding condiviso fra i due domini
+  (`RandomUuidGenerator`, che delega a `Str::uuid()` — la dipendenza concreta e' corretta li',
+  e' l'adapter). Toccati: `GenerateCommunicationCoverService`, `UpdateCommunicationCoverService`,
+  `StartCommunicationWorkflowService`, `StartDocumentWorkflowService`, `ProcessDocumentService`.
+  Nessun nuovo test: i due unici DomainUnit test che istanziano direttamente uno di questi servizi
+  (`GenerateCommunicationCoverServiceTest`, l'allora `ProcessDocumentServiceTest`, vedi punto
+  successivo per la ridenominazione) sono stati aggiornati per passare un `FakeUniqueIdGenerator`,
+  comportamento osservabile invariato.
+- **`ProcessDocumentService` (478 righe) spezzata in due casi d'uso**: `process()` (split del
+  documento via Bedrock, manipolazione Fpdi/`storage_path()`) ed `extractAndSaveFields()`
+  (estrazione campi per destinatario) erano nella stessa classe solo perche' `process()` invocava la
+  seconda internamente per ogni segmento appena creato — la porta `ProcessDocumentUseCase` lo
+  documentava gia' esplicitamente ("esposta a se' stante... perche' e' un punto di ingresso
+  testabile in isolamento"), un'incoerenza fra dichiarazione e struttura mai risolta. Estratta
+  `ExtractSubDocumentFieldsService` (nuova porta `ExtractSubDocumentFieldsUseCase`, 238 righe) con
+  tutta la logica di estrazione/confidenza/override manuali; `ProcessDocumentService` (246 righe)
+  ora dipende da quella porta per delegare l'estrazione di ogni destinatario, invece di contenerne
+  la logica. I due helper condivisi (testo OCR per intervallo di pagine, nonce del marcatore)
+  estratti in `OcrRangeReader` (52 righe, `Application/Support/`), iniettato in entrambe. Il vecchio
+  test `ProcessDocumentServiceTest` rinominato in `ExtractSubDocumentFieldsServiceTest` (stessi 3
+  test, ora contro la classe che possiede davvero quella logica); i 9 test Feature di
+  `DocumentExtractionTest` che risolvevano `ProcessDocumentService::class` dal container per
+  chiamare `extractAndSaveFields()` aggiornati a risolvere `ExtractSubDocumentFieldsService::class`.
+  Rimossi due doppi di test rimasti orfani dello split (`NullWorkflowTaskHeartbeat`,
+  `FakeUniqueIdGenerator` in Documents): nessun test li usava piu'. Nessuna regressione di
+  comportamento: `DocumentWorkflowTaskHandler` continua a dipendere solo da `ProcessDocumentUseCase`
+  e a chiamare `process()`, invariato. `process()` resta non testabile in `DomainUnit` per lo stesso
+  motivo di sempre (Fpdi/`storage_path()`); `ExtractSubDocumentFieldsService` invece lo era gia'
+  prima dello split e lo resta identicamente dopo.
+- **`CommunicationWorkflowTaskHandler::onFailure()` non chiama piu' `BedrockService` staticamente**:
+  trovato durante un controllo generale finale, non durante lo split di `ProcessDocumentService` che
+  aveva chiuso lo stesso pattern sul lato Documents — un adapter primario (non un caso d'uso
+  applicativo, quindi fuori dal raggio del fix precedente) chiamava
+  `BedrockService::formatUserError()` come metodo statico della classe concreta per costruire un
+  messaggio di fallback quando il caso d'uso non aveva gia' scritto un `error_message` leggibile.
+  `DocumentWorkflowTaskHandler::onFailure()`, lo stesso metodo sul lato Documents, non lo fa mai: usa
+  `$e->getMessage()` grezzo. Nessuna buona ragione per l'asimmetria — allineato a quel comportamento
+  invece di aggiungere `formatUserError()` a `CommunicationAiGatewayPort`, perche' un adapter
+  primario che dipende da una porta *secondaria* per formattare un messaggio sarebbe un'eccezione al
+  perimetro peggiore del problema che risolve. Nessun test asseriva sul testo esatto del messaggio
+  di fallback rimosso: nessuna regressione.
+- **Chiuso l'ultimo buco Observer: cambio manuale della copertina**: `UpdateCommunicationCoverService::update()`/`::remove()`
+  (sostituzione/rimozione manuale dell'immagine di copertina) non dispatchavano alcun evento —
+  l'audit veniva scritto direttamente nel controller HTTP (`CommunicationCoverController`), l'unica
+  azione del dominio Communications a farlo cosi' invece che tramite Observer. Il docblock del
+  controller giustificava la cosa con "l'audit dipende da metadati solo HTTP (mime/size)", ma
+  `CommunicationCoverGenerated` (generazione AI) dimostra che il `mime` passa gia' tranquillamente
+  come payload di un evento — la giustificazione copriva solo il contenuto extra dell'audit, non
+  l'assenza dell'evento stesso. Aggiunti `CommunicationCoverReplaced` e `CommunicationCoverRemoved`
+  (17 → 19 eventi Communications), con listener che spostano l'audit dal controller (rimosso da li')
+  e un contatore metrica per la sostituzione manuale (`communication_covers_generated_total` con
+  `source=manual`, stesso contatore gia' usato per la generazione AI, solo un'altra label). 4 nuovi
+  test `DomainUnit` (`UpdateCommunicationCoverServiceTest`) per un servizio che era gia' completamente
+  puro prima di questo cambio — nessuno l'aveva ancora testato in isolamento. Comportamento HTTP
+  osservabile invariato (stesso `event_type`, stesso conteggio di un solo `AuditEvent` per azione,
+  verificato dai test Feature esistenti).
+- **`DocumentRepository` non prende piu' array associativi in scrittura (lato Documents)**: prima
+  `createOriginalDocument()`/`updateOriginalDocument()`/`createSubDocument()`/`updateSubDocument()`/
+  `saveExtractedData()` prendevano `array<string, mixed>` con chiavi a stringa che erano, di fatto,
+  i nomi delle colonne DB (`'processing_status'`, `'workflow_completed_at'`, ecc.) scritti a mano in
+  8 `Application Service` diversi — "il dominio non usa Eloquent" era vero solo a meta', perche' un
+  refuso o una colonna rinominata rompevano il codice applicativo silenziosamente, senza che nessun
+  tipo lo impedisse. Aggiunti cinque value object nel dominio (`OriginalDocumentChanges`,
+  `SubDocumentChanges`, `ExtractedDataChanges` — costruzione incrementale con metodi `with*()`
+  immutabili, per gli aggiornamenti parziali; `NewOriginalDocument`, `NewSubDocument` — costruttore
+  semplice, per le creazioni dove tutti i campi sono gia' noti). Il nome della colonna DB resta un
+  dettaglio interno di queste classi (`Domain/ValueObjects/`, non `Application/`): il chiamante scrive
+  `OriginalDocumentChanges::none()->withProcessingStatus(...)`, mai una stringa. L'adapter Eloquent
+  consuma `->toArray()` cosi' com'e' — nessuna doppia traduzione. Toccati tutti gli 8 casi d'uso che
+  scrivevano sull'aggregato documentale (`UploadDocumentService`, `StartDocumentWorkflowService`,
+  `FinalizeDocumentWorkflowService`, `RunOcrService`, `ProcessDocumentService`,
+  `ExtractSubDocumentFieldsService`, `ReviewDocumentService`, `SendMessageService`). Nessun nuovo
+  test: comportamento invariato, solo la forma con cui i casi d'uso lo esprimono — verificato da
+  Larastan (i nuovi tipi sono staticamente controllati) e dalla suite esistente, 370/370.
+- **Stesso cambio esteso a Communications**: `CommunicationRepository::createCommunication()`/
+  `updateCommunication()` avevano lo stesso problema, su una superficie piu' larga — 18 chiamate a
+  `updateCommunication()` in 8 `Application Service` diversi, il singolo metodo piu' usato di tutto
+  il refactor. Aggiunti `CommunicationChanges` (aggiornamento parziale, 21 campi coperti da metodi
+  `with*()`) e `NewCommunication` (creazione). Unica complicazione reale: `CommunicationDraftBuilder`
+  (il Builder gia' esistente, vedi tabella pattern sopra) restituisce gia' array snake_case per
+  `withGeneratedText()`/`withGeneratedCover()` — invece di riscrivere il Builder (avrebbe richiesto
+  toccare anche il suo test dedicato per un guadagno marginale), `CommunicationChanges::fromRawFields()`
+  fa da punto di conversione esplicito e unico, usato solo li' e dove `GenerateCommunicationCoverService`
+  doveva unire l'output del Builder ad altri campi (`array_merge` prima, `->with*()` incatenato ora).
+  Nessun nuovo test, stesso motivo del punto precedente — verificato da Larastan e dalla suite
+  esistente, 370/370 (eseguita due volte, nessuna flakiness) e da `OpenApiContractTest` (21/21).
+- **Trade-off noto, non risolto**: molti casi d'uso restano legati a `config()` per parametri di
+  runtime genuinamente variabili per ambiente (`StartCommunicationWorkflowService`,
+  `StartDocumentWorkflowService` in particolare: ARN di state machine, URL di coda, guardia
+  Textract/`real_s3`). Introdurre una porta di configurazione generica per astrarli
+  contraddirebbe esplicitamente questo stesso ADR ("non creare porte per valori scalari o
+  dettagli che non varieranno", vedi Vincoli) — quindi restano testati solo a livello Feature
+  (bootstrap Laravel completo), non a livello di dominio puro. Scelta deliberata, non un
+  oversight.
+- **Nota di onestà su `MvpUser`**: le porte di Communications e Documents tipizzano
+  `App\Mvp\Identity\MvpUser`, che implementa `Illuminate\Contracts\Auth\Authenticatable` (serve al
+  middleware di autenticazione). È una dipendenza transitiva del dominio verso un'interfaccia
+  Illuminate che lo script di conformità non intercetta (verifica solo le importazioni dirette nei
+  file sotto `Domain/`). Non è stata rimossa: `Identity` è infrastruttura condivisa accettata per
+  scelta esplicita di perimetro (vedi sopra), e introdurre un value object "Actor" di dominio
+  separato da tradurre a ogni confine avrebbe richiesto toccare ogni adapter primario dei due
+  domini per un guadagno di purezza marginale, non un problema concreto riscontrato.
+- **Nessuna scrittura DB era transazionale, in nessun punto di `app/Mvp`**: gap reale, non un
+  trade-off dichiarato da nessuna parte. Non risolvibile con un `DB::transaction()` generico attorno
+  a interi casi d'uso come `ProcessDocumentService::process()` — quel metodo intreccia scritture DB a
+  chiamate esterne lente (Bedrock, minuti per segmento, da cui l'heartbeat Step Functions esistente):
+  tenere una transazione aperta per tutta la sua durata avrebbe tenuto lock/connessioni DB aperti
+  troppo a lungo, un problema peggiore di quello che si voleva risolvere. Introdotta invece
+  `TransactionManagerPort` (`App\Mvp\Support\Persistence`, adapter `LaravelTransactionManager` su
+  `DB::transaction()`, binding singleton condiviso fra i due domini come Clock/UniqueIdGenerator: la
+  transazionalità non ha semantica di dominio) e usata solo dove la sequenza di scritture è pura,
+  senza I/O esterno nel mezzo: `EloquentDocumentRepository::deleteExistingSubDocuments()` (elimina N
+  sotto-documenti in loop) e `::deleteOriginalDocumentWithWorkflowTasks()` (2 scritture) avvolte
+  direttamente con `DB::transaction()` nell'adapter, che già dipende da Eloquent; i due punti di
+  scrittura doppia in `ExtractSubDocumentFieldsService::extractAndSaveFieldsWithContext()` (percorso
+  di successo: `updateSubDocument`+`saveExtractedData`; percorso di quarantena:
+  `deleteExtractedData`+`updateSubDocument`) avvolti con la nuova porta, iniettata nel binding del
+  container. Nessun altro punto della codebase aveva scritture multiple pure sullo stesso confine
+  (`CommunicationRepository` non ha metodi multi-statement).
+- **`RunOcrService` non gestiva mai un proprio fallimento**: a differenza di
+  `ProcessDocumentService`/`ExtractSubDocumentFieldsService`, non aveva alcun try/catch — un errore
+  Textract arrivava solo a `DocumentWorkflowTaskHandler::onFailure()`, che scrive lo stato `Failed`
+  con un `Model::update()` grezzo senza dispatch di eventi: nessun audit, nessuna metrica per i
+  fallimenti OCR, a differenza di ogni altro fallimento della pipeline. Aggiunto try/catch che
+  dispatcha `DocumentProcessingFailed` (lo stesso evento già usato da `ProcessDocumentService`, non
+  serviva un evento nuovo) prima di rilanciare; `onFailure()` continua a girare dopo, ridondante ma
+  innocuo, stesso pattern già presente per `bedrock.extract`. Nello stesso metodo spostata anche la
+  guardia "documento già completato" per `textract.ocr`, che prima viveva centralizzata in
+  `DocumentWorkflowTaskHandler::execute()`: `RunOcrUseCase::run()` restituisce già un array con
+  `skipped`, quindi non serviva duplicare la logica nell'adapter — a differenza di
+  `bedrock.extract`/`persist.results`, dove è rimasta (vedi punto successivo).
+- **`DocumentWorkflowTaskHandler` dichiarava "nessuna regola di business qui" pur contenendone una**:
+  il docblock della classe lo affermava esplicitamente, ma `execute()` conteneva una guardia
+  "documento già completato" prima del match — una regola di idempotenza verso la ridelivery del
+  task da Step Functions, non pura traduzione. Per `textract.ocr` la guardia è stata rimossa da qui e
+  spostata in `RunOcrService` (punto sopra). Per `bedrock.extract`/`persist.results` inizialmente
+  lasciata nell'adapter (vedi punto successivo per la chiusura).
+- **Asimmetria `bedrock.extract`/`persist.results` chiusa**: `ProcessDocumentUseCase::process()` era
+  dichiarato `void`, quindi non aveva modo di segnalare uno skip al chiamante — motivo per cui la
+  guardia era rimasta centralizzata nell'adapter invece di seguire `textract.ocr` nel punto sopra.
+  Cambiata la firma in `process(int $documentId): array{skipped: bool}` (stesso identico approccio di
+  `RunOcrUseCase::run()`): `ProcessDocumentService::process()` ora legge lo stato per primo e
+  restituisce `['skipped' => true]` senza toccare Fpdi/storage_path()/Bedrock se il documento è già
+  `Completed`, `['skipped' => false]` a fine pipeline altrimenti. Verificato che nessun
+  `ProcessDocumentUseCase` fosse invocato da un trigger manuale di "rielaborazione" (non esiste:
+  l'unico chiamante è `DocumentWorkflowTaskHandler`), quindi nessun rischio di rompere un percorso di
+  reprocess legittimo. `processDocumentStep()` nell'adapter ora inoltra quel flag invece di
+  restituire sempre `skipped: false`. Per `persist.results` la guardia è stata invece rimossa senza
+  sostituzione: `FinalizeDocumentWorkflowUseCase::currentStatus()` è una lettura pura, chiamarla su un
+  documento già completato è innocuo (restituisce lo stato reale, più informativo del segnale
+  sintetico precedente) — verificato sull'ASL (`infra/localstack/state-machines/document-pipeline.asl.json`)
+  che nessuno stato Choice dipende dal campo `skipped` per `bedrock.extract`/`persist.results`, solo
+  `ValidateStructuredOutput` legge `task_result.status === 'failed'`. La guardia centralizzata in
+  `DocumentWorkflowTaskHandler::execute()` è stata quindi rimossa del tutto: il docblock torna a dire
+  "nessuna regola di business qui", ed è di nuovo vero. Nuovo test Feature
+  (`DocumentWorkflowTest`: "workflow runner skips bedrock.extract on a document already completed
+  without calling the AI gateway", con un mock che fallirebbe se Bedrock venisse chiamato) — non un
+  test `DomainUnit` perché costruire `ProcessDocumentService` richiede l'intero grafo di dipendenze
+  (incluso `WorkflowTaskHeartbeat`, il cui fake era stato rimosso come orfano in un punto precedente
+  di questo log), anche se il path di skip stesso non tocca mai Fpdi.
+- Suite di dominio invariata nella struttura, cresciuta di 3 test (`RunOcrServiceTest`: guardia
+  idempotenza + fallimento con evento; `DocumentWorkflowTest`: skip di `bedrock.extract`) —
+  **373/373** (eseguita due volte, nessuna flakiness), Pint 364 file, Larastan 269 file, Dependency
+  Rule pulita, `/ready` 200 dopo rebuild immagine (il container `app` non ha bind mount: ogni
+  modifica di questi punti ha richiesto `docker compose build app` prima di rieseguire i controlli,
+  altrimenti si verificava codice vecchio).
+- **Stesso trattamento esteso a Communications, chiudendo le ultime due asimmetrie residue**:
+  `GenerateCommunicationTextService::generate()` catturava solo `InvalidAiOutputException` — qualsiasi
+  altro `Throwable` (timeout Bedrock, errore di rete) arrivava non gestito a
+  `CommunicationWorkflowTaskHandler::onFailure()`, stesso gap già chiuso su `RunOcrService`: nessun
+  audit, nessuna metrica. Aggiunto un secondo `catch (\Throwable $e)` dopo quello esistente, che
+  dispatcha il nuovo evento `CommunicationGenerationFailed` (nuovo perché nessun evento esistente
+  aveva la forma giusta: `CommunicationWorkflowStartFailed` è specifico del fallimento di *avvio*
+  dell'esecuzione Step Functions in `StartCommunicationWorkflowService`, semanticamente diverso da un
+  passo della pipeline che fallisce a metà) prima di rilanciare — stesso pattern del ramo
+  `InvalidAiOutputException` immediatamente sopra (solo `error_message`, senza toccare
+  `generation_status`: `onFailure()` continua a occuparsene, esattamente come già faceva per quel
+  ramo). `GenerateCommunicationCoverService` non necessitava lo stesso trattamento: cattura già ogni
+  `Throwable` e degrada senza mai rilanciare (verificato, non modificato).
+  `FinalizeCommunicationService::finalize()` non aveva alcuna guardia di idempotenza — a differenza di
+  `generate_text`/`generate_cover` che la ottengono gratis controllando un campo (`generatedBody`,
+  `coverStatus`), `finalize()` avrebbe ri-dispatchato `CommunicationWorkflowCompleted` su ogni
+  redelivery del task dopo il completamento (`WorkflowTaskRunner` deduplica per token, ma un nuovo
+  token — es. un redrive dell'intera esecuzione Step Functions — lo aggirerebbe). Aggiunta la stessa
+  guardia already-completed di `ProcessDocumentService`, e `FinalizeCommunicationUseCase::finalize()`
+  ora restituisce anche `skipped: bool` (`CommunicationWorkflowTaskHandler::finalizeStep()` lo inoltra
+  invece di restituire sempre `skipped: false`, stesso fix di `processDocumentStep()`). 2 nuovi test
+  `DomainUnit` (`GenerateCommunicationTextServiceTest`, `FinalizeCommunicationServiceTest`) —
+  **375/375** (eseguita due volte, nessuna flakiness), Pint 366 file, Larastan 271 file, Dependency
+  Rule pulita, `/ready` 200.
+- **Chiusi in blocco i punti "farei subito, anche gratis" e "basso valore, anche gratis" di una
+  revisione onesta di cosa restava aperto** (sei interventi, nessuno dei quali era un trade-off
+  dichiarato: erano tutti gap reali, semplicemente a impatto/urgenza minori dei cinque punti sopra):
+  - **Script Dependency Rule esteso**: oltre a `Illuminate\*`/`Aws\*`/`App\Models\*`, ora rileva anche
+    riferimenti al namespace dell'*altro* dominio dentro `Domain/` (`App\Mvp\Communications\*` dentro
+    `Documents/Domain`, e viceversa) — i due domini non si conoscono a vicenda, ma prima nessun
+    controllo meccanico lo garantiva.
+  - **Enum spostati dentro `Domain/Enums/`** in entrambi i domini (`Documents\Enums` →
+    `Documents\Domain\Enums`, stesso per Communications): prima vivevano fuori dalla cartella che lo
+    script controlla, quindi erano "puri" solo per disciplina, non per verifica automatica. Rename
+    meccanico di namespace su 7 file enum e ~52 file che li importavano (fatto con una sostituzione
+    letterale di stringa, non un editor a mano: il rischio di un rename così ampio è nella sua
+    ampiezza, non nella sua difficoltà). Nessun comportamento cambiato — verificato dalla suite
+    completa e da Larastan.
+  - **`ValidCodiceFiscale` separato in due**: il checksum vero e proprio è ora una funzione pura
+    (`Documents\Domain\Support\CodiceFiscale::isValid()`, nessuna dipendenza da Laravel) richiamata da
+    `ValidCodiceFiscale` (che resta l'unico pezzo ad implementare l'interfaccia di validazione di
+    Laravel, in `Rules/`, fuori dal perimetro controllato per necessità — non può fare altrimenti).
+    Stesso messaggio d'errore, stesso comportamento osservabile; nuovo test `DomainUnit`
+    (`CodiceFiscaleTest`) che dimostra la logica testabile senza bootstrap Laravel, oltre alla
+    copertura esaustiva preesistente in `tests/Unit/ValidCodiceFiscaleTest.php` attraverso l'adapter.
+  - **Guardia tenant in `resolveSubject()`** su entrambi i `WorkflowTaskHandler`: prima nessuno dei due
+    controllava che il `tenantId` nel messaggio SQS corrispondesse al tenant reale del documento/della
+    comunicazione risolti per id — l'autorizzazione vera resta al bordo HTTP (i messaggi di workflow
+    sono generati dalla pipeline stessa, non da input utente diretto, quindi il rischio pratico era già
+    basso), ma un messaggio corrotto o malformato ora viene rifiutato esplicitamente invece di essere
+    eseguito silenziosamente. Controllo solo-se-presente (non reso obbligatorio, per non rischiare di
+    rompere un chiamante legittimo non ancora mappato con certezza). 2 nuovi test Feature (uno per
+    dominio) che confermano il rifiuto su tenant non corrispondente.
+  - **`ListCommunicationsUseCase` allineato a `ListDocumentsUseCase`**: nuovo VO `CommunicationPage`
+    (stesso taglio di `SubDocumentPage`, solo id e metadati di paginazione), sostituisce l'array con
+    shape `array{ids, total, page, perPage}` che prima era l'unico ritorno-array-invece-che-VO fra le
+    porte primarie di lettura dei due domini. Tocca l'interfaccia, l'adapter Eloquent, il caso d'uso,
+    il fake di test, e `CommunicationController::index()` (accesso a proprietà invece che a chiavi di
+    array) — comportamento HTTP osservabile invariato, stesso JSON di risposta.
+  - **I `*Changes` VO non incorporano più letteralmente lo schema DB**: `OriginalDocumentChanges`,
+    `SubDocumentChanges`, `ExtractedDataChanges`, `CommunicationChanges` usavano internamente chiavi
+    snake_case identiche ai nomi delle colonne (`'processing_status'`, `'error_message'`, ecc.),
+    scritte a mano in ogni metodo `with*()` — il tipo era già sicuro (Larastan), ma il *Domain* sapeva
+    comunque il nome esatto delle colonne. Le chiavi interne sono ora camelCase (`'processingStatus'`,
+    derivate meccanicamente dal nome del metodo `with*()` stesso), e la conversione verso snake_case è
+    stata spostata negli adapter di persistenza (`EloquentDocumentRepository`/
+    `EloquentCommunicationRepository`, via `Illuminate\Support\Str::snake()` — lecito, sono adapter),
+    in un unico metodo privato `snakeCaseKeys()` per adapter. `fromRawFields()` (usato da
+    `ReviewDocumentService` per i campi grezzi da HTTP e da `GenerateCommunicationCoverService`/
+    `GenerateCommunicationTextService` per l'output di `CommunicationDraftBuilder`, entrambi
+    snake_case in ingresso) converte in camelCase al volo con un piccolo helper PHP puro (nessuna
+    dipendenza da Illuminate, resta lecito nel Domain). Aggiornati anche i due fake `InMemory*Repository`
+    (che imitano la stessa conversione per restare fedeli alle righe seminate, già snake_case). **Guadagno
+    dichiaratamente marginale** (il tipo era già verificato staticamente prima), fatto comunque su
+    richiesta esplicita — nessun comportamento osservabile cambiato, nessun nuovo test necessario
+    (stessa suite, stesso comportamento, solo la rappresentazione interna delle chiavi).
+  - **Rimandato in questo giro** (fatto subito dopo, vedi punto successivo): disaccoppiare `MvpUser` da
+    `Illuminate\Contracts\Auth\Authenticatable` con un "Attore" di dominio — 48 file referenziano
+    `MvpUser`, contro le stime iniziali di poche decine, e la sua natura non e' un rename meccanico ma
+    una traduzione da introdurre ad ogni bordo di adapter primario.
+  - **380/380** (eseguita due volte, nessuna flakiness), Pint 369 file, Larastan 273 file, Dependency
+    Rule pulita (col nuovo controllo cross-dominio), `/ready` 200. Nessuna regressione di comportamento
+    HTTP osservabile in nessuno dei sei punti.
+- **`MvpUser` disaccoppiato da `Authenticatable` con un nuovo `Actor` di dominio** (il punto rimandato
+  sopra, fatto subito dopo su richiesta esplicita): introdotto `App\Mvp\Support\Identity\Actor`
+  (id/email/name/tenantId/roles + `hasAnyRole()`, gemello strutturale di `MvpUser` ma senza il
+  contratto Laravel), condiviso fra i due domini come Clock/UniqueIdGenerator/TransactionManager. Unico
+  punto di traduzione: `ResolvesActor::actor()` (bordo HTTP, dove `$request->user()` viene verificato
+  `instanceof MvpUser` e tradotto) — da lì in poi porte primarie, eventi, comandi e servizi applicativi
+  vedono solo `Actor`, mai `Authenticatable`.
+  - **Ampiezza reale confermata**: 48 file referenziavano `MvpUser`. 2 restano intoccati per necessità
+    (`AuthorizeMvpAccess`/`ResolveMvpIdentity`, i middleware che costruiscono/autorizzano l'identita'
+    reale prima che esista un `Actor`); 3 sono punti di confine editati a mano perché contengono il
+    controllo `instanceof MvpUser` vero e proprio (`ResolvesActor`, `StateController`,
+    `UploadDocumentRequest`); i restanti 43 (porte primarie, eventi, comandi, servizi applicativi,
+    `AuditLogger`, i due trait `Authorizes*`) erano puro pass-through (nessun `instanceof`, solo accesso
+    a proprietà) — verificato con un controllo mirato prima di procedere, poi sostituiti con una
+    sostituzione di stringa letterale sui 43 file espliciti (non un glob sull'intero repo: `MvpUser` non
+    ha il "backslash finale" che rendeva sicuro il rename degli Enum, quindi la lista doveva essere
+    esplicita per non toccare `App\Mvp\Identity\MvpUser.php` stesso o i due middleware). Aggiunto
+    `MvpUser::toActor()` come unico punto di conversione, usato dai tre file di confine.
+  - **Incidente di percorso, non architetturale**: Larastan segnalava 60 falsi positivi
+    (`class.notFound` su `App\Models\User`) su ogni accesso a proprietà dopo il narrowing
+    `instanceof MvpUser` in codice che tocca `Request::user()`. Causa: `config/auth.php` punta ancora al
+    modello Eloquent di scaffolding Laravel (`App\Models\User`, mai esistito in questo progetto, mai
+    usato a runtime — l'app usa solo la guardia custom `mvp`/`MvpUser`), e Larastan risolve
+    `Request::user()`/`Auth::user()` tramite quel modello di default configurato, non tramite il
+    narrowing reale. Mai emerso prima perché nessun codice precedente accedeva a proprietà nella stessa
+    espressione del narrowing. Non è un problema di `Actor`: riprodotto identico anche accedendo a
+    `$this->id` dentro `MvpUser::toActor()` stesso. Risolto con un `ignoreErrors` mirato in
+    `phpstan.neon` (solo il pattern `unknown class App\\Models\\User`, non un `class.notFound`
+    generico — non nasconde altre classi mancanti reali), non con un cambiamento al codice applicativo.
+  - Verificato dal vivo, non solo dalla suite: `MvpUser('u1', ...)->toActor()` via tinker, e una vera
+    richiesta HTTP a `/api/v1/state` attraverso l'intera catena (`ResolveMvpIdentity` →
+    `ResolvesActor`/`StateController` → `MvpUser::toActor()` → `MvpStateService::forActor(Actor)`) —
+    200 con dati reali dal DB, non solo dai fake di test.
+  - **380/380** (eseguita due volte, nessuna flakiness — stesso numero di prima: nessun test nuovo,
+    solo aggiornamento dei fake `fake*Actor()` nei test `DomainUnit` da `MvpUser` ad `Actor`), Pint 370
+    file, Larastan 274 file, Dependency Rule pulita, `/ready` 200.
+- **`ignoreErrors` di Larastan sostituito con un provider utente vero (non solo rimosso)**: un giro
+  successivo ha corretto `config/auth.php` per puntare a `MvpUser::class` invece del fantasma
+  `App\Models\User`, facendo sparire il `class.notFound` e permettendo di togliere l'`ignoreErrors`
+  sopra — ma la correzione era a metà: il provider restava dichiarato `driver: eloquent`, e `MvpUser`
+  non estende `Illuminate\Database\Eloquent\Model`. Un `Auth::check()` eseguito prima che
+  `ResolveMvpIdentity` giri (o il password broker, mai usato ma comunque configurato) avrebbe
+  risolto quel provider e fallito con un errore Eloquent poco leggibile. Aggiunto
+  `App\Mvp\Identity\MvpUserProvider implements UserProvider`, registrato con
+  `Auth::provider('mvp', ...)` in `AppServiceProvider::boot()`, dichiarato in `config/auth.php` come
+  `driver: mvp`: rende esplicito che questa app non ha un archivio utenti persistente (l'identita' e'
+  ricostruita ad ogni richiesta, mai recuperata per id/credenziali) invece di simularne uno con un
+  driver che non corrisponde alla classe. Se mai risolto per errore, fallisce con un messaggio che
+  dice esattamente perché, non con un metodo Eloquent mancante.
+- **`WorkflowTaskHandler` non dipende più da `Illuminate\Database\Eloquent\Model`**: era l'ultimo punto
+  rimasto, classificato inizialmente come "progetto a sé" per riportare tutta l'infrastruttura di
+  orchestrazione Step Functions dietro porte proprie — un'indagine mirata (non solo stima) ha mostrato
+  che la superficie reale era molto più piccola: `resolveSubject()`/`execute()`/`onFailure()` usavano
+  l'aggregato Eloquent solo per `->id`, `->tenant_id`, e (un solo punto) `->refresh()->subDocuments()->count()`
+  come campo diagnostico — nessuna vera logica di business sul Model stesso.
+  - Nuovo `App\Mvp\Workflow\Contracts\WorkflowSubject` (id + tenantId, VO immutabile) sostituisce `Model`
+    nella firma dei tre metodi del contratto `WorkflowTaskHandler`. `WorkflowTaskRunner` (il layer
+    condiviso, domain-agnostic) ora legge `$subject->id`/`$subject->tenantId` invece di
+    `getKey()`/`getAttribute('tenant_id')`, e ri-chiama `resolveSubject()` invece di `$subject->refresh()`
+    prima di `execute()`/`onFailure()` (stesso numero di letture DB, stessa garanzia di freschezza,
+    solo attraverso il repository di dominio invece che Eloquent diretto).
+  - `DocumentWorkflowTaskHandler`/`CommunicationWorkflowTaskHandler` ora iniettano `DocumentRepository`/
+    `CommunicationRepository` (la stessa porta secondaria già usata dai casi d'uso) invece di interrogare
+    `OriginalDocument::query()`/`Communication::query()` direttamente. `onFailure()` scrive tramite
+    `updateOriginalDocument()`/`updateCommunication()` con i VO `*Changes` già esistenti, invece di
+    `$model->update([...])` grezzo. Nuovo metodo `DocumentRepository::countSubDocuments()` sostituisce
+    l'unico punto che leggeva una relazione Eloquent per un campo diagnostico.
+  - Il meccanismo di claim/dedup (`WorkflowTask` + UPDATE...WHERE atomico) **non è stato toccato**: è
+    infrastruttura pura che non ha mai referenziato i modelli Documents/Communications, e resta
+    un'operazione SQL atomica per natura — non un candidato realistico a spostarsi dietro una porta di
+    dominio (confermato durante l'indagine, non solo assunto).
+  - Nessun test nuovo: la suite Feature esistente (`DocumentWorkflowTest`, `MvpAppRoutesTest`) già
+    esercita l'intero percorso `WorkflowTaskRunner::handle()` end-to-end con dati reali, non fake —
+    prova live equivalente, non serviva ripeterla separatamente.
+  - **380/380** (invariato, eseguita due volte, nessuna flakiness), Pint 371 file, Larastan 275 file,
+    Dependency Rule pulita, DI verificata dal vivo via tinker.
+- **Progetto A, Fase 0 (spike): prima entità di dominio — `SubDocument`**: prova di concetto per il
+  modello ricco, prima di impegnare tutto il dominio. Nuovo `App\Mvp\Documents\Domain\Entities\SubDocument`
+  (a differenza dei VO `*Record`, mutabile e con comportamento): governa le proprie transizioni di
+  `reviewStatus` (`markAutoValidated()`, `markNeedsReview()`, `markManuallyValidated()`,
+  `markQuarantined()`) invece di lasciare a ogni caso d'uso il compito di scrivere lo status giusto a
+  mano tramite `SubDocumentChanges`. Internamente accumula le modifiche in un `SubDocumentChanges`
+  "sporco" (`pendingChanges()`), riusando il VO esistente invece di introdurre un meccanismo di
+  tracking separato — l'adapter (`saveSubDocument()`, nuovo metodo su `DocumentRepository`) lo legge e
+  lo scrive, esattamente come già faceva `updateSubDocument()`. Tocca `ReviewDocumentService`
+  (entrambi i metodi) ed `ExtractSubDocumentFieldsService` (decisione di confidenza + ramo di
+  quarantena); `DeleteDocumentService`/`PreviewDocumentService` (altri consumatori di
+  `findSubDocument()`) non hanno richiesto modifiche — leggono solo campi strutturali
+  (`filePath`/`originalFilename`/ecc.), rimasti pubblici e readonly sull'entità esattamente come su
+  `SubDocumentRecord`.
+  - **Scoperta reale dello spike, non assunta a tavolino**: `SendMessageService` (governava anche
+    `sendStatus`, candidato iniziale) è stato **deliberatamente escluso**. Il suo flusso legge lo stato
+    tramite `SendMessageContext`, una proiezione cross-aggregato che unisce SubDocument+ExtractedData+
+    OriginalDocument per comporre il messaggio — non ha una casa naturale sull'entità SubDocument senza
+    introdurre una doppia lettura (una per comporre, una per l'entità) o un'architettura scomoda a metà
+    fra le due. Questo è precisamente il tipo di attrito che uno spike serve a scoprire prima di
+    impegnare l'intero dominio: **il pattern entità+`pendingChanges()` si adatta bene alle transizioni
+    interne a un solo aggregato (reviewStatus), non a quelle lette tramite proiezioni cross-aggregato
+    costruite per un altro scopo (sendStatus via SendMessageContext)**. `sendStatus` resta gestito con
+    `SubDocumentChanges` grezzo com'era prima — nessuna regressione, solo non ancora migrato.
+  - Nuovi test: `SubDocumentTest` (5 test, `DomainUnit`, sull'entità isolata, senza alcun caso d'uso —
+    prova diretta che le transizioni funzionano indipendentemente da come vengono chiamate) più 2 nuovi
+    assert/test sui casi d'uso esistenti (`ReviewDocumentServiceTest` guadagna un test per il ramo
+    `NeedsReview` prima scoperto solo indirettamente; `ExtractSubDocumentFieldsServiceTest` guadagna
+    asserzioni dirette su `reviewStatus` nei due path già testati).
+  - **386/386** (eseguita due volte, nessuna flakiness), Pint 373 file, Larastan 276 file, Dependency
+    Rule pulita, DI verificata dal vivo via tinker, `/ready` 200. La suite Feature esistente
+    (`MvpAppRoutesTest`, `DocumentExtractionTest`) già esercita `markReviewed`/`updateExtractedData`
+    attraverso Eloquent e DB reali (non fake) — prova live equivalente per il percorso HTTP.
+  - **Prossimo passo, non fatto qui**: se lo spike viene giudicato valido, Fase 1 (`OriginalDocument`,
+    transizioni di `processingStatus`) e Fase 2 (`Communication`, la superficie più larga) restano da
+    pianificare come interventi a sé, ciascuno con il proprio checkpoint di verifica — vedi il piano
+    originale del Progetto A per l'elenco completo dei candidati.
+- **Progetto A, Fase 1: seconda entità di dominio — `OriginalDocument`**: a differenza di `SubDocument`
+  (Fase 0, invariante "transizione valida sì/no"), l'invariante trovata qui investigando il codice reale
+  è diversa: **"questi campi si muovono sempre insieme"**. Prima di questa entità, tre punti diversi
+  (`StartDocumentWorkflowService`, `RunOcrService`, `ProcessDocumentService`) impostavano
+  `processingStatus = Failed` con sottoinsiemi diversi e incoerenti di `workflowFailedAt`/
+  `workflowFailureReason`/`errorMessage` — mascherato dal fatto che
+  `DocumentWorkflowTaskHandler::onFailure()` li completava comunque come rete di sicurezza. Nuovo
+  `App\Mvp\Documents\Domain\Entities\OriginalDocument`: `startProcessing()`, `fail()`, `complete()`,
+  `markWorkflowCompleted()` consolidano quel comportamento in un solo posto, stesso pattern
+  entità+`pendingChanges()` di Fase 0 (`OriginalDocumentChanges` interno, letto da un nuovo
+  `saveOriginalDocument()` su `DocumentRepository`). **Deliberatamente non governa i campi OCR**
+  (`ocrText`/`ocrPages`/`ocrConfidenceAvg`/`textractJobId`): non sono una transizione di stato, solo dati
+  scritti dal gateway OCR — `RunOcrService` continua a scriverli con `OriginalDocumentChanges` grezzo nel
+  proprio percorso di successo. Allo stesso modo, la scrittura "avvia estrazione" di `ProcessDocumentService`
+  (`processingStatus = Processing`, nessun campo collegato) resta un `updateOriginalDocument()` grezzo: non
+  è la transizione compound-state che l'entità esiste per proteggere.
+  - `findOriginalDocument()` cambia tipo di ritorno globalmente (`OriginalDocumentRecord` → entità) invece
+    di un metodo parallelo: l'entità è un superset strutturale (stessi campi pubblici readonly), quindi i
+    consumatori di sola lettura (`OcrRangeReader`, `ExtractSubDocumentFieldsService`,
+    `DeleteDocumentService`) non richiedono modifiche oltre il type hint, salvo dove confrontavano
+    `processingStatus` come stringa grezza.
+  - `DocumentWorkflowTaskHandler::onFailure()` passa da scrittura diretta (`updateOriginalDocument` con
+    `$current->errorMessage ?: $e->getMessage()` calcolato a mano) a `$document->fail(...)` +
+    `saveOriginalDocument()` — stesso fallback semantico, ora incapsulato nell'entità.
+    `FinalizeDocumentWorkflowService::dispatchCompletionEvent()` passa da un `if` esplicito
+    "completato e non ancora marcato" a `markWorkflowCompleted()`, che è già idempotente internamente
+    (no-op se già `true`), eliminando la guardia duplicata.
+  - `ProcessDocumentService::handleProcessingFailure()` prima leggeva il documento due volte (una scrittura
+    incondizionata, poi una lettura protetta da try/catch solo per il `tenantId` dell'evento, nel caso il
+    documento fosse diventato illeggibile nel frattempo): fuse in un'unica `findOriginalDocument()` +
+    `fail()` + `saveOriginalDocument()`, lo stesso principio "niente letture duplicate" già applicato ai
+    controller nei punti 1-3 di questa sessione. `process()` ora fa una sola `findOriginalDocument()`
+    all'inizio e riusa la stessa entità per la guardia di idempotenza, la lettura di `filePath`/`tenantId`
+    e — via `complete()` — la scrittura finale, invece di ri-recuperare un `$original` separato a metà
+    funzione.
+  - `RunOcrService`, `ProcessDocumentService` e `DocumentWorkflowTaskHandler` guadagnano un
+    `ClockInterface $clock` iniettato (stesso pattern di `StartDocumentWorkflowService`): le entità non
+    chiamano mai `new \DateTimeImmutable()` internamente, il timestamp è sempre un parametro del
+    chiamante — testabile con `FakeClock`.
+  - **Difetto scoperto durante l'implementazione**: `OriginalDocumentChanges`, a differenza di
+    `SubDocumentChanges`, non aveva mai avuto un metodo `isEmpty()` — necessario a
+    `EloquentDocumentRepository::saveOriginalDocument()` per evitare una query di update a vuoto quando
+    l'entità non ha transizioni pendenti (es. `dispatchCompletionEvent()` sul ramo "non ancora
+    completato"). Aggiunto, stesso identico shape di `SubDocumentChanges::isEmpty()`.
+  - Nuovi/aggiornati test: `RunOcrServiceTest` (asserzioni sull'entità invece di proprietà grezze, `FakeClock`
+    iniettato), `FinalizeDocumentWorkflowServiceTest` (`workflowCompleted()` come metodo). Nessun test
+    dedicato preesisteva per `StartDocumentWorkflowService`/`ProcessDocumentService`/
+    `DocumentWorkflowTaskHandler`: coperti dalla suite Feature (`DocumentWorkflowTest`,
+    `MvpAppRoutesTest`), che esercita l'intero percorso con Eloquent/DB reali — prova live equivalente.
+  - **386/386** (invariato, eseguita due volte, nessuna flakiness), Pint 374 file, Larastan 277 file,
+    Dependency Rule pulita, DI verificata dal vivo via tinker, `/ready` 200.
+  - **Resta da fare**: Fase 2 (`Communication` — rating, favorite, draft, regenerate, export-readiness),
+    non pianificata né iniziata in questa fase, da affrontare come proprio checkpoint separato.
+- **Progetto A, Fase 2: terza entità di dominio — `Communication`**: la superficie più larga del
+  progetto (10 Application Service + l'adapter di workflow, contro i 2-3 toccati per aggregato nelle
+  fasi precedenti), perché l'aggregato Communication accumula più responsabilità distinte
+  (approvazione bozza, preferiti, valutazione, copertina manuale/AI, pipeline di generazione,
+  rigenerazione, idoneità all'esportazione) invece delle 1-2 responsabilità di `SubDocument`/
+  `OriginalDocument`. Nuovo `App\Mvp\Communications\Domain\Entities\Communication` governa tutte
+  queste transizioni con lo stesso pattern entità+`pendingChanges()` delle fasi precedenti
+  (`CommunicationChanges` interno, letto da un nuovo `saveCommunication()` su
+  `CommunicationRepository`); `findCommunication()` cambia tipo di ritorno globalmente
+  (`CommunicationRecord` → entità), stessa scelta di Fase 1 per lo stesso motivo (superset
+  strutturale, i consumatori di sola lettura si limitano al type hint).
+  - **Metodi aggiunti, per gruppo di responsabilità**: `favorite()`/`unfavorite()` (guardia:
+    stato preferiti coerente, `CommunicationAlreadyFavoritedException`/
+    `CommunicationNotFavoritedException`); `updateDraft()`/`approve()`/`discard()` (guardie:
+    non scartata, `CommunicationNotDraftException`, `CommunicationAlreadyDiscardedException`);
+    `rate()` (guardia: non già valutata, `CommunicationAlreadyRatedException`); `replaceCover()`/
+    `removeCover()` (guardia condivisa `assertEditable()`/`isEditable()`: non scartata);
+    `applyGeneratedText()`/`applyGeneratedCover()` (guardia: il testo precede la copertina,
+    `CoverPrecedesTextException`); `degradeCover()` (nessuna guardia, unifica una scrittura a due
+    campi duplicata identica in due punti); `startGeneration()`/`failGeneration()`/
+    `completeGeneration()` (stesso tipo di invariante compound di `OriginalDocument::fail()`);
+    `regenerate()` (guardie: non scartata, generazione conclusa,
+    `CommunicationRegenerationUnavailableException`); `isReadyForExport()` come query booleana
+    (sostituisce un metodo privato duplicato di guardia in `ExportCommunicationService`).
+  - **Consolidamento scoperto durante l'implementazione, non pianificato a tavolino**:
+    `CommunicationDraftBuilder` (VO "usa e getta" con `hasGeneratedText()`/`withGeneratedText()`/
+    `withGeneratedCover()`, unica sede della guardia `CoverPrecedesTextException`) è stato
+    **ritirato**, non solo scavalcato: la sua unica invariante non attraversa confini di
+    aggregato (a differenza di `sendStatus`/`SendMessageContext` in Fase 0, dove l'esclusione era
+    l'esito corretto), quindi mantenerlo accanto all'entità avrebbe significato due rappresentazioni
+    della stessa regola. I suoi 4 test sono confluiti in `CommunicationTest.php` (nuovo, sul modello
+    di `SubDocumentTest.php`), che copre anche tutte le altre transizioni/guardie sopra elencate
+    direttamente sull'entità, senza passare da alcun caso d'uso.
+  - **Duplicazione eliminata**: `degrade()` (in `GenerateCommunicationCoverService`, 3 punti di
+    chiamata) e il ramo di timeout copertina in `FinalizeCommunicationService` scrivevano entrambi
+    lo stesso identico paio `coverStatus=Failed`+`coverError` come `updateCommunication()` grezzo,
+    non riusando codice fra loro; ora entrambi chiamano `Communication::degradeCover()`.
+  - **Ordine di scrittura preservato esplicitamente durante la migrazione** (non un dettaglio
+    automatico): in tre punti l'originale eseguiva una guardia o un effetto collaterale di I/O
+    *prima* della scrittura DB — `UpdateCommunicationCoverService::update()` verificava
+    "non scartata" prima di caricare il nuovo file su storage; `GenerateCommunicationCoverService`
+    verificava "il testo precede la copertina" prima dello `storage->store()`, per non lasciare un
+    file orfano su un bug di ordinamento del workflow. Il primo caso ha richiesto un nuovo metodo di
+    query `isEditable(): bool` (oltre alla guardia interna di `replaceCover()`/`removeCover()`) perché
+    il chiamante deve poter verificare la condizione *senza* mutare l'entità prima di aver completato
+    l'I/O; il secondo riusa `hasGeneratedText()` allo stesso scopo, con `applyGeneratedCover()` che
+    ripete la stessa guardia internamente come difesa in profondità.
+  - `CommunicationWorkflowTaskHandler::onFailure()` passa da scrittura diretta a
+    `failGeneration()`, stesso trattamento di `DocumentWorkflowTaskHandler::onFailure()` in Fase 1;
+    guadagna un `ClockInterface $clock` iniettato (mancava, usava `new \DateTimeImmutable()` diretto).
+  - **Deliberatamente NON governato dall'entità** (stesso principio "idempotenza resta
+    nell'Application Service" di tutte le fasi precedenti): il marcatore transitorio
+    `coverStatus=Processing` scritto da `GenerateCommunicationCoverService` prima della chiamata AI
+    (nessun campo collegato); l'`errorMessage` scritto da `GenerateCommunicationTextService` nei
+    propri rami di errore (un singolo campo, riconciliato dal fallback di `failGeneration()` quando
+    interviene `onFailure()`).
+  - **Difetto scoperto durante l'implementazione**: `CommunicationChanges`, come già
+    `OriginalDocumentChanges` in Fase 1, non aveva `isEmpty()` — aggiunto. Il suo metodo
+    `fromRawFields()` (unico consumatore: `CommunicationDraftBuilder`) è diventato dead code dopo il
+    ritiro del builder ed è stato rimosso insieme al privato `toCamelCase()` che lo supportava.
+  - Nuovi/aggiornati test: `CommunicationTest.php` (nuovo, 15 test sull'entità isolata);
+    `CommunicationDraftBuilderTest.php` rimosso (assorbito); asserzioni aggiornate su proprietà →
+    metodi in `RateCommunicationServiceTest`, `CommunicationDraftServiceTest`,
+    `GenerateCommunicationCoverServiceTest`, `FinalizeCommunicationServiceTest`,
+    `GenerateCommunicationTextServiceTest`, `UpdateCommunicationCoverServiceTest`. Un test
+    preesistente di `FinalizeCommunicationServiceTest` seminava `cover_status: 'completed'` — mai un
+    valore valido dell'enum `CoverImageStatus` (`pending/processing/ready/failed/removed`), passava
+    silenziosamente perché il campo era una stringa non tipizzata; l'entità lo valida ora tramite
+    `CoverImageStatus::from()`, il test è stato corretto a `'ready'`. Nessun test dedicato preesisteva
+    per `StartCommunicationWorkflowService`/`CommunicationWorkflowTaskHandler`: coperti dalla suite
+    Feature, che esercita l'intero percorso con Eloquent/DB reali.
+  - **397/397** (eseguita due volte, nessuna flakiness), Pint 374 file, Larastan 277 file, Dependency
+    Rule pulita, DI verificata dal vivo via tinker, `/ready` 200.
+  - **Progetto A concluso**: tutte e tre le fasi pianificate (Fase 0 `SubDocument`, Fase 1
+    `OriginalDocument`, Fase 2 `Communication`) sono complete.
+- **Resilienza alla cancellazione: cleanup storage non blocca più l'eliminazione**: revisione finale
+  dell'intera architettura, non un progetto pianificato. `DeleteDocumentService`/
+  `DeleteCommunicationService` cancellavano sempre il record DB prima del file su storage (ordine
+  corretto: un guasto di storage lascia un file orfano, non un riferimento pendente — vedi "Trade-off
+  noto" più sotto), ma lasciavano propagare l'eccezione di `storage->delete()` senza catch: un blip
+  di rete verso S3 faceva fallire con 500 un'eliminazione già avvenuta lato DB, mostrando un errore
+  per un'operazione che dal punto di vista dell'utente era riuscita. Il pattern corretto esisteva già
+  nella stessa codebase (`ProcessDocumentService::deleteStoragePaths()`, catch + `logger->warning()`)
+  ma non era stato applicato ai due `Delete*Service`: incoerenza fra due punti dello stesso dominio
+  che fanno la stessa cosa in due modi diversi, non un trade-off dichiarato. Entrambi guadagnano un
+  `LoggerInterface $logger` iniettato; il `storage->delete()` (entrambi i punti di
+  `DeleteDocumentService`, l'unico di `DeleteCommunicationService`) è avvolto in try/catch che logga
+  un warning invece di rilanciare.
+  - Nuovi test: `DeleteDocumentServiceTest`/`DeleteCommunicationServiceTest` guadagnano un caso "storage
+    cleanup fallisce" (nuovo `willThrowOnDelete()` su `FakeDocumentStorage`/`FakeCommunicationCoverStorage`,
+    stesso pattern di `willThrowOnStore()` già esistente su quest'ultimo) che verifica: nessuna
+    eccezione propagata, il record resta cancellato dal repository, l'evento di dominio viene
+    comunque dispatchato.
+  - **399/399** (eseguita due volte, nessuna flakiness), Pint 374 file, Larastan 277 file, Dependency
+    Rule pulita, DI verificata dal vivo via tinker, `/ready` 200.
+- **Giro di hardening da revisione esterna** (timeout, autorizzazione, atomicità, filtri come VO,
+  eventi mancanti): commit unico, chiuso in blocco perché le sette categorie di cambiamento erano
+  interdipendenti a livello di test (stessa suite li copre tutti insieme).
+  - **Filtri lista come VO, non più array**: `ListDocumentsUseCase::list()`/`ListCommunicationsUseCase::list()`
+    prendevano `array $filters` con chiavi HTTP grezze (`sendStatus`, `confidenceThreshold`) nella
+    porta di dominio — la Form Request validata arrivava fino al caso d'uso senza una traduzione,
+    esattamente il tipo di fuga che i `*Changes` VO (vedi sopra) avevano già chiuso lato scrittura.
+    Aggiunti `DocumentListFilters`/`CommunicationListFilters` (`Domain/ValueObjects/`), costruiti
+    dall'adapter HTTP dalla Form Request validata: il dominio non vede più chiavi HTTP.
+  - **Ultima asimmetria Observer chiusa**: `UploadDocumentService`/`GenerateCommunicationService`
+    restavano gli unici due casi d'uso con "un solo audit" diretto invece di un evento (scelta
+    dichiarata sopra). Aggiunti `DocumentUploadAccepted`/`CommunicationGenerationRequested` con i
+    listener `RecordDocumentUploadAccepted`/`RecordCommunicationGenerationRequested`: ora ogni caso
+    d'uso di entrambi i domini dispatcha eventi, senza eccezioni residue.
+  - **Timeout SSE allineato ai timeout ASL**: `DocumentController::stream()`/`CommunicationStreamController::stream()`
+    tagliavano a 300s fissi contro pipeline che possono superare i 1000s (Textract 420s + Bedrock
+    720s + persist/dispatch/retry). Timeout ora configurabile (`mvp.documents.stream_timeout_seconds`,
+    default 1800s; `mvp.communications.stream_timeout_seconds`, default 900s) ed emette `still_running`
+    invece di `error` quando scade: la SPA non mostra più "fallito" per un worker che sta ancora
+    lavorando. Pool PHP-FPM ridimensionato in parallelo (`docker/php/www-pool.conf`,
+    `pm.max_children` da 5 default a 20): con lo stream che ora tiene occupato un worker fino a 30
+    minuti, il pool di default avrebbe permesso a 3-5 utenti concorrenti di esaurirlo, bloccando
+    anche `/health`/`/ready` per tutti.
+  - **Autorizzazione unificata su `authorizeSubDocument()`**: preview/export/delete usavano
+    `if ($subDocument->originalDocument) { authorizeOriginalDocument(...) }`, che salta il check
+    (invece di negarlo) quando la relazione è assente — comportamento opposto ad
+    `authorizeSubDocument()`, che nega esplicitamente. Con vincoli FK il ramo è morto, ma è
+    un'incoerenza reale nello stesso file. Tutti e quattro i punti (preview, send-preview,
+    send-export, delete) ora passano da `authorizeSubDocument()`; `PreviewDocumentUseCase`/
+    `SendMessageUseCase` prendono `Actor` come parametro per il controllo tenant anche a livello di
+    caso d'uso, non solo nel controller.
+  - **Callback Step Functions non perde più messaggi SQS**: `ConsumeWorkflowTasks::sendCallback()`
+    ingoiava ogni `AwsException` e il messaggio veniva comunque cancellato dalla coda anche quando
+    `SendTaskSuccess`/`SendTaskFailure` erano stati rifiutati — un blip transitorio perdeva
+    silenziosamente il lavoro invece di lasciarlo per un retry. `sendCallback()` ora ritorna
+    l'esito; `deleteMessage()` viene chiamato solo se il callback è stato accettato o l'errore è
+    permanente (`PERMANENT_CALLBACK_ERRORS`: `TaskTimedOut`, `TaskDoesNotExist`, `InvalidToken` —
+    un retry con lo stesso token non potrebbe comunque riuscire). `WorkflowTaskRunner::handle()`
+    cattura `UniqueConstraintViolationException` sul claim invece di un `firstOrCreate` non atomico
+    (check-then-insert), e distingue `duplicate_in_flight` dal caso "già concluso".
+  - **`ProcessDocumentService` non dipende più da `WorkflowTaskHeartbeat` concreto**: iniettava la
+    classe concreta, non una porta — nuovo `WorkflowHeartbeatPort` (`App\Mvp\Workflow\Ports\Outbound`),
+    bindato al service provider su `WorkflowTaskHeartbeat`. `storage_path('app/tmp/mvp-processing')`
+    risolto anch'esso al confine del container invece che con l'helper globale dentro la classe,
+    stesso pattern già usato per `config()`.
+  - **`prompt_configurations` unique per tenant**: era un indice semplice `(tenant_id, name)`,
+    `resolveName()` deduplica solo a livello applicativo — due POST paralleli potevano creare due
+    configurazioni con lo stesso nome. Migrazione a `unique(['tenant_id', 'name'])`.
+  - **`UploadDocumentCommand::$actor` reso obbligatorio**: era nullable con un fallback implicito
+    `'mvp-local-tenant'` nel dominio se l'attore mancava — il dominio non dovrebbe inventare un
+    tenant. Ora `Actor $actor` non nullable.
+  - **`PromptConfigurationService::delete()` verifica il tenant anche nel caso d'uso**: prima solo
+    il controller lo faceva (stesso gap di difesa in profondità delle preview, chiuso sopra).
+  - **Frontend: `EventSource` sostituito da un client SSE su `fetch`** (`SseClient`,
+    `core/http/sse-client.ts`): `EventSource` non può inviare header custom (rotto in modalità
+    identità `trusted_headers`, dove il middleware richiede `X-Mvp-*`) e collassa l'evento nominato
+    `error` con la caduta di connessione nello stesso listener — un blip di rete veniva mostrato come
+    fallimento definitivo della pipeline. Il nuovo client manda gli header di correlazione, distingue
+    `onNamedError` da `onConnectionError` (quest'ultimo ricarica lo stato senza mostrare un errore),
+    e avvolge `JSON.parse` in try/catch. Pulsante "Riprova" aggiunto a `mvp-error-state` per il
+    fallimento del primo `GET /state`, che prima restava senza recupero automatico né manuale.
+  - Nessun nuovo test `DomainUnit`/Feature quantificato qui singolarmente: la suite esistente più
+    `WorkflowHeartbeatTest`/i test dei singoli casi d'uso toccati coprono il giro nel suo insieme —
+    vedi commit history per il dettaglio file per file.
+- **Teardown dei ViewModel frontend**: `CopilotPageViewModel`/`AssistantPageViewModel` annullavano
+  la propria ricerca in lettura solo fra due chiamate consecutive (`reload()`), non alla distruzione
+  del componente — navigando via con una ricerca in volo, la sottoscrizione restava attiva fino al
+  completamento. Aggiunto `destroy()` su entrambi, chiamato dalla View via `DestroyRef.onDestroy()`:
+  annulla solo la ricerca in lettura, non le azioni di scrittura (upload, generate, ...), che devono
+  completare lato server anche se l'utente ha già navigato altrove.
+
+## Related documents
+
+- [`../architecture/repository-structure.md`](../architecture/repository-structure.md) — descrive
+  già `Workflow` come infrastruttura condivisa alle due pipeline.
+- [`../architecture/final-architecture.md`](../architecture/final-architecture.md) — obiettivo
+  "stesso codice, AWS reale o emulata" che oggi si ottiene per configurazione, non per adapter.
+- [`0003-sqs-instead-of-redis-queue.md`](0003-sqs-instead-of-redis-queue.md) — pattern
+  callback/task-token che `WorkflowTaskHandler` implementa.
+- [`0004-localstack-terraform.md`](0004-localstack-terraform.md) — motiva perché LocalStack/AWS
+  reale sono la stessa classe concreta con endpoint diverso, rilevante per la scelta di scartare
+  Abstract Factory.
+- [`0005-no-automatic-fallbacks.md`](0005-no-automatic-fallbacks.md) — motiva lo scarto esplicito
+  del pattern Proxy.
+- [`0009-communication-async-pipeline-and-cover-storage.md`](0009-communication-async-pipeline-and-cover-storage.md) —
+  pipeline che `CommunicationWorkflowTaskHandler` diventa adapter primario di.
+- [`../IMPLEMENTATION_OVERVIEW.md`](../IMPLEMENTATION_OVERVIEW.md) (§3, §5, §12) — descrizione
+  attuale del "service layer per dominio" che questo ADR formalizza e vincola.

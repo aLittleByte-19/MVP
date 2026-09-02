@@ -1,4 +1,4 @@
-# ADR 0007 — Confine di autenticazione/autorizzazione
+# ADR 0007: Confine di autenticazione/autorizzazione
 
 Status: Accepted, implemented baseline
 Date: 2026-06-08
@@ -37,7 +37,7 @@ le azioni non disponibili per UX, ma non deve mai essere la fonte di verità per
 ## Implementation evidence
 
 - Middleware: `app/Http/Middleware/ResolveMvpIdentity.php` (modalità `local`/`trusted_headers`),
-  `app/Copilot/Identity/MvpUser.php`.
+  `app/Mvp/Identity/MvpUser.php`.
 - Autorizzazione: `app/Http/Middleware/AuthorizeMvpAccess.php` (ruoli `mvp-operator`/`mvp-admin`,
   tenant check) e check nei controller.
 - Configurazione identità in `infra/localstack/main.tf` (`MVP_IDENTITY_MODE`, `MVP_LOCAL_*`).
@@ -45,7 +45,7 @@ le azioni non disponibili per UX, ma non deve mai essere la fonte di verità per
 ## References
 
 - OWASP ASVS: https://owasp.org/www-project-application-security-verification-standard/
-- GitHub Actions — AWS OIDC per le credenziali CI future: https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
+- GitHub Actions: AWS OIDC per le credenziali CI future: https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
 
 ## Related documents
 

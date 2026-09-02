@@ -78,10 +78,28 @@ variable "bedrock_model_id" {
   default     = "amazon.nova-lite-v1:0"
 }
 
+variable "bedrock_image_model_id" {
+  description = "Optional Bedrock image model identifier used to generate communication covers."
+  type        = string
+  default     = "stability.sd3-5-large-v1:0"
+}
+
 variable "bedrock_region" {
   description = "AWS region used by Bedrock runtime calls."
   type        = string
   default     = "eu-north-1"
+}
+
+variable "communication_cover_disk" {
+  description = "Laravel disk storing communication covers. Stays on the emulated S3 even when documents move to real_s3."
+  type        = string
+  default     = "s3"
+}
+
+variable "bedrock_image_region" {
+  description = "AWS region serving the Bedrock image model, which is often not the text model one."
+  type        = string
+  default     = "us-west-2"
 }
 
 variable "bedrock_endpoint" {

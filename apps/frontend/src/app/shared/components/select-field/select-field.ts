@@ -15,7 +15,7 @@ import { type FormControl, ReactiveFormsModule } from "@angular/forms";
       </select>
     </label>
   `,
-  styleUrl: "./select-field.css"
+  styleUrls: ["../../styles/field.css", "./select-field.css"]
 })
 export class SelectFieldComponent {
   readonly label = input.required<string>();

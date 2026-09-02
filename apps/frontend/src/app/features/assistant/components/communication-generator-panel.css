@@ -6,7 +6,7 @@
   max-width: 760px;
   margin: 0;
   color: var(--mvp-muted);
-  line-height: 1.45;
+  line-height: var(--mvp-line-body);
 }
 
 .form form {
@@ -23,6 +23,19 @@
 .status {
   margin: 0;
   color: var(--mvp-muted);
+}
+
+/* Il campo del nome sta nella riga delle azioni, ma non ci sta accanto: va a
+   capo per intero, cosi' l'etichetta resta sopra il proprio controllo. */
+.configName {
+  flex-basis: 100%;
+}
+
+.configActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mvp-space-2);
+  align-items: center;
 }
 
 @media (max-width: 640px) {

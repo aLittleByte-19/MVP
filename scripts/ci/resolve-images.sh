@@ -6,7 +6,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 
-services=(node frontend-audit terraform postgres redis localstack traefik otel-collector prometheus tempo alertmanager grafana loki alloy)
+services=(node frontend-audit terraform postgres redis localstack traefik)
 
 compose_json="$(docker compose --profile tools config --format json)"
 

@@ -14,7 +14,7 @@ return [
     */
 
     'defaults' => [
-        'guard' => env('AUTH_GUARD', 'web'),
+        'guard' => env('AUTH_GUARD', 'mvp'),
         'passwords' => env('AUTH_PASSWORD_BROKER', 'users'),
     ],
 
@@ -40,6 +40,10 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+        'mvp' => [
+            'driver' => 'session',
+            'provider' => 'users',
+        ],
     ],
 
     /*
@@ -60,14 +64,16 @@ return [
     */
 
     'providers' => [
+        // MvpUser (App\Mvp\Identity\MvpUser) non ha un archivio persistente
+        // da cui essere recuperato: e' ricostruito ad ogni richiesta da
+        // ResolveMvpIdentity e impostato con Auth::setUser(), mai risolto
+        // tramite un provider. Il driver 'mvp' (registrato in
+        // AppServiceProvider::boot() via App\Mvp\Identity\MvpUserProvider)
+        // rende esplicito che questa app non ha un provider utente reale,
+        // invece di dichiarare 'eloquent' con un model che non e' Eloquent.
         'users' => [
-            'driver' => 'eloquent',
-            'model' => env('AUTH_MODEL', 'App\Models\User'),
+            'driver' => 'mvp',
         ],
-        // 'users' => [
-        //     'driver' => 'database',
-        //     'table' => 'users',
-        // ],
     ],
 
     /*

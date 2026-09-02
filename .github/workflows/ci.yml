@@ -1,28 +1,32 @@
 name: CI
 
-# Pipeline a 3 macroaree parallele con responsabilità separate:
-#   backend  — build immagine app (dev) + check PHP (Composer, Pint, Larastan, Pest)
-#   frontend — suite SPA + contratto OpenAPI (solo immagine node)
-#   stack    — IaC/observability statici, build produzione, scan Trivy,
-#              smoke HTTPS, accessibilità, push GHCR
+# Pipeline composta da quattro job con responsabilità separate:
+#   backend: build immagine app di sviluppo, controlli PHP e coverage globale
+#   frontend: suite SPA, contratto OpenAPI e coverage globale
+#   coverage-diff: coverage del codice modificato rispetto a origin/develop
+#   stack: IaC, osservabilità, build di produzione, scansione Trivy,
+#          smoke HTTPS, accessibilità e pubblicazione GHCR
 # Ogni job acquisisce le immagini esterne senza pull anonimi: mirror GHCR
 # (autenticato, nessun rate limit per-IP) con fallback upstream; il job stack
 # usa anche la cache di Actions (zero pull a cache hit). Vedi
 # scripts/ci/resolve-images.sh e .github/workflows/mirror-images.yml.
 
+# La CI gira su ogni push di ogni branch, non solo su develop/main e in PR:
+# chi lavora su un branch di feature vede i test rossi mentre sta sviluppando,
+# invece di scoprirli quando il branch e' gia' da mergiare.
 on:
   push:
     branches:
-      - develop
-      - main
-      - migrate/react_angular
+      - "**"
     tags:
       - "v*"
   pull_request:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Push e pull request dello stesso branch condividono il gruppo. Rimane una
+  # sola esecuzione completa, con tutti i job previsti dalla pipeline.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
@@ -81,9 +85,24 @@ jobs:
           -e DB_PASSWORD=
           app vendor/bin/phpstan analyse --memory-limit=1G
 
-      - name: Run Pest
+      # Verifica meccanica della Dependency Rule (ADR 0010): il livello
+      # Domain dei domini esagonali non deve importare Illuminate\*, Aws\*,
+      # o modelli Eloquent.
+      - name: Check hexagonal Dependency Rule
+        run: bash scripts/ci/check-dependency-rule.sh
+
+      # L'immagine applicativa usa www-data. Su un runner Linux Docker crea un
+      # bind mount mancante come root e Pest non può scriverci i report.
+      - name: Prepare backend coverage directory
+        run: |
+          mkdir -p coverage
+          chmod 0777 coverage
+
+      - name: Run Pest with coverage
         run: >
           docker compose run --rm --no-deps
+          -v "$PWD/coverage:/var/www/html/coverage"
+          -e XDEBUG_MODE=coverage
           -e CONFIG_SOURCE=env
           -e APP_ENV=testing
           -e CACHE_STORE=array
@@ -95,7 +114,61 @@ jobs:
           -e DB_PORT=
           -e DB_USERNAME=
           -e DB_PASSWORD=
-          app php artisan test --display-warnings
+          app php -d memory_limit=1G vendor/bin/pest
+          --display-warnings
+          --coverage
+          --path-coverage
+          --coverage-cobertura coverage/cobertura.xml
+          --coverage-html coverage/html
+
+      # Pest scrive i report come www-data del container: il runner li legge ma
+      # non puo' riscriverli, e la normalizzazione in place fallirebbe. Si riprende
+      # la proprieta' invece di derivare un secondo file, cosi' il Cobertura resta
+      # l'unica fonte del dato di coverage del backend.
+      - name: Take ownership of backend coverage reports
+        run: sudo chown -R "$(id -u):$(id -g)" coverage
+
+      # Il report esce con i path assoluti del container: senza questa riscrittura
+      # diff-cover non aggancia nessun file e il gate sul diff passerebbe a vuoto.
+      - name: Normalize backend coverage paths
+        run: node scripts/ci/normalize-cobertura-paths.mjs coverage/cobertura.xml /var/www/html
+
+      # Unico gate sui minimi globali del backend: Pest non usa piu' --min, che
+      # ripeteva la stessa soglia sulla stessa metrica ignorando i branch.
+      - name: Check backend coverage thresholds
+        run: node scripts/ci/check-coverage-thresholds.mjs backend coverage/cobertura.xml
+
+      - name: Upload backend coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: coverage/cobertura.xml
+          if-no-files-found: warn
+          retention-days: 1
+
+      - name: Upload backend coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-report
+          path: coverage/html
+          if-no-files-found: warn
+          retention-days: 7
+
+      # Controparte PHP dell'audit npm del job frontend: come quello, guarda le
+      # sole dipendenze di produzione ed e' in coda, cosi' un advisory non
+      # nasconde l'esito dei test. I pacchetti abbandonati vengono riportati ma
+      # non fanno fallire il job: non sono vulnerabilita'.
+      # --locked audita quanto dichiarato dal lock, non il vendor cotto
+      # nell'immagine, cosi' il gate resta indipendente dal momento del build.
+      # La soglia e' applicata dallo script: composer da solo fallisce su
+      # qualsiasi severita' e non sa filtrarla.
+      - name: Audit production PHP dependencies
+        run: >
+          docker compose run --rm --no-deps app
+          composer audit --locked --no-dev --abandoned=report --format=json
+          | node scripts/ci/check-composer-advisories.mjs
 
   frontend:
     name: Frontend checks
@@ -137,14 +210,104 @@ jobs:
       - name: Typecheck SPA
         run: docker compose --profile tools run --rm node npm run frontend:typecheck
 
-      - name: Test SPA
-        run: docker compose --profile tools run --rm node npm run frontend:test
+      - name: Test SPA with coverage
+        run: docker compose --profile tools run --rm node sh -lc 'cd apps/frontend && npx jest --coverage --runInBand'
+
+      - name: Check frontend coverage thresholds
+        run: node scripts/ci/check-coverage-thresholds.mjs frontend apps/frontend/coverage/coverage-summary.json
+
+      - name: Upload frontend coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: |
+            apps/frontend/coverage/lcov.info
+            apps/frontend/coverage/coverage-summary.json
+          if-no-files-found: warn
+          retention-days: 1
+
+      - name: Upload frontend coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage-report
+          path: apps/frontend/coverage/lcov-report
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Build SPA
         run: docker compose --profile tools run --rm node npm run frontend:build
 
       - name: Audit production Node dependencies
         run: docker compose --profile tools run --rm node npm audit --omit=dev --audit-level=high
+
+  coverage-diff:
+    name: Coverage diff
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Download backend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage
+          path: coverage/backend
+
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage
+          path: coverage/frontend
+
+      - name: Install diff-cover
+        run: python -m pip install diff-cover==10.4.1
+
+      # diff-cover non accetta XML e LCov nella stessa invocazione, quindi i due
+      # stack vengono misurati separatamente. Ogni report descrive solo i propri
+      # file: le righe modificate dell'altro stack non risultano misurate e
+      # restano fuori dal conteggio, senza sovrapposizioni ne' doppi conteggi.
+      # Un commit che tocca un solo stack lascia l'altra invocazione a zero righe
+      # misurate, che per diff-cover e' un esito positivo.
+      - name: Check changed-line coverage
+        run: |
+          minimum="$(jq -er '.diff.lines' coverage-thresholds.json)"
+          status=0
+
+          check() {
+            local report="$1" stack="$2"
+
+            echo "::group::Coverage del codice modificato: ${stack} (minimo ${minimum}%)"
+            diff-cover "$report" \
+              --compare-branch=origin/develop \
+              --format="html:coverage/diff-coverage-${stack}.html,markdown:coverage/diff-coverage-${stack}.md" \
+              --show-uncovered \
+              --fail-under="$minimum" || status=1
+            echo "::endgroup::"
+          }
+
+          check coverage/backend/cobertura.xml backend
+          check coverage/frontend/lcov.info frontend
+
+          exit "$status"
+
+      - name: Upload changed-line coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: changed-line-coverage
+          path: |
+            coverage/diff-coverage-backend.html
+            coverage/diff-coverage-backend.md
+            coverage/diff-coverage-frontend.html
+            coverage/diff-coverage-frontend.md
+          if-no-files-found: warn
+          retention-days: 7
 
   stack:
     name: Stack, security and a11y
@@ -190,7 +353,7 @@ jobs:
 
       - name: Restore image cache
         id: image-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: /tmp/ci-images.tar.zst
           key: docker-images-${{ steps.images.outputs.key }}
@@ -206,12 +369,26 @@ jobs:
             || echo "::warning::Login GHCR fallito, uso solo gli upstream"
           bash scripts/ci/pull-images.sh /tmp/ci-images.txt
 
-      # L'archivio viene caricato in cache dal post-step di actions/cache
-      - name: Save image archive for cache
-        if: steps.image-cache.outputs.cache-hit != 'true'
+      # Le esecuzioni di feature e pull request riusano la cache dei branch di
+      # riferimento senza crearne copie isolate da oltre 2 GB.
+      - name: Prepare image archive for cache
+        if: >-
+          steps.image-cache.outputs.cache-hit != 'true' &&
+          github.event_name == 'push' &&
+          (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
         run: |
           mapfile -t images < /tmp/ci-images.txt
           docker save "${images[@]}" | zstd -T0 -o /tmp/ci-images.tar.zst
+
+      - name: Save image cache
+        if: >-
+          steps.image-cache.outputs.cache-hit != 'true' &&
+          github.event_name == 'push' &&
+          (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/ci-images.tar.zst
+          key: docker-images-${{ steps.images.outputs.key }}
 
       # --- Check statici senza build (fail fast) ---
 
@@ -223,9 +400,6 @@ jobs:
 
       - name: Terraform validate
         run: docker compose --profile tools run --rm terraform validate
-
-      - name: Validate observability config
-        run: make observability-config
 
       # --- Build immagini (una sola volta su questo runner) ---
 
@@ -262,8 +436,7 @@ jobs:
       # --- Stack completo: smoke HTTPS + accessibilità sullo stesso ambiente ---
 
       - name: Generate local TLS certificate
-        # Stesso script di make local-tls: i SAN (incluso *.localhost per le
-        # dashboard) vivono in un posto solo
+        # Stesso script di make local-tls: i SAN vivono in un posto solo
         run: sh scripts/tls/generate-local-cert.sh docker/traefik/certs/mvp-local.test.crt docker/traefik/certs/mvp-local.test.key
 
       - name: Start dependencies
@@ -285,12 +458,10 @@ jobs:
         run: docker compose --profile release run --rm migrate
 
       - name: Start runtime
-        run: docker compose up -d app queue nginx traefik otel-collector prometheus tempo alertmanager grafana
+        run: docker compose up -d app queue nginx traefik
 
       - name: Smoke HTTPS endpoints
         run: |
-          # Le dashboard non espongono più porte host: si passa da Traefik con
-          # routing per hostname (*.localhost) e basic auth (docker/traefik/usersfile).
           wait_for() {
             for _ in {1..120}; do
               if curl --silent --fail --insecure "$@" > /dev/null; then
@@ -304,20 +475,11 @@ jobs:
             return 1
           }
 
-          obs_curl() {
-            local host="$1" path="$2"
-            wait_for "https://${host}:8443${path}" \
-              --resolve "${host}:8443:127.0.0.1" \
-              --user "mvp:mvp-obs-local-password"
-          }
-
           wait_for https://localhost:8443/health
 
           curl --silent --fail --insecure https://localhost:8443/health
           curl --silent --fail --insecure https://localhost:8443/ready
           curl --silent --fail --insecure https://localhost:8443/api/v1/state
-          test "$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure https://localhost:8443/internal/metrics)" = "404"
-          docker compose exec -T nginx wget -q -O - http://127.0.0.1:8081/internal/metrics | grep mvp_app_info
 
           # Security headers: CSP enforced ovunque, con frame-ancestors 'self'
           # solo sulla preview PDF (incorporata in iframe dalla SPA)
@@ -333,26 +495,39 @@ jobs:
           curl --silent --insecure -I https://localhost:8443/api/v1/documents/1/preview \
             | grep -i '^content-security-policy:' | grep -F "frame-ancestors 'self'"
 
-          obs_curl prometheus.localhost /-/ready
-          obs_curl alertmanager.localhost /-/ready
-          wait_for https://grafana.localhost:8443/api/health \
-            --resolve grafana.localhost:8443:127.0.0.1
-          # Senza credenziali le UI protette devono rispondere 401
-          test "$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure --resolve prometheus.localhost:8443:127.0.0.1 https://prometheus.localhost:8443/-/ready)" = "401"
-
       # Il volume node-modules è per-job: l'npm ci del job frontend non è
       # disponibile qui e va rieseguito prima degli audit a11y
       - name: Install audit dependencies
         run: docker compose --profile tools run --rm node npm ci --ignore-scripts
 
       - name: Smoke SPA with enforced CSP
-        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/csp-smoke.mjs https://traefik:8443
+        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/csp-smoke.mjs
+          https://traefik:8443/overview https://traefik:8443/assistant https://traefik:8443/copilot
 
       - name: Run axe
-        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/axe-playwright.mjs https://traefik:8443
+        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/axe-playwright.mjs
+          https://traefik:8443/overview https://traefik:8443/assistant https://traefik:8443/copilot
 
       - name: Run Pa11y
-        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/pa11y-runner.mjs https://traefik:8443
+        run: docker compose --profile tools run --rm frontend-audit node scripts/a11y/pa11y-runner.mjs
+          https://traefik:8443/overview https://traefik:8443/assistant https://traefik:8443/copilot
+
+      - name: Collect stack diagnostics
+        if: failure()
+        run: |
+          mkdir -p artifacts/stack-diagnostics
+          docker compose ps --all > artifacts/stack-diagnostics/compose-ps.txt
+          docker compose logs --no-color --timestamps > artifacts/stack-diagnostics/compose.log 2>&1
+          docker system df > artifacts/stack-diagnostics/docker-disk-usage.txt
+
+      - name: Upload stack diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-diagnostics
+          path: artifacts/stack-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Stop application
         if: always()

@@ -1,4 +1,4 @@
-.PHONY: help test pint node-install frontend-build frontend-lint frontend-test frontend-typecheck frontend-audit frontend-a11y frontend-s3-local-provision frontend-s3-local-upload frontend-s3-local-deploy edge-cdn-local-url frontend-serving-local-test openapi-generate openapi-validate observability-config observability-up local-tls trusted-local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-observability verify-ci-local aws-smoke reset-all workers backup-local restore-local
+.PHONY: help test backend-coverage pint node-install frontend-build frontend-lint frontend-test frontend-coverage frontend-typecheck frontend-audit frontend-a11y frontend-s3-local-provision frontend-s3-local-upload frontend-s3-local-deploy edge-cdn-local-url frontend-serving-local-test openapi-generate openapi-validate local-tls trusted-local-tls fresh logs sh restart setup release infra-up infra-init infra-plan infra-apply infra-destroy refresh-runtime verify verify-fast verify-backend verify-frontend verify-infra verify-ci-local aws-smoke reset-all workers backup-local restore-local
 
 # Colori per l'output
 BLUE  := \033[34m
@@ -16,7 +16,18 @@ TERRAFORM := docker compose --profile tools run --rm -T terraform
 NODE := docker compose --profile tools run --rm -T node
 AWS_CLI := docker compose --profile tools run --rm -T --entrypoint aws aws-cli --endpoint-url=$(LOCALSTACK_ENDPOINT_INTERNAL)
 FRONTEND_AUDIT := docker compose --profile tools run --rm -T frontend-audit
+# RVC9-OB chiede axe e Pa11y sulle interfacce utente principali, al plurale: la
+# sola root reindirizza su /overview e lascerebbe fuori le due pagine piu' dense.
+A11Y_URLS := https://traefik:8443/overview https://traefik:8443/assistant https://traefik:8443/copilot
 TLS_TOOL := docker compose --profile tools run --rm -T tls-tool
+# Pest viene invocato direttamente e con un limite di memoria esplicito, lo
+# stesso usato dal workflow CI. Con i 128M di default dell'immagine PHP la suite
+# esaurisce la memoria durante i test Feature e, poiche' display_errors e' Off,
+# il processo muore senza stampare nulla: si vede solo un exit 255, che diventa
+# uno 0 ingannevole appena l'output finisce in pipe verso tail o grep.
+# `artisan test` non basterebbe: avvia Pest in un sottoprocesso, a cui i flag -d
+# di questa invocazione non arrivano.
+PEST := php -d memory_limit=1G vendor/bin/pest
 TEST_ENV := -e CONFIG_SOURCE=env \
 	-e APP_ENV=testing \
 	-e CACHE_STORE=array \
@@ -32,10 +43,12 @@ TEST_ENV := -e CONFIG_SOURCE=env \
 help:
 	@echo "$(BLUE)Comandi disponibili:$(RESET)"
 	@echo "  $(BLUE)make test$(RESET)      Esegue la suite di test (Pest)"
+	@echo "  $(BLUE)make backend-coverage$(RESET) Misura linee e branch backend con Xdebug"
 	@echo "  $(BLUE)make pint$(RESET)      Esegue Laravel Pint in modalita' check"
 	@echo "  $(BLUE)make frontend-build$(RESET) Compila la SPA Angular"
 	@echo "  $(BLUE)make frontend-lint$(RESET)  Esegue ESLint sul frontend Angular"
 	@echo "  $(BLUE)make frontend-test$(RESET)  Esegue i test frontend"
+	@echo "  $(BLUE)make frontend-coverage$(RESET) Misura statement, funzioni e branch frontend"
 	@echo "  $(BLUE)make frontend-typecheck$(RESET) Esegue typecheck TypeScript"
 	@echo "  $(BLUE)make frontend-audit$(RESET) Audit npm production dependencies"
 	@echo "  $(BLUE)make frontend-a11y$(RESET)  Esegue axe e Pa11y sullo stack HTTPS locale"
@@ -45,8 +58,6 @@ help:
 	@echo "  $(BLUE)make frontend-serving-local-test$(RESET) Smoke test del serving S3 locale + CDN/edge locale"
 	@echo "  $(BLUE)make openapi-generate$(RESET) Rigenera il client TypeScript"
 	@echo "  $(BLUE)make openapi-validate$(RESET) Valida il contratto OpenAPI"
-	@echo "  $(BLUE)make observability-config$(RESET) Valida la configurazione OTel Collector"
-	@echo "  $(BLUE)make observability-up$(RESET) Avvia OTel Collector e Prometheus"
 	@echo "  $(BLUE)make local-tls$(RESET) Genera il certificato TLS locale per Traefik"
 	@echo "  $(BLUE)make trusted-local-tls$(RESET) Genera un certificato locale trusted via mkcert"
 	@echo "  $(BLUE)make fresh$(RESET)     Resetta database, Redis (sessioni/cache/rate limit) e dati generati"
@@ -70,7 +81,7 @@ help:
 	@echo "  $(BLUE)make reset-all$(RESET)     Reset TOTALE: volumi locali + S3 reale, poi setup da zero (FORCE=1 senza conferma)"
 
 # Quality gate rapido: usa solo container e non richiede credenziali AWS reali.
-verify-fast: verify-backend verify-frontend verify-infra verify-observability
+verify-fast: verify-backend verify-frontend verify-infra
 
 # Quality gate completo locale: include contratto OpenAPI e audit dipendenze frontend.
 verify: verify-fast openapi-validate frontend-audit
@@ -79,9 +90,10 @@ verify-backend:
 	docker compose build app
 	docker compose run --rm --no-deps app composer validate --strict
 	docker compose run --rm --no-deps $(TEST_ENV) app php artisan route:list
-	docker compose run --rm --no-deps $(TEST_ENV) app php artisan test
+	docker compose run --rm --no-deps $(TEST_ENV) app $(PEST)
 	docker compose run --rm --no-deps app php vendor/bin/pint --test
 	docker compose run --rm --no-deps $(TEST_ENV) app sh -lc 'if [ -x vendor/bin/phpstan ]; then vendor/bin/phpstan analyse --memory-limit=1G; else echo "phpstan non installato in vendor: skip locale"; fi'
+	bash scripts/ci/check-dependency-rule.sh
 
 verify-frontend: node-install
 	$(NODE) npm run openapi:generate
@@ -96,13 +108,19 @@ verify-infra:
 	$(TERRAFORM) init -backend=false
 	$(TERRAFORM) validate
 
-verify-observability: observability-config
-
 verify-ci-local: verify-fast openapi-validate
 
 test:
 	docker compose build app
-	docker compose run --rm --no-deps $(TEST_ENV) app php artisan test
+	docker compose run --rm --no-deps $(TEST_ENV) app $(PEST)
+
+backend-coverage:
+	docker compose build app
+	mkdir -p coverage
+	chmod 0777 coverage
+	docker compose run --rm --no-deps -v "$(CURDIR)/coverage:/var/www/html/coverage" -e XDEBUG_MODE=coverage $(TEST_ENV) app $(PEST) --coverage --path-coverage --coverage-cobertura coverage/cobertura.xml
+	$(NODE) node scripts/ci/normalize-cobertura-paths.mjs coverage/cobertura.xml /var/www/html
+	$(NODE) node scripts/ci/check-coverage-thresholds.mjs backend coverage/cobertura.xml
 
 node-install:
 	$(NODE) npm ci --ignore-scripts
@@ -116,6 +134,10 @@ frontend-lint: node-install
 
 frontend-test: openapi-generate
 	$(NODE) npm run frontend:test
+
+frontend-coverage:
+	$(NODE) sh -lc 'cd apps/frontend && npx jest --coverage --runInBand'
+	$(NODE) node scripts/ci/check-coverage-thresholds.mjs frontend apps/frontend/coverage/coverage-summary.json
 
 frontend-typecheck: openapi-generate
 	$(NODE) npm run frontend:typecheck
@@ -149,22 +171,15 @@ frontend-audit: node-install
 frontend-a11y: frontend-s3-local-deploy
 	@if [ ! -f docker/traefik/certs/mvp-local.test.crt ] || [ ! -f docker/traefik/certs/mvp-local.test.key ]; then $(MAKE) local-tls; fi
 	docker compose up -d --wait --force-recreate app nginx edge-cdn traefik
-	$(FRONTEND_AUDIT) node scripts/a11y/csp-smoke.mjs https://traefik:8443
-	$(FRONTEND_AUDIT) node scripts/a11y/axe-playwright.mjs https://traefik:8443
-	$(FRONTEND_AUDIT) node scripts/a11y/pa11y-runner.mjs https://traefik:8443
+	$(FRONTEND_AUDIT) node scripts/a11y/csp-smoke.mjs $(A11Y_URLS)
+	$(FRONTEND_AUDIT) node scripts/a11y/axe-playwright.mjs $(A11Y_URLS)
+	$(FRONTEND_AUDIT) node scripts/a11y/pa11y-runner.mjs $(A11Y_URLS)
 
 openapi-generate: node-install
 	$(NODE) npm run openapi:generate
 
 openapi-validate: node-install
 	$(NODE) npx --yes @redocly/cli@latest lint openapi/v1/alittlebyte-mvp-api.yaml
-
-observability-config:
-	docker compose run --rm --no-deps otel-collector validate --config=/etc/otelcol-contrib/config.yml
-	docker compose run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
-
-observability-up:
-	docker compose up -d otel-collector prometheus tempo alertmanager grafana loki alloy
 
 pint:
 	docker compose build app
@@ -183,7 +198,7 @@ fresh:
 	docker compose exec -T redis redis-cli FLUSHALL
 
 logs:
-	docker compose logs -f app queue nginx edge-cdn localstack
+	docker compose logs -f app queue queue-communications nginx edge-cdn localstack
 
 sh:
 	docker compose run --rm app sh
@@ -191,12 +206,12 @@ sh:
 restart:
 	docker compose restart
 
-# Scala i worker della pipeline documentale (default 2): il servizio queue non
-# ha container_name fisso e l'idempotenza dei task e' garantita da
+# Scala i worker delle due pipeline (default 2 ciascuna): i servizi queue non
+# hanno container_name fisso e l'idempotenza dei task e' garantita da
 # task_token_hash + claim atomico, quindi piu' repliche sono sicure.
 WORKERS ?= 2
 workers:
-	docker compose up -d --no-recreate --scale queue=$(WORKERS) queue
+	docker compose up -d --no-recreate --scale queue=$(WORKERS) --scale queue-communications=$(WORKERS) queue queue-communications
 
 # --clean --if-exists: il dump droppa e ricrea gli oggetti, cosi' il restore
 # funziona anche su un database gia' migrato senza errori di oggetti duplicati.
@@ -218,10 +233,9 @@ setup:
 	$(MAKE) frontend-build
 	$(MAKE) frontend-s3-local-upload
 	$(MAKE) release
-	docker compose up -d app nginx queue traefik otel-collector prometheus tempo alertmanager grafana loki alloy
+	docker compose up -d app nginx queue queue-communications traefik
 	@echo "$(BLUE)L'ambiente è stato configurato ed è in fase di avvio.$(RESET)"
 	@echo "$(BLUE)Endpoint locale: https://localhost:8443$(RESET)"
-	@echo "$(BLUE)Grafana: https://grafana.localhost:8443$(RESET)"
 	@echo "$(BLUE)Puoi monitorare il progresso con: make logs$(RESET)"
 
 release:
@@ -247,12 +261,12 @@ infra-destroy: infra-init
 # aggiornato le credenziali AWS_REAL_*) e ricrea app e queue per ricaricare la
 # configurazione runtime caricata dal bootstrap Laravel.
 refresh-runtime: infra-apply
-	docker compose up -d --no-deps --force-recreate app queue
-	@echo "$(BLUE)Runtime aggiornato: SSM/Secrets riscritti, app e queue ricreati.$(RESET)"
+	docker compose up -d --no-deps --force-recreate app queue queue-communications
+	@echo "$(BLUE)Runtime aggiornato: SSM/Secrets riscritti, app e worker ricreati.$(RESET)"
 
 # Reset TOTALE della MVP: ferma lo stack, elimina tutti i volumi locali
-# (PostgreSQL, Redis, LocalStack, osservabilita'), svuota il prefisso del
-# bucket S3 reale se configurato nel .env e riparte da zero con make setup.
+# (PostgreSQL, Redis, LocalStack), svuota il prefisso del bucket S3 reale
+# se configurato nel .env e riparte da zero con make setup.
 # Distruttivo per design (e' una MVP): FORCE=1 salta la conferma interattiva.
 reset-all:
 	@if [ "$(FORCE)" != "1" ]; then \

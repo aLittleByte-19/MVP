@@ -2,7 +2,7 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://mvp.alittlebyte.local/schemas/ai/generate-communication.schema.json",
     "title": "GenerateCommunicationResult",
-    "description": "HR communication draft returned by the Bedrock conversational model. Extra keys are ignored: only title and body are persisted.",
+    "description": "HR communication draft returned by the Bedrock conversational model. Extra keys are ignored: only title, body and imagePrompt are persisted. imagePrompt is optional: without it the cover falls back to a generic corporate prompt.",
     "type": "object",
     "required": ["title", "body"],
     "properties": {
@@ -15,6 +15,11 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 20000
+        },
+        "imagePrompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 900
         }
     }
 }

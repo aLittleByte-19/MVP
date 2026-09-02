@@ -1,3 +1,4 @@
+@import "./fonts.css";
 @import "./tokens.css";
 @import "./utilities.css";
 
@@ -14,7 +15,7 @@ body {
   min-height: 100vh;
   background: var(--mvp-surface-page);
   color: var(--mvp-text);
-  font-family: "Avenir Next", "Segoe UI", Arial, sans-serif;
+  font-family: "IBM Plex Sans", system-ui, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
 button,
@@ -38,11 +39,11 @@ a {
   color: inherit;
 }
 
+/* Lo scostamento non e' decorativo: con `outline-offset: 0` l'anello tocca il
+   riempimento del controllo, e il contrasto andrebbe misurato contro quello
+   invece che contro la superficie. Il colore scelto in ADR 0012 vale a patto
+   che l'anello resti staccato. */
 :focus-visible {
   outline: 3px solid var(--mvp-focus);
   outline-offset: 2px;
-}
-
-#mvp-root {
-  min-height: 100vh;
 }

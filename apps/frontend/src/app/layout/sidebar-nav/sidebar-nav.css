@@ -26,6 +26,10 @@
   border-radius: var(--mvp-radius);
 }
 
+/* Il marchio e' monocromatico: `brightness(0) invert(1)` non appiattisce alcun
+   colore proprio, lo porta da nero pieno a bianco pieno. La piastra chiara che
+   stava qui reggeva il contrasto ma introduceva in tema scuro un rettangolo
+   luminoso che nessun'altra superficie della paletta ha. */
 :host-context([data-mvp-theme="dark"]) .brand img {
   filter: brightness(0) invert(1);
 }
@@ -65,9 +69,11 @@
   color: var(--mvp-text);
   font-weight: 700;
   text-align: left;
+  text-decoration: none;
 }
 
 .subitem {
+  display: block;
   width: 100%;
   padding: 8px 12px 8px 22px;
   border-radius: var(--mvp-radius);
@@ -76,6 +82,7 @@
   font-size: var(--mvp-font-sm);
   font-weight: 700;
   text-align: left;
+  text-decoration: none;
 }
 
 .item:hover,
@@ -85,7 +92,7 @@
 
 .active {
   background: var(--mvp-primary);
-  color: #ffffff;
+  color: var(--mvp-surface);
 }
 
 /* L'hover generico non deve sovrascrivere lo sfondo dell'item attivo: in tema
@@ -93,7 +100,7 @@
    rendendo illeggibile il titolo della sezione corrente. */
 .item.active:hover {
   background: var(--mvp-primary);
-  color: #ffffff;
+  color: var(--mvp-surface);
 }
 
 .subitemActive {
@@ -101,7 +108,7 @@
   color: var(--mvp-primary-deep);
 }
 
-@media (max-width: 920px) {
+@media (max-width: 1100px) {
   .sidebar {
     position: static;
     height: auto;

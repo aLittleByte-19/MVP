@@ -1,0 +1,1 @@
+Scrivi un messaggio di auguri di fine anno da parte della direzione a tutti i dipendenti. Ringrazia per il lavoro svolto in un anno impegnativo e accenna agli obiettivi del prossimo, senza retorica eccessiva.

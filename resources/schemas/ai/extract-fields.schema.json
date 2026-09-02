@@ -17,6 +17,18 @@
             "type": ["string", "null"],
             "maxLength": 500
         },
+        "recipient_email": {
+            "type": ["string", "null"],
+            "maxLength": 255
+        },
+        "fiscal_code": {
+            "type": ["string", "null"],
+            "maxLength": 16
+        },
+        "employee_id": {
+            "type": ["string", "null"],
+            "maxLength": 255
+        },
         "document_date": {
             "type": ["string", "null"],
             "pattern": "^\\d{4}-\\d{2}-\\d{2}$"

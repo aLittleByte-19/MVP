@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/badge/PostgreSQL-persistence-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL">
   <img src="https://img.shields.io/badge/LocalStack-AWS%20emulation-FF9900?logo=amazonaws&logoColor=white" alt="LocalStack">
   <img src="https://img.shields.io/badge/Bedrock-AI%20provider-FF9900?logo=amazonaws&logoColor=white" alt="Bedrock">
-  <img src="https://img.shields.io/badge/OpenTelemetry-observability-000000?logo=opentelemetry&logoColor=white" alt="OpenTelemetry">
+  <img src="https://img.shields.io/badge/CloudWatch-observability%20(EMF)-FF9900?logo=amazonaws&logoColor=white" alt="CloudWatch observability">
 </p>
 
 <p align="center">
@@ -36,7 +36,7 @@ La MVP dimostra un modello applicativo composto da più livelli cooperanti:
 * **LocalStack** per emulare localmente servizi AWS come SQS, Step Functions, SSM, Secrets Manager e S3;
 * **emulatore CDN locale** (Nginx) davanti al bucket S3 LocalStack per il serving della SPA Angular (in produzione: AWS CloudFront);
 * integrazione AI tramite astrazione verso **Bedrock** e integrazione OCR tramite **Textract** (attivabile, disabilitata di default);
-* stack di osservabilità con **OpenTelemetry, Prometheus, Grafana, Tempo, Loki, Alloy e Alertmanager**;
+* osservabilità minimale verso **CloudWatch**: log JSON strutturati con correlation ID e metriche custom in formato **CloudWatch EMF**, senza stack dedicato (vedi ADR 0014/0015);
 * CI con test backend/frontend, scansione immagini, validazione infrastrutturale e audit accessibilità.
 
 La separazione tra richiesta HTTP e workflow asincrono è uno dei punti centrali: l’utente avvia l’elaborazione, il backend registra lo stato e il worker si occupa dei task più lunghi tramite una pipeline orchestrata.
@@ -45,7 +45,7 @@ La separazione tra richiesta HTTP e workflow asincrono è uno dei punti centrali
 
 L’architettura locale è organizzata intorno a un entrypoint edge, un layer applicativo, servizi dati, workflow asincroni e osservabilità.
 
-Traefik gestisce l’ingresso verso i servizi esposti e instrada il traffico applicativo verso l’emulatore CDN locale. Quest’ultimo (`edge-cdn`) è un secondo Nginx che emula il ruolo di una CDN/edge — non Amazon CloudFront — servendo la SPA Angular dagli oggetti caricati nel bucket S3 LocalStack e inoltrando `/api/`, `/health` e `/ready` all’Nginx applicativo/Laravel. È un container separato dall’Nginx applicativo, che è un’immagine di produzione e non deve conoscere LocalStack; quest’ultimo resta il proxy verso PHP-FPM e il percorso interno di compatibilità. PostgreSQL conserva lo stato persistente, Redis supporta componenti runtime a bassa latenza, mentre LocalStack fornisce servizi AWS-like in ambiente locale.
+Traefik gestisce l’ingresso verso i servizi esposti e instrada il traffico applicativo verso l’emulatore CDN locale. Quest’ultimo (`edge-cdn`) è un secondo Nginx che emula il ruolo di una CDN/edge (non Amazon CloudFront) servendo la SPA Angular dagli oggetti caricati nel bucket S3 LocalStack e inoltrando `/api/`, `/health` e `/ready` all’Nginx applicativo/Laravel. È un container separato dall’Nginx applicativo, che è un’immagine di produzione e non deve conoscere LocalStack; quest’ultimo resta il proxy verso PHP-FPM e il percorso interno di compatibilità. PostgreSQL conserva lo stato persistente, Redis supporta componenti runtime a bassa latenza, mentre LocalStack fornisce servizi AWS-like in ambiente locale.
 
 I worker Laravel consumano task asincroni da SQS e comunicano con Step Functions tramite callback task token. Questo permette di rappresentare una pipeline documentale composta da stati espliciti, retry, gestione errori, idempotenza e aggiornamento progressivo dello stato.
 
@@ -57,7 +57,17 @@ I worker Laravel consumano task asincroni da SQS e comunicano con Step Functions
 
 Il flusso AI Assistant supporta la generazione di comunicazioni HR a partire da un prompt, con tono e stile selezionati dall’operatore.
 
-La richiesta parte dalla SPA e arriva alle API Laravel, dove viene validata e normalizzata. Il backend invoca il servizio AI configurato, interpreta la risposta, verifica la struttura dei dati ottenuti e registra il risultato come comunicazione applicativa. La generazione viene tracciata attraverso audit event e metriche, così da rendere osservabile l’intero processo.
+La richiesta parte dalla SPA e arriva alle API Laravel, dove viene validata e normalizzata. Il backend registra la comunicazione e avvia una state machine dedicata in LocalStack Step Functions, rispondendo subito senza attendere il modello. La pipeline genera prima il testo e poi l’immagine di copertina, e la SPA segue l’avanzamento via Server-Sent Events: il titolo e il corpo compaiono appena pronti, la copertina quando arriva. La generazione viene tracciata attraverso audit event e metriche, così da rendere osservabile l’intero processo.
+
+I due contenuti hanno criticità diverse e sono trattati di conseguenza: senza testo non esiste una comunicazione e l’esecuzione fallisce, mentre una copertina non disponibile viene segnalata all’operatore e lascia la bozza valida e utilizzabile.
+
+A generazione conclusa l’operatore può aprire l’anteprima del documento finale impaginato ed esportarlo in PDF. Ogni pagina riporta il marcatore «Creato da AI Assistant», così la provenienza del contenuto resta leggibile anche fuori dall’applicativo. Il PDF viene materializzato sullo storage a oggetti alla prima richiesta e riusato finché il contenuto non cambia.
+
+Sulla bozza l’operatore mantiene il controllo: può correggere a mano titolo e testo, chiedere una nuova variante che rigenera testo e copertina conservando prompt, tono e stile, scartarla mantenendola tracciata, oppure eliminarla definitivamente dallo storico. Può inoltre assegnare una valutazione da 1 a 5 stelle con un commento facoltativo, una sola volta per generazione: è il segnale di qualità percepita, esposto anche come metrica.
+
+Nello storico entra solo ciò che l’operatore decide di conservare: una bozza vi compare dopo un salvataggio esplicito, e finché non lo riceve resta nell’area di lavoro corrente. Il salvataggio decide cosa viene archiviato, non congela il contenuto, che resta modificabile e rigenerabile come prima. Le generazioni archiviate si possono contrassegnare come preferite e lo storico è filtrabile per parola chiave, tono, stile e giorno di creazione, con i criteri applicati lato API.
+
+I parametri di partenza si possono riusare senza ripartire da zero: testo, tono e stile del form si salvano come preset con un nome a scelta, e se il nome manca o è già in uso il sistema ne assegna uno progressivo. Riaprire un preset ricompila il form senza avviare alcuna generazione.
 
 Il flusso evidenzia il ruolo del backend come livello di controllo tra interfaccia e modello AI: il provider genera il contenuto, mentre l’applicazione mantiene responsabilità su validazione, persistenza, stato e tracciabilità.
 
@@ -65,25 +75,33 @@ Il flusso evidenzia il ruolo del backend come livello di controllo tra interfacc
 
 Il flusso Co-Pilot documentale gestisce PDF multi-destinatario caricati dall’operatore. Dopo l’upload, il backend valida il file, registra il documento originale, salva il contenuto nello storage S3-compatible e avvia una state machine in LocalStack Step Functions.
 
+Chi carica il documento può dichiararne fin da subito tipologia, azienda, mese e anno. Sono tutti facoltativi, ma quello che dichiara fa fede: l’AI continua a produrre la propria estrazione, che resta consultabile, e i campi indicati a mano non vengono sovrascritti. Dichiararli non gonfia però la confidenza, che misura quanto ha riconosciuto il modello e quindi valuta soltanto i campi rimasti a suo carico.
+
 La state machine pubblica task su SQS usando il callback pattern con task token. I worker Laravel consumano i messaggi, eseguono le fasi previste e notificano a Step Functions il completamento o il fallimento del task. Le fasi principali comprendono OCR, split logico del documento, estrazione dei dati, generazione dei sotto-documenti, aggiornamento dello stato e registrazione degli eventi applicativi.
 
 Il risultato è una pipeline documentale composta da passaggi isolati, monitorabili e riavviabili, con persistenza dello stato e visibilità sui risultati prodotti.
 
+Sui sotto-documenti prodotti l’operatore lavora in revisione human-in-the-loop: corregge i campi estratti (inclusi email destinatario, codice fiscale e matricola, con validazione dedicata) e li marca come validati. Il dettaglio riporta anche l’email del destinatario, copiabile negli appunti con un comando, e la data e ora di caricamento del documento di origine. Da ogni sotto-documento il sistema compone un messaggio di invio precompilato con destinatario, oggetto e testo, che si può correggere, visualizzare in anteprima ed esportare in PDF. Il recapito avviene fuori dalla piattaforma tramite canali terzi: per questo lo stato mostrato è quello di **scaricamento** («Scaricato» / «Non scaricato»), e non un invio effettuato dal sistema. Lo storico dei documenti è filtrabile per nome, cognome o azienda, stato di scaricamento, soglia di confidenza e periodo, sempre con i criteri applicati lato API e limitati al tenant chiamante.
+
 ## Monitoring e osservabilità
 
-La MVP integra un layer di osservabilità locale per seguire il comportamento dell’applicazione e della pipeline documentale.
+Dopo la rimozione dello stack di osservabilità self-hosted (Prometheus/Grafana/Tempo/Loki/Alloy/Alertmanager, [ADR 0014](docs/architecture-decisions/0014-rimozione-stack-osservabilita.md), sproporzionato per un progetto senza traffico di produzione reale), l'osservabilità della MVP punta direttamente ai meccanismi nativi di CloudWatch, con la minima superficie operativa possibile ([ADR 0015](docs/architecture-decisions/0015-osservabilita-minima-cloudwatch-emf.md)):
 
-Le metriche applicative e infrastrutturali vengono raccolte tramite OpenTelemetry Collector e Prometheus. Le trace vengono inviate a Tempo, i log sono centralizzati su Loki tramite Alloy, mentre Grafana fornisce dashboard per API, workflow documentale, qualità AI/OCR, code, DLQ, log ed errori. Alertmanager completa il flusso operativo con regole collegate a runbook dedicati.
-
-Questa impostazione rende visibili latency, traffico, errori, saturazione, stato dei worker, andamento della pipeline e qualità delle elaborazioni AI.
+* **Log**: ogni richiesta viene arricchita da `CorrelateRequests` con `request_id`/`correlation_id` e scritta in JSON strutturato (`config/logging.php`, canale `stderr`); in produzione queste righe sono raccolte da CloudWatch Logs tramite il log driver del container, senza codice applicativo dedicato.
+* **Metriche**: traffico, latenza, tasso di errore per richiesta e profondità delle DLQ vengono emesse come righe **CloudWatch EMF** sullo stesso canale di log (`EmfMetricsRecorder`, middleware `RecordRequestMetrics`, comando `mvp:metrics:dlq-depth`), che CloudWatch interpreta automaticamente come dati di metrica senza collector né endpoint di scrape.
+* **Audit trail**: le azioni di dominio restano tracciate su `audit_events` (`AuditLogger`), indipendente dallo stack rimosso.
+* **Alarms**: documentati come esempio Terraform di riferimento (`infra/aws/README.md`), non provisionati in assenza di un ambiente AWS reale collegato al progetto.
+* **Tracing distribuito**: sostituito dalla propagazione end-to-end di `request_id`/`correlation_id` tra richiesta HTTP e lavorazione asincrona, equivalente proporzionato alla scala del progetto (stessa logica di scope-reduction già accettata per l'autenticazione simulata, [ADR 0007](docs/architecture-decisions/0007-authn-authz-boundary.md)).
 
 ## CI e quality gate
 
 La pipeline CI verifica la qualità della repository attraverso controlli backend, frontend, infrastrutturali e di sicurezza.
 
-Il backend viene controllato con formattazione, analisi statica e test automatici. Il frontend viene verificato tramite typecheck, test, build e generazione del client API. Lo stack locale viene validato attraverso Terraform, configurazioni di osservabilità, build delle immagini, scansione Trivy, smoke test e audit di accessibilità con axe e pa11y.
+Il backend viene controllato con formattazione, analisi statica, test automatici e coverage globale. Il frontend viene verificato tramite typecheck, test, coverage globale, build e generazione del client API. Un job dedicato richiede almeno l'80% di coverage sulle linee nuove o modificate rispetto a `origin/develop`, misurato separatamente per backend e frontend. Lo stack locale viene validato attraverso Terraform, configurazioni di osservabilità, build delle immagini, scansione Trivy, smoke test e audit di accessibilità con axe e pa11y.
 
-La CI agisce come quality gate del progetto: ogni modifica significativa deve mantenere coerenti codice applicativo, contratto API, infrastruttura locale e comportamento osservabile dello stack.
+La CI agisce come quality gate del progetto: ogni modifica significativa deve mantenere coerenti codice applicativo, contratto API, infrastruttura locale e comportamento osservabile dello stack. I minimi globali e quello sul codice modificato sono definiti in `coverage-thresholds.json` e non prevedono tolleranze.
+
+I job pubblicano report coverage HTML, dati Cobertura e LCOV e un riepilogo del codice modificato in HTML e Markdown, uno per stack. Se lo smoke dello stack fallisce, la CI conserva anche lo stato dei container, i log Docker Compose e l'uso del disco per 14 giorni.
 
 ## Setup locale
 
@@ -107,6 +125,8 @@ make setup
 
 ```bash
 make test
+make backend-coverage
+make frontend-coverage
 make logs
 ```
 

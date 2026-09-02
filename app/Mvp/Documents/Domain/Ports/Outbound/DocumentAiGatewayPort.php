@@ -1,0 +1,38 @@
+<?php
+
+namespace App\Mvp\Documents\Domain\Ports\Outbound;
+
+/**
+ * Porta secondaria verso il classificatore AI: divisione di un documento in
+ * destinatari ed estrazione dei campi per un singolo destinatario. Nessun
+ * riferimento a Bedrock o all'SDK AWS: l'adapter (oggi basato su Bedrock)
+ * decide come soddisfarla.
+ */
+interface DocumentAiGatewayPort
+{
+    /**
+     * Divide il testo OCR di un documento in uno o più destinatari.
+     *
+     * @return array<int, array{employee_name: string, start_page: int, end_page: int}>
+     */
+    public function splitDocument(string $ocrText, int $pageCount, string $boundaryNonce): array;
+
+    /**
+     * Estrae i campi di un destinatario dal testo OCR del suo intervallo di pagine.
+     *
+     * @return array{employee_first_name: ?string, employee_last_name: ?string, company_name: ?string, document_date: ?string, document_type: ?string, description: ?string, recipient_email: ?string, fiscal_code: ?string, employee_id: ?string, confidence_score: ?int}
+     */
+    public function extractFields(string $ocrText): array;
+
+    /**
+     * Marcatore di confine pagina inserito nel testo OCR passato a
+     * splitDocument()/extractFields(): il formato e' un dettaglio del
+     * protocollo di prompt dell'adapter, non una decisione di dominio.
+     */
+    public function pageBoundaryMarker(int $page, string $nonce): string;
+
+    /**
+     * Traduce un'eccezione del gateway AI in un messaggio utente leggibile.
+     */
+    public function formatUserError(\Throwable $e, string $defaultMessage): string;
+}

@@ -7,12 +7,7 @@ x-backend-environment: &backend-environment
   CONFIG_AWS_ACCESS_KEY_ID: ${LOCALSTACK_AWS_ACCESS_KEY_ID:-test}
   CONFIG_AWS_SECRET_ACCESS_KEY: ${LOCALSTACK_AWS_SECRET_ACCESS_KEY:-test}
   CONFIG_AWS_SESSION_TOKEN: ${LOCALSTACK_AWS_SESSION_TOKEN:-}
-  OTEL_SERVICE_NAMESPACE: ${OTEL_SERVICE_NAMESPACE:-alittlebyte}
-  OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-mvp-document-pipeline}
-  OTEL_DEPLOYMENT_ENVIRONMENT: ${OTEL_DEPLOYMENT_ENVIRONMENT:-local}
-  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
   MVP_RELEASE_VERSION: ${MVP_RELEASE_VERSION:-local}
-  MVP_METRICS_ENABLED: ${MVP_METRICS_ENABLED:-true}
 
 services:
   traefik:
@@ -26,7 +21,6 @@ services:
       - ./docker/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./docker/traefik/dynamic:/etc/traefik/dynamic:ro
       - ./docker/traefik/certs:/etc/traefik/certs:ro
-      - ./docker/traefik/usersfile:/etc/traefik/usersfile:ro
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9100/ping"]
       interval: 30s
@@ -37,120 +31,6 @@ services:
         condition: service_healthy
     networks:
       - edge
-      - observability
-
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.153.0
-    command:
-      - --config=/etc/otelcol-contrib/config.yml
-    volumes:
-      - ./docker/otel-collector/config.yml:/etc/otelcol-contrib/config.yml:ro
-    depends_on:
-      nginx:
-        condition: service_healthy
-      traefik:
-        condition: service_started
-    # backend: riceve OTLP da app/queue e scrappa nginx; observability: esporta
-    # verso tempo/loki e scrappa traefik:9100
-    networks:
-      - backend
-      - observability
-
-  prometheus:
-    image: prom/prometheus:v3.9.0
-    # Nessuna porta esposta sull'host: la UI è servita da Traefik su
-    # https://prometheus.localhost:8443 dietro basic auth. Niente
-    # --web.enable-lifecycle: esponeva /-/reload e /-/quit senza auth.
-    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.path=/prometheus
-    volumes:
-      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./docker/prometheus/rules:/etc/prometheus/rules:ro
-      - prometheus-data:/prometheus
-    depends_on:
-      otel-collector:
-        condition: service_started
-      alertmanager:
-        condition: service_started
-    networks:
-      - observability
-
-  tempo:
-    image: grafana/tempo:2.9.0
-    # Nessuna porta esposta sull'host: UI/API via https://tempo.localhost:8443
-    # (basic auth); Grafana e otel-collector vi accedono dalla rete interna.
-    command:
-      - -config.file=/etc/tempo/tempo.yml
-    volumes:
-      - ./docker/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
-      - tempo-data:/var/tempo
-    networks:
-      - observability
-
-  alertmanager:
-    image: prom/alertmanager:v0.29.0
-    # Nessuna porta esposta sull'host: UI via https://alertmanager.localhost:8443
-    # (basic auth); Prometheus vi inoltra gli alert dalla rete interna.
-    command:
-      - --config.file=/etc/alertmanager/alertmanager.yml
-      - --storage.path=/alertmanager
-    volumes:
-      - ./docker/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - alertmanager-data:/alertmanager
-    networks:
-      - observability
-
-  grafana:
-    image: grafana/grafana:12.3.0
-    # Nessuna porta esposta sull'host: servita da Traefik su
-    # https://grafana.localhost:8443 con la sua autenticazione nativa.
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GF_AUTH_ANONYMOUS_ENABLED: "false"
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-https://grafana.localhost:8443}
-    volumes:
-      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - grafana-data:/var/lib/grafana
-    depends_on:
-      prometheus:
-        condition: service_started
-      tempo:
-        condition: service_started
-      loki:
-        condition: service_started
-    networks:
-      - observability
-
-  loki:
-    image: grafana/loki:3.3.2
-    command:
-      - -config.file=/etc/loki/loki-config.yml
-    volumes:
-      - ./docker/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
-      - loki-data:/loki
-    networks:
-      - observability
-
-  alloy:
-    image: grafana/alloy:v1.5.1
-    command:
-      - run
-      - /etc/alloy/config.alloy
-      - --server.http.listen-addr=0.0.0.0:12345
-      - --storage.path=/var/lib/alloy/data
-    volumes:
-      - ./docker/alloy/config.alloy:/etc/alloy/config.alloy:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - alloy-data:/var/lib/alloy/data
-    depends_on:
-      loki:
-        condition: service_started
-    networks:
-      - observability
 
   nginx:
     build:
@@ -208,10 +88,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-    volumes:
-      # Shared with the queue worker so domain metrics recorded by the consumer
-      # (Textract, SQS, workflow completion) reach the /internal/metrics exporter.
-      - observability-metrics:/var/www/html/storage/app/private/observability
     networks:
       - backend
 
@@ -221,7 +97,7 @@ services:
       dockerfile: docker/php/Dockerfile
       args:
         COMPOSER_INSTALL_DEV: ${COMPOSER_INSTALL_DEV:-true}
-    command: php artisan mvp:workflow:consume --max=0 --wait=10
+    command: php artisan mvp:workflow:consume --queue=documents --max=0 --wait=10
     restart: unless-stopped
     environment:
       <<: *backend-environment
@@ -234,8 +110,30 @@ services:
         condition: service_started
       localstack:
         condition: service_healthy
-    volumes:
-      - observability-metrics:/var/www/html/storage/app/private/observability
+    networks:
+      - backend
+
+  # Worker dedicato alla pipeline comunicazioni: coda separata da quella
+  # documentale, cosi' i due flussi non si contendono gli stessi consumatori.
+  queue-communications:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        COMPOSER_INSTALL_DEV: ${COMPOSER_INSTALL_DEV:-true}
+    command: php artisan mvp:workflow:consume --queue=communications --max=0 --wait=10
+    restart: unless-stopped
+    environment:
+      <<: *backend-environment
+    depends_on:
+      app:
+        condition: service_started
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      localstack:
+        condition: service_healthy
     networks:
       - backend
 
@@ -283,7 +181,10 @@ services:
       TF_VAR_db_password: ${MVP_DB_PASSWORD:-mvp-local-password}
       TF_VAR_redis_password: ${MVP_REDIS_PASSWORD:-mvp-redis-local-password}
       TF_VAR_bedrock_model_id: ${MVP_BEDROCK_MODEL_ID:-amazon.nova-lite-v1:0}
+      TF_VAR_bedrock_image_model_id: ${MVP_BEDROCK_IMAGE_MODEL_ID:-stability.sd3-5-large-v1:0}
       TF_VAR_bedrock_region: ${BEDROCK_REGION:-eu-north-1}
+      TF_VAR_bedrock_image_region: ${BEDROCK_IMAGE_REGION:-us-west-2}
+      TF_VAR_communication_cover_disk: ${MVP_COMMUNICATION_COVER_DISK:-s3}
       TF_VAR_bedrock_endpoint: ${BEDROCK_ENDPOINT:-not-configured}
       TF_VAR_confidence_threshold: ${MVP_CONFIDENCE_THRESHOLD:-80}
       TF_VAR_document_disk: ${MVP_DOCUMENT_DISK:-s3}
@@ -441,28 +342,17 @@ services:
 
 # Segmentazione di rete (least privilege):
 # - edge: traffico HTTP in ingresso (traefik <-> nginx) e tool di audit frontend
-# - backend: app, worker, datastore e AWS locale — non raggiungibile da grafana & co.
-# - observability: telemetria (otel, prometheus, tempo, loki, alloy, grafana);
-#   traefik vi partecipa solo per instradare le dashboard e per lo scrape :9100
+# - backend: app, worker, datastore e AWS locale
 networks:
   edge:
     driver: bridge
   backend:
     driver: bridge
-  observability:
-    driver: bridge
 
 volumes:
-  observability-metrics:
-  loki-data:
-  alloy-data:
   postgres-data:
   redis-data:
   localstack-data:
-  prometheus-data:
-  tempo-data:
-  alertmanager-data:
-  grafana-data:
   terraform-plugin-cache:
   node-modules:
   npm-cache:

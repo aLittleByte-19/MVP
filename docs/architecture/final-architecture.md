@@ -11,31 +11,33 @@ verso AWS reale, e i principi di qualità che trovano riscontro nel codice.
 Sorgente editabile: [`diagrams/final-architecture.drawio`](diagrams/final-architecture.drawio)
 (draw.io / diagrams.net, loghi ufficiali incorporati); versione vettoriale in
 [`final-architecture.drawio.svg`](diagrams/final-architecture.drawio.svg). Le aree colorate
-distinguono i piani logici — Frontend, Client/Edge, Applicazione, Config, Dati, Infra locale,
-Orchestrazione (LocalStack), AWS reale, Osservabilità e CI/Qualità — mentre lo stile delle
+distinguono i piani logici: Frontend, Client/Edge, Applicazione, Config, Dati, Infra locale,
+Orchestrazione (LocalStack), AWS reale, Osservabilità e CI/Qualità: mentre lo stile delle
 frecce distingue i flussi (vedi legenda nel diagramma): sincrono, workflow asincrono,
 errore/DLQ, telemetria, provisioning/infra/CI, build frontend ed encryption. Il diagramma
 include anche il legame di control-plane **IAM → Step Functions** (execution role,
-least-privilege documentata — non applicata da LocalStack in locale) e il registry **GHCR**
+least-privilege documentata: non applicata da LocalStack in locale) e il registry **GHCR**
 nella pipeline CI (mirror delle immagini base e pubblicazione delle immagini buildate). Gli
 export PNG/SVG vanno rigenerati da draw.io dopo ogni modifica (`drawio -x -f png -s 1.6 -b 24 ...`).
+
+> **Nota**: il piano "Osservabilità" e i flussi di telemetria disegnati nel diagramma sono superati
+> dalla rimozione dello stack Prometheus/Grafana ([ADR 0014](../architecture-decisions/0014-rimozione-stack-osservabilita.md));
+> il sorgente `.drawio` va aggiornato a mano con lo strumento draw.io, non è stato rigenerato qui.
 
 ## Confine di runtime
 
 | Livello | Componente implementato | Ruolo |
 | --- | --- | --- |
-| Frontend | SPA Angular/TypeScript in `apps/frontend` | Upload, stato di elaborazione, revisione, flussi di anteprima/eliminazione. |
+| Frontend | SPA Angular/TypeScript in `apps/frontend` | Generazione assistita con avanzamento in tempo reale, upload, stato di elaborazione, revisione, flussi di anteprima/eliminazione. |
 | Edge | Traefik (TLS), emulatore CDN locale (Nginx) e Nginx applicativo | HTTPS locale, serving della SPA da S3 LocalStack, proxy API, blocco delle superfici `/admin`. |
 | API | API JSON Laravel in `app/Http` | Validazione, controlli di tenant, audit event, avvio del workflow. |
-| Workflow | Step Functions e SQS (LocalStack) | Orchestrazione production-like con callback task token, end-to-end. |
-| Worker | `php artisan mvp:workflow:consume` | Ricezione SQS, esecuzione dei task, `SendTaskSuccess`/`SendTaskFailure`, `SendTaskHeartbeat`. |
-| OCR | `App\Copilot\Ocr\Services\TextractService` | Integrazione Textract reale, disabilitata di default nelle esecuzioni locali/CI standard. |
-| AI | `App\Copilot\Ai\BedrockService` | Integrazione Bedrock reale per split/estrazione/generazione. |
-| Storage | Dischi Laravel `s3` o `real_s3`, bucket `frontend_static` | S3 LocalStack per documenti locali e asset Angular, S3 reale opzionale solo per documenti/Textract. |
-| Persistenza | PostgreSQL | Documenti, sotto-documenti, dati estratti, audit e stato dei task di workflow. |
+| Workflow | Due state machine Step Functions e due code SQS (LocalStack) | Orchestrazione production-like con callback task token, end-to-end; pipeline documentale e pipeline comunicazioni isolate fra loro. |
+| Worker | `php artisan mvp:workflow:consume --queue=documents|communications` | Un worker per pipeline: ricezione SQS, esecuzione dei task, `SendTaskSuccess`/`SendTaskFailure`, `SendTaskHeartbeat`. |
+| OCR | `App\Mvp\Documents\Adapters\Outbound\Ocr\TextractOcrAdapter` | Integrazione Textract reale, disabilitata di default nelle esecuzioni locali/CI standard. |
+| AI | `App\Mvp\Ai\BedrockService` | Integrazione Bedrock reale per split/estrazione, generazione del testo e delle copertine. |
+| Storage | Dischi Laravel `s3` o `real_s3`, bucket `frontend_static` | S3 LocalStack per documenti, copertine delle comunicazioni e asset Angular, S3 reale opzionale solo per documenti/Textract. |
+| Persistenza | PostgreSQL | Comunicazioni, documenti, sotto-documenti, dati estratti, audit e stato dei task di workflow. |
 | Cache/sessione | Redis | Cache/sessione e rate limiting; non è la fonte di verità dei dati. |
-| Osservabilità | OTel Collector, Prometheus, Tempo, Grafana, Alertmanager | Metriche, trace, dashboard e alert locali. |
-| Log | Grafana Alloy, Loki | Raccolta e archiviazione dei log dei container, interrogabili in Grafana. |
 
 ## LocalStack e AWS reale
 
@@ -50,7 +52,7 @@ LocalStack`: `make frontend-s3-local-deploy` carica `apps/frontend/dist` nel buc
 servizio `edge-cdn` è un **secondo Nginx** che emula in locale il **ruolo di una
 CDN/edge** (non Amazon CloudFront): serve gli asset statici e inoltra `/api/`, `/health` e
 `/ready` all'Nginx applicativo/Laravel. È un container separato dall'Nginx applicativo di
-proposito — quest'ultimo è un'immagine di produzione (buildata, scansionata, pubblicata) e non
+proposito: quest'ultimo è un'immagine di produzione (buildata, scansionata, pubblicata) e non
 deve conoscere LocalStack, mentre il serving da S3 emulato resta confinato in uno scaffolding
 solo-locale; la separazione riflette anche la topologia reale CDN → origin. L'Nginx applicativo
 resta il proxy verso PHP-FPM e il percorso interno di compatibilità (include la build SPA), ma
@@ -93,19 +95,12 @@ I test e la CI standard non chiamano S3, Textract o Bedrock reali.
 
 | Principio di riferimento | Implementazione concreta |
 | --- | --- |
-| AWS Well-Architected — operational excellence | Avvio ripetibile via Docker/Terraform, endpoint `/health` e `/ready`, target `make verify*`. |
-| AWS Well-Architected — reliability | Retry/catch espliciti in Step Functions, heartbeat per task, DLQ SQS, tabella di workflow idempotente. |
-| AWS Well-Architected — security | Nessuna UI di amministrazione runtime, nessun segreto reale committato, header di sicurezza e CSP in nginx, matrice IAM a privilegio minimo documentata. |
+| AWS Well-Architected: operational excellence | Avvio ripetibile via Docker/Terraform, endpoint `/health` e `/ready`, target `make verify*`. |
+| AWS Well-Architected: reliability | Retry/catch espliciti in Step Functions, heartbeat per task, DLQ SQS, tabella di workflow idempotente. |
+| AWS Well-Architected: security | Nessuna UI di amministrazione runtime, nessun segreto reale committato, header di sicurezza e CSP in nginx, matrice IAM a privilegio minimo documentata. |
 | Baseline OWASP ASVS/API | Validazione upload server-side, controlli di ownership per tenant, rate limit, confine di autenticazione strutturato. |
-| Google SRE — monitoring | Metriche API golden-signal, metriche della pipeline documentale, alert coda/DLQ con runbook. |
-| Modello OpenTelemetry | Il Collector riceve OTLP ed esporta metriche verso Prometheus e trace verso Tempo. |
-| Logging centralizzato | Grafana Alloy invia i log di ogni container a Loki, correlati in Grafana con metriche e trace. |
 
 ## Riferimenti principali
 
 - AWS Well-Architected Framework: https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html
 - OWASP ASVS: https://owasp.org/www-project-application-security-verification-standard/
-- Google SRE — Monitoring Distributed Systems: https://sre.google/sre-book/monitoring-distributed-systems/
-- OpenTelemetry Collector: https://opentelemetry.io/docs/collector/
-- Prometheus alerting: https://prometheus.io/docs/alerting/latest/overview/
-- Grafana provisioning: https://grafana.com/docs/grafana/latest/administration/provisioning/

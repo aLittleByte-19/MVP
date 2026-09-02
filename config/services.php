@@ -37,7 +37,12 @@ return [
 
     'bedrock' => [
         'model_id' => env('BEDROCK_MODEL_ID'),
+        'image_model_id' => env('BEDROCK_IMAGE_MODEL_ID', env('MVP_BEDROCK_IMAGE_MODEL_ID')),
         'region' => env('BEDROCK_REGION', env('AWS_DEFAULT_REGION', 'eu-north-1')),
+        // I modelli immagine sono attivi in un insieme di region diverso da
+        // quelli testo: la copertina usa un client dedicato, con fallback sulla
+        // region del modello testo quando non specificata.
+        'image_region' => env('BEDROCK_IMAGE_REGION') ?: env('BEDROCK_REGION', env('AWS_DEFAULT_REGION', 'eu-north-1')),
         'endpoint' => env('BEDROCK_ENDPOINT') === 'not-configured' ? null : env('BEDROCK_ENDPOINT'),
         // Shared real-AWS credentials (same set used by real S3 and Textract).
         // Left empty in LocalStack mode, where the SDK default chain applies.
@@ -47,6 +52,11 @@ return [
             'token' => env('AWS_REAL_SESSION_TOKEN'),
         ],
         'mvp_confidence_threshold' => (int) env('MVP_CONFIDENCE_THRESHOLD', 80),
+        // Soglia propria del codice fiscale, piu' alta di quella generale: un
+        // carattere letto male assegna il documento a un'altra persona. Non e'
+        // il «mapping CF >= 99%» del Capitolato, che e' un obiettivo di
+        // accuratezza sulla popolazione e non una soglia per documento.
+        'mvp_fiscal_code_confidence_threshold' => (int) env('MVP_FISCAL_CODE_CONFIDENCE_THRESHOLD', 95),
     ],
 
     'workflow' => [
@@ -55,13 +65,27 @@ return [
         'state_machine_arn' => env('DOCUMENT_PIPELINE_STATE_MACHINE_ARN'),
         'task_queue_url' => env('DOCUMENT_PIPELINE_TASK_QUEUE_URL'),
         'dlq_queue_url' => env('SQS_DLQ_URL'),
+        // Pipeline comunicazioni: coda e DLQ separate da quelle documentali, cosi'
+        // il backlog di un dominio non ritarda l'altro.
+        'communications_state_machine_arn' => env('COMMUNICATION_PIPELINE_STATE_MACHINE_ARN'),
+        'communications_task_queue_url' => env('COMMUNICATION_PIPELINE_TASK_QUEUE_URL'),
+        'communications_dlq_queue_url' => env('COMMUNICATION_PIPELINE_DLQ_URL'),
     ],
 
+    // Solo i parametri del client: gli URL delle code stanno sotto "workflow",
+    // una voce per pipeline, per non avere due sorgenti della stessa coda.
     'sqs' => [
         'region' => env('AWS_DEFAULT_REGION', 'eu-north-1'),
         'endpoint' => env('SQS_ENDPOINT'),
-        'queue_url' => env('DOCUMENT_PIPELINE_TASK_QUEUE_URL'),
-        'dlq_queue_url' => env('SQS_DLQ_URL'),
+    ],
+
+    // Metriche applicative in formato CloudWatch EMF (vedi EmfMetricsRecorder,
+    // ADR 0015): namespace e interruttore, nessuna credenziale dedicata perché
+    // il trasporto verso CloudWatch e' il log driver del container, non una
+    // chiamata SDK diretta.
+    'metrics' => [
+        'namespace' => env('CLOUDWATCH_METRICS_NAMESPACE', 'MVP/App'),
+        'enabled' => (bool) env('METRICS_ENABLED', true),
     ],
 
     'textract' => [

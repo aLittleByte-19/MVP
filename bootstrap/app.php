@@ -2,13 +2,18 @@
 
 use App\Console\Commands\ConsumeWorkflowTasks;
 use App\Console\Commands\ListDlqMessages;
+use App\Console\Commands\PublishDlqDepthMetric;
 use App\Console\Commands\ResetMvpData;
-use App\Copilot\Support\RuntimeConfigurationLoader;
-use App\Exceptions\Copilot\AiServiceException;
+use App\Exceptions\AiServiceException;
 use App\Http\Middleware\AuthorizeMvpAccess;
 use App\Http\Middleware\CorrelateRequests;
-use App\Http\Middleware\RecordHttpMetrics;
 use App\Http\Middleware\ResolveMvpIdentity;
+use App\Mvp\Communications\Domain\Exceptions\CommunicationNotAuthorizedException;
+use App\Mvp\Communications\Domain\Exceptions\PromptConfigurationNotAuthorizedException;
+use App\Mvp\Documents\Domain\Exceptions\DocumentNotAuthorizedException;
+use App\Mvp\Documents\Domain\Exceptions\SendMessageAttachmentUnavailableException;
+use App\Mvp\Documents\Domain\Exceptions\SendMessageNotConfirmedException;
+use App\Mvp\Support\RuntimeConfigurationLoader;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -47,6 +52,7 @@ return (new ApplicationBuilder($app))
     ->withCommands([
         ConsumeWorkflowTasks::class,
         ListDlqMessages::class,
+        PublishDlqDepthMetric::class,
         ResetMvpData::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
@@ -55,7 +61,9 @@ return (new ApplicationBuilder($app))
         // secure cookies work correctly.
         $middleware->trustProxies(at: '*');
         $middleware->append(CorrelateRequests::class);
-        $middleware->append(RecordHttpMetrics::class);
+        // La metrica per richiesta (ADR 0015) non è più un middleware: ascolta
+        // RequestHandled (registrato in AppServiceProvider), cosi' vede anche
+        // lo status code delle richieste finite in eccezione.
         $middleware->alias([
             'mvp.identity' => ResolveMvpIdentity::class,
             'mvp.authorize' => AuthorizeMvpAccess::class,
@@ -109,9 +117,29 @@ return (new ApplicationBuilder($app))
             return null;
         });
 
-        $exceptions->render(function (AuthorizationException $exception, Request $request) use ($expectsApiJson, $jsonError) {
+        $exceptions->render(function (AuthorizationException|DocumentNotAuthorizedException|PromptConfigurationNotAuthorizedException|CommunicationNotAuthorizedException $exception, Request $request) use ($expectsApiJson, $jsonError) {
             if ($expectsApiJson($request)) {
                 return $jsonError($request, 'forbidden', 'Operazione non autorizzata.', 403);
+            }
+
+            return null;
+        });
+
+        // SendMessageController costruiva questi due a mano (senza requestId/
+        // correlationId, e senza il 422 dichiarato in OpenAPI): centralizzati
+        // qui, come ogni altro errore di dominio, tornano coerenti col resto
+        // del contratto d'errore.
+        $exceptions->render(function (SendMessageNotConfirmedException $exception, Request $request) use ($expectsApiJson, $jsonError) {
+            if ($expectsApiJson($request)) {
+                return $jsonError($request, 'review_not_confirmed', $exception->getMessage(), 422);
+            }
+
+            return null;
+        });
+
+        $exceptions->render(function (SendMessageAttachmentUnavailableException $exception, Request $request) use ($expectsApiJson, $jsonError) {
+            if ($expectsApiJson($request)) {
+                return $jsonError($request, 'attachment_unavailable', $exception->getMessage(), 404);
             }
 
             return null;

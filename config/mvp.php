@@ -28,6 +28,32 @@ return [
 
     'documents' => [
         'storage_disk' => env('MVP_DOCUMENT_DISK', env('FILESYSTEM_DISK', 's3')),
+        // Somma dei TimeoutSeconds ASL (420+720+120+120) più un margine per
+        // un giro di retry: oltre, lo stream SSE emette still_running e non
+        // un errore, perché la pipeline può ancora concludere.
+        'stream_timeout_seconds' => (int) env('MVP_DOCUMENT_STREAM_TIMEOUT_SECONDS', 1800),
+    ],
+
+    'communications' => [
+        // Disco separato da quello documentale: le copertine sono asset generati
+        // dall'applicazione, non documenti HR, e restano sull'S3 emulato anche
+        // quando i documenti passano a "real_s3" per Textract.
+        // "?:" e non il default di env(): una chiave presente ma vuota nel .env
+        // restituisce stringa vuota, che qui sarebbe un nome di disco invalido.
+        'cover_disk' => env('MVP_COMMUNICATION_COVER_DISK') ?: env('FILESYSTEM_DISK', 's3'),
+        'cover_prefix' => env('MVP_COMMUNICATION_COVER_PREFIX') ?: 'communications/covers',
+        'cover_max_mb' => (int) (env('MVP_COMMUNICATION_COVER_MAX_MB') ?: 5),
+        // Il PDF finale e' un asset derivato come la copertina: stesso disco,
+        // prefisso separato. Il rendering dompdf e' l'operazione piu' costosa
+        // dell'API e l'esito e' deterministico a parita' di titolo/corpo/
+        // copertina, quindi viene materializzato una volta e riletto.
+        'pdf_disk' => env('MVP_COMMUNICATION_PDF_DISK') ?: env('MVP_COMMUNICATION_COVER_DISK') ?: env('FILESYSTEM_DISK', 's3'),
+        'pdf_prefix' => env('MVP_COMMUNICATION_PDF_PREFIX') ?: 'communications/exports',
+        // Oltre questa eta' una generazione ancora in processing e' considerata
+        // bloccata e viene esposta come tale dalle metriche.
+        'generation_timeout_seconds' => (int) (env('MVP_COMMUNICATION_TIMEOUT_SECONDS') ?: 900),
+        // Somma dei TimeoutSeconds ASL (180+300+120) più un margine per retry.
+        'stream_timeout_seconds' => (int) env('MVP_COMMUNICATION_STREAM_TIMEOUT_SECONDS', 900),
     ],
 
     'document_limits' => [
@@ -35,7 +61,7 @@ return [
         'max_pdf_pages' => (int) env('MVP_MAX_PDF_PAGES', 50),
         // Path esplicito del binario qpdf; vuoto = autodetect nei path standard.
         'qpdf_binary' => env('MVP_QPDF_BINARY', ''),
-        'processing_timeout_seconds' => (int) env('MVP_PROCESSING_TIMEOUT_SECONDS', 600),
+        'processing_timeout_seconds' => (int) env('MVP_PROCESSING_TIMEOUT_SECONDS', 1800),
         'textract_timeout_seconds' => (int) env('TEXTRACT_TIMEOUT_SECONDS', 300),
     ],
 

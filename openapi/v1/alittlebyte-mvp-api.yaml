@@ -23,6 +23,35 @@ paths:
       summary: Get current MVP state
       operationId: getMvpState
       tags: [State]
+      parameters:
+        - name: tone
+          in: query
+          required: false
+          description: Filtra le metriche AI Assistant per tono (RF40-OB). Non incide sulle metriche Co-Pilot.
+          schema:
+            type: string
+            maxLength: 255
+        - name: style
+          in: query
+          required: false
+          description: Filtra le metriche AI Assistant per stile (RF41-OB). Non incide sulle metriche Co-Pilot.
+          schema:
+            type: string
+            maxLength: 255
+        - name: dateFrom
+          in: query
+          required: false
+          description: Inizio (incluso) dell'intervallo di date delle metriche AI Assistant (RF39-OB).
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          required: false
+          description: Fine (inclusa) dell'intervallo di date delle metriche AI Assistant (RF39-OB).
+          schema:
+            type: string
+            format: date
       responses:
         "200":
           description: Current operational state.
@@ -34,9 +63,85 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/assistant/metrics/export:
+    get:
+      summary: Export the AI Assistant metrics as a summary PDF report
+      operationId: exportAssistantMetricsReport
+      tags: [State]
+      responses:
+        "200":
+          description: PDF attachment.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /api/v1/communications:
+    get:
+      summary: List the tenant communication drafts, optionally filtered
+      operationId: listMvpCommunications
+      tags: [Communications]
+      parameters:
+        - name: keyword
+          in: query
+          required: false
+          description: Ricerca nel prompt della generazione (UC-15).
+          schema:
+            type: string
+            maxLength: 255
+        - name: tone
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+        - name: style
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+        - name: date
+          in: query
+          required: false
+          description: Giorno di creazione della bozza, in formato ISO.
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: perPage
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Bozze corrispondenti ai filtri, escluse quelle scartate.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListCommunicationsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
     post:
-      summary: Generate a communication draft
+      summary: Request an AI communication draft
       operationId: generateMvpCommunication
       tags: [Communications]
       requestBody:
@@ -46,16 +151,462 @@ paths:
             schema:
               $ref: "#/components/schemas/GenerateCommunicationRequest"
       responses:
-        "201":
-          description: Communication draft generated.
+        "202":
+          description: Generation accepted and delegated to the communication pipeline.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GenerateCommunicationResponse"
+                $ref: "#/components/schemas/StartCommunicationGenerationResponse"
         "422":
           $ref: "#/components/responses/ValidationError"
         "502":
           $ref: "#/components/responses/UpstreamUnavailable"
+  /api/v1/prompt-configurations:
+    post:
+      summary: Save the current prompt configuration for later reuse (UC-19)
+      operationId: saveMvpPromptConfiguration
+      tags: [Communications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavePromptConfigurationRequest"
+      responses:
+        "201":
+          description: Prompt configuration saved to history.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavePromptConfigurationResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/prompt-configurations/{promptConfiguration}:
+    delete:
+      summary: Permanently delete a saved prompt configuration
+      operationId: deleteMvpPromptConfiguration
+      tags: [Communications]
+      parameters:
+        - name: promptConfiguration
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Prompt configuration deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteDocumentResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/communications/{communication}/favorite:
+    post:
+      summary: Add a communication to favorites
+      operationId: favoriteMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Communication added to favorites.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateCommunicationFavoriteResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      summary: Remove a communication from favorites
+      operationId: unfavoriteMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Communication removed from favorites.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateCommunicationFavoriteResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/communications/{communication}:
+    put:
+      summary: Update the title and body of a draft communication
+      operationId: updateMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCommunicationRequest"
+      responses:
+        "200":
+          description: Communication draft updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateCommunicationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      summary: Permanently delete a communication from history
+      operationId: deleteMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Communication deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteDocumentResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/communications/{communication}/regenerate:
+    post:
+      summary: Regenerate a communication draft
+      operationId: regenerateMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "202":
+          description: Regeneration accepted and delegated to the communication pipeline.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartCommunicationGenerationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/communications/{communication}/save:
+    post:
+      summary: Save a communication draft to history, leaving it editable and regenerable
+      operationId: saveMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Communication saved to history.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunicationMutationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/communications/{communication}/discard:
+    post:
+      summary: Discard a communication draft
+      operationId: discardMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Communication discarded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunicationMutationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/communications/{communication}/stream:
+    get:
+      summary: Stream communication generation events
+      operationId: streamMvpCommunicationGeneration
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Server-sent events for communication generation.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/communications/{communication}/cover-image:
+    get:
+      summary: Download the communication cover image
+      operationId: showMvpCommunicationCoverImage
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Cover image binary.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      summary: Replace communication cover image manually
+      operationId: updateMvpCommunicationCoverImage
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Cover image updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunicationMutationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      summary: Remove communication cover image
+      operationId: removeMvpCommunicationCoverImage
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+      responses:
+        "200":
+          description: Cover image removed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunicationMutationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/communications/{communication}/preview:
+    get:
+      summary: Preview the final laid-out communication PDF
+      operationId: previewMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: PDF preview stream.
+          headers:
+            ETag:
+              $ref: "#/components/headers/PdfETag"
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: Il PDF non e' cambiato rispetto all'ETag inviato dal client.
+          headers:
+            ETag:
+              $ref: "#/components/headers/PdfETag"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/communications/{communication}/export:
+    get:
+      summary: Export the communication as a finalized downloadable PDF
+      operationId: exportMvpCommunication
+      tags: [Communications]
+      parameters:
+        - $ref: "#/components/parameters/CommunicationId"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: PDF attachment.
+          headers:
+            ETag:
+              $ref: "#/components/headers/PdfETag"
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: Il PDF non e' cambiato rispetto all'ETag inviato dal client.
+          headers:
+            ETag:
+              $ref: "#/components/headers/PdfETag"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/communications/{communication}/rating:
+    post:
+      summary: Assign a 1–5 star rating to a generated communication draft
+      operationId: rateMvpCommunication
+      tags: [Communications]
+      parameters:
+        - name: communication
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RateCommunicationRequest"
+      responses:
+        "200":
+          description: Rating stored for the draft; further ratings for this generation are rejected.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateCommunicationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/documents:
+    get:
+      summary: List the tenant sub-documents, optionally filtered
+      operationId: listMvpDocuments
+      tags: [Documents]
+      parameters:
+        - name: search
+          in: query
+          required: false
+          description: Ricerca su nome, cognome e azienda dei dati estratti (UC-35).
+          schema:
+            type: string
+            maxLength: 255
+        - name: sendStatus
+          in: query
+          required: false
+          description: >-
+            Stato di scaricamento del messaggio precompilato in PDF (UC-36). L'invio non fa parte
+            del perimetro MVP; i valori `pending`/`sent` dell'enum restano per compatibilita' del
+            contratto, ma si leggono come "Non scaricato" e "Scaricato".
+          schema:
+            $ref: "#/components/schemas/SubDocumentSendStatus"
+        - name: confidenceThreshold
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+        - name: confidenceCriterion
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [above, below]
+        - name: month
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+        - name: year
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 2000
+            maximum: 2100
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: perPage
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Sub-documents matching the filters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListDocumentsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   /api/v1/documents/ocr:
     post:
       summary: Upload a document for OCR and AI extraction
@@ -72,6 +623,32 @@ paths:
                 document:
                   type: string
                   format: binary
+                documentType:
+                  description: >
+                    Tipologia documento impostata manualmente in upload.
+                    Se presente, prevale sull'estrazione AI e non viene sovrascritta.
+                  type: [string, "null"]
+                  enum: [cedolino, CU, comunicazione, documento da firmare, lettera, altro]
+                companyName:
+                  description: >
+                    Azienda di riferimento impostata manualmente in upload.
+                    Se presente, prevale sull'estrazione AI e non viene sovrascritta.
+                  type: [string, "null"]
+                  maxLength: 500
+                month:
+                  description: >
+                    Mese di riferimento (1-12) impostato manualmente in upload.
+                    Combinato con year forma la data documento preservata dall'AI.
+                  type: [integer, "null"]
+                  minimum: 1
+                  maximum: 12
+                year:
+                  description: >
+                    Anno di riferimento impostato manualmente in upload.
+                    Combinato con month forma la data documento preservata dall'AI.
+                  type: [integer, "null"]
+                  minimum: 1900
+                  maximum: 2100
       responses:
         "202":
           description: Document accepted for asynchronous processing.
@@ -95,6 +672,8 @@ paths:
             text/event-stream:
               schema:
                 type: string
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
   /api/v1/documents/{subDocument}:
@@ -111,6 +690,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeleteDocumentResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
   /api/v1/documents/{subDocument}/extracted-data:
@@ -174,8 +755,105 @@ paths:
               schema:
                 type: string
                 format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/documents/{subDocument}/original-preview:
+    get:
+      summary: Preview the complete, non-split original document (UC-40.2)
+      operationId: previewMvpOriginalDocument
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      responses:
+        "200":
+          description: PDF preview stream.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/documents/{subDocument}/send-preview:
+    get:
+      summary: Preview the precompiled send message for a sub-document
+      operationId: sendPreviewMvpSubDocument
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      responses:
+        "200":
+          description: PDF preview stream.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: The extracted data for this sub-document has not been confirmed yet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/documents/{subDocument}/send-export:
+    get:
+      summary: Export the precompiled send message for a sub-document as a downloadable PDF
+      operationId: sendExportMvpSubDocument
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      responses:
+        "200":
+          description: PDF attachment.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: The extracted data for this sub-document has not been confirmed yet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/documents/{subDocument}/send-message:
+    put:
+      summary: Correct the precompiled send message fields for a sub-document
+      operationId: updateMvpSubDocumentSendMessage
+      tags: [Documents]
+      parameters:
+        - $ref: "#/components/parameters/SubDocumentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSendMessageRequest"
+      responses:
+        "200":
+          description: Send message updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateSubDocumentReviewResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
 components:
   securitySchemes:
     MvpIdentity:
@@ -183,7 +861,23 @@ components:
       in: header
       name: X-Mvp-User-Id
       description: Identity claims injected by the enterprise boundary or local MVP middleware.
+  headers:
+    PdfETag:
+      description: >-
+        Impronta del contenuto del PDF (titolo, corpo, copertina). Cambia solo
+        quando cambia il documento renderizzato.
+      schema:
+        type: string
   parameters:
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: >-
+        ETag ottenuto da una risposta precedente. Se coincide con il PDF
+        corrente il server risponde 304 senza rigenerare il documento.
+      schema:
+        type: string
     OriginalDocumentId:
       name: originalDocument
       in: path
@@ -193,6 +887,13 @@ components:
         minimum: 1
     SubDocumentId:
       name: subDocument
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    CommunicationId:
+      name: communication
       in: path
       required: true
       schema:
@@ -223,6 +924,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ValidationErrorEnvelope"
+    Conflict:
+      description: Request conflicts with current resource state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
     UpstreamUnavailable:
       description: Required upstream service failed explicitly.
       content:
@@ -240,7 +947,7 @@ components:
           $ref: "#/components/schemas/CopilotState"
     AssistantState:
       type: object
-      required: [metrics, history]
+      required: [metrics, history, promptConfigurations, recentFeedback]
       properties:
         metrics:
           type: array
@@ -248,6 +955,15 @@ components:
             $ref: "#/components/schemas/Metric"
         history:
           type: array
+          items:
+            $ref: "#/components/schemas/Communication"
+        promptConfigurations:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromptConfiguration"
+        recentFeedback:
+          type: array
+          description: Gli ultimi contenuti valutati, con voto e commento testuale.
           items:
             $ref: "#/components/schemas/Communication"
     CopilotState:
@@ -264,14 +980,101 @@ components:
             $ref: "#/components/schemas/SubDocument"
     Metric:
       type: object
-      required: [value, label]
+      required: [key, value, label]
       properties:
+        key:
+          type: string
+          description: Identificativo stabile della metrica. La label è testo di presentazione e può cambiare; per selezionare una metrica si usa la key.
         value:
           oneOf:
             - type: integer
             - type: string
         label:
           type: string
+        threshold:
+          type: number
+          description: >-
+            Valore oltre il quale il sistema decide da solo, per le metriche che ne hanno uno
+            (la confidenza media OCR ha la soglia di validazione automatica). Lo conosce solo
+            il backend, che la legge dalla configurazione: l'interfaccia la mostra sulla scala
+            della scheda ma non la stabilisce.
+        unit:
+          type: string
+          description: >-
+            Unità di misura del valore, quando ne ha una ("%", "s", "min", "/ 5").
+            Sta nel contratto e non nel frontend perché è un fatto della metrica:
+            è chi la calcola a sapere se una media è in secondi o in minuti, e
+            una tabella chiave → unità nell'interfaccia andrebbe fuori sincrono
+            alla prima metrica aggiunta. Assente sui conteggi, che sono numeri
+            puri.
+        outOf:
+          type: integer
+          minimum: 0
+          description: >-
+            Totale di riferimento, per le metriche che sono una quota di un insieme
+            ("1.207 sotto-documenti verificati su 1.284"). È un fatto del dato, non una scelta
+            di resa: il denominatore lo conosce chi calcola il numeratore.
+        parts:
+          type: array
+          description: >-
+            Ripartizione del valore fra le sue componenti, in ordine di lettura: il tempo medio di
+            una pipeline si spende in fasi (OCR, estrazione, salvataggio), un insieme di documenti
+            si divide fra gli stati in cui si trovano. La somma delle parti è il valore.
+          items:
+            type: object
+            required: [label, value]
+            properties:
+              label:
+                type: string
+              value:
+                type: number
+                minimum: 0
+              tone:
+                type: string
+                enum: [neutral, info, success, warning, danger]
+                description: >-
+                  Rilievo della parte, quando ne ha uno proprio. Gli stati di revisione e di
+                  scaricamento lo dichiarano già nel dominio (`ReviewStatus::color()`), quindi
+                  arriva da lì invece di essere ricostruito da una tabella nell'interfaccia.
+                  Assente sulle ripartizioni che non esprimono un giudizio — le fasi di una
+                  pipeline, dove verde e rosso direbbero qualcosa che il dato non dice.
+        distribution:
+          type: array
+          description: >-
+            Densità delle durate: quante elaborazioni cadono in ciascun intervallo di tempo,
+            dagli intervalli più brevi ai più lunghi. Gli intervalli hanno tutti la stessa ampiezza
+            e `upTo` è l'estremo superiore in secondi, così l'interfaccia può disegnare l'asse
+            senza ricostruire i confini.
+          items:
+            type: object
+            required: [upTo, count]
+            properties:
+              upTo:
+                type: number
+                minimum: 0
+              count:
+                type: integer
+                minimum: 0
+        sampleSize:
+          type: integer
+          minimum: 0
+          description: >-
+            Quante misure stanno dietro una distribuzione o una media. Con pochi campioni una curva
+            di densità è più interpolazione che dato: l'interfaccia la sostituisce con una riga di
+            testo, e per farlo deve sapere quante ne ha.
+        history:
+          type: array
+          description: >-
+            Conteggio giornaliero degli ultimi sette giorni, dal più vecchio al più recente.
+            È il flusso di ingresso — quanti elementi sono entrati in quello stato ogni giorno —
+            non la storia del totale, che richiederebbe snapshot giornalieri non conservati dal
+            modello dati. Va quindi presentato come "n nuovi oggi", mai come variazione del valore.
+            Assente sulle metriche per cui un flusso non ha significato, come le medie.
+          minItems: 7
+          maxItems: 7
+          items:
+            type: integer
+            minimum: 0
     GenerateCommunicationRequest:
       type: object
       required: [prompt, tone, style]
@@ -286,7 +1089,93 @@ components:
         style:
           type: string
           enum: [Testo informativo, Avviso operativo, Aggiornamento breve]
-    GenerateCommunicationResponse:
+    SavePromptConfigurationRequest:
+      type: object
+      required: [prompt, tone, style]
+      properties:
+        name:
+          type: [string, "null"]
+          maxLength: 150
+          description: Nome identificativo scelto dal Redattore. Se vuoto o gia' in uso per il tenant, il sistema assegna un'etichetta progressiva (es. "Senza nome (1)") (UC-19).
+        prompt:
+          type: string
+          minLength: 12
+          maxLength: 5000
+        tone:
+          type: string
+          enum: [Chiaro e diretto, Più istituzionale, Più sintetico, Empatico, Tecnico]
+        style:
+          type: string
+          enum: [Testo informativo, Avviso operativo, Aggiornamento breve]
+    SavePromptConfigurationResponse:
+      type: object
+      required: [message, configuration, state]
+      properties:
+        message:
+          type: string
+        configuration:
+          $ref: "#/components/schemas/PromptConfiguration"
+        state:
+          $ref: "#/components/schemas/MvpState"
+    PromptConfiguration:
+      type: object
+      required: [id, name, prompt, tone, style]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        prompt:
+          type: string
+        tone:
+          type: string
+        style:
+          type: string
+        createdAt:
+          type: [string, "null"]
+    StartCommunicationGenerationResponse:
+      type: object
+      required: [message, communicationId, streamUrl]
+      properties:
+        message:
+          type: string
+        communicationId:
+          type: integer
+        streamUrl:
+          type: string
+    CommunicationMutationResponse:
+      type: object
+      required: [message, communication, state]
+      properties:
+        message:
+          type: string
+        communication:
+          $ref: "#/components/schemas/Communication"
+        state:
+          $ref: "#/components/schemas/MvpState"
+    RateCommunicationRequest:
+      type: object
+      required: [rating]
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: [string, "null"]
+          maxLength: 1000
+          description: Optional qualitative comment for the rating (UC-25).
+    RateCommunicationResponse:
+      type: object
+      required: [message, communication, state]
+      properties:
+        message:
+          type: string
+        communication:
+          $ref: "#/components/schemas/Communication"
+        state:
+          $ref: "#/components/schemas/MvpState"
+    UpdateCommunicationFavoriteResponse:
       type: object
       required: [message, communication, state]
       properties:
@@ -338,6 +1227,15 @@ components:
           type: [string, "null"]
           format: date
         documentType:
+          description: >
+            Una delle sei tipologie fisse (cedolino, CU, comunicazione,
+            documento da firmare, lettera, altro), oppure — solo se il
+            sotto-documento ha gia' quella classificazione dall'estrazione AI
+            — il valore libero assegnato dal classificatore Bedrock (UC-43):
+            un "Salva" senza toccare il campo non deve rompersi su un
+            documento gia' classificato fuori enum. Non e' un OpenAPI `enum`
+            perche' quella seconda eccezione lo rende dipendente dal record,
+            non un insieme fisso di valori validi per ogni richiesta.
           type: [string, "null"]
           maxLength: 200
         description:
@@ -349,9 +1247,52 @@ components:
           maximum: 100
         markAsValidated:
           type: boolean
+        recipientEmail:
+          type: [string, "null"]
+          maxLength: 255
+        fiscalCode:
+          type: [string, "null"]
+          maxLength: 16
+        employeeId:
+          type: [string, "null"]
+          maxLength: 255
+    UpdateCommunicationRequest:
+      type: object
+      required: [title, body]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        body:
+          type: string
+          minLength: 1
+          maxLength: 20000
+    UpdateCommunicationResponse:
+      type: object
+      required: [message, communication, state]
+      properties:
+        message:
+          type: string
+        communication:
+          $ref: "#/components/schemas/Communication"
+        state:
+          $ref: "#/components/schemas/MvpState"
+    UpdateSendMessageRequest:
+      type: object
+      properties:
+        recipient:
+          type: [string, "null"]
+          maxLength: 255
+        subject:
+          type: [string, "null"]
+          maxLength: 255
+        body:
+          type: [string, "null"]
+          maxLength: 5000
     Communication:
       type: object
-      required: [id, prompt, tone, style, title, body, status]
+      required: [id, prompt, tone, style, status, previewUrl, exportUrl, generationStatus, generationStatusLabel, coverStatus, coverStatusLabel, isFavorite]
       properties:
         id:
           type: integer
@@ -362,16 +1303,80 @@ components:
         style:
           type: string
         title:
-          type: string
+          type: [string, "null"]
         body:
+          type: [string, "null"]
+        previewUrl:
           type: string
+        exportUrl:
+          type: string
+        coverImageUrl:
+          type: [string, "null"]
+        coverStatus:
+          type: string
+          enum: [pending, processing, ready, failed, removed]
+        coverStatusLabel:
+          type: string
+        coverError:
+          type: [string, "null"]
+        generationStatus:
+          type: string
+          enum: [pending, processing, completed, failed]
+        generationStatusLabel:
+          type: string
+        error:
+          type: [string, "null"]
         status:
           type: string
+        statusValue:
+          type: string
+        isFavorite:
+          type: boolean
         createdAt:
           type: [string, "null"]
+        rating:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 5
+        ratingComment:
+          type: [string, "null"]
+          maxLength: 1000
+        ratedAt:
+          type: [string, "null"]
+    SubDocumentSendStatus:
+      type: string
+      enum: [pending, sent]
+    ListDocumentsResponse:
+      type: object
+      required: [items, total, page, perPage]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubDocument"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+    ListCommunicationsResponse:
+      type: object
+      required: [items, total, page, perPage]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Communication"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
     SubDocument:
       type: object
-      required: [id, reviewStatus, reviewStatusLabel, previewLines]
+      required: [id, reviewStatus, reviewStatusLabel, sendStatus, sendStatusLabel, previewLines]
       properties:
         id:
           type: string
@@ -385,22 +1390,20 @@ components:
           type: [string, "null"]
         companyName:
           type: [string, "null"]
-        company:
-          type: [string, "null"]
         file:
           type: [string, "null"]
         documentDate:
           type: [string, "null"]
           format: date
-        date:
-          type: [string, "null"]
         pages:
           type: integer
         documentType:
           type: [string, "null"]
-        type:
-          type: [string, "null"]
         description:
+          type: [string, "null"]
+        recipientEmail:
+          type: [string, "null"]
+        uploadedAt:
           type: [string, "null"]
         confidence:
           type: [integer, "null"]
@@ -409,11 +1412,49 @@ components:
           enum: [needs_review, auto_validated, quarantined, manually_validated]
         reviewStatusLabel:
           type: string
+        sendStatus:
+          $ref: "#/components/schemas/SubDocumentSendStatus"
+        sendStatusLabel:
+          type: string
         error:
           type: [string, "null"]
         previewUrl:
           type: string
+        originalPreviewUrl:
+          type: string
+        sendRecipient:
+          type: string
+        sendSubject:
+          type: string
+        sendBody:
+          type: string
+        sendPreviewUrl:
+          type: string
+        sendExportUrl:
+          type: string
         previewLines:
+          type: array
+          items:
+            type: string
+        fiscalCode:
+          type: [string, "null"]
+        employeeId:
+          type: [string, "null"]
+        fieldConfidences:
+          description: >
+            Confidenza OCR di ogni campo trascritto, presa dalla riga da cui il
+            campo proviene (ADR 0013). Chiave in snake_case come il campo
+            estratto. Valore null: il campo non e' rintracciabile fra le righe
+            OCR, che e' diverso dall'essere stato letto male. Assente sui
+            documenti elaborati prima dell'introduzione del dettaglio per riga.
+          type: [object, "null"]
+          additionalProperties:
+            type: [number, "null"]
+        lowConfidenceFields:
+          description: >
+            Campi la cui confidenza sta sotto la propria soglia: la soglia
+            generale, o quella dedicata del codice fiscale. La decisione sta qui
+            e non nella SPA perche' le soglie sono conoscenza di dominio.
           type: array
           items:
             type: string
@@ -434,5 +1475,24 @@ components:
             correlationId:
               type: [string, "null"]
     ValidationErrorEnvelope:
-      allOf:
-        - $ref: "#/components/schemas/ErrorEnvelope"
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId, correlationId, fields]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            requestId:
+              type: [string, "null"]
+            correlationId:
+              type: [string, "null"]
+            fields:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string

@@ -10,6 +10,7 @@ RUN apt-get update \
         libfreetype6-dev \
         libicu-dev \
         libjpeg62-turbo-dev \
+        libonig-dev \
         libpng-dev \
         libpq-dev \
         libzip-dev \
@@ -20,6 +21,7 @@ RUN apt-get update \
         bcmath \
         gd \
         intl \
+        mbstring \
         opcache \
         pcntl \
         pdo_pgsql \
@@ -27,11 +29,16 @@ RUN apt-get update \
         zip \
     && pecl install redis \
     && docker-php-ext-enable redis \
+    && if [ "$COMPOSER_INSTALL_DEV" = "true" ]; then \
+        pecl install xdebug; \
+        docker-php-ext-enable xdebug; \
+    fi \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/zz-opcache.ini
+COPY docker/php/www-pool.conf /usr/local/etc/php-fpm.d/zz-www-pool.conf
 
 ARG COMPOSER_ALLOW_SUPERUSER=1
 
@@ -58,7 +65,6 @@ RUN composer dump-autoload --no-interaction --optimize \
     && mkdir -p \
         storage/app/public \
         storage/app/private \
-        storage/app/private/observability \
         storage/app/tmp/mvp-processing \
         storage/framework/cache/data \
         storage/framework/sessions \

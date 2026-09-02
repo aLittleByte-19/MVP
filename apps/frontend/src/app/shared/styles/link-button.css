@@ -1,0 +1,26 @@
+/** Collegamento-azione (ADR 0012): resta un `<a>`, ma pesa quanto un pulsante. Altezza dal token controlli per il bersaglio SC 2.5.8 (44px). */
+
+.previewLink,
+.downloadLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--mvp-control-h);
+  padding: 0 var(--mvp-space-3);
+  border-radius: var(--mvp-radius);
+  background: var(--mvp-surface-soft);
+  color: var(--mvp-primary-deep);
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
+.previewLink:hover,
+.downloadLink:hover {
+  box-shadow: var(--mvp-shadow);
+}
+
+.downloadLink {
+  background: var(--mvp-primary);
+  color: var(--mvp-surface);
+}

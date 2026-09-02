@@ -1,12 +1,62 @@
+/**
+ * Mosaico delle metriche: quattro colonne, e ogni scheda ne occupa una o due a
+ * seconda di cosa deve mostrare. Le schede con un asse — la densita' delle
+ * durate, la ripartizione in fasi — ne prendono due, perche' su una colonna le
+ * tacche dei tempi si accavallerebbero.
+ *
+ * Quattro colonne e non `auto-fit`: con il riempimento automatico il numero di
+ * colonne cambia con la larghezza e le due righe finivano spaiate, una piena e
+ * una con due schede in mezzo al vuoto. Fissandolo, il pannello va calibrato
+ * perche' le celle occupate siano un multiplo di quattro.
+ */
+
 .grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--mvp-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grid > li {
+  display: grid;
+  min-width: 0;
+}
+
+.grid > li.wide {
+  grid-column: span 2;
+}
+
+/* Stessa forma dell'avviso di pagina (`mvp-alert`): riquadro intero nel colore
+   dell'accento, non una striscia laterale. Le due segnalazioni compaiono una
+   sopra l'altra quando il servizio non risponde, e disegnarle in due modi
+   diversi le faceva sembrare due fatti diversi. */
+.failed {
+  margin: 0;
+  padding: var(--mvp-space-4);
+  border: 1px solid var(--mvp-accent);
+  border-radius: var(--mvp-radius);
+  background: var(--mvp-surface);
+  color: var(--mvp-muted);
+  font-size: var(--mvp-font-sm);
+}
+
+/* Due colonne: le schede larghe prendono la riga intera, e con un numero di
+   celle multiplo di quattro le righe restano piene anche qui. */
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
   .grid {
     grid-template-columns: 1fr;
+  }
+
+  .grid > li.wide {
+    grid-column: span 1;
   }
 }
 

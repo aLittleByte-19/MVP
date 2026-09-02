@@ -1,15 +1,19 @@
 import { Injectable, inject } from "@angular/core";
-import { Observable, tap } from "rxjs";
+import { Observable, map, tap } from "rxjs";
 import { AlittlebyteMVPAPIService } from "../../../../api/generated/mvp-api";
 import type {
   DeleteDocumentResponse,
   MvpState,
   SubDocument,
+  SubDocumentSendStatus,
   UpdateExtractedDataRequest,
+  UpdateSendMessageRequest,
   UpdateSubDocumentReviewResponse
 } from "../../../../api/generated/model";
+import { SseClient } from "../../../core/http/sse-client";
 import { MvpStateStore } from "../../../core/state/mvp-state.store";
 import { getSubDocumentNumericId } from "../../../shared/util/formatters";
+import type { DOCUMENT_TYPE_OPTIONS } from "../../../shared/util/document-field-validators";
 
 /** Stato dell'anteprima PDF di un sotto-documento. */
 export type DocumentPreviewStatus = "idle" | "loading" | "available" | "unavailable" | "unreachable";
@@ -28,6 +32,7 @@ export type DocumentUploadPhase =
   | "queued"
   | "processing"
   | "extracting"
+  | "still_running"
   | "completed"
   | "failed";
 
@@ -44,6 +49,44 @@ interface ProcessingProgressEvent {
   subDocuments: number;
 }
 
+/** Criterio di confronto per il filtro di confidenza (UC-37). */
+export type ConfidenceCriterion = "above" | "below";
+
+/** Criteri di filtro per l'elenco documenti mostrato nel Co-Pilot (UC-35..UC-38). */
+export interface DocumentFilters {
+  /** Ricerca testuale su nome/cognome dipendente e azienda (UC-35). */
+  search?: string;
+  /** Stato di scaricamento del messaggio: "sent" (Scaricato) o "pending" (Non scaricato) (UC-36). */
+  sendStatus?: SubDocumentSendStatus;
+  /** Soglia di confidenza e criterio di confronto rispetto alla soglia (UC-37). */
+  confidenceThreshold?: number;
+  confidenceCriterion?: ConfidenceCriterion;
+  /** Mese (1-12) e anno del documento (UC-38). */
+  month?: number;
+  year?: number;
+}
+
+/**
+ * Una pagina dello storico documenti, con il totale che le sta dietro.
+ *
+ * Il totale non e' ridondante: e' l'unico modo per sapere quante pagine
+ * esistono, e senza di esso l'elenco non puo' dire che c'e' altro da vedere.
+ */
+export interface DocumentPage {
+  items: SubDocument[];
+  total: number;
+  page: number;
+  perPage: number;
+}
+
+/** Metadati manuali inviati insieme al file in upload. */
+export interface DocumentUploadMetadata {
+  documentType?: (typeof DOCUMENT_TYPE_OPTIONS)[number];
+  companyName?: string;
+  month?: number;
+  year?: number;
+}
+
 /**
  * Pipeline documentale del Co-Pilot: upload con elaborazione asincrona via SSE,
  * revisione/validazione dei dati estratti, eliminazione e verifica anteprima.
@@ -53,71 +96,90 @@ interface ProcessingProgressEvent {
 export class DocumentWorkflowService {
   private readonly api = inject(AlittlebyteMVPAPIService);
   private readonly store = inject(MvpStateStore);
+  private readonly sse = inject(SseClient);
 
-  /**
-   * Carica il documento e segue lo stream di elaborazione (Server-Sent Events).
-   * La prima emissione corrisponde alla conferma dell'upload (POST risolto), le
-   * successive agli eventi di elaborazione. Lo stream viene chiuso alla
-   * conclusione o all'annullamento della sottoscrizione (nessun leak di
-   * connessioni). Nessun fallback automatico: in caso di errore lo stato
-   * documentale viene solo ricaricato per riflettere la situazione reale.
-   */
-  upload(file: File): Observable<DocumentUploadProgress> {
+  /** Carica il file e segue lo stream SSE di elaborazione, chiuso a conclusione o annullamento. */
+  upload(file: File, metadata: DocumentUploadMetadata = {}): Observable<DocumentUploadProgress> {
     return new Observable<DocumentUploadProgress>((observer) => {
-      let eventSource: EventSource | null = null;
+      let closeStream: (() => void) | null = null;
 
-      const subscription = this.api.uploadMvpDocument({ document: file }).subscribe({
-        next: (response) => {
-          observer.next({ status: response.message, phase: "queued" });
+      const subscription = this.api
+        .uploadMvpDocument({
+          document: file,
+          ...(metadata.documentType !== undefined ? { documentType: metadata.documentType } : {}),
+          ...(metadata.companyName !== undefined ? { companyName: metadata.companyName } : {}),
+          ...(metadata.month !== undefined ? { month: metadata.month } : {}),
+          ...(metadata.year !== undefined ? { year: metadata.year } : {})
+        })
+        .subscribe({
+          next: (response) => {
+            observer.next({ status: response.message, phase: "queued" });
 
-          eventSource = new EventSource(response.streamUrl);
+            closeStream = this.sse.connect(response.streamUrl, {
+              onEvent: (event, data) => {
+                if (event === "progress") {
+                  const progress = data as ProcessingProgressEvent;
+                  observer.next({
+                    status: progressStatusLabel(progress),
+                    phase: progressPhase(progress)
+                  });
+                  return;
+                }
 
-          eventSource.addEventListener("progress", (event) => {
-            const progress = JSON.parse((event as MessageEvent).data) as ProcessingProgressEvent;
-            observer.next({
-              status: progressStatusLabel(progress),
-              phase: progressPhase(progress)
+                if (event === "document") {
+                  const document = data as SubDocument;
+                  this.store.upsertDocument(document);
+                  observer.next({
+                    status: "Estrazione dati dai sotto-documenti in corso.",
+                    phase: "extracting",
+                    receivedDocumentId: document.id
+                  });
+                  return;
+                }
+
+                if (event === "still_running") {
+                  const payload = data as { message?: string };
+                  observer.next({
+                    status: payload.message ?? "Elaborazione ancora in corso. Lo stato verrà aggiornato.",
+                    phase: "still_running"
+                  });
+                  return;
+                }
+
+                if (event === "done") {
+                  const payload = data as { state?: MvpState };
+
+                  if (payload.state) {
+                    this.store.setState(payload.state);
+                  }
+
+                  observer.next({ status: "Elaborazione completata.", phase: "completed" });
+                  closeStream?.();
+                  observer.complete();
+                }
+              },
+              onNamedError: (message) => {
+                observer.next({
+                  status: message || "Elaborazione non disponibile. Controlla lo stato del documento.",
+                  phase: "failed"
+                });
+                closeStream?.();
+                this.store.reload();
+                observer.complete();
+              },
+              onConnectionError: () => {
+                closeStream?.();
+                this.store.reload();
+                observer.complete();
+              }
             });
-          });
-
-          eventSource.addEventListener("document", (event) => {
-            const document = JSON.parse((event as MessageEvent).data) as SubDocument;
-            this.store.upsertDocument(document);
-            observer.next({
-              status: "Estrazione dati dai sotto-documenti in corso.",
-              phase: "extracting",
-              receivedDocumentId: document.id
-            });
-          });
-
-          eventSource.addEventListener("done", (event) => {
-            const payload = JSON.parse((event as MessageEvent).data) as { state?: MvpState };
-
-            if (payload.state) {
-              this.store.setState(payload.state);
-            }
-
-            observer.next({ status: "Elaborazione completata.", phase: "completed" });
-            eventSource?.close();
-            observer.complete();
-          });
-
-          eventSource.addEventListener("error", () => {
-            observer.next({
-              status: "Elaborazione non disponibile. Controlla lo stato del documento.",
-              phase: "failed"
-            });
-            eventSource?.close();
-            this.store.reload();
-            observer.complete();
-          });
-        },
-        error: (error: unknown) => observer.error(error)
-      });
+          },
+          error: (error: unknown) => observer.error(error)
+        });
 
       return () => {
         subscription.unsubscribe();
-        eventSource?.close();
+        closeStream?.();
       };
     });
   }
@@ -141,6 +203,38 @@ export class DocumentWorkflowService {
     return this.api
       .reviewMvpSubDocument(getSubDocumentNumericId(documentId))
       .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  saveSendMessage(
+    documentId: string,
+    payload: UpdateSendMessageRequest
+  ): Observable<UpdateSubDocumentReviewResponse> {
+    return this.api
+      .updateMvpSubDocumentSendMessage(getSubDocumentNumericId(documentId), payload)
+      .pipe(tap((response) => this.store.setState(response.state)));
+  }
+
+  /** Storico filtrato e impaginato (UC-35..UC-38); restituisce anche `total`, non solo `items`. */
+  searchDocuments(filters: DocumentFilters, page: number, perPage: number): Observable<DocumentPage> {
+    return this.api
+      .listMvpDocuments({
+        search: filters.search,
+        sendStatus: filters.sendStatus,
+        confidenceThreshold: filters.confidenceThreshold,
+        confidenceCriterion: filters.confidenceCriterion,
+        month: filters.month,
+        year: filters.year,
+        page,
+        perPage
+      })
+      .pipe(
+        map((response) => ({
+          items: response.items,
+          total: response.total ?? response.items.length,
+          page: response.page ?? page,
+          perPage: response.perPage ?? perPage
+        }))
+      );
   }
 
   /**

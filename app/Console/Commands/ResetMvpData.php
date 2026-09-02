@@ -29,6 +29,8 @@ class ResetMvpData extends Command
             'sub_documents',
             'original_documents',
             'communications',
+            // Relazione morph senza foreign key: va svuotata esplicitamente.
+            'workflow_tasks',
         ], fn (string $table): bool => Schema::hasTable($table)));
 
         $this->resetTables($tables);
@@ -94,15 +96,28 @@ class ResetMvpData extends Command
 
     private function resetStorage(): void
     {
-        $documentDisk = config('filesystems.default', 'local');
+        // Stesso disco su cui scrivono i servizi documentali: con
+        // MVP_DOCUMENT_DISK=real_s3 i documenti vivono sul bucket AWS reale, non
+        // su quello LocalStack. Leggere `filesystems.default` qui significava
+        // ripulire un disco vuoto e lasciare intatti i file veri.
+        $documentDisk = (string) config('mvp.documents.storage_disk', config('filesystems.default', 'local'));
 
         // I documenti sono salvati in "originals/" e "sub/" relativi al root del
-        // disk (vedi DocumentProcessingService); "documents/" resta per pulire
+        // disk (vedi ProcessDocumentService); "documents/" resta per pulire
         // eventuali dati pregressi del vecchio layout.
         Storage::disk($documentDisk)->deleteDirectory('originals');
         Storage::disk($documentDisk)->deleteDirectory('sub');
         Storage::disk($documentDisk)->deleteDirectory('documents');
         Storage::disk($documentDisk)->deleteDirectory('livewire-tmp');
+
+        // Copertine ed export PDF hanno prefisso e disco propri e vanno puliti
+        // entrambi: gli export sono materializzati alla prima richiesta di
+        // anteprima o esportazione e altrimenti resterebbero a vita.
+        Storage::disk((string) config('mvp.communications.cover_disk', $documentDisk))
+            ->deleteDirectory((string) config('mvp.communications.cover_prefix', 'communications/covers'));
+
+        Storage::disk((string) config('mvp.communications.pdf_disk', $documentDisk))
+            ->deleteDirectory((string) config('mvp.communications.pdf_prefix', 'communications/exports'));
 
         Storage::disk('local')->deleteDirectory('documents');
         Storage::disk('local')->deleteDirectory('livewire-tmp');

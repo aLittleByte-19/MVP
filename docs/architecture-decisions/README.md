@@ -14,14 +14,14 @@ e delle sue conseguenze.
 Ogni ADR segue la struttura [Michael Nygard](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions),
 estesa con alcuni campi per la tracciabilità verso la codebase:
 
-- **Status** — `Proposed` · `Accepted` · `Superseded` · `Deprecated` (con eventuale `implemented`/`implemented baseline`)
-- **Date** — data della decisione
-- **Context** — forze in gioco e vincoli al momento della decisione
-- **Decision** — la scelta adottata
-- **Consequences** — effetti positivi e negativi che ne derivano
-- **Alternatives considered** — le opzioni realistiche valutate e perché scartate
-- **Implementation evidence** — dove la decisione si vede nella codebase (path)
-- **Related documents** — ADR e documenti correlati che approfondiscono il tema
+- **Status**: `Proposed` · `Accepted` · `Superseded` · `Deprecated` (con eventuale `implemented`/`implemented baseline`)
+- **Date**: data della decisione
+- **Context**: forze in gioco e vincoli al momento della decisione
+- **Decision**: la scelta adottata
+- **Consequences**: effetti positivi e negativi che ne derivano
+- **Alternatives considered**: le opzioni realistiche valutate e perché scartate
+- **Implementation evidence**: dove la decisione si vede nella codebase (path)
+- **Related documents**: ADR e documenti correlati che approfondiscono il tema
 
 Gli ADR sono immutabili: una decisione che cambia non si riscrive, si **supera** con un nuovo
 ADR che referenzia il precedente. La numerazione è progressiva e a quattro cifre
@@ -36,9 +36,15 @@ ADR che referenzia il precedente. La numerazione è progressiva e a quattro cifr
 | [0003](0003-sqs-instead-of-redis-queue.md) | Code asincrone su SQS; Redis solo per cache/sessioni | Accepted, implemented |
 | [0004](0004-localstack-terraform.md) | Emulazione AWS locale con LocalStack + Terraform | Accepted, implemented |
 | [0005](0005-no-automatic-fallbacks.md) | Nessun fallback automatico dei servizi AI: stato `failed` esplicito | Accepted, implemented |
-| [0006](0006-observability-and-audit.md) | Osservabilità (OTel/Prometheus) e audit trail append-only | Accepted, implemented baseline |
+| [0006](0006-observability-and-audit.md) | Osservabilità (OTel/Prometheus) e audit trail append-only | Metrics/dashboard superseded by 0014; audit trail Accepted |
 | [0007](0007-authn-authz-boundary.md) | Confine authn/authz: IdP simulato, RBAC/ABAC server-side | Accepted, implemented baseline |
 | [0008](0008-angular-frontend-static-serving.md) | Frontend Angular e serving statico S3 locale + emulatore CDN locale (Nginx) | Accepted, implemented |
+| [0009](0009-communication-async-pipeline-and-cover-storage.md) | Pipeline asincrona delle comunicazioni e copertine su storage a oggetti | Accepted, implemented |
+| [0010](0010-hexagonal-architecture-documents-communications.md) | Architettura esagonale (ports & adapters) per i domini Documents e Communications | Accepted, implemented |
+| [0011](0011-frontend-presentation-model-and-sse-client.md) | ViewModel puro (Presentation Model) e client SSE su `fetch` | Accepted, implemented |
+| [0012](0012-frontend-design-system-and-ui-language.md) | Sistema visivo e linguaggio dell'interfaccia della SPA | Accepted, implemented |
+| [0013](0013-per-field-ocr-confidence.md) | Confidenza per campo invece che media di pagina | Accepted, implemented |
+| [0014](0014-rimozione-stack-osservabilita.md) | Rimozione dello stack Prometheus/Grafana | Accepted, implemented |
 
 ## Aggiungere un ADR
 

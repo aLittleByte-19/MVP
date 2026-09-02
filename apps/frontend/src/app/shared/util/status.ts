@@ -1,9 +1,5 @@
 export type StatusTone = "neutral" | "info" | "success" | "warning" | "danger";
 
-export function getDocumentStatus(error?: string | null): "success" | "warning" {
-  return error ? "warning" : "success";
-}
-
 export function getReviewStatusTone(reviewStatus?: string, error?: string | null): StatusTone {
   if (reviewStatus === "quarantined") {
     return "danger";
@@ -25,4 +21,20 @@ export function getReviewStatusTone(reviewStatus?: string, error?: string | null
   }
 
   return "neutral";
+}
+
+/** Forma breve per una colonna stretta di tabella: la frase completa del backend andrebbe a capo. La forma estesa resta nell'ispettore. */
+export function getReviewStatusShortLabel(reviewStatus: string | undefined, fallback: string): string {
+  switch (reviewStatus) {
+    case "auto_validated":
+      return "Automatica";
+    case "manually_validated":
+      return "Manuale";
+    case "needs_review":
+      return "Da verificare";
+    case "quarantined":
+      return "Quarantena";
+    default:
+      return fallback;
+  }
 }

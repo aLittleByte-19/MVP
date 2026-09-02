@@ -3,18 +3,21 @@
 Il repository mantiene le convenzioni Laravel, separando i confini di runtime dalla logica di
 dominio.
 
-- `app/Copilot`: codice applicativo di dominio del co-pilot AI.
-- `app/Copilot/Ai`: integrazione Bedrock e servizi specifici dell'AI.
-- `app/Copilot/Audit`: servizi di audit logging.
-- `app/Copilot/Documents`: enum ed elaborazione dei documenti.
-- `app/Copilot/Communications`: enum delle comunicazioni e relativi servizi.
-- `app/Copilot/Identity`: identità utente risolta a runtime.
-- `app/Copilot/Observability`: exporter Prometheus e registrazione delle metriche.
-- `app/Copilot/Ocr`: integrazione OCR Textract.
-- `app/Copilot/Workflow`: servizi di orchestrazione del workflow Step Functions/SQS.
+- `app/Mvp`: codice applicativo di dominio del co-pilot AI.
+- `app/Mvp/Ai`: integrazione Bedrock e servizi specifici dell'AI.
+- `app/Mvp/Audit`: servizi di audit logging.
+- `app/Mvp/Documents`: dominio documentale (Co-Pilot), incluso OCR Textract. Architettura esagonale
+  (ports & adapters, [ADR 0010](../architecture-decisions/0010-hexagonal-architecture-documents-communications.md)):
+  `Domain/` (porte, value object, eccezioni), `Application/UseCases/` (casi d'uso), `Adapters/`
+  (`Primary/` guidati da HTTP/Step Functions, `Outbound/` verso Eloquent/Textract/Bedrock/storage).
+- `app/Mvp/Communications`: dominio generativo (AI Assistant), copertine e impaginazione del PDF
+  finale. Stessa architettura esagonale di `Documents` (ADR 0010).
+- `app/Mvp/Identity`: identità utente risolta a runtime.
+- `app/Mvp/Support`: servizi trasversali a piu' domini (stato applicativo esposto alla SPA, caricamento della configurazione runtime, piè di pagina condiviso dei PDF generati).
+- `app/Mvp/Workflow`: infrastruttura di orchestrazione Step Functions/SQS comune alle pipeline (contratto degli handler, registry, runner, heartbeat, contesto di correlazione). I servizi specifici di un flusso vivono nella cartella del flusso.
 - `app/Console/Commands`: comandi artisan, incluso il worker `mvp:workflow:consume`.
 - `app/Http`: controller HTTP, middleware e validazione delle richieste.
-- `app/Models/Copilot`: model Eloquent del dominio MVP.
+- `app/Models`: model Eloquent del dominio MVP.
 - `apps/frontend`: SPA Angular/TypeScript.
 - `openapi/v1`: contratto API versionato.
 - `infra/localstack`: modello Terraform LocalStack per le esecuzioni locali production-like.

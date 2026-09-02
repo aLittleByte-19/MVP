@@ -1,4 +1,4 @@
-# ADR 0004 — Emulazione AWS locale con LocalStack e Terraform
+# ADR 0004: Emulazione AWS locale con LocalStack e Terraform
 
 Status: Accepted, implemented
 Date: 2026-06-08
@@ -46,7 +46,7 @@ endpoint e credenziali (vedi [ADR 0005](0005-no-automatic-fallbacks.md)).
 ## References
 
 - Terraform AWS provider: https://registry.terraform.io/providers/hashicorp/aws/latest/docs
-- LocalStack — integrazione Terraform: https://docs.localstack.cloud/aws/integrations/infrastructure-as-code/terraform/
+- LocalStack: integrazione Terraform: https://docs.localstack.cloud/aws/integrations/infrastructure-as-code/terraform/
 - AWS Step Functions con Terraform: https://docs.aws.amazon.com/step-functions/latest/dg/terraform-sfn.html
 
 ## Related documents

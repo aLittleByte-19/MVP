@@ -1,4 +1,4 @@
-# ADR 0008 — Frontend Angular e serving statico LocalStack
+# ADR 0008: Frontend Angular e serving statico LocalStack
 
 Status: Accepted, implemented
 Date: 2026-06-24
@@ -24,7 +24,7 @@ loading states restano espliciti.
 
 Terraform LocalStack provisiona anche un bucket S3 dedicato agli asset Angular. Il percorso
 default locale passa da Traefik al servizio Docker `edge-cdn`: un **secondo Nginx**
-che **emula in locale il ruolo di una CDN/edge** davanti al bucket S3 LocalStack — serve gli
+che **emula in locale il ruolo di una CDN/edge** davanti al bucket S3 LocalStack: serve gli
 asset statici e inoltra `/api/`, `/health` e `/ready` all'Nginx applicativo/Laravel. Non emula
 Amazon CloudFront né la sua semantica; ne riproduce solo il *ruolo* di distribuzione edge. In
 produzione quel ruolo sarebbe ricoperto da AWS CloudFront (vedi *Evoluzione*). Il deploy locale
@@ -32,10 +32,10 @@ carica `apps/frontend/dist` nel bucket con cache-control differenziato: `index.h
 bundle hashati immutable, altri asset con cache breve.
 
 Il serving CDN locale è un container Nginx **separato** dall'Nginx applicativo, per due motivi:
-(1) **sostanziale** — l'Nginx applicativo è un'immagine di produzione (buildata, scansionata da
+(1) **sostanziale**: l'Nginx applicativo è un'immagine di produzione (buildata, scansionata da
 Trivy, pubblicata su GHCR) e non deve contenere riferimenti a LocalStack; isolare il serving da
 S3 emulato in un container scaffolding solo-locale mantiene pulito l'artefatto di produzione;
-(2) **di forma** — riflette la topologia reale CDN → origin, dove l'edge è distinto dall'origin
+(2) **di forma**: riflette la topologia reale CDN → origin, dove l'edge è distinto dall'origin
 applicativo.
 
 ![Frontend SPA e contratto API](../architecture/diagrams/03_frontend_spa_contratto_api.drawio.png)

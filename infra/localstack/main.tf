@@ -44,40 +44,50 @@ locals {
     STEPFUNCTIONS_ENDPOINT              = local.localstack_endpoint
     DOCUMENT_PIPELINE_STATE_MACHINE_ARN = aws_sfn_state_machine.document_pipeline.arn
     DOCUMENT_PIPELINE_TASK_QUEUE_URL    = aws_sqs_queue.documents.url
-    FILESYSTEM_DISK                     = "s3"
-    MVP_DOCUMENT_DISK                   = var.document_disk
-    AWS_DEFAULT_REGION                  = var.aws_region
-    AWS_BUCKET                          = aws_s3_bucket.documents.bucket
-    AWS_ENDPOINT                        = local.localstack_endpoint
-    AWS_USE_PATH_STYLE_ENDPOINT         = "true"
-    AWS_REAL_REGION                     = var.real_aws_region
-    AWS_REAL_S3_BUCKET                  = var.real_s3_bucket
-    AWS_REAL_S3_PREFIX                  = var.real_s3_prefix
-    BEDROCK_ENABLED                     = "true"
-    BEDROCK_REGION                      = var.bedrock_region
-    BEDROCK_ENDPOINT                    = var.bedrock_endpoint
-    BEDROCK_MODEL_ID                    = var.bedrock_model_id
-    MVP_CONFIDENCE_THRESHOLD            = tostring(var.confidence_threshold)
-    MVP_MAX_UPLOAD_MB                   = "20"
-    MVP_MAX_PDF_PAGES                   = "50"
-    MVP_PROCESSING_TIMEOUT_SECONDS      = "600"
-    DOCUMENT_MAX_UPLOAD_MB              = "20"
-    TEXTRACT_ENABLED                    = tostring(var.textract_enabled)
-    TEXTRACT_REGION                     = var.textract_region
-    TEXTRACT_AWS_REGION                 = var.textract_region
-    TEXTRACT_POLL_INTERVAL_SECONDS      = "5"
-    TEXTRACT_TIMEOUT_SECONDS            = "300"
-    TEXTRACT_MAX_PAGES                  = tostring(var.textract_max_pages)
-    TEXTRACT_MAX_BYTES                  = tostring(var.textract_max_bytes)
-    MAIL_MAILER                         = "log"
-    MAIL_FROM_ADDRESS                   = var.local_ses_sender
-    MAIL_FROM_NAME                      = "NEXUM"
-    MVP_IDENTITY_MODE                   = "local"
-    MVP_LOCAL_USER_ID                   = "mvp-local-user"
-    MVP_LOCAL_USER_EMAIL                = "operator@alittlebyte.local"
-    MVP_LOCAL_USER_NAME                 = "Alittlebyte Operator"
-    MVP_LOCAL_TENANT_ID                 = "mvp-local-tenant"
-    MVP_LOCAL_ROLES                     = "mvp-operator"
+
+    COMMUNICATION_PIPELINE_STATE_MACHINE_ARN = aws_sfn_state_machine.communication_pipeline.arn
+    COMMUNICATION_PIPELINE_TASK_QUEUE_URL    = aws_sqs_queue.communications.url
+    COMMUNICATION_PIPELINE_DLQ_URL           = aws_sqs_queue.communications_dlq.url
+    MVP_COMMUNICATION_COVER_DISK             = var.communication_cover_disk
+    MVP_COMMUNICATION_COVER_PREFIX           = "communications/covers"
+    MVP_COMMUNICATION_COVER_MAX_MB           = "5"
+    MVP_COMMUNICATION_TIMEOUT_SECONDS        = "300"
+    FILESYSTEM_DISK                          = "s3"
+    MVP_DOCUMENT_DISK                        = var.document_disk
+    AWS_DEFAULT_REGION                       = var.aws_region
+    AWS_BUCKET                               = aws_s3_bucket.documents.bucket
+    AWS_ENDPOINT                             = local.localstack_endpoint
+    AWS_USE_PATH_STYLE_ENDPOINT              = "true"
+    AWS_REAL_REGION                          = var.real_aws_region
+    AWS_REAL_S3_BUCKET                       = var.real_s3_bucket
+    AWS_REAL_S3_PREFIX                       = var.real_s3_prefix
+    BEDROCK_ENABLED                          = "true"
+    BEDROCK_REGION                           = var.bedrock_region
+    BEDROCK_IMAGE_REGION                     = var.bedrock_image_region
+    BEDROCK_ENDPOINT                         = var.bedrock_endpoint
+    BEDROCK_MODEL_ID                         = var.bedrock_model_id
+    BEDROCK_IMAGE_MODEL_ID                   = var.bedrock_image_model_id
+    MVP_CONFIDENCE_THRESHOLD                 = tostring(var.confidence_threshold)
+    MVP_MAX_UPLOAD_MB                        = "20"
+    MVP_MAX_PDF_PAGES                        = "50"
+    MVP_PROCESSING_TIMEOUT_SECONDS           = "600"
+    DOCUMENT_MAX_UPLOAD_MB                   = "20"
+    TEXTRACT_ENABLED                         = tostring(var.textract_enabled)
+    TEXTRACT_REGION                          = var.textract_region
+    TEXTRACT_AWS_REGION                      = var.textract_region
+    TEXTRACT_POLL_INTERVAL_SECONDS           = "5"
+    TEXTRACT_TIMEOUT_SECONDS                 = "300"
+    TEXTRACT_MAX_PAGES                       = tostring(var.textract_max_pages)
+    TEXTRACT_MAX_BYTES                       = tostring(var.textract_max_bytes)
+    MAIL_MAILER                              = "log"
+    MAIL_FROM_ADDRESS                        = var.local_ses_sender
+    MAIL_FROM_NAME                           = "NEXUM"
+    MVP_IDENTITY_MODE                        = "local"
+    MVP_LOCAL_USER_ID                        = "mvp-local-user"
+    MVP_LOCAL_USER_EMAIL                     = "operator@alittlebyte.local"
+    MVP_LOCAL_USER_NAME                      = "Alittlebyte Operator"
+    MVP_LOCAL_TENANT_ID                      = "mvp-local-tenant"
+    MVP_LOCAL_ROLES                          = "mvp-operator"
   }
 
   app_secrets = {
@@ -114,6 +124,28 @@ resource "aws_sqs_queue" "documents" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.documents_dlq.arn
+    maxReceiveCount     = 3
+  })
+
+  tags = local.tags
+}
+
+resource "aws_sqs_queue" "communications_dlq" {
+  name                    = "${var.name_prefix}-communications-dlq"
+  sqs_managed_sse_enabled = true
+  tags                    = local.tags
+}
+
+# Coda separata da quella documentale: una generazione immagini lenta non deve
+# occupare gli slot dei task documentali, e viceversa.
+resource "aws_sqs_queue" "communications" {
+  name                       = "${var.name_prefix}-communications"
+  visibility_timeout_seconds = 900
+  message_retention_seconds  = 345600
+  sqs_managed_sse_enabled    = true
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.communications_dlq.arn
     maxReceiveCount     = 3
   })
 
@@ -246,6 +278,26 @@ resource "aws_cloudwatch_event_target" "pipeline_terminal_queue" {
   arn            = aws_sqs_queue.documents.arn
 }
 
+# Regola distinta da quella documentale: condividerla riporterebbe gli eventi
+# terminali delle comunicazioni sulla coda dei documenti.
+resource "aws_cloudwatch_event_rule" "communication_pipeline_terminal" {
+  name           = "${var.name_prefix}-communication-pipeline-terminal"
+  event_bus_name = aws_cloudwatch_event_bus.mvp.name
+
+  event_pattern = jsonencode({
+    source      = ["mvp.communications"]
+    detail-type = ["CommunicationPipelineCompleted", "CommunicationPipelineFailed"]
+  })
+
+  tags = local.tags
+}
+
+resource "aws_cloudwatch_event_target" "communication_pipeline_terminal_queue" {
+  rule           = aws_cloudwatch_event_rule.communication_pipeline_terminal.name
+  event_bus_name = aws_cloudwatch_event_bus.mvp.name
+  arn            = aws_sqs_queue.communications.arn
+}
+
 resource "aws_iam_role" "step_functions" {
   name = "${var.name_prefix}-step-functions-role"
 
@@ -277,7 +329,10 @@ resource "aws_iam_role_policy" "step_functions_sqs" {
         Action = [
           "sqs:SendMessage"
         ]
-        Resource = aws_sqs_queue.documents.arn
+        Resource = [
+          aws_sqs_queue.documents.arn,
+          aws_sqs_queue.communications.arn,
+        ]
       }
     ]
   })
@@ -287,6 +342,13 @@ resource "aws_sfn_state_machine" "document_pipeline" {
   name       = "${var.name_prefix}-document-pipeline"
   role_arn   = aws_iam_role.step_functions.arn
   definition = file("${path.module}/state-machines/document-pipeline.asl.json")
+  tags       = local.tags
+}
+
+resource "aws_sfn_state_machine" "communication_pipeline" {
+  name       = "${var.name_prefix}-communication-pipeline"
+  role_arn   = aws_iam_role.step_functions.arn
+  definition = file("${path.module}/state-machines/communication-pipeline.asl.json")
   tags       = local.tags
 }
 

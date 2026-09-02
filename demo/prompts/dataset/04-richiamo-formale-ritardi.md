@@ -1,0 +1,1 @@
+Scrivi una comunicazione formale rivolta al personale sul rispetto degli orari di ingresso, ricordando che i ritardi ripetuti senza giustificazione sono rilevanti sul piano disciplinare. Mantieni un tono fermo ma non minaccioso.
