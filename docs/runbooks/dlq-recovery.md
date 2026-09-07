@@ -44,7 +44,7 @@ flowchart TD
 docker compose exec app php artisan mvp:dlq:list --queue=documents
 ```
 
-The command reads up to 10 messages from the DLQ with `VisibilityTimeout=0` and prints a preview. There is no automated depth monitoring (the previous Prometheus-based probe was removed, see [ADR 0014](../architecture-decisions/0014-rimozione-stack-osservabilita.md)): run this command periodically or after a suspected failure to check whether a DLQ has accumulated messages.
+The command reads up to 10 messages from the DLQ with `VisibilityTimeout=0` and prints a preview. There is no automated depth monitoring: run this command periodically or after a suspected failure to check whether a DLQ has accumulated messages.
 
 ## Recovery Procedure
 

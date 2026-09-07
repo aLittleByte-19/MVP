@@ -1,7 +1,6 @@
 # Confine di autenticazione/autorizzazione
 
-L'autenticazione è intenzionalmente simulata in questa MVP (vedi
-[ADR 0007](../architecture-decisions/0007-authn-authz-boundary.md)).
+L'autenticazione è intenzionalmente simulata in questa MVP.
 
 ## Implementato
 
