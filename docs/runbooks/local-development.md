@@ -15,10 +15,6 @@ Il target esegue:
 - migrazioni applicative;
 - avvio di app, Nginx, worker SQS e Traefik.
 
-![Ambiente locale e provisioning](../architecture/diagrams/02_ambiente_locale_provisioning.drawio.png)
-
-<sub>Sorgente editabile: [`02_ambiente_locale_provisioning.drawio`](../architecture/diagrams/02_ambiente_locale_provisioning.drawio), export [`SVG`](../architecture/diagrams/02_ambiente_locale_provisioning.drawio.svg).</sub>
-
 Endpoint:
 
 - App: https://localhost:8443
